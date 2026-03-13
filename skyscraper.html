@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>空の上から（Skyscrapers）自動生成パズル｜index.html版</title>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <style>
+    :root{
+      --bg:#0b1020; /* 夜空っぽい濃紺 */
+      --card:#ffffff;
+      --ink:#0f172a; /* slate-900 */
+      --muted:#475569; /* slate-600 */
+      --line:#cbd5e1; /* slate-300 */
+      --accent:#2563eb; /* blue-600 */
+      --accent-2:#10b981; /* emerald-500 */
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans JP, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color:var(--ink); background:linear-gradient(180deg, var(--bg), #111827);
+      -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    .wrap{ max-width: 1080px; margin: 0 auto; padding: 20px; }
+    header{ display:flex; gap:12px; align-items:center; justify-content:space-between; color:#f8fafc; }
+    h1{ font-size:clamp(20px, 3vw, 28px); margin:0; letter-spacing:.02em; }
+    .btns{ display:flex; gap:8px; flex-wrap:wrap; }
+    button, select{ font:inherit; }
+    .btn{ padding:8px 12px; border-radius:10px; border:1px solid #94a3b8; background:#0f172a; color:#e2e8f0; cursor:pointer; }
+    .btn:hover{ background:#111827; }
+    .btn.primary{ background:var(--accent); border-color:var(--accent); color:white; }
+    .btn.primary:hover{ filter:brightness(1.05); }
+    .btn.ghost{ background:transparent; border-color:#64748b; }
+    .card{ background:var(--card); border-radius:14px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.25); margin-top:14px; }
+    .card h2{ margin:4px 0 12px; font-size:18px; color:#0f172a; }
+    .controls{ display:flex; gap:16px; align-items:end; flex-wrap:wrap; }
+    .control{ display:flex; flex-direction:column; gap:6px; }
+    .label{ font-size:12px; color:var(--muted); }
+    .note{ font-size:12px; color:var(--muted); }
+
+    /* 盤面 */
+    .board-wrap{ display:grid; grid-template-rows: auto auto auto; gap:8px; align-items:center; justify-items:center; }
+    .edge-row, .edge-col{ display:grid; gap:4px; }
+    .edge-row{ justify-items:center; }
+    .edge-col{ align-content:space-between; }
+    .edge-cell{ width:28px; height:28px; display:flex; align-items:center; justify-content:center; color:#334155; font-weight:600; }
+    .board{ border:2px solid var(--line); border-radius:12px; overflow:hidden; }
+    .grid{ display:grid; }
+    .cell{
+      width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+      border:1px solid var(--line); cursor:pointer; font-weight:700; font-size:18px; user-select:none;
+      touch-action: none; /* ← スワイプ/ドラッグ操作のためにブラウザのスクロール等を抑止 */
+      
+      /* ビルの高さを表現するための追加スタイル */
+      position: relative;
+      z-index: 1;
+      overflow: hidden;
+    }
+    
+    /* ビルの背景ゲージ部分 */
+    .cell::before {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: #bfdbfe; /* 薄い青色 */
+      border-top: 3px solid #60a5fa; /* ビルの屋上（濃い青色） */
+      z-index: -1; /* 数字の後ろに配置 */
+      height: var(--build-height, 0%);
+      transition: height 0.15s cubic-bezier(0.4, 0, 0.2, 1); /* 高さが変わる際のアニメーション */
+    }
+    
+    /* 空白（0）の時は屋上（ボーダー）も隠す */
+    .cell[data-empty="true"]::before {
+      display: none;
+    }
+    /* 正解時はカーソルをデフォルトに戻す */
+    .cell.solved{ cursor: default; }
+
+    .cell:hover:not(.solved){ background:#f8fafc; }
+    .cell:focus:not(.solved){ outline:2px solid var(--accent); outline-offset:-2px; }
+    .cell.dragging{ background:#eef2ff; } /* ドラッグ中の軽いフィードバック */
+
+    @media (min-width: 640px){
+      .cell{ width:52px; height:52px; font-size:20px; }
+      .edge-cell{ width:32px; height:32px; }
+    }
+    .actions{ display:flex; gap:8px; align-items:center; justify-content:space-between; }
+    .status{ font-size:12px; color:#334155; min-height:1.2em; font-weight:bold; }
+
+    /* 印刷用 */
+    @media print{
+      body{ background:#fff; }
+      header, .note, .actions .btn.primary{ display:none !important; }
+      .card{ box-shadow:none; margin:0; }
+      .edge-cell{ color:#000; }
+      .cell{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      /* 印刷時はビルの背景色を消す */
+      .cell::before { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>空の上から（Skyscrapers）自動生成パズル｜スタンドアロン</h1>
+      <div class="btns">
+        <button class="btn ghost" id="printBtn">印刷</button>
+        <button class="btn primary" id="regenBtn">新規生成</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>設定</h2>
+      <div class="controls">
+        <label class="control">
+          <span class="label">サイズ（N×N）</span>
+          <select id="sizeSel" class="btn">
+            <option value="4">4×4（入門）</option>
+            <option value="5" selected>5×5（標準）</option>
+            <option value="6">6×6（上級）</option>
+          </select>
+        </label>
+
+        <label class="control">
+          <span class="label">難易度（手がかりの数）</span>
+          <select id="diffSel" class="btn">
+            <option value="easy">かんたん（多め）</option>
+            <option value="normal" selected>ふつう</option>
+            <option value="hard">むずかしい（少なめ）</option>
+          </select>
+        </label>
+
+        <label class="control">
+          <span class="label">操作</span>
+          <div class="btns">
+            <button class="btn" id="hintBtn">ヒント</button>
+            <button class="btn" id="checkBtn">途中判定</button>
+            <button class="btn" id="clearBtn">リセット</button>
+            <button class="btn" id="solveBtn">自動解答</button>
+          </div>
+        </label>
+
+        <div class="note">
+          ※ マスを<strong>タップ/クリック</strong>で <strong>1→2→…→N→空白</strong> と巡回入力。数字キー（1〜N）/Backspaceも可。<br>
+          ※ <strong>上スワイプ/上ドラッグ</strong>でカウントアップ、<strong>下スワイプ/下ドラッグ</strong>でカウントダウン（最小は空白）。
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="puzzleCard">
+      <div id="boardArea"></div>
+      <div class="actions" style="margin-top:10px;">
+        <div class="btns">
+          <button class="btn primary" id="regenBtn2">新規生成</button>
+        </div>
+        <div class="status" id="status"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>ルール（要点）</h2>
+      <ol style="margin-left:20px; line-height:1.7;">
+        <li>各マスは「ビルの高さ」を表し、1〜N の数字を入れます。</li>
+        <li>各行・各列には 1〜N が 1つずつ（重複なし）入ります。</li>
+        <li>4辺の数字（手がかり）は、その方向から見えるビルの本数（手前から順により高いビルが現れるたびに +1）。</li>
+        <li>すべての手がかりを満たすように数字を配置すると完成です。</li>
+      </ol>
+    </section>
+
+    <p class="note" style="text-align:center">© <span id="year"></span> Skyscrapers puzzle generator (for educational/demo use). 生成はブラウザ内で行い、4〜6マスに最適化。</p>
+  </div>
+
+<script>
+// =========================
+// 乱数 & ユーティリティ
+// =========================
+function shuffle(a){ const b=[...a]; for(let i=b.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [b[i],b[j]]=[b[j],b[i]];} return b; }
+function latinBase(n){ return Array.from({length:n},(_,r)=>Array.from({length:n},(_,c)=>((r+c)%n)+1)); }
+function permuteGrid(grid){ const n=grid.length; let g=grid.map(r=>[...r]);
+  // 行入れ替え
+  for(let k=0;k<n*2;k++){ const r1=Math.floor(Math.random()*n), r2=Math.floor(Math.random()*n); [g[r1],g[r2]]=[g[r2],g[r1]]; }
+  // 列入れ替え
+  for(let k=0;k<n*2;k++){ const c1=Math.floor(Math.random()*n), c2=Math.floor(Math.random()*n); for(let r=0;r<n;r++){ [g[r][c1],g[r][c2]]=[g[r][c2],g[r][c1]]; } }
+  // 数字置換
+  const map=shuffle(Array.from({length:n},(_,i)=>i+1));
+  for(let r=0;r<n;r++) for(let c=0;c<n;c++) g[r][c]=map[g[r][c]-1];
+  return g;
+}
+function visibleCount(arr){ let max=0, cnt=0; for(const h of arr){ if(h>max){ max=h; cnt++; } } return cnt; }
+function computeClues(sol){ const n=sol.length; const top=Array(n), bottom=Array(n), left=Array(n), right=Array(n);
+  for(let i=0;i<n;i++){
+    left[i]=visibleCount(sol[i]);
+    right[i]=visibleCount([...sol[i]].reverse());
+    const col=Array.from({length:n},(_,r)=>sol[r][i]);
+    top[i]=visibleCount(col);
+    bottom[i]=visibleCount(col.slice().reverse());
+  }
+  return {top,bottom,left,right};
+}
+function cloneClues(cl){ return { top:[...cl.top], bottom:[...cl.bottom], left:[...cl.left], right:[...cl.right] } }
+
+// =========================
+// ソルバ（唯一解判定）
+// =========================
+function countSolutionsWithClues(n, clues){
+  const rows=Array.from({length:n},()=>Array(n).fill(0));
+  const usedRow=Array.from({length:n},()=>new Set());
+  const usedCol=Array.from({length:n},()=>new Set());
+  let solutions=0;
+  function fullLineOK(line, L, R){ if(line.every(x=>x!==0)){ if(L && visibleCount(line)!==L) return false; if(R && visibleCount([...line].reverse())!==R) return false; } return true; }
+  function partialOK(line, L){ if(!L) return true; let max=0,c=0; for(const v of line){ if(v===0) break; if(v>max){ max=v; c++; } } return c<=L; }
+  function dfs(r,c){
+    if(solutions>=2) return;
+    if(r===n){ // 列の可視数チェック
+      for(let col=0; col<n; col++){
+        const colArr=Array.from({length:n},(_,rr)=>rows[rr][col]);
+        if(!fullLineOK(colArr, clues.top[col], clues.bottom[col])) return;
+      }
+      solutions++; return;
+    }
+    const nr = (c===n-1)? r+1 : r; const nc = (c===n-1)? 0 : c+1;
+    for(let v=1; v<=n; v++){
+      if(usedRow[r].has(v) || usedCol[c].has(v)) continue;
+      rows[r][c]=v; usedRow[r].add(v); usedCol[c].add(v);
+      if(!partialOK(rows[r], clues.left[r])){ usedRow[r].delete(v); usedCol[c].delete(v); rows[r][c]=0; continue; }
+      if(nc===0 && !fullLineOK(rows[r], clues.left[r], clues.right[r])){ usedRow[r].delete(v); usedCol[c].delete(v); rows[r][c]=0; continue; }
+      if(r===n-1){
+        const colArr=Array.from({length:n},(_,rr)=>rows[rr][c]);
+        if(!fullLineOK(colArr, clues.top[c], clues.bottom[c])){ usedRow[r].delete(v); usedCol[c].delete(v); rows[r][c]=0; continue; }
+      }
+      dfs(nr,nc);
+      usedRow[r].delete(v); usedCol[c].delete(v); rows[r][c]=0; if(solutions>=2) return;
+    }
+  }
+  dfs(0,0); return solutions;
+}
+
+// =========================
+// パズル生成
+// =========================
+function generateUniquePuzzle(n, difficulty="normal", maxTries=40){
+  let solution = permuteGrid(latinBase(n));
+  let full = computeClues(solution);
+  const sideCount = 4*n;
+  const keepRatio = (difficulty==="easy")? 0.75 : (difficulty==="hard"? 0.35 : 0.5);
+  const target = Math.max(n*2, Math.round(sideCount*keepRatio));
+  let best = cloneClues(full);
+  const pos=[]; for(let i=0;i<n;i++) pos.push({side:"top",index:i}); for(let i=0;i<n;i++) pos.push({side:"bottom",index:i}); for(let i=0;i<n;i++) pos.push({side:"left",index:i}); for(let i=0;i<n;i++) pos.push({side:"right",index:i});
+  function keeps(cl){ return [...cl.top,...cl.bottom,...cl.left,...cl.right].filter(x=>x!=null).length; }
+  let order = shuffle(pos); let tries=0;
+  while(tries<maxTries){
+    const cand = cloneClues(best);
+    for(const p of order){
+      if(keeps(cand)<=target) break;
+      const prev=cand[p.side][p.index];
+      cand[p.side][p.index]=null;
+      const solCnt=countSolutionsWithClues(n,cand);
+      if(solCnt!==1) cand[p.side][p.index]=prev;
+    }
+    if(countSolutionsWithClues(n,cand)===1){ best=cand; break; }
+    // 失敗 → 別解で再試行
+    solution = permuteGrid(latinBase(n)); full = computeClues(solution); best = cloneClues(full); order = shuffle(pos); tries++;
+  }
+  return { solution, clues: best };
+}
+
+// =========================
+/* UI */
+// =========================
+const state = {
+  n: 5,
+  difficulty: 'normal',
+  puzzle: null, // {solution, clues}
+  grid: [],
+  solved: false // 正解済みかどうかのフラグ
+};
+
+function el(tag, attrs={}, ...children){
+  const e=document.createElement(tag);
+  for(const [k,v] of Object.entries(attrs)){
+    if(k==='class') e.className=v;
+    else if(k.startsWith('on')&&typeof v==='function') e.addEventListener(k.substring(2).toLowerCase(), v);
+    else if(k==='html') e.innerHTML=v;
+    else e.setAttribute(k,v);
+  }
+  for(const c of children){ if(c==null) continue; if(typeof c==='string') e.appendChild(document.createTextNode(c)); else e.appendChild(c); }
+  return e;
+}
+function setStatus(msg){ document.getElementById('status').textContent = msg || ''; }
+
+/** セルのテキストとビルの高さ（背景）を同時に更新するヘルパー関数 */
+function updateCellVisuals(cell, val, n) {
+  cell.textContent = val ? String(val) : '';
+  // CSSのカスタムプロパティ（--build-height）を更新して高さを制御
+  cell.style.setProperty('--build-height', val ? `${(val / n) * 100}%` : '0%');
+  if (!val) {
+    cell.setAttribute('data-empty', 'true');
+  } else {
+    cell.removeAttribute('data-empty');
+  }
+}
+
+/** 単純タップ/クリック時の巡回：
+ * 0(空白) -> 1 -> 2 -> ... -> N -> 0(空白)
+ */
+function cycleCell(r,c){
+  const n=state.n;
+  const cur=state.grid[r][c] || 0;
+  const next = (cur >= n) ? 0 : (cur + 1);
+  state.grid[r][c] = next;
+}
+
+function updateCell(r,c,val){ state.grid[r][c]=val; }
+
+/** 正解かどうかを自動判定し、正解なら紙吹雪を降らせる */
+function checkWinCondition() {
+  if (state.solved) return;
+  
+  // 1. すべてのマスが埋まっているか確認
+  for (let r = 0; r < state.n; r++) {
+    for (let c = 0; c < state.n; c++) {
+      if (state.grid[r][c] === 0) return; // 空白があればまだ
+    }
+  }
+  
+  // 2. ルール違反がないか確認
+  const res = validateProgress();
+  if (res.ok) {
+    state.solved = true; // 盤面ロック
+    setStatus('✨ 正解です！おめでとうございます！ ✨（新規生成で次のパズルへ）');
+    
+    // 全てのセルに solved クラスを付与（カーソルなどを変更）
+    document.querySelectorAll('.cell').forEach(cell => cell.classList.add('solved'));
+    
+    // 紙吹雪アニメーション
+    if (typeof confetti === 'function') {
+      confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+      });
+    }
+  }
+}
+
+/** スワイプ/ドラッグインタラクションを付与（Pointer Eventsで統一）
+ * 上方向：インクリメント、下方向：デクリメント（0〜Nにクランプ）
+ * ドラッグ量をステップ化して追従（STEP_PX あたり ±1）
+ * クリック（移動なし）は cycleCell() の挙動にフォールバック
+ */
+function attachCellInteractions(cell, r, c){
+  const STEP_PX = 22;  // ピクセルあたりのカウントステップ
+  let startY = 0;
+  let startVal = 0;
+  let moved = false;
+  let lastStep = 0;
+  let pointerId = null;
+
+  function onPointerMove(ev){
+    if(pointerId===null) return;
+    const dy = ev.clientY - startY;
+    const step = Math.floor((-dy) / STEP_PX); // 上に動かすと正のステップ
+    if(step !== lastStep){
+      moved = true;
+      let next = startVal + step;
+      next = Math.max(0, Math.min(state.n, next)); // 0〜Nにクランプ
+      updateCell(r, c, next);
+      updateCellVisuals(cell, next, state.n);
+      lastStep = step;
+    }
+  }
+
+  function cleanup(ev){
+    try{ if(pointerId!==null && cell.hasPointerCapture(pointerId)) cell.releasePointerCapture(pointerId); }catch(_){}
+    cell.classList.remove('dragging');
+    cell.removeEventListener('pointermove', onPointerMove);
+    cell.removeEventListener('pointerup', cleanup);
+    cell.removeEventListener('pointercancel', cleanup);
+    pointerId = null;
+  }
+
+  function onPointerUp(ev){
+    const wasMoved = moved;
+    cleanup(ev);
+    if(!wasMoved){
+      // 移動なし → クリック扱いで巡回（Nの次は空白）
+      cycleCell(r,c);
+      updateCellVisuals(cell, state.grid[r][c], state.n);
+    }
+    checkWinCondition(); // 入力後にクリア判定
+  }
+
+  cell.addEventListener('pointerdown', (ev)=>{
+    if(state.solved) return; // 正解後は操作ロック
+    // 左クリック／タップのみ反応（右クリック等は無視）
+    if(ev.button !== 0 && ev.pointerType === 'mouse') return;
+    ev.preventDefault();
+
+    pointerId = ev.pointerId;
+    startY = ev.clientY;
+    startVal = state.grid[r][c] || 0;
+    moved = false;
+    lastStep = 0;
+
+    cell.classList.add('dragging');
+    try{ cell.setPointerCapture(pointerId); }catch(_){}
+
+    cell.addEventListener('pointermove', onPointerMove);
+    cell.addEventListener('pointerup', onPointerUp, {once:true});
+    cell.addEventListener('pointercancel', cleanup, {once:true});
+  });
+
+  // キーボード操作も維持
+  cell.addEventListener('keydown', (e) => {
+    if(state.solved) return; // 正解後は操作ロック
+    
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      updateCell(r, c, 0);
+      updateCellVisuals(cell, 0, state.n);
+      e.preventDefault();
+      return;
+    }
+    if (/^[1-9]$/.test(e.key)) {
+      const num = parseInt(e.key, 10);
+      if (num >= 1 && num <= state.n) {
+        updateCell(r, c, num);
+        updateCellVisuals(cell, num, state.n);
+        checkWinCondition(); // 入力後にクリア判定
+      }
+    }
+  });
+}
+
+function buildBoard(){
+  const n = state.n;
+  const clues = state.puzzle.clues;
+  const grid = state.grid;
+  const area = document.getElementById('boardArea');
+  area.innerHTML = '';
+
+  // ---- セル幅を実測（現在のCSS/ズーム/ブレークポイントに追従）----
+  const probe = document.createElement('div');
+  probe.className = 'cell';
+  probe.style.position = 'absolute';
+  probe.style.visibility = 'hidden';
+  document.body.appendChild(probe);
+  const cs = window.getComputedStyle(probe);
+  const CELL_PX = Math.round(parseFloat(cs.width)); // ボーダー込み（box-sizing:border-box）
+  document.body.removeChild(probe);
+
+  // 盤面ボーダーの太さ（CSSに合わせて2px）
+  const BORDER_PX = 2;
+  const SIDE_PAD_PX = 32;
+
+  // ===== 上段（上側の手がかり）=====
+  // 左32px + 2pxスペーサ + N×CELL + 2pxスペーサ + 右32px
+  const topRow = el('div', { class: 'edge-row' });
+  topRow.style.gridTemplateColumns =
+    `${SIDE_PAD_PX}px ${BORDER_PX}px repeat(${n}, ${CELL_PX}px) ${BORDER_PX}px ${SIDE_PAD_PX}px`;
+
+  // 左余白
+  topRow.appendChild(el('div', { class: 'edge-cell' }));
+  // 左ボーダー分のスペーサ
+  topRow.appendChild(el('div', { class: 'edge-cell' }));
+  // 上ヒント（N個）
+  for (let i = 0; i < n; i++) {
+    const v = clues.top[i] ?? '';
+    topRow.appendChild(el('div', { class: 'edge-cell' }, String(v)));
+  }
+  // 右ボーダー分のスペーサ
+  topRow.appendChild(el('div', { class: 'edge-cell' }));
+  // 右余白
+  topRow.appendChild(el('div', { class: 'edge-cell' }));
+
+  // ===== 中段（左手がかり + 盤面 + 右手がかり）=====
+  // 中央列は「N×CELL + 左右ボーダー4px」を確保
+  const midRow = el('div', {
+    style: `display:grid; grid-template-columns: ${SIDE_PAD_PX}px calc(${n * CELL_PX}px + ${2 * BORDER_PX}px) ${SIDE_PAD_PX}px; gap:8px; align-items:center;`
+  });
+
+  // 左手がかり（上2pxスペーサ + N×CELL + 下2pxスペーサ）
+  const leftCol = el('div', { class: 'edge-col' });
+  leftCol.style.gridTemplateRows = `${BORDER_PX}px repeat(${n}, ${CELL_PX}px) ${BORDER_PX}px`;
+  // 上スペーサ
+  leftCol.appendChild(el('div', { class: 'edge-cell' }));
+  for (let i = 0; i < n; i++) {
+    const v = clues.left[i] ?? '';
+    leftCol.appendChild(el('div', { class: 'edge-cell' }, String(v)));
+  }
+  // 下スペーサ
+  leftCol.appendChild(el('div', { class: 'edge-cell' }));
+
+  // 盤面
+  const board = el('div', { class: 'board' });
+  const gridEl = el('div', { class: 'grid' });
+  gridEl.style.gridTemplateColumns = `repeat(${n}, ${CELL_PX}px)`;
+
+  // セル生成（サイズは実測値で明示）
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const cell = el('div', { class: 'cell', tabIndex: 0 });
+      cell.style.width = `${CELL_PX}px`;
+      cell.style.height = `${CELL_PX}px`;
+      
+      const val = grid[r][c] || 0;
+      updateCellVisuals(cell, val, state.n);
+
+      // クリックは Pointer イベントに内包させる（移動なし＝クリック扱い）
+      attachCellInteractions(cell, r, c);
+
+      gridEl.appendChild(cell);
+    }
+  }
+  board.appendChild(gridEl);
+
+  // 右手がかり（上2pxスペーサ + N×CELL + 下2pxスペーサ）
+  const rightCol = el('div', { class: 'edge-col' });
+  rightCol.style.gridTemplateRows = `${BORDER_PX}px repeat(${n}, ${CELL_PX}px) ${BORDER_PX}px`;
+  // 上スペーサ
+  rightCol.appendChild(el('div', { class: 'edge-cell' }));
+  for (let i = 0; i < n; i++) {
+    const v = clues.right[i] ?? '';
+    rightCol.appendChild(el('div', { class: 'edge-cell' }, String(v)));
+  }
+  // 下スペーサ
+  rightCol.appendChild(el('div', { class: 'edge-cell' }));
+
+  midRow.appendChild(leftCol);
+  midRow.appendChild(board);
+  midRow.appendChild(rightCol);
+
+  // ===== 下段（下側の手がかり）=====
+  const bottomRow = el('div', { class: 'edge-row' });
+  bottomRow.style.gridTemplateColumns =
+    `${SIDE_PAD_PX}px ${BORDER_PX}px repeat(${n}, ${CELL_PX}px) ${BORDER_PX}px ${SIDE_PAD_PX}px`;
+  // 左余白
+  bottomRow.appendChild(el('div', { class: 'edge-cell' }));
+  // 左ボーダー分のスペーサ
+  bottomRow.appendChild(el('div', { class: 'edge-cell' }));
+  // 下ヒント（N個）
+  for (let i = 0; i < n; i++) {
+    const v = clues.bottom[i] ?? '';
+    bottomRow.appendChild(el('div', { class: 'edge-cell' }, String(v)));
+  }
+  // 右ボーダー分のスペーサ
+  bottomRow.appendChild(el('div', { class: 'edge-cell' }));
+  // 右余白
+  bottomRow.appendChild(el('div', { class: 'edge-cell' }));
+
+  // ===== ラップ =====
+  const wrap = el('div', { class: 'board-wrap' });
+  wrap.appendChild(topRow);
+  wrap.appendChild(midRow);
+  wrap.appendChild(bottomRow);
+  area.appendChild(wrap);
+}
+
+function validateProgress(){
+  const n=state.n, grid=state.grid, clues=state.puzzle.clues;
+  // 行・列の重複
+  for(let r=0;r<n;r++){
+    const seen=new Set();
+    for(let c=0;c<n;c++){
+      const v=grid[r][c]; if(v===0) continue;
+      if(seen.has(v)) return {ok:false, msg:`行${r+1}で数字が重複しています。`};
+      seen.add(v);
+    }
+  }
+  for(let c=0;c<n;c++){
+    const seen=new Set();
+    for(let r=0;r<n;r++){
+      const v=grid[r][c]; if(v===0) continue;
+      if(seen.has(v)) return {ok:false, msg:`列${c+1}で数字が重複しています。`};
+      seen.add(v);
+    }
+  }
+  // 完成行/列の可視数
+  function fullOK(line, L, R){
+    if(line.every(x=>x!==0)){
+      if(L && visibleCount(line)!==L) return false;
+      if(R && visibleCount([...line].reverse())!==R) return false;
+    }
+    return true;
+  }
+  for(let i=0;i<n;i++){
+    if(!fullOK(grid[i], clues.left[i], clues.right[i])) return {ok:false, msg:`行${i+1}の可視数ヒントと一致しません。`};
+    const col=Array.from({length:n},(_,r)=>grid[r][i]);
+    if(!fullOK(col, clues.top[i], clues.bottom[i])) return {ok:false, msg:`列${i+1}の可視数ヒントと一致しません。`};
+  }
+  return {ok:true, msg:'ルールに矛盾は見つかりません。続けましょう。'};
+}
+
+function handleHint(){
+  if(state.solved) return; // ロック
+  const n=state.n;
+  const empties=[];
+  for(let r=0;r<n;r++) for(let c=0;c<n;c++) if(!state.grid[r][c]) empties.push([r,c]);
+  if(empties.length===0) return;
+  const [r,c]=empties[Math.floor(Math.random()*empties.length)];
+  state.grid[r][c]=state.puzzle.solution[r][c];
+  buildBoard();
+  setStatus(`ヒント：(${r+1}, ${c+1}) に ${state.grid[r][c]} を入れました。`);
+  checkWinCondition(); // ヒントを入れた結果クリアするかもしれない
+}
+function handleCheck(){ 
+  if(state.solved) return; // ロック
+  const res=validateProgress(); 
+  setStatus(res.msg); 
+}
+function handleClear(){ 
+  if(state.solved) return; // ロック（クリア後は新規生成を促すため）
+  state.grid = Array.from({length:state.n}, ()=>Array(state.n).fill(0)); 
+  buildBoard(); 
+  setStatus('盤面をリセットしました。'); 
+}
+function handleSolve(){ 
+  if(state.solved) return; // ロック
+  state.grid = state.puzzle.solution.map(row=>[...row]); 
+  state.solved = true; // 自動解答後はロックする（紙吹雪は出さない）
+  buildBoard(); 
+  setStatus('解答を表示しました。（新規生成で次のパズルへ）'); 
+}
+
+function generate(){
+  setStatus('生成中…（唯一解チェックを行います）');
+  state.solved = false; // ロック解除
+  setTimeout(()=>{
+    const {solution, clues} = generateUniquePuzzle(state.n, state.difficulty);
+    state.puzzle={solution, clues};
+    state.grid = Array.from({length:state.n}, ()=>Array(state.n).fill(0));
+    buildBoard();
+    setStatus('新しいパズルを生成しました（唯一解）');
+  }, 10);
+}
+
+// 初期化
+window.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('year').textContent = new Date().getFullYear();
+  const sizeSel = document.getElementById('sizeSel');
+  const diffSel = document.getElementById('diffSel');
+
+  function syncAndGen(){ state.n = parseInt(sizeSel.value,10); state.difficulty = diffSel.value; generate(); }
+  sizeSel.addEventListener('change', syncAndGen);
+  diffSel.addEventListener('change', syncAndGen);
+
+  document.getElementById('regenBtn').addEventListener('click', generate);
+  document.getElementById('regenBtn2').addEventListener('click', generate);
+  document.getElementById('hintBtn').addEventListener('click', handleHint);
+  document.getElementById('checkBtn').addEventListener('click', handleCheck);
+  document.getElementById('clearBtn').addEventListener('click', handleClear);
+  document.getElementById('solveBtn').addEventListener('click', handleSolve);
+  document.getElementById('printBtn').addEventListener('click', ()=>window.print());
+
+  // 初回生成
+  generate();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Number Connect - Logic Solver Edition</title>
+    <style>
+        :root { --main-bg: #f8f9fa; --panel-bg: #ffffff; --accent: #34495e; }
+        body { font-family: sans-serif; background: var(--main-bg); margin: 0; display: flex; flex-direction: column; align-items: center; touch-action: none; }
+        .config { width: 100%; background: var(--accent); color: white; padding: 15px 0; text-align: center; }
+        .config select, .config button { padding: 8px 12px; border-radius: 8px; border: none; font-size: 14px; margin: 0 5px; vertical-align: middle; }
+        .config button { background: #2ecc71; color: white; font-weight: bold; cursor: pointer; }
+        #giveupBtn { background: #e74c3c; }
+        .container { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; padding: 20px; max-width: 900px; }
+        .game-area { display: flex; flex-direction: column; align-items: center; }
+        .side-panel { width: 240px; background: var(--panel-bg); padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: left; font-size: 0.85rem; color: #555; }
+        canvas { background: #fff; border: 2px solid #eee; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-radius: 12px; cursor: crosshair; touch-action: none; }
+        .info-bar { margin: 10px 0; display: flex; justify-content: space-between; width: 100%; font-weight: bold; max-width: 500px; font-size: 1.1rem; }
+        #timer.gave-up { color: #e74c3c; font-size: 1.2rem; }
+        #clearOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; justify-content: center; align-items: center; }
+        .clear-card { background: white; padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    </style>
+</head>
+<body>
+
+<div class="config">
+    サイズ: <select id="gridSelect">
+        <option value="4">4x4（ペア3）</option>
+        <option value="6" selected>6x6（ペア5）</option>
+        <option value="8">8x8（ペア7）</option>
+        <option value="10">10x10（ペア9）</option>
+    </select>
+    <button onclick="initGame()">生成 & スタート</button>
+</div>
+
+<div class="container">
+    <div class="game-area">
+        <div class="info-bar"><span id="status">Ready</span><span id="timer">00:00</span></div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    <div class="side-panel">
+        <h3>💡 盤面自動生成</h3>
+        <p>選択したサイズごとに固定のペア数で、全マスを埋めるナンバーリンク盤面を自動生成します。</p>
+        <p>※サイズが大きいと生成に数秒かかる場合があります。</p>
+    </div>
+</div>
+
+<div id="clearOverlay">
+    <div class="clear-card">
+        <h2 style="color:#2ecc71; margin-top:0;">Perfect!</h2>
+        <p>パズルを解き明かしました。</p>
+        <button onclick="closeClear()" style="background:#34495e; color:white; padding:10px 25px; border:none; border-radius:5px; cursor:pointer;">次へ</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const timerEl = document.getElementById('timer');
+    
+    let gridSize, pairCount, spacing, canvasSize;
+    const padding = 50;
+    let numbers = [], paths = {}, isDrawing = false, activeVal = null, activePathIdx = null;
+    let startTime, timerInterval;
+    let generatingDotsInterval = null;
+    let answerSnake = []; 
+    let showingAnswer = false;
+
+    const colors = ["#ff4757", "#2e86de", "#2ed573", "#ffa502", "#a29bfe", "#e17055", "#00cec9", "#6c5ce7", "#fdcb6e"];
+
+    // --- ソルバー / 問題生成セクション ---
+
+    /**
+     * mate法の考え方を取り入れた「状態圧縮＋枝刈り付きバックトラック」ソルバー
+     * - 各ペアごとに経路を構築し、全マス充填＆ユニーク解かどうかを判定
+     * - stats.nodes を指標として「探索の複雑さ（≒難易度）」を評価
+     */
+
+    function countSolutions(grid, pairs, pairIndex, maxSolutions, stats) {
+        const n = gridSize;
+
+        // 全ペアを処理し終わったら、全マスが埋まっているかを確認
+        if (pairIndex === pairs.length) {
+            for (let r = 0; r < n; r++) {
+                for (let c = 0; c < n; c++) {
+                    if (grid[r][c] === 0) return 0;
+                }
+            }
+            return 1;
+        }
+
+        const pair = pairs[pairIndex];
+        const id = pair.id;
+        const [sr, sc] = pair.start;
+        const [tr, tc] = pair.end;
+
+        const dirs = [
+            [0, 1],
+            [0, -1],
+            [1, 0],
+            [-1, 0],
+        ];
+
+        // ランダムな方向順で試すことで多様な経路を生成
+        for (let i = dirs.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+        }
+
+        let solutions = 0;
+        const visited = Array.from({ length: n }, () => Array(n).fill(false));
+
+        function dfs(r, c) {
+            if (solutions >= maxSolutions) return;
+            stats.nodes++;
+
+            // 探索が極端に膨らんだら強制打ち切り（安全装置）
+            if (stats.nodes > stats.nodeLimit) return;
+
+            if (r === tr && c === tc) {
+                // このペアは完了 → 次のペアへ
+                solutions += countSolutions(grid, pairs, pairIndex + 1, maxSolutions - solutions, stats);
+                return;
+            }
+
+            for (const [dr, dc] of dirs) {
+                const nr = r + dr;
+                const nc = c + dc;
+                if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+
+                const cell = grid[nr][nc];
+
+                // ゴール or 空きマスのみ進入可能
+                if (!((nr === tr && nc === tc) || cell === 0)) continue;
+                if (visited[nr][nc]) continue;
+
+                // 移動
+                visited[nr][nc] = true;
+                const prev = grid[nr][nc];
+                if (!(nr === tr && nc === tc)) {
+                    grid[nr][nc] = id;
+                }
+
+                dfs(nr, nc);
+
+                // 復元
+                grid[nr][nc] = prev;
+                visited[nr][nc] = false;
+
+                if (solutions >= maxSolutions) return;
+            }
+        }
+
+        // 開始地点を訪問済みにしてDFS開始
+        visited[sr][sc] = true;
+        dfs(sr, sc);
+        visited[sr][sc] = false;
+
+        return solutions;
+    }
+
+    // --- 単純な SAT ソルバー（DPLL） ---
+
+    function solveSat(numVars, clauses, timeLimitMs) {
+        const assignment = new Int8Array(numVars + 1); // 0: 未割当, 1: true, -1: false
+        const start = performance.now();
+
+        function unitProp() {
+            while (true) {
+                let changed = false;
+                for (let ci = 0; ci < clauses.length; ci++) {
+                    const clause = clauses[ci];
+                    let satisfied = false;
+                    let unassignedCount = 0;
+                    let lastUnassigned = 0;
+
+                    for (let k = 0; k < clause.length; k++) {
+                        const lit = clause[k];
+                        const v = lit > 0 ? lit : -lit;
+                        const val = assignment[v];
+                        if (val === 0) {
+                            unassignedCount++;
+                            lastUnassigned = lit;
+                        } else {
+                            const isTrue = (val === 1 && lit > 0) || (val === -1 && lit < 0);
+                            if (isTrue) {
+                                satisfied = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!satisfied) {
+                        if (unassignedCount === 0) {
+                            return false; // 矛盾
+                        }
+                        if (unassignedCount === 1) {
+                            const lit = lastUnassigned;
+                            const v = lit > 0 ? lit : -lit;
+                            const val = lit > 0 ? 1 : -1;
+                            if (assignment[v] === 0) {
+                                assignment[v] = val;
+                                changed = true;
+                            } else if (assignment[v] !== val) {
+                                return false; // 既存割当と矛盾
+                            }
+                        }
+                    }
+                }
+                if (!changed) return true;
+            }
+        }
+
+        function chooseVar() {
+            for (let v = 1; v <= numVars; v++) {
+                if (assignment[v] === 0) return v;
+            }
+            return 0;
+        }
+
+        function dpll() {
+            if (performance.now() - start > timeLimitMs) {
+                return null; // タイムアウト
+            }
+            if (!unitProp()) return false;
+
+            const v = chooseVar();
+            if (v === 0) return true; // すべて割当済み
+
+            const saved = assignment.slice();
+
+            assignment[v] = 1;
+            let res = dpll();
+            if (res === true) return true;
+            if (res === null) return null;
+
+            assignment.set(saved);
+            assignment[v] = -1;
+            res = dpll();
+            if (res === true) return true;
+            if (res === null) return null;
+
+            assignment.set(saved);
+            return false;
+        }
+
+        const ok = dpll();
+        if (ok === true) return assignment;
+        return null;
+    }
+
+    // --- 解答盤面（全マスを覆う線の森）生成用ユーティリティ（6x6 以下専用） ---
+
+    function computeDegreesAndEndpoints(grid) {
+        const n = grid.length;
+        const deg = Array.from({ length: n }, () => Array(n).fill(0));
+        let filled = 0;
+
+        for (let r = 0; r < n; r++) {
+            for (let c = 0; c < n; c++) {
+                const id = grid[r][c];
+                if (!id) continue;
+                filled++;
+                const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+                for (const [dr, dc] of dirs) {
+                    const nr = r + dr, nc = c + dc;
+                    if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+                    if (grid[nr][nc] === id) deg[r][c]++;
+                }
+            }
+        }
+
+        const endpointsPerId = new Map();
+        for (let r = 0; r < n; r++) {
+            for (let c = 0; c < n; c++) {
+                const id = grid[r][c];
+                if (!id) continue;
+                if (deg[r][c] === 1) {
+                    if (!endpointsPerId.has(id)) endpointsPerId.set(id, []);
+                    endpointsPerId.get(id).push({ r, c });
+                }
+                // deg 0（まだ伸びていない種）も端点扱いしたいので別処理
+                if (deg[r][c] === 0) {
+                    if (!endpointsPerId.has(id)) endpointsPerId.set(id, []);
+                    endpointsPerId.get(id).push({ r, c });
+                }
+            }
+        }
+
+        return { deg, endpointsPerId, filled };
+    }
+
+    function evaluateForestGrid(grid) {
+        const n = grid.length;
+        let score = 0;
+        let filled = 0;
+        let emptyIsolatedPenalty = 0;
+
+        for (let r = 0; r < n; r++) {
+            for (let c = 0; c < n; c++) {
+                if (grid[r][c]) {
+                    filled++;
+                } else {
+                    let emptyNeighbors = 0;
+                    const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+                    for (const [dr, dc] of dirs) {
+                        const nr = r + dr, nc = c + dc;
+                        if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+                        if (!grid[nr][nc]) emptyNeighbors++;
+                    }
+                    if (emptyNeighbors <= 1) emptyIsolatedPenalty += 5; // 詰みやすい孤立空きマスを強く罰する
+                }
+            }
+        }
+
+        // カバー率を主な指標にしつつ、孤立空きマスを罰する
+        score += filled * 10;
+        score -= emptyIsolatedPenalty;
+
+        return score;
+    }
+
+    function generateFullCoverByBeam() {
+        const n = gridSize;
+        const beamWidth = 20;
+        const maxSteps = n * n * 8;
+
+        // 初期グリッド：pairCount 個の種マスをランダム配置
+        const cells = [];
+        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) cells.push({ r, c });
+        for (let i = cells.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [cells[i], cells[j]] = [cells[j], cells[i]];
+        }
+
+        const initGrid = Array.from({ length: n }, () => Array(n).fill(0));
+        for (let id = 1; id <= pairCount; id++) {
+            const cell = cells[id - 1];
+            initGrid[cell.r][cell.c] = id;
+        }
+
+        let beam = [{
+            grid: initGrid,
+            score: evaluateForestGrid(initGrid),
+        }];
+
+        for (let step = 0; step < maxSteps; step++) {
+            // 完成盤面がビーム内にあれば採用
+            for (const state of beam) {
+                const { deg, endpointsPerId, filled } = computeDegreesAndEndpoints(state.grid);
+                if (filled === n * n) {
+                    // 各 id が少なくとも1セル持ち、端点が2つ以上あるものだけに限定
+                    let ok = true;
+                    for (let id = 1; id <= pairCount; id++) {
+                        let hasCell = false;
+                        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+                            if (state.grid[r][c] === id) { hasCell = true; break; }
+                        }
+                        const eps = endpointsPerId.get(id) || [];
+                        if (!hasCell || eps.length < 2) { ok = false; break; }
+                    }
+                    if (ok) return state.grid;
+                }
+            }
+
+            const nextStates = [];
+
+            for (const state of beam) {
+                const { endpointsPerId } = computeDegreesAndEndpoints(state.grid);
+
+                for (let id = 1; id <= pairCount; id++) {
+                    const endpoints = endpointsPerId.get(id) || [];
+                    for (const ep of endpoints) {
+                        const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+                        for (const [dr, dc] of dirs) {
+                            const nr = ep.r + dr, nc = ep.c + dc;
+                            if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+                            if (state.grid[nr][nc] !== 0) continue; // 他の線や自分自身へのループは作らない
+
+                            const newGrid = state.grid.map(row => row.slice());
+                            newGrid[nr][nc] = id;
+
+                            const newScore = evaluateForestGrid(newGrid);
+                            nextStates.push({ grid: newGrid, score: newScore });
+                        }
+                    }
+                }
+            }
+
+            if (nextStates.length === 0) break;
+
+            nextStates.sort((a, b) => b.score - a.score);
+            beam = nextStates.slice(0, beamWidth);
+        }
+
+        return null;
+    }
+
+    function generateCandidate() {
+        const n = gridSize;
+
+        // --- 6x6 以下：既存のビームサーチ＋ユニーク解チェックをそのまま利用 ---
+        if (gridSize <= 6) {
+            const forestGrid = generateFullCoverByBeam();
+            if (!forestGrid) return null;
+
+            const pairs = [];
+            for (let id = 1; id <= pairCount; id++) {
+                const cells = [];
+                for (let r = 0; r < n; r++) {
+                    for (let c = 0; c < n; c++) {
+                        if (forestGrid[r][c] === id) cells.push({ r, c });
+                    }
+                }
+                if (!cells.length) return null;
+
+                const deg = Array.from({ length: n }, () => Array(n).fill(0));
+                for (const { r, c } of cells) {
+                    const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+                    for (const [dr, dc] of dirs) {
+                        const nr = r + dr, nc = c + dc;
+                        if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+                        if (forestGrid[nr][nc] === id) deg[r][c]++;
+                    }
+                }
+
+                const endpoints = cells.filter(({ r, c }) => deg[r][c] === 1 || deg[r][c] === 0);
+                if (endpoints.length < 2) return null;
+
+                const e1 = endpoints[0];
+                const e2 = endpoints[1];
+                pairs.push({ id, start: [e1.r, e1.c], end: [e2.r, e2.c] });
+            }
+
+            const solveGrid = Array.from({ length: n }, () => Array(n).fill(0));
+            const solverPairs = pairs.map(p => ({
+                id: p.id,
+                start: p.start,
+                end: p.end,
+            }));
+
+            solverPairs.forEach(p => {
+                const [sr, sc] = p.start;
+                const [tr, tc] = p.end;
+                solveGrid[sr][sc] = p.id;
+                solveGrid[tr][tc] = p.id;
+            });
+
+            const stats = {
+                nodes: 0,
+                nodeLimit: gridSize * gridSize * pairCount * 40,
+            };
+
+            const solCount = countSolutions(solveGrid, solverPairs, 0, 2, stats);
+            if (solCount !== 1) return null;
+
+            return {
+                grid: forestGrid,
+                pairs,
+                difficultyScore: stats.nodes,
+            };
+        }
+
+        // --- 8x8 以上：SAT ソルバーを用いたランダムペア配置方式 ---
+
+        // 端点ペアをランダム配置
+        const cells = [];
+        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) cells.push({ r, c });
+        for (let i = cells.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [cells[i], cells[j]] = [cells[j], cells[i]];
+        }
+
+        const terminals = [];
+        const isTerminal = Array.from({ length: n }, () => Array(n).fill(false));
+        let idx = 0;
+        for (let id = 1; id <= pairCount; id++) {
+            if (idx + 1 >= cells.length) return null;
+            const c1 = cells[idx++];
+            const c2 = cells[idx++];
+            terminals.push({ id, r1: c1.r, c1: c1.c, r2: c2.r, c2: c2.c });
+            isTerminal[c1.r][c1.c] = true;
+            isTerminal[c2.r][c2.c] = true;
+        }
+
+        // SAT 変数の割り当て
+        const vertCount = (n - 1) * n;
+        const horizCount = n * (n - 1);
+        const edgeOffset = 0;
+        const edgeHOffset = vertCount;
+        const labelOffset = vertCount + horizCount;
+
+        function vertEdgeVar(i, j) { // (i,j) と (i+1,j) を結ぶ縦辺
+            return edgeOffset + (i * n + j) + 1;
+        }
+        function horizEdgeVar(i, j) { // (i,j) と (i,j+1) を結ぶ横辺
+            return edgeHOffset + (i * (n - 1) + j) + 1;
+        }
+        function labelVar(i, j, a) { // マス(i,j) がラベル a を持つか
+            return labelOffset + ((i * n + j) * pairCount + (a - 1)) + 1;
+        }
+
+        const numVars = labelOffset + n * n * pairCount;
+        const clauses = [];
+        const addClause = (lits) => { clauses.push(lits); };
+
+        // 各マスの incident edges を準備
+        const incidentEdges = Array.from({ length: n }, () => Array.from({ length: n }, () => []));
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                const list = incidentEdges[i][j];
+                if (i > 0) list.push(vertEdgeVar(i - 1, j));
+                if (i < n - 1) list.push(vertEdgeVar(i, j));
+                if (j > 0) list.push(horizEdgeVar(i, j - 1));
+                if (j < n - 1) list.push(horizEdgeVar(i, j));
+            }
+        }
+
+        // 端点・非端点ごとの次数制約
+        function addAtLeastOne(vars) {
+            if (vars.length === 0) return;
+            addClause(vars.slice());
+        }
+        function addAtMostOne(vars) {
+            for (let i = 0; i < vars.length; i++) {
+                for (let j = i + 1; j < vars.length; j++) {
+                    addClause([-vars[i], -vars[j]]);
+                }
+            }
+        }
+        function addAtMostTwo(vars) {
+            for (let i = 0; i < vars.length; i++) {
+                for (let j = i + 1; j < vars.length; j++) {
+                    for (let k = j + 1; k < vars.length; k++) {
+                        addClause([-vars[i], -vars[j], -vars[k]]);
+                    }
+                }
+            }
+        }
+        function addNotEqualOne(vars) {
+            // 「ちょうど1本」のパターンをすべて否定する (論理圧縮された形)
+            const m = vars.length;
+            for (let i = 0; i < m; i++) {
+                const lits = [];
+                for (let j = 0; j < m; j++) {
+                    lits.push(i === j ? -vars[j] : vars[j]);
+                }
+                addClause(lits);
+            }
+        }
+
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                const edges = incidentEdges[i][j];
+                if (edges.length === 0) continue;
+                if (isTerminal[i][j]) {
+                    // 端点：次数 = 1
+                    addAtLeastOne(edges);
+                    addAtMostOne(edges);
+                } else {
+                    // 非端点：次数 = 2 （0,1,3,4 を禁止）
+                    addAtMostTwo(edges);
+                    addNotEqualOne(edges);
+                    addAtLeastOne(edges);
+                }
+            }
+        }
+
+        // ラベル変数 x_ij ∈ {1..pairCount}
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                const vars = [];
+                for (let a = 1; a <= pairCount; a++) {
+                    vars.push(labelVar(i, j, a));
+                }
+                // 少なくとも1つ
+                addClause(vars);
+                // 高々1つ
+                for (let a = 0; a < pairCount; a++) {
+                    for (let b = a + 1; b < pairCount; b++) {
+                        addClause([-vars[a], -vars[b]]);
+                    }
+                }
+            }
+        }
+
+        // 端点のラベル固定
+        terminals.forEach(t => {
+            addClause([labelVar(t.r1, t.c1, t.id)]);
+            addClause([labelVar(t.r2, t.c2, t.id)]);
+        });
+
+        // エッジとラベルの整合性 (Tamura+ 紙の式 (24)-(27))
+        for (let i = 0; i < n - 1; i++) {
+            for (let j = 0; j < n; j++) {
+                const sVar = vertEdgeVar(i, j);
+                for (let a = 1; a <= pairCount; a++) {
+                    const p1 = labelVar(i, j, a);
+                    const p2 = labelVar(i + 1, j, a);
+                    addClause([-sVar, -p1, p2]);
+                    addClause([-sVar, p1, -p2]);
+                }
+            }
+        }
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n - 1; j++) {
+                const eVar = horizEdgeVar(i, j);
+                for (let a = 1; a <= pairCount; a++) {
+                    const p1 = labelVar(i, j, a);
+                    const p2 = labelVar(i, j + 1, a);
+                    addClause([-eVar, -p1, p2]);
+                    addClause([-eVar, p1, -p2]);
+                }
+            }
+        }
+
+        // SAT ソルバー実行（1 インスタンスあたりタイムアウトを短めに設定）
+        const assign = solveSat(numVars, clauses, 2000);
+        if (!assign) return null;
+
+        // 難易度スコア：端点間マンハッタン距離の総和を簡易指標として用いる
+        let difficultyScore = 0;
+        const pairs = terminals.map(t => {
+            const d = Math.abs(t.r1 - t.r2) + Math.abs(t.c1 - t.c2);
+            difficultyScore += d;
+            return {
+                id: t.id,
+                start: [t.r1, t.c1],
+                end: [t.r2, t.c2],
+            };
+        });
+
+        return {
+            grid: null,
+            pairs,
+            difficultyScore,
+        };
+    }
+
+    async function generateLevel() {
+        return new Promise((resolve) => {
+            const startTimeGen = performance.now();
+            const timeLimitMs = 50000; // 大きな盤面向けに十分な余裕を確保
+
+            // 難易度しきい値（6x6 以下のときのみ使用）
+            const baseThreshold = gridSize * pairCount * 10;
+
+            const attempt = () => {
+                if (performance.now() - startTimeGen > timeLimitMs) {
+                    statusEl.innerText = "生成に失敗しました…もう一度試してください";
+                    resolve(false);
+                    return;
+                }
+
+                const candidate = generateCandidate();
+                if (!candidate) {
+                    setTimeout(attempt, 0);
+                    return;
+                }
+
+                if (gridSize <= 6 && candidate.difficultyScore < baseThreshold) {
+                    // 簡単すぎるのでボツにして再生成
+                    setTimeout(attempt, 0);
+                    return;
+                }
+
+                // 採用
+                numbers = [];
+                paths = {};
+                candidate.pairs.forEach((p, idx) => {
+                    const color = colors[idx % colors.length];
+                    const [r1, c1] = p.start;
+                    const [r2, c2] = p.end;
+                    numbers.push({ x: c1, y: r1, val: p.id, color });
+                    numbers.push({ x: c2, y: r2, val: p.id, color });
+                    // プレイヤー用の初期経路は両端1マスのみ
+                    paths[p.id] = [[{ x: c1, y: r1 }], [{ x: c2, y: r2 }]];
+                });
+
+                resolve(true);
+            };
+
+            attempt();
+        });
+    }
+
+    // --- 以下、既存のUI/描画ロジックを維持 ---
+
+    async function initGame() {
+        gridSize = parseInt(document.getElementById('gridSelect').value);
+        // サイズごとにペア数を固定
+        switch (gridSize) {
+            case 4:
+                pairCount = 3;
+                break;
+            case 6:
+                pairCount = 5;
+                break;
+            case 8:
+                pairCount = 7;
+                break;
+            case 10:
+            default:
+                pairCount = 9;
+                break;
+        }
+        canvasSize = Math.min(window.innerWidth - 40, 500);
+        canvas.width = canvas.height = canvasSize;
+        spacing = (canvasSize - padding * 2) / (gridSize - 1);
+
+        // 生成中アニメーション開始
+        let dots = 0;
+        statusEl.innerText = "探索中";
+        if (generatingDotsInterval) clearInterval(generatingDotsInterval);
+        generatingDotsInterval = setInterval(() => {
+            dots = (dots + 1) % 4; // 0,1,2,3 → 0〜3個のドット
+            statusEl.innerText = "探索中" + "・".repeat(dots);
+        }, 1000);
+
+        showingAnswer = false;
+        timerEl.classList.remove("gave-up");
+        clearInterval(timerInterval);
+
+        const ok = await generateLevel();
+
+        // 生成アニメーション停止
+        if (generatingDotsInterval) {
+            clearInterval(generatingDotsInterval);
+            generatingDotsInterval = null;
+        }
+
+        if (!ok) {
+            // 生成失敗時はゲーム開始しない
+            return;
+        }
+        statusEl.innerText = "Playing";
+        startTime = Date.now();
+        timerInterval = setInterval(updateTimer, 1000);
+        draw();
+    }
+
+    function updateTimer() {
+        let diff = Math.floor((Date.now()-startTime)/1000);
+        timerEl.innerText = `${String(Math.floor(diff/60)).padStart(2,'0')}:${String(diff%60).padStart(2,'0')}`;
+    }
+
+    function draw() {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = "#eee";
+        for(let i=0;i<gridSize;i++) for(let j=0;j<gridSize;j++) {
+            ctx.beginPath(); ctx.arc(padding+i*spacing, padding+j*spacing, 2, 0, 7); ctx.fill();
+        }
+
+        Object.keys(paths).forEach(v => {
+            paths[v].forEach((path, idx) => {
+                let isD = (isDrawing && activeVal == v && activePathIdx == idx);
+                ctx.strokeStyle = colors[(v-1) % colors.length]; ctx.lineWidth = spacing*(isD?0.55:0.45);
+                ctx.lineCap = ctx.lineJoin = "round"; ctx.globalAlpha = isD?0.7:1.0;
+                ctx.beginPath();
+                path.forEach((p,i) => { let x=padding+p.x*spacing, y=padding+p.y*spacing; if(i==0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+                ctx.stroke();
+                let last = path[path.length-1];
+                ctx.fillStyle = colors[(v-1) % colors.length]; ctx.globalAlpha = 0.2;
+                ctx.beginPath(); ctx.arc(padding+last.x*spacing, padding+last.y*spacing, spacing*0.4, 0, 7); ctx.fill();
+            });
+        });
+
+        let r = spacing*0.35; ctx.font = `bold ${r}px Arial`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.globalAlpha = 1.0;
+        numbers.forEach(n => {
+            let x=padding+n.x*spacing, y=padding+n.y*spacing;
+            ctx.fillStyle = n.color; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
+            ctx.fillStyle = "white"; ctx.fillText(n.val, x, y);
+        });
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if(showingAnswer) return;
+        const p = getGridPos(e); if(!p) return;
+
+        // 既存パスの端点から描画開始
+        for(let v in paths) {
+            for(let i=0; i<paths[v].length; i++) {
+                let path = paths[v][i];
+                if(p.x == path[path.length-1].x && p.y == path[path.length-1].y) {
+                    activeVal = v; activePathIdx = i; isDrawing = true;
+                    canvas.setPointerCapture(e.pointerId); draw(); return;
+                }
+                if(p.x == path[0].x && p.y == path[0].y) {
+                    path.reverse(); activeVal = v; activePathIdx = i; isDrawing = true;
+                    canvas.setPointerCapture(e.pointerId); draw(); return;
+                }
+            }
+        }
+
+        // どのパスの端点でもないが「数字マス」の場合は、新たな端点としてパスを開始できるようにする
+        const num = numbers.find(n => n.x === p.x && n.y === p.y);
+        if (num) {
+            const v = String(num.val);
+            if (!paths[v]) paths[v] = [];
+            paths[v].push([{ x: num.x, y: num.y }]);
+            activeVal = v;
+            activePathIdx = paths[v].length - 1;
+            isDrawing = true;
+            canvas.setPointerCapture(e.pointerId);
+            draw();
+        }
+    });
+
+    window.addEventListener('pointermove', (e) => {
+        if(!isDrawing) return;
+        e.preventDefault();
+        const p = getGridPos(e); if(!p) return;
+        let path = paths[activeVal][activePathIdx], last = path[path.length-1];
+        if(p.x==last.x && p.y==last.y) return;
+        if(Math.abs(p.x-last.x) + Math.abs(p.y-last.y) == 1) {
+            if(path.length>1 && p.x==path[path.length-2].x && p.y==path[path.length-2].y) { path.pop(); draw(); return; }
+            let oIdx = 1 - activePathIdx, oPath = paths[activeVal][oIdx];
+            if(oPath && (p.x == oPath[oPath.length-1].x && p.y == oPath[oPath.length-1].y)) {
+                paths[activeVal][activePathIdx] = path.concat(oPath.reverse());
+                paths[activeVal].splice(oIdx, 1); isDrawing = false; draw(); return;
+            }
+            const tNum = numbers.find(n => n.x === p.x && n.y === p.y);
+            if(tNum) {
+                if(tNum.val != activeVal) return;
+                // 自分の数字マスには経路完了として到達可能（既にパスに含まれていても許可）
+                path.push(p); isDrawing = false; draw(); return;
+            }
+            if(Object.values(paths).flat().some(pa => pa.some(pt => pt.x==p.x && pt.y==p.y))) return;
+            path.push(p); draw();
+        }
+    });
+
+    window.addEventListener('pointerup', () => { isDrawing = false; activeVal = null; checkClear(); draw(); });
+
+    function getGridPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = Math.round((e.clientX - rect.left - padding) / spacing);
+        const y = Math.round((e.clientY - rect.top - padding) / spacing);
+        return (x>=0 && x<gridSize) ? (y>=0 && y<gridSize ? {x, y} : null) : null;
+    }
+
+    function checkClear() {
+        let used = new Set(); let ok = true;
+        for(let v in paths) {
+            if(paths[v].length !== 1) { ok = false; continue; }
+            let p = paths[v][0];
+            if(!numbers.some(n => n.x==p[0].x && n.y==p[0].y && n.val==v) || 
+               !numbers.some(n => n.x==p[p.length-1].x && n.y==p[p.length-1].y && n.val==v)) ok = false;
+            p.forEach(pt => used.add(`${pt.x},${pt.y}`));
+        }
+        if(used.size === gridSize*gridSize && ok) {
+            clearInterval(timerInterval);
+            document.getElementById('clearOverlay').style.display = 'flex';
+        }
+    }
+
+    function closeClear() { document.getElementById('clearOverlay').style.display='none'; initGame(); }
+    initGame();
+</script>
+</body>
+</html>

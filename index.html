@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WIT PORT（ウィッポ）| 知恵が集まる、港。</title>
+  <meta name="description" content="WIT PORTは、直感と論理を交差させる知恵の港。ペアリンクやビルパズルなど、洗練された知育ロジックゲームをお楽しみください。">
+  <style>
+    :root {
+      --bg-dark: #0b1020;
+      --bg-gradient: linear-gradient(135deg, #0b1020 0%, #111827 100%);
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-blue: #3b82f6;
+      --accent-emerald: #10b981;
+      --accent-glow: rgba(59, 130, 246, 0.5);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* アニメーション定義 */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes float {
+      0% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0px); }
+    }
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 24px;
+      width: 100%;
+    }
+
+    /* ヘッダー */
+    header {
+      padding: 32px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      animation: fadeInUp 0.8s ease-out;
+    }
+
+    .logo {
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: var(--text-main);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent-blue), #8b5cf6);
+      border-radius: 8px;
+      display: inline-block;
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+
+    /* ヒーローセクション */
+    .hero {
+      text-align: center;
+      padding: 60px 0 80px;
+      animation: fadeInUp 1s ease-out 0.2s backwards;
+    }
+
+    .hero h1 {
+      font-size: clamp(32px, 5vw, 56px);
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 24px;
+      background: linear-gradient(to right, #fff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      font-size: clamp(16px, 2vw, 20px);
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ゲームグリッド（メニュー） */
+    .game-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 32px;
+      padding-bottom: 80px;
+      animation: fadeInUp 1s ease-out 0.4s backwards;
+    }
+
+    .game-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 32px;
+      text-decoration: none;
+      color: var(--text-main);
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      backdrop-filter: blur(10px);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .game-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.1), transparent 50%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .game-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px var(--accent-glow);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .game-card:hover::before {
+      opacity: 1;
+    }
+
+    .card-icon {
+      font-size: 48px;
+      margin-bottom: 24px;
+      display: inline-block;
+      animation: float 6s ease-in-out infinite;
+    }
+
+    .game-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .game-desc {
+      color: var(--text-muted);
+      font-size: 15px;
+      line-height: 1.6;
+      flex-grow: 1;
+      margin-bottom: 24px;
+    }
+
+    .play-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: var(--accent-blue);
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-weight: bold;
+      font-size: 16px;
+      transition: background 0.2s;
+      width: 100%;
+    }
+
+    .game-card:hover .play-btn {
+      background: #2563eb;
+    }
+
+    .card-emerald .play-btn { background: var(--accent-emerald); }
+    .card-emerald:hover .play-btn { background: #059669; }
+    .card-emerald:hover { box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(16, 185, 129, 0.3); }
+
+    /* フッター */
+    footer {
+      margin-top: auto;
+      padding: 32px 0;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+      border-top: 1px solid var(--card-border);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <a href="#" class="logo">
+        <span class="logo-icon"></span>
+        WIT PORT
+      </a>
+    </header>
+
+    <main>
+      <section class="hero">
+        <h1>知恵が集まる、港。</h1>
+        <p>直感と論理を交差させる、洗練されたパズルの世界へようこそ。<br>あなたの「ひらめき」が、ここから出航します。</p>
+      </section>
+
+      <section class="game-grid">
+        <a href="pair-link.html" class="game-card">
+          <div class="card-icon">✨</div>
+          <h2 class="game-title">ペアリンク</h2>
+          <p class="game-desc">盤面上の同じキャラクター同士を、線が交差しないように繋ぎ合わせる直感型ロジックパズル。すべてのマスを埋めて、鮮やかなクリアを目指そう。</p>
+          <div class="play-btn">
+            出航する（Play）
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </div>
+        </a>
+
+        <a href="skyscraper.html" class="game-card card-emerald">
+          <div class="card-icon">🏢</div>
+          <h2 class="game-title">空の上から (Skyscraper)</h2>
+          <p class="game-desc">外枠の数字をヒントに、重なり合うビルの高さを推理する本格派パズル。迷った時は「メイビー蜂さん」の力を借りて、論理の糸口を掴もう。</p>
+          <div class="play-btn">
+            出航する（Play）
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </div>
+        </a>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    <p>&copy; 2026 WIT PORT. All rights reserved.</p>
+  </footer>
+
+</body>
+</html>
