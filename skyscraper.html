@@ -88,10 +88,62 @@
     .actions{ display:flex; gap:8px; align-items:center; justify-content:space-between; }
     .status{ font-size:12px; color:#334155; min-height:1.2em; font-weight:bold; }
 
+    /* メイビー用ボタン・パネル */
+    .maybe-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .maybe-btn-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .maybe-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      border: 1px solid #94a3b8;
+      background: #0f172a;
+      color: #e2e8f0;
+      cursor: pointer;
+      font: inherit;
+      padding: 6px 10px;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    .maybe-btn:hover { background: #111827; }
+    .maybe-btn .bee { font-size: 1em; line-height: 1; }
+    .maybe-btn .label { font-size: 0.65em; font-weight: 600; }
+    .maybe-btn .sublabel { font-size: 0.5em; color: var(--muted); margin-top: 2px; }
+    .maybe-two-btns { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+    .maybe-two-btns .maybe-btn { width: 100%; }
+
+    /* メイビーモード時の数字の色（かもしれない＝薄い色） */
+    .cell.maybe-number { color: #64748b; }
+    .cell.maybe-number::before { background: #cbd5e1; border-top-color: #94a3b8; }
+    /* 最初に決めたマス：蜂の針ピン */
+    .cell.maybe-pin { position: relative; }
+    .cell.maybe-pin::after {
+      content: '';
+      position: absolute;
+      bottom: 2px; left: 50%; transform: translateX(-50%);
+      width: 0; height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 8px solid #b45309;
+      pointer-events: none;
+    }
+
     /* 印刷用 */
     @media print{
       body{ background:#fff; }
-      header, .note, .actions .btn.primary{ display:none !important; }
+      header, .note, .actions .btn.primary, .maybe-panel{ display:none !important; }
       .card{ box-shadow:none; margin:0; }
       .edge-cell{ color:#000; }
       .cell{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -273,7 +325,12 @@ const state = {
   difficulty: 'normal',
   puzzle: null, // {solution, clues}
   grid: [],
-  solved: false // 正解済みかどうかのフラグ
+  solved: false, // 正解済みかどうかのフラグ
+  // メイビー（巻き戻し）用
+  maybeMode: false,
+  maybeGridSnapshot: null,   // メイビー押下時の盤面
+  sinceMaybeHistory: [],    // [{r,c,prevVal}, ...] メイビー以降の入力履歴
+  firstDeterminedCell: null // {r,c} メイビー時点で最初に数字が入っていたマス
 };
 
 function el(tag, attrs={}, ...children){
@@ -308,10 +365,17 @@ function cycleCell(r,c){
   const n=state.n;
   const cur=state.grid[r][c] || 0;
   const next = (cur >= n) ? 0 : (cur + 1);
+  recordMaybeChange(r, c);
   state.grid[r][c] = next;
 }
 
 function updateCell(r,c,val){ state.grid[r][c]=val; }
+
+/** メイビーモード時に入力前の値を履歴に記録 */
+function recordMaybeChange(r, c) {
+  if (!state.maybeMode) return;
+  state.sinceMaybeHistory.push({ r, c, prevVal: state.grid[r][c] || 0 });
+}
 
 /** 正解かどうかを自動判定し、正解なら紙吹雪を降らせる */
 function checkWinCondition() {
@@ -366,6 +430,7 @@ function attachCellInteractions(cell, r, c){
       moved = true;
       let next = startVal + step;
       next = Math.max(0, Math.min(state.n, next)); // 0〜Nにクランプ
+      recordMaybeChange(r, c);
       updateCell(r, c, next);
       updateCellVisuals(cell, next, state.n);
       lastStep = step;
@@ -417,6 +482,7 @@ function attachCellInteractions(cell, r, c){
     if(state.solved) return; // 正解後は操作ロック
     
     if (e.key === 'Backspace' || e.key === 'Delete') {
+      recordMaybeChange(r, c);
       updateCell(r, c, 0);
       updateCellVisuals(cell, 0, state.n);
       e.preventDefault();
@@ -425,12 +491,61 @@ function attachCellInteractions(cell, r, c){
     if (/^[1-9]$/.test(e.key)) {
       const num = parseInt(e.key, 10);
       if (num >= 1 && num <= state.n) {
+        recordMaybeChange(r, c);
         updateCell(r, c, num);
         updateCellVisuals(cell, num, state.n);
         checkWinCondition(); // 入力後にクリア判定
       }
     }
   });
+}
+
+function handleMaybeEnter() {
+  if (state.solved) return;
+  state.maybeGridSnapshot = state.grid.map(row => [...row]);
+  state.sinceMaybeHistory = [];
+  state.firstDeterminedCell = null;
+  for (let r = 0; r < state.n; r++) {
+    for (let c = 0; c < state.n; c++) {
+      if (state.maybeGridSnapshot[r][c]) {
+        state.firstDeterminedCell = { r, c };
+        break;
+      }
+    }
+    if (state.firstDeterminedCell) break;
+  }
+  state.maybeMode = true;
+  buildBoard();
+}
+
+function handleMaybeConfirm() {
+  state.maybeMode = false;
+  state.maybeGridSnapshot = null;
+  state.sinceMaybeHistory = [];
+  state.firstDeterminedCell = null;
+  buildBoard();
+}
+
+function handleMaybeRewind() {
+  const area = document.getElementById('boardArea');
+  const steps = state.sinceMaybeHistory.slice();
+  const totalMs = 1000;
+  const stepMs = steps.length > 0 ? Math.max(40, Math.min(80, Math.floor(totalMs / steps.length))) : 0;
+
+  (async () => {
+    for (let i = steps.length - 1; i >= 0; i--) {
+      const { r, c, prevVal } = steps[i];
+      state.grid[r][c] = prevVal;
+      const cellEl = area.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+      if (cellEl) updateCellVisuals(cellEl, prevVal, state.n);
+      await new Promise(resolve => setTimeout(resolve, stepMs));
+    }
+    state.maybeMode = false;
+    state.maybeGridSnapshot = null;
+    state.sinceMaybeHistory = [];
+    state.firstDeterminedCell = null;
+    buildBoard();
+  })();
 }
 
 function buildBoard(){
@@ -474,10 +589,10 @@ function buildBoard(){
   // 右余白
   topRow.appendChild(el('div', { class: 'edge-cell' }));
 
-  // ===== 中段（左手がかり + 盤面 + 右手がかり）=====
-  // 中央列は「N×CELL + 左右ボーダー4px」を確保
+  // ===== 中段（左手がかり + 盤面 + メイビーパネル + 右手がかり）=====
+  const MAYBE_BTN_PX = Math.round(CELL_PX * 1.25);
   const midRow = el('div', {
-    style: `display:grid; grid-template-columns: ${SIDE_PAD_PX}px calc(${n * CELL_PX}px + ${2 * BORDER_PX}px) ${SIDE_PAD_PX}px; gap:8px; align-items:center;`
+    style: `display:grid; grid-template-columns: ${SIDE_PAD_PX}px calc(${n * CELL_PX}px + ${2 * BORDER_PX}px) ${MAYBE_BTN_PX + 16}px ${SIDE_PAD_PX}px; gap:8px; align-items:center;`
   });
 
   // 左手がかり（上2pxスペーサ + N×CELL + 下2pxスペーサ）
@@ -498,14 +613,17 @@ function buildBoard(){
   gridEl.style.gridTemplateColumns = `repeat(${n}, ${CELL_PX}px)`;
 
   // セル生成（サイズは実測値で明示）
+  const firstCell = state.firstDeterminedCell;
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
-      const cell = el('div', { class: 'cell', tabIndex: 0 });
+      const cell = el('div', { class: 'cell', tabIndex: 0, 'data-row': String(r), 'data-col': String(c) });
       cell.style.width = `${CELL_PX}px`;
       cell.style.height = `${CELL_PX}px`;
       
       const val = grid[r][c] || 0;
       updateCellVisuals(cell, val, state.n);
+      if (state.maybeMode && val) cell.classList.add('maybe-number');
+      if (state.maybeMode && firstCell && firstCell.r === r && firstCell.c === c) cell.classList.add('maybe-pin');
 
       // クリックは Pointer イベントに内包させる（移動なし＝クリック扱い）
       attachCellInteractions(cell, r, c);
@@ -514,6 +632,41 @@ function buildBoard(){
     }
   }
   board.appendChild(gridEl);
+
+  // メイビーパネル（盤面の横）
+  const maybePanel = el('div', { class: 'maybe-panel' });
+  maybePanel.style.width = `${MAYBE_BTN_PX + 16}px`;
+  if (state.maybeMode) {
+    const twoWrap = el('div', { class: 'maybe-two-btns' });
+    const btnConfirm = el('button', { class: 'maybe-btn' }, 'メイビー確定');
+    btnConfirm.style.width = `${MAYBE_BTN_PX}px`;
+    btnConfirm.style.height = `${MAYBE_BTN_PX}px`;
+    btnConfirm.style.fontSize = '0.7em';
+    btnConfirm.onclick = handleMaybeConfirm;
+    const btnRewind = el('button', { class: 'maybe-btn' }, 'メイビーまで戻す');
+    btnRewind.style.width = `${MAYBE_BTN_PX}px`;
+    btnRewind.style.height = `${MAYBE_BTN_PX}px`;
+    btnRewind.style.fontSize = '0.55em';
+    btnRewind.onclick = handleMaybeRewind;
+    twoWrap.appendChild(btnConfirm);
+    twoWrap.appendChild(btnRewind);
+    maybePanel.appendChild(twoWrap);
+  } else {
+    const btnWrap = el('div', { class: 'maybe-btn-wrap' });
+    const maybeBtn = el('button', { class: 'maybe-btn', id: 'maybeBtn' });
+    maybeBtn.style.width = `${MAYBE_BTN_PX}px`;
+    maybeBtn.style.height = `${MAYBE_BTN_PX}px`;
+    const beeSpan = el('span', { class: 'bee' }, '🐝');
+    const labelSpan = el('span', { class: 'label' }, 'メイビー');
+    const subSpan = el('span', { class: 'sublabel' }, 'かもしれないボタン');
+    maybeBtn.appendChild(beeSpan);
+    maybeBtn.appendChild(labelSpan);
+    maybeBtn.appendChild(subSpan);
+    maybeBtn.onclick = handleMaybeEnter;
+    btnWrap.appendChild(maybeBtn);
+    maybePanel.appendChild(btnWrap);
+  }
+  midRow.appendChild(maybePanel);
 
   // 右手がかり（上2pxスペーサ + N×CELL + 下2pxスペーサ）
   const rightCol = el('div', { class: 'edge-col' });
@@ -611,6 +764,10 @@ function handleCheck(){
 }
 function handleClear(){ 
   if(state.solved) return; // ロック（クリア後は新規生成を促すため）
+  state.maybeMode = false;
+  state.maybeGridSnapshot = null;
+  state.sinceMaybeHistory = [];
+  state.firstDeterminedCell = null;
   state.grid = Array.from({length:state.n}, ()=>Array(state.n).fill(0)); 
   buildBoard(); 
   setStatus('盤面をリセットしました。'); 
@@ -626,6 +783,10 @@ function handleSolve(){
 function generate(){
   setStatus('生成中…（唯一解チェックを行います）');
   state.solved = false; // ロック解除
+  state.maybeMode = false;
+  state.maybeGridSnapshot = null;
+  state.sinceMaybeHistory = [];
+  state.firstDeterminedCell = null;
   setTimeout(()=>{
     const {solution, clues} = generateUniquePuzzle(state.n, state.difficulty);
     state.puzzle={solution, clues};
