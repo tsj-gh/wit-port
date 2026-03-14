@@ -49,6 +49,7 @@ export default function PairLinkGame() {
   const activePathIdxRef = useRef<number | null>(null);
   const hasTriggeredClearRef = useRef(false);
   const isCheckingClearRef = useRef(false);
+  const mergeIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     isDrawingRef.current = isDrawing;
