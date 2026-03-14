@@ -159,10 +159,24 @@
       pointer-events: none;
     }
 
+    /* ADスペース（デザインを損なわない広告枠） */
+    .ad-space {
+      min-height: 90px;
+      margin: 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid rgba(203, 213, 225, 0.2);
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
     /* 印刷用 */
     @media print{
       body{ background:#fff; }
-      header, .note, .actions .btn.primary, .maybe-panel{ display:none !important; }
+      header, .note, .actions .btn.primary, .maybe-panel, .ad-space{ display:none !important; }
       .card{ box-shadow:none; margin:0; }
       .edge-cell{ color:#000; }
       .cell{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -238,6 +252,8 @@
         <li>すべての手がかりを満たすように数字を配置すると完成です。</li>
       </ol>
     </section>
+
+    <aside class="ad-space" aria-label="広告スペース">AD</aside>
 
     <p class="note" style="text-align:center">© <span id="year"></span> Skyscrapers puzzle generator (for educational/demo use). 生成はブラウザ内で行い、4〜6マスに最適化。</p>
   </div>

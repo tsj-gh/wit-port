@@ -195,6 +195,21 @@
     .card-emerald:hover .play-btn { background: #059669; }
     .card-emerald:hover { box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(16, 185, 129, 0.3); }
 
+    /* ADスペース（デザインを損なわない広告枠） */
+    .ad-space {
+      min-height: 90px;
+      margin: 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(30, 41, 59, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      color: var(--text-muted);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+
     /* フッター */
     footer {
       margin-top: auto;
@@ -243,6 +258,10 @@
           </div>
         </a>
       </section>
+
+      <aside class="ad-space" aria-label="広告スペース">
+        AD
+      </aside>
     </main>
   </div>
 
