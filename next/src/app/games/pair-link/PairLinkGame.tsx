@@ -322,6 +322,20 @@ export default function PairLinkGame() {
       const num = numbers.find((n) => n.x === p.x && n.y === p.y);
       if (num) {
         const v = String(num.val);
+        // 既に他セグメントの端点になっている数字には新規セグメントを作らない
+        const alreadyEndpoint = Object.entries(paths).some(([pv, pathList]) =>
+          pv === v &&
+          pathList.some(
+            (path) =>
+              (path.length > 0 &&
+                path[0].x === p.x &&
+                path[0].y === p.y) ||
+              (path.length > 0 &&
+                path[path.length - 1].x === p.x &&
+                path[path.length - 1].y === p.y)
+          )
+        );
+        if (alreadyEndpoint) return;
         setPaths((prev) => {
           const next = { ...prev };
           if (!next[v]) next[v] = [];
@@ -385,6 +399,20 @@ export default function PairLinkGame() {
           next[av] = seg;
           return next;
         }
+
+        // 数字の端点からは別方向に伸ばせない（戻すのみ）
+        const lastIsNum = numbers.some(
+          (n) => n.x === last.x && n.y === last.y && n.val === Number(av)
+        );
+        if (lastIsNum) return prev;
+
+        // 自分の開始数字へ戻る（ループ生成・2本目防止）
+        if (
+          path.length > 2 &&
+          p.x === path[0].x &&
+          p.y === path[0].y
+        )
+          return prev;
 
         const oIdx = 1 - api;
         const oPath = prev[av]?.[oIdx];
