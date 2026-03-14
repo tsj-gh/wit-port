@@ -245,18 +245,21 @@ export default function PairLinkGame() {
           else ctx.lineTo(px, py);
         });
         ctx.stroke();
-        const last = path[path.length - 1];
         ctx.fillStyle = color;
         ctx.globalAlpha = 0.2;
-        ctx.beginPath();
-        ctx.arc(
-          PADDING + last.x * spacing,
-          PADDING + last.y * spacing,
-          spacing * 0.4,
-          0,
-          Math.PI * 2
-        );
-        ctx.fill();
+        const drawEndpointCircle = (pt: PathPoint) => {
+          ctx.beginPath();
+          ctx.arc(
+            PADDING + pt.x * spacing,
+            PADDING + pt.y * spacing,
+            spacing * 0.4,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        };
+        drawEndpointCircle(path[path.length - 1]);
+        if (path.length > 1) drawEndpointCircle(path[0]);
       });
     });
 
@@ -378,6 +381,19 @@ export default function PairLinkGame() {
         ) {
           const mergeIdx = mergeIndexRef.current;
           const popped = path.slice(0, -1);
+          const firstIsNum = numbers.some(
+            (n) =>
+              n.x === popped[0].x &&
+              n.y === popped[0].y &&
+              n.val === Number(av)
+          );
+          const lastIsNum = numbers.some(
+            (n) =>
+              n.x === popped[popped.length - 1].x &&
+              n.y === popped[popped.length - 1].y &&
+              n.val === Number(av)
+          );
+          if (!firstIsNum && !lastIsNum) return prev;
           if (mergeIdx !== null && popped.length === mergeIdx) {
             mergeIndexRef.current = null;
             const ourPath = path.slice(0, mergeIdx);
