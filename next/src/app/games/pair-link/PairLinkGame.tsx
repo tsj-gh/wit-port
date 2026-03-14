@@ -254,7 +254,7 @@ export default function PairLinkGame() {
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault();
-      if (solved) return;
+      if (solved || hasTriggeredClearRef.current) return;
       const p = getGridPos(e.clientX, e.clientY);
       if (!p) return;
 
@@ -320,7 +320,7 @@ export default function PairLinkGame() {
       // refs を参照（window listener から呼ばれたとき、描画開始直後の React 再描画前でも正しく動作）
       const av = activeValRef.current;
       const api = activePathIdxRef.current;
-      if (!isDrawingRef.current || av === null || api === null) return;
+      if (hasTriggeredClearRef.current || !isDrawingRef.current || av === null || api === null) return;
       e.preventDefault();
       const p = getGridPos(e.clientX, e.clientY);
       if (!p) return;
