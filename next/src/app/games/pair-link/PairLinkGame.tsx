@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useMemo,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import confetti from "canvas-confetti";
 import { generatePuzzleAction, validatePathsAction } from "./actions";
@@ -47,6 +41,15 @@ export default function PairLinkGame() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeSecondsRef = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isDrawingRef = useRef(false);
+  const activeValRef = useRef<string | null>(null);
+  const activePathIdxRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    isDrawingRef.current = isDrawing;
+    activeValRef.current = activeVal;
+    activePathIdxRef.current = activePathIdx;
+  }, [isDrawing, activeVal, activePathIdx]);
 
   const [canvasPixelSize, setCanvasPixelSize] = useState(420);
   useEffect(() => {
@@ -120,8 +123,13 @@ export default function PairLinkGame() {
       const canvas = canvasRef.current;
       if (!canvas || spacing <= 0) return null;
       const rect = canvas.getBoundingClientRect();
-      const x = Math.round((clientX - rect.left - PADDING) / spacing);
-      const y = Math.round((clientY - rect.top - PADDING) / spacing);
+      // 表示サイズとcanvas内部サイズが異なる場合の座標変換（HTML版と同様に正しくマス判定）
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const canvasX = (clientX - rect.left) * scaleX;
+      const canvasY = (clientY - rect.top) * scaleY;
+      const x = Math.round((canvasX - PADDING) / spacing);
+      const y = Math.round((canvasY - PADDING) / spacing);
       if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) return { x, y };
       return null;
     },
@@ -246,6 +254,9 @@ export default function PairLinkGame() {
           const last = path[path.length - 1];
           const first = path[0];
           if (p.x === last.x && p.y === last.y) {
+            activeValRef.current = v;
+            activePathIdxRef.current = i;
+            isDrawingRef.current = true;
             setActiveVal(v);
             setActivePathIdx(i);
             setIsDrawing(true);
@@ -260,6 +271,9 @@ export default function PairLinkGame() {
               next[v] = seg;
               return next;
             });
+            activeValRef.current = v;
+            activePathIdxRef.current = i;
+            isDrawingRef.current = true;
             setActiveVal(v);
             setActivePathIdx(i);
             setIsDrawing(true);
@@ -278,8 +292,12 @@ export default function PairLinkGame() {
           next[v] = [...(next[v] ?? []), [{ x: num.x, y: num.y }]];
           return next;
         });
+        const pathIdx = (paths[v]?.length ?? 1) - 1;
+        activeValRef.current = v;
+        activePathIdxRef.current = pathIdx;
+        isDrawingRef.current = true;
         setActiveVal(v);
-        setActivePathIdx((paths[v]?.length ?? 1) - 1);
+        setActivePathIdx(pathIdx);
         setIsDrawing(true);
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
       }
@@ -289,7 +307,10 @@ export default function PairLinkGame() {
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (!isDrawing || activeVal === null || activePathIdx === null) return;
+      // refs を参照（window listener から呼ばれたとき、描画開始直後の React 再描画前でも正しく動作）
+      const av = activeValRef.current;
+      const api = activePathIdxRef.current;
+      if (!isDrawingRef.current || av === null || api === null) return;
       e.preventDefault();
       const p = getGridPos(e.clientX, e.clientY);
       if (!p) return;
@@ -298,7 +319,7 @@ export default function PairLinkGame() {
       let reachedGoal = false;
 
       setPaths((prev) => {
-        const path = prev[activeVal]?.[activePathIdx];
+        const path = prev[av]?.[api];
         if (!path) return prev;
         const last = path[path.length - 1];
         if (p.x === last.x && p.y === last.y) return prev;
@@ -313,14 +334,14 @@ export default function PairLinkGame() {
           p.y === path[path.length - 2].y
         ) {
           const next = { ...prev };
-          const seg = next[activeVal].map((s) => [...s]);
-          seg[activePathIdx] = path.slice(0, -1);
-          next[activeVal] = seg;
+          const seg = next[av].map((s) => [...s]);
+          seg[api] = path.slice(0, -1);
+          next[av] = seg;
           return next;
         }
 
-        const oIdx = 1 - activePathIdx;
-        const oPath = prev[activeVal]?.[oIdx];
+        const oIdx = 1 - api;
+        const oPath = prev[av]?.[oIdx];
         if (
           oPath &&
           oPath.length > 0 &&
@@ -329,21 +350,21 @@ export default function PairLinkGame() {
         ) {
           didMerge = true;
           const merged = [...path, ...[...oPath].reverse()];
-          const seg = prev[activeVal].filter((_, i) => i !== oIdx);
+          const seg = prev[av].filter((_, i) => i !== oIdx);
           seg[0] = merged;
           const next = { ...prev };
-          next[activeVal] = seg;
+          next[av] = seg;
           return next;
         }
 
         const tNum = numbers.find((n) => n.x === p.x && n.y === p.y);
         if (tNum) {
-          if (tNum.val !== Number(activeVal)) return prev;
+          if (tNum.val !== Number(av)) return prev;
           reachedGoal = true;
           const next = { ...prev };
-          const seg = next[activeVal].map((s) => [...s]);
-          seg[activePathIdx] = [...path, p];
-          next[activeVal] = seg;
+          const seg = next[av].map((s) => [...s]);
+          seg[api] = [...path, p];
+          next[av] = seg;
           return next;
         }
 
@@ -353,27 +374,63 @@ export default function PairLinkGame() {
         if (occupied) return prev;
 
         const next = { ...prev };
-        const seg = next[activeVal].map((s) => [...s]);
-        seg[activePathIdx] = [...path, p];
-        next[activeVal] = seg;
+        const seg = next[av].map((s) => [...s]);
+        seg[api] = [...path, p];
+        next[av] = seg;
         return next;
       });
 
       if (didMerge || reachedGoal) {
+        isDrawingRef.current = false;
+        activeValRef.current = null;
+        activePathIdxRef.current = null;
         setIsDrawing(false);
         setActiveVal(null);
         setActivePathIdx(null);
       }
     },
-    [isDrawing, activeVal, activePathIdx, numbers, getGridPos]
+    [numbers, getGridPos]
   );
 
   const handlePointerUp = useCallback(() => {
+    isDrawingRef.current = false;
+    activeValRef.current = null;
+    activePathIdxRef.current = null;
     setIsDrawing(false);
     setActiveVal(null);
     setActivePathIdx(null);
     checkClear();
   }, [checkClear]);
+
+  // HTML版と同様に window で pointermove/up を受信（指が canvas 外に出てもドラッグ継続）
+  const handlePointerMoveRef = useRef(handlePointerMove);
+  const handlePointerUpRef = useRef(handlePointerUp);
+  handlePointerMoveRef.current = handlePointerMove;
+  handlePointerUpRef.current = handlePointerUp;
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const synthetic = {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        preventDefault: () => e.preventDefault(),
+      } as React.PointerEvent;
+      handlePointerMoveRef.current(synthetic);
+    };
+    const onUp = () => handlePointerUpRef.current?.();
+
+    window.addEventListener("pointermove", onMove, {
+      capture: true,
+      passive: false,
+    });
+    window.addEventListener("pointerup", onUp, { capture: true });
+    window.addEventListener("pointercancel", onUp, { capture: true });
+    return () => {
+      window.removeEventListener("pointermove", onMove, { capture: true });
+      window.removeEventListener("pointerup", onUp, { capture: true });
+      window.removeEventListener("pointercancel", onUp, { capture: true });
+    };
+  }, []);
 
   if (loading || !numbers.length) {
     return (
@@ -433,8 +490,8 @@ export default function PairLinkGame() {
             <span className="tabular-nums">{formatTime(timeSeconds)}</span>
           </div>
           <div
-            className="w-full max-w-[520px] touch-none"
-            style={{ minHeight: canvasSize }}
+            className="w-full max-w-[520px] touch-none select-none"
+            style={{ minHeight: canvasSize, WebkitTapHighlightColor: "transparent" }}
           >
             <canvas
               ref={canvasRef}
