@@ -34,6 +34,7 @@ export default function SkyscraperGame() {
   const [clues, setClues] = useState<Clues | null>(null);
   const [grid, setGrid] = useState<number[][]>([]);
   const [solved, setSolved] = useState(false);
+  const [showClearOverlay, setShowClearOverlay] = useState(false);
   const [status, setStatus] = useState("");
   const [maybeMode, setMaybeMode] = useState(false);
   const [maybeGridSnapshot, setMaybeGridSnapshot] = useState<number[][] | null>(null);
@@ -52,6 +53,7 @@ export default function SkyscraperGame() {
   const loadPuzzle = useCallback(async (size: number, diff: "easy" | "normal" | "hard") => {
     setLoading(true);
     setSolved(false);
+    setShowClearOverlay(false);
     setN(size);
     setDifficulty(diff);
     setTimeSeconds(0);
@@ -111,15 +113,7 @@ export default function SkyscraperGame() {
     const result = await validateAnswerAction(grid, n);
     if (result.ok) {
       setSolved(true);
-      const count = 150;
-      const defaults = { origin: { y: 0.6 }, zIndex: 9999 };
-      confetti({ ...defaults, particleCount: count, spread: 100 });
-      confetti({ ...defaults, particleCount: count / 2, angle: 60, spread: 55 });
-      confetti({ ...defaults, particleCount: count / 2, angle: 120, spread: 55 });
-      setTimeout(() => {
-        confetti({ ...defaults, particleCount: 50, scalar: 1.2, spread: 80 });
-      }, 200);
-      setStatus("✨ 正解です！おめでとうございます！ ✨");
+      setShowClearOverlay(true);
       try {
         const key = "skyscraper_completed";
         const prev = JSON.parse(localStorage.getItem(key) || "[]");
@@ -136,6 +130,19 @@ export default function SkyscraperGame() {
   useEffect(() => {
     checkWin();
   }, [grid, checkWin]);
+
+  // クリア画面ポップアップ時のみ紙吹雪を1回発火
+  useEffect(() => {
+    if (!showClearOverlay) return;
+    const defaults = { origin: { y: 0.6 }, zIndex: 9999 };
+    confetti({ ...defaults, particleCount: 150, spread: 100 });
+    confetti({ ...defaults, particleCount: 75, angle: 60, spread: 55 });
+    confetti({ ...defaults, particleCount: 75, angle: 120, spread: 55 });
+    const t = setTimeout(() => {
+      confetti({ ...defaults, particleCount: 50, scalar: 1.2, spread: 80 });
+    }, 200);
+    return () => clearTimeout(t);
+  }, [showClearOverlay]);
 
   const cycleCell = useCallback(
     (r: number, c: number) => {
@@ -227,8 +234,8 @@ export default function SkyscraperGame() {
     setGrid(result.solution.map((r) => [...r]));
     setSolved(true);
     setTimerActive(false);
+    setShowClearOverlay(true);
     setStatus("解答を表示しました。");
-    confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
   };
 
   const handleMaybeEnter = () => {
@@ -565,6 +572,44 @@ export default function SkyscraperGame() {
           <li>すべての手がかりを満たすように数字を配置すると完成です。</li>
         </ol>
       </section>
+
+      {showClearOverlay && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clear-title"
+        >
+          <div className="rounded-2xl p-8 bg-slate-800 border border-slate-600 text-center shadow-2xl max-w-sm mx-4">
+            <h2
+              id="clear-title"
+              className="text-2xl font-bold text-wit-emerald mb-2"
+            >
+              Perfect!
+            </h2>
+            <p className="text-wit-muted mb-4">
+              パズルを解き明かしました。（{formatTime(timeSeconds)}）
+            </p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => setShowClearOverlay(false)}
+                className="px-6 py-3 rounded-lg bg-slate-700 text-wit-text font-medium hover:bg-slate-600"
+              >
+                戻る
+              </button>
+              <button
+                onClick={() => {
+                  setShowClearOverlay(false);
+                  loadPuzzle(n, difficulty);
+                }}
+                className="px-6 py-3 rounded-lg bg-wit-emerald text-white font-medium hover:bg-emerald-600"
+              >
+                次に進む
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

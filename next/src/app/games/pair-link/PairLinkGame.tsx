@@ -669,15 +669,23 @@ export default function PairLinkGame() {
             <p className="text-wit-muted mb-4">
               パズルを解き明かしました。（{formatTime(timeSeconds)}）
             </p>
-            <button
-              onClick={() => {
-                setShowClearOverlay(false);
-                initGame(gridSize);
-              }}
-              className="px-6 py-3 rounded-lg bg-slate-700 text-wit-text font-medium hover:bg-slate-600"
-            >
-              次へ
-            </button>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => setShowClearOverlay(false)}
+                className="px-6 py-3 rounded-lg bg-slate-700 text-wit-text font-medium hover:bg-slate-600"
+              >
+                戻る
+              </button>
+              <button
+                onClick={() => {
+                  setShowClearOverlay(false);
+                  initGame(gridSize);
+                }}
+                className="px-6 py-3 rounded-lg bg-wit-emerald text-white font-medium hover:bg-emerald-600"
+              >
+                次に進む
+              </button>
+            </div>
           </div>
         </div>
       )}
