@@ -147,14 +147,6 @@ export default function PairLinkGame() {
       hasTriggeredClearRef.current = true;
       setSolved(true);
       setTimerActive(false);
-      const count = 150;
-      const defaults = { origin: { y: 0.6 }, zIndex: 9999 };
-      confetti({ ...defaults, particleCount: count, spread: 100 });
-      confetti({ ...defaults, particleCount: count / 2, angle: 60, spread: 55 });
-      confetti({ ...defaults, particleCount: count / 2, angle: 120, spread: 55 });
-      setTimeout(() => {
-        confetti({ ...defaults, particleCount: 50, scalar: 1.2, spread: 80 });
-      }, 200);
       setShowClearOverlay(true);
       try {
         const prev = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
@@ -169,6 +161,19 @@ export default function PairLinkGame() {
       }
     }
   }, [paths, pairs, gridSize, solved, loading]);
+
+  // クリア画面ポップアップ時のみ紙吹雪を1回発火（showClearOverlay の遷移で確実に1回に限定）
+  useEffect(() => {
+    if (!showClearOverlay) return;
+    const defaults = { origin: { y: 0.6 }, zIndex: 9999 };
+    confetti({ ...defaults, particleCount: 150, spread: 100 });
+    confetti({ ...defaults, particleCount: 75, angle: 60, spread: 55 });
+    confetti({ ...defaults, particleCount: 75, angle: 120, spread: 55 });
+    const t = setTimeout(() => {
+      confetti({ ...defaults, particleCount: 50, scalar: 1.2, spread: 80 });
+    }, 200);
+    return () => clearTimeout(t);
+  }, [showClearOverlay]);
 
   // --- Draw canvas ---
   useEffect(() => {
