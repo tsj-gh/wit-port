@@ -43,7 +43,7 @@ export type UsePuzzleStockOptions = {
 export function usePuzzleStock(
   options: UsePuzzleStockOptions = {}
 ): {
-  getPuzzle: () => Promise<GenerateResult>;
+  getPuzzle: (requestedSize?: number) => Promise<GenerateResult>;
   stockCount: number;
   prefetch: () => void;
 } {
