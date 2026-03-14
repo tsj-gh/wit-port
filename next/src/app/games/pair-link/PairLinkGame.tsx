@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
-import { generatePuzzleAction, validatePathsAction } from "./actions";
+import { validatePathsAction } from "./actions";
+import { usePuzzleStock } from "@/hooks/usePuzzleStock";
 import type { Pair } from "@/lib/puzzle-engine/pair-link";
 
 type NumberCell = { x: number; y: number; val: number; color: string };
@@ -37,6 +39,7 @@ export default function PairLinkGame() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [activeVal, setActiveVal] = useState<string | null>(null);
   const [activePathIdx, setActivePathIdx] = useState<number | null>(null);
+  const [puzzleKey, setPuzzleKey] = useState(0);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeSecondsRef = useRef(0);
@@ -68,31 +71,46 @@ export default function PairLinkGame() {
     gridSize > 1 ? (canvasPixelSize - PADDING * 2) / (gridSize - 1) : 0;
   const canvasSize = Math.round(PADDING * 2 + (gridSize - 1) * spacing) || 420;
 
-  const initGame = useCallback(async (size: number) => {
-    hasTriggeredClearRef.current = false;
-    isCheckingClearRef.current = false;
-    setLoading(true);
-    setSolved(false);
-    setShowClearOverlay(false);
-    setStatus("探索中");
-    setTimeSeconds(0);
-    setTimerActive(false);
+  const { getPuzzle, stockCount } = usePuzzleStock({ gridSize, persist: true });
 
-    const result = await generatePuzzleAction(size);
-    if (result.error) {
-      setStatus(result.error);
-      setLoading(false);
-      return;
-    }
+  const initGame = useCallback(
+    async (size: number) => {
+      hasTriggeredClearRef.current = false;
+      isCheckingClearRef.current = false;
+      setSolved(false);
+      setShowClearOverlay(false);
+      setTimeSeconds(0);
+      setTimerActive(false);
 
-    setGridSize(result.gridSize);
-    setNumbers(result.numbers);
-    setPairs(result.pairs);
-    setPaths(emptyPaths(result.pairs));
-    setStatus("Playing");
-    setLoading(false);
-    setTimerActive(true);
-  }, []);
+      const hasStock = size === gridSize && stockCount > 0;
+      if (!hasStock) {
+        setLoading(true);
+        setStatus("探索中");
+      }
+
+      try {
+        const result = await getPuzzle(size);
+        if (result.error) {
+          setStatus(result.error ?? "生成に失敗しました");
+          return;
+        }
+        setGridSize(result.gridSize);
+        setNumbers(result.numbers);
+        setPairs(result.pairs);
+        setPaths(emptyPaths(result.pairs));
+        setStatus("Playing");
+        setTimerActive(true);
+        setPuzzleKey((k) => k + 1);
+      } catch (err) {
+        setStatus(
+          err instanceof Error ? err.message : "生成に失敗しました。もう一度お試しください。"
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [getPuzzle, gridSize, stockCount]
+  );
 
   useEffect(() => {
     initGame(6);

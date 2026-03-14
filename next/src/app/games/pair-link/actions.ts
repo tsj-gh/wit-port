@@ -14,6 +14,7 @@ export type GenerateResult = {
   error?: string;
 };
 
+/** プリフェッチ等で複数リクエストが同時に来ても問題なし（純粋関数・共有状態なし） */
 export async function generatePuzzleAction(
   gridSize: number
 ): Promise<GenerateResult> {

@@ -1,8 +1,10 @@
 import Link from "next/link";
+import PuzzleStockPrefetcher from "@/components/PuzzleStockPrefetcher";
 
 export default function HomePage() {
   return (
     <div className="mx-auto max-w-[1080px] w-full px-6">
+      <PuzzleStockPrefetcher />
       <header className="flex justify-between items-center py-8 animate-fade-in-up">
         <Link
           href="/"
