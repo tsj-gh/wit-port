@@ -137,7 +137,8 @@ export default function PairLinkGame() {
   );
 
   const checkClear = useCallback(async () => {
-    if (solved || pairs.length === 0) return;
+    // ローディング中（次へ押下後の探索中など）は前パズルの paths が残っており誤検知するためスキップ
+    if (loading || solved || pairs.length === 0) return;
     const result = await validatePathsAction(paths, pairs, gridSize);
     if (result.ok) {
       setSolved(true);
@@ -163,7 +164,7 @@ export default function PairLinkGame() {
         /* ignore */
       }
     }
-  }, [paths, pairs, gridSize, solved]);
+  }, [paths, pairs, gridSize, solved, loading]);
 
   // --- Draw canvas ---
   useEffect(() => {
