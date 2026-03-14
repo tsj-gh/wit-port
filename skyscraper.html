@@ -173,6 +173,15 @@
       font-size: 11px;
       letter-spacing: 0.05em;
     }
+    /* フッターリンク */
+    footer { margin-top: 24px; padding: 20px 0; text-align: center; font-size: 13px; color: var(--muted); border-top: 1px solid rgba(203, 213, 225, 0.2); }
+    .footer-links { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
+    .footer-links a { color: var(--muted); text-decoration: none; }
+    .footer-links a:hover { color: #e2e8f0; }
+    .footer-links a + a::before { content: '|'; margin: 0 10px; color: var(--muted); opacity: 0.7; }
+    .top-link { color: #94a3b8 !important; text-decoration: none; font-size: 14px; padding: 6px 12px; border-radius: 8px; border: 1px solid #64748b; }
+    .top-link:hover { color: #e2e8f0 !important; background: rgba(255,255,255,0.05); }
+
     /* 印刷用 */
     @media print{
       body{ background:#fff; }
@@ -190,6 +199,7 @@
     <header>
       <h1>空の上から（Skyscrapers）自動生成パズル｜スタンドアロン</h1>
       <div class="btns">
+        <a href="index.html" class="top-link">WIT PORT（トップ）</a>
         <button class="btn ghost" id="printBtn">印刷</button>
         <button class="btn primary" id="regenBtn">新規生成</button>
       </div>
@@ -255,7 +265,14 @@
 
     <aside class="ad-space" aria-label="広告スペース">AD</aside>
 
-    <p class="note" style="text-align:center">© <span id="year"></span> Skyscrapers puzzle generator (for educational/demo use). 生成はブラウザ内で行い、4〜6マスに最適化。</p>
+    <footer>
+      <p class="footer-links">
+        <a href="index.html">WIT PORT（トップ）</a>
+        <a href="privacy.html">プライバシーポリシー</a>
+        <a href="contact.html">お問い合わせ</a>
+      </p>
+      <p class="note" style="text-align:center; margin:0;">© <span id="year"></span> Skyscrapers puzzle generator (for educational/demo use). 生成はブラウザ内で行い、4〜6マスに最適化。</p>
+    </footer>
   </div>
 
 <script>
