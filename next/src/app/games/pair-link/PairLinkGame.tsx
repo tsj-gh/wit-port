@@ -45,6 +45,7 @@ export default function PairLinkGame() {
   const activeValRef = useRef<string | null>(null);
   const activePathIdxRef = useRef<number | null>(null);
   const hasTriggeredClearRef = useRef(false);
+  const isCheckingClearRef = useRef(false);
 
   useEffect(() => {
     isDrawingRef.current = isDrawing;
@@ -69,6 +70,7 @@ export default function PairLinkGame() {
 
   const initGame = useCallback(async (size: number) => {
     hasTriggeredClearRef.current = false;
+    isCheckingClearRef.current = false;
     setLoading(true);
     setSolved(false);
     setShowClearOverlay(false);
@@ -142,23 +144,28 @@ export default function PairLinkGame() {
     // ローディング中（次へ押下後の探索中など）は前パズルの paths が残っており誤検知するためスキップ
     if (loading || solved || pairs.length === 0 || hasTriggeredClearRef.current)
       return;
-    const result = await validatePathsAction(paths, pairs, gridSize);
-    if (result.ok) {
-      hasTriggeredClearRef.current = true;
-      setSolved(true);
-      setTimerActive(false);
-      setShowClearOverlay(true);
-      try {
-        const prev = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-        prev.push({
-          gridSize,
-          timeSeconds: timeSecondsRef.current,
-          completedAt: new Date().toISOString(),
-        });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(prev));
-      } catch {
-        /* ignore */
+    isCheckingClearRef.current = true;
+    try {
+      const result = await validatePathsAction(paths, pairs, gridSize);
+      if (result.ok) {
+        hasTriggeredClearRef.current = true;
+        setSolved(true);
+        setTimerActive(false);
+        setShowClearOverlay(true);
+        try {
+          const prev = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+          prev.push({
+            gridSize,
+            timeSeconds: timeSecondsRef.current,
+            completedAt: new Date().toISOString(),
+          });
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(prev));
+        } catch {
+          /* ignore */
+        }
       }
+    } finally {
+      isCheckingClearRef.current = false;
     }
   }, [paths, pairs, gridSize, solved, loading]);
 
@@ -254,7 +261,7 @@ export default function PairLinkGame() {
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault();
-      if (solved || hasTriggeredClearRef.current) return;
+      if (solved || hasTriggeredClearRef.current || isCheckingClearRef.current) return;
       const p = getGridPos(e.clientX, e.clientY);
       if (!p) return;
 
@@ -320,7 +327,7 @@ export default function PairLinkGame() {
       // refs を参照（window listener から呼ばれたとき、描画開始直後の React 再描画前でも正しく動作）
       const av = activeValRef.current;
       const api = activePathIdxRef.current;
-      if (hasTriggeredClearRef.current || !isDrawingRef.current || av === null || api === null) return;
+      if (hasTriggeredClearRef.current || isCheckingClearRef.current || !isDrawingRef.current || av === null || api === null) return;
       e.preventDefault();
       const p = getGridPos(e.clientX, e.clientY);
       if (!p) return;
