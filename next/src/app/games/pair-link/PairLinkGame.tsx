@@ -12,7 +12,12 @@ type NumberCell = { x: number; y: number; val: number; color: string };
 type PathPoint = { x: number; y: number };
 
 const PADDING = 50;
+const HIT_RADIUS_FACTOR = 0.55; // 数字・端点の当たり判定半径（spacing に対する倍率）
 const STORAGE_KEY = "pair-link_completed";
+
+type HitTarget =
+  | { type: "endpoint"; val: string; pathIdx: number; point: PathPoint; isFirst: boolean }
+  | { type: "number"; x: number; y: number; val: number };
 
 function emptyPaths(pairs: Pair[]): Record<string, PathPoint[][]> {
   const out: Record<string, PathPoint[][]> = {};
@@ -159,6 +164,73 @@ export default function PairLinkGame() {
     [gridSize, spacing]
   );
 
+  const getCanvasPos = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      const canvas = canvasRef.current;
+      if (!canvas || spacing <= 0) return null;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY,
+      };
+    },
+    [spacing]
+  );
+
+  const findNearestHit = useCallback(
+    (clientX: number, clientY: number): HitTarget | null => {
+      const canvasPos = getCanvasPos(clientX, clientY);
+      if (!canvasPos) return null;
+
+      const hitRadius = spacing * HIT_RADIUS_FACTOR;
+      let best: { target: HitTarget; distSq: number } | null = null;
+
+      const consider = (target: HitTarget, px: number, py: number) => {
+        const dx = canvasPos.x - px;
+        const dy = canvasPos.y - py;
+        const distSq = dx * dx + dy * dy;
+        if (distSq <= hitRadius * hitRadius) {
+          if (!best || distSq < best.distSq) best = { target, distSq };
+        }
+      };
+
+      for (const [v, pathList] of Object.entries(paths)) {
+        for (let i = 0; i < pathList.length; i++) {
+          const path = pathList[i];
+          const first = path[0];
+          const last = path[path.length - 1];
+          const firstPx = PADDING + first.x * spacing;
+          const firstPy = PADDING + first.y * spacing;
+          consider(
+            { type: "endpoint", val: v, pathIdx: i, point: first, isFirst: true },
+            firstPx,
+            firstPy
+          );
+          if (first.x !== last.x || first.y !== last.y) {
+            const lastPx = PADDING + last.x * spacing;
+            const lastPy = PADDING + last.y * spacing;
+            consider(
+              { type: "endpoint", val: v, pathIdx: i, point: last, isFirst: false },
+              lastPx,
+              lastPy
+            );
+          }
+        }
+      }
+
+      for (const n of numbers) {
+        const px = PADDING + n.x * spacing;
+        const py = PADDING + n.y * spacing;
+        consider({ type: "number", x: n.x, y: n.y, val: n.val }, px, py);
+      }
+
+      return best ? best.target : null;
+    },
+    [paths, numbers, spacing, getCanvasPos]
+  );
+
   const checkClear = useCallback(async () => {
     // ローディング中（次へ押下後の探索中など）は前パズルの paths が残っており誤検知するためスキップ
     if (loading || solved || pairs.length === 0 || hasTriggeredClearRef.current)
@@ -284,58 +356,45 @@ export default function PairLinkGame() {
     (e: React.PointerEvent) => {
       e.preventDefault();
       if (solved || hasTriggeredClearRef.current || isCheckingClearRef.current) return;
-      const p = getGridPos(e.clientX, e.clientY);
-      if (!p) return;
+      const hit = findNearestHit(e.clientX, e.clientY);
+      if (!hit) return;
 
-      for (const [v, pathList] of Object.entries(paths)) {
-        for (let i = 0; i < pathList.length; i++) {
-          const path = pathList[i];
-          const last = path[path.length - 1];
-          const first = path[0];
-          if (p.x === last.x && p.y === last.y) {
-            activeValRef.current = v;
-            activePathIdxRef.current = i;
-            isDrawingRef.current = true;
-            setActiveVal(v);
-            setActivePathIdx(i);
-            setIsDrawing(true);
-            (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-            return;
-          }
-          if (p.x === first.x && p.y === first.y) {
-            setPaths((prev) => {
-              const next = { ...prev };
-              const seg = [...next[v]].map((s) => [...s]);
-              seg[i] = [...path].reverse();
-              next[v] = seg;
-              return next;
-            });
-            activeValRef.current = v;
-            activePathIdxRef.current = i;
-            isDrawingRef.current = true;
-            setActiveVal(v);
-            setActivePathIdx(i);
-            setIsDrawing(true);
-            (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-            return;
-          }
+      if (hit.type === "endpoint") {
+        const { val: v, pathIdx: i, isFirst } = hit;
+        const path = paths[v]?.[i];
+        if (!path) return;
+        if (isFirst) {
+          setPaths((prev) => {
+            const next = { ...prev };
+            const seg = [...next[v]].map((s) => [...s]);
+            seg[i] = [...path].reverse();
+            next[v] = seg;
+            return next;
+          });
         }
+        activeValRef.current = v;
+        activePathIdxRef.current = i;
+        isDrawingRef.current = true;
+        setActiveVal(v);
+        setActivePathIdx(i);
+        setIsDrawing(true);
+        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+        return;
       }
 
-      const num = numbers.find((n) => n.x === p.x && n.y === p.y);
-      if (num) {
-        const v = String(num.val);
-        // 既に端点になっている数字には新規セグメントを作らない（上ループで必ずマッチするが安全のため）
+      if (hit.type === "number") {
+        const { x, y, val } = hit;
+        const v = String(val);
         const alreadyEndpoint = (paths[v] ?? []).some(
           (path) =>
-            (path[0]?.x === p.x && path[0]?.y === p.y) ||
-            (path[path.length - 1]?.x === p.x && path[path.length - 1]?.y === p.y)
+            (path[0]?.x === x && path[0]?.y === y) ||
+            (path[path.length - 1]?.x === x && path[path.length - 1]?.y === y)
         );
         if (alreadyEndpoint) return;
         setPaths((prev) => {
           const next = { ...prev };
           if (!next[v]) next[v] = [];
-          next[v] = [...(next[v] ?? []), [{ x: num.x, y: num.y }]];
+          next[v] = [...(next[v] ?? []), [{ x, y }]];
           return next;
         });
         const pathIdx = (paths[v]?.length ?? 1) - 1;
@@ -348,7 +407,7 @@ export default function PairLinkGame() {
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
       }
     },
-    [paths, numbers, solved, getGridPos]
+    [paths, numbers, solved, findNearestHit]
   );
 
   const handlePointerMove = useCallback(
