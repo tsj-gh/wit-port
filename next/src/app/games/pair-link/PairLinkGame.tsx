@@ -369,9 +369,19 @@ export default function PairLinkGame() {
           p.x === path[path.length - 2].x &&
           p.y === path[path.length - 2].y
         ) {
+          const mergeIdx = mergeIndexRef.current;
+          const popped = path.slice(0, -1);
+          if (mergeIdx !== null && popped.length === mergeIdx) {
+            mergeIndexRef.current = null;
+            const ourPath = path.slice(0, mergeIdx);
+            const otherPath = path.slice(mergeIdx).reverse();
+            const next = { ...prev };
+            next[av] = [ourPath, otherPath];
+            return next;
+          }
           const next = { ...prev };
           const seg = next[av].map((s) => [...s]);
-          seg[api] = path.slice(0, -1);
+          seg[api] = popped;
           next[av] = seg;
           return next;
         }
@@ -385,6 +395,7 @@ export default function PairLinkGame() {
           p.y === oPath[oPath.length - 1].y
         ) {
           didMerge = true;
+          mergeIndexRef.current = path.length;
           const merged = [...path, ...[...oPath].reverse()];
           const seg = prev[av].filter((_, i) => i !== oIdx);
           seg[0] = merged;
@@ -416,19 +427,16 @@ export default function PairLinkGame() {
         return next;
       });
 
-      if (didMerge || reachedGoal) {
-        isDrawingRef.current = false;
-        activeValRef.current = null;
-        activePathIdxRef.current = null;
-        setIsDrawing(false);
-        setActiveVal(null);
-        setActivePathIdx(null);
+      if (didMerge) {
+        activePathIdxRef.current = 0;
+        setActivePathIdx(0);
       }
     },
     [numbers, getGridPos]
   );
 
   const handlePointerUp = useCallback(() => {
+    mergeIndexRef.current = null;
     isDrawingRef.current = false;
     activeValRef.current = null;
     activePathIdxRef.current = null;
