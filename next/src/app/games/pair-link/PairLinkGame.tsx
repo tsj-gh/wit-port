@@ -44,6 +44,7 @@ export default function PairLinkGame() {
   const isDrawingRef = useRef(false);
   const activeValRef = useRef<string | null>(null);
   const activePathIdxRef = useRef<number | null>(null);
+  const hasTriggeredClearRef = useRef(false);
 
   useEffect(() => {
     isDrawingRef.current = isDrawing;
@@ -67,6 +68,7 @@ export default function PairLinkGame() {
   const canvasSize = Math.round(PADDING * 2 + (gridSize - 1) * spacing) || 420;
 
   const initGame = useCallback(async (size: number) => {
+    hasTriggeredClearRef.current = false;
     setLoading(true);
     setSolved(false);
     setShowClearOverlay(false);
@@ -138,9 +140,11 @@ export default function PairLinkGame() {
 
   const checkClear = useCallback(async () => {
     // ローディング中（次へ押下後の探索中など）は前パズルの paths が残っており誤検知するためスキップ
-    if (loading || solved || pairs.length === 0) return;
+    if (loading || solved || pairs.length === 0 || hasTriggeredClearRef.current)
+      return;
     const result = await validatePathsAction(paths, pairs, gridSize);
     if (result.ok) {
+      hasTriggeredClearRef.current = true;
       setSolved(true);
       setTimerActive(false);
       const count = 150;
