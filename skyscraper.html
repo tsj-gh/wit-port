@@ -88,6 +88,25 @@
     .actions{ display:flex; gap:8px; align-items:center; justify-content:space-between; }
     .status{ font-size:12px; color:#334155; min-height:1.2em; font-weight:bold; }
 
+    /* 盤面+メイビーパネルの横並びコンテナ */
+    .board-maybe-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: center;
+    }
+    .board-maybe-container .board-wrap { flex-shrink: 0; }
+
+    /* 盤面＋メイビーパネルを横並び */
+    .board-maybe-container {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 12px;
+      justify-content: flex-start;
+    }
+
     /* メイビー用ボタン・パネル */
     .maybe-panel {
       display: flex;
@@ -589,10 +608,9 @@ function buildBoard(){
   // 右余白
   topRow.appendChild(el('div', { class: 'edge-cell' }));
 
-  // ===== 中段（左手がかり + 盤面 + メイビーパネル + 右手がかり）=====
-  const MAYBE_BTN_PX = Math.round(CELL_PX * 1.25);
+  // ===== 中段（左手がかり + 盤面 + 右手がかり）※元のレイアウトを維持 =====
   const midRow = el('div', {
-    style: `display:grid; grid-template-columns: ${SIDE_PAD_PX}px calc(${n * CELL_PX}px + ${2 * BORDER_PX}px) ${MAYBE_BTN_PX + 16}px ${SIDE_PAD_PX}px; gap:8px; align-items:center;`
+    style: `display:grid; grid-template-columns: ${SIDE_PAD_PX}px calc(${n * CELL_PX}px + ${2 * BORDER_PX}px) ${SIDE_PAD_PX}px; gap:8px; align-items:center;`
   });
 
   // 左手がかり（上2pxスペーサ + N×CELL + 下2pxスペーサ）
@@ -633,7 +651,40 @@ function buildBoard(){
   }
   board.appendChild(gridEl);
 
-  // メイビーパネル（盤面の横）
+  // 右手がかり（上2pxスペーサ + N×CELL + 下2pxスペーサ）
+  const rightCol = el('div', { class: 'edge-col' });
+  rightCol.style.gridTemplateRows = `${BORDER_PX}px repeat(${n}, ${CELL_PX}px) ${BORDER_PX}px`;
+  rightCol.appendChild(el('div', { class: 'edge-cell' }));
+  for (let i = 0; i < n; i++) {
+    const v = clues.right[i] ?? '';
+    rightCol.appendChild(el('div', { class: 'edge-cell' }, String(v)));
+  }
+  rightCol.appendChild(el('div', { class: 'edge-cell' }));
+
+  midRow.appendChild(leftCol);
+  midRow.appendChild(board);
+  midRow.appendChild(rightCol);
+
+  // ===== 下段（下側の手がかり）=====
+  const bottomRow = el('div', { class: 'edge-row' });
+  bottomRow.style.gridTemplateColumns =
+    `${SIDE_PAD_PX}px ${BORDER_PX}px repeat(${n}, ${CELL_PX}px) ${BORDER_PX}px ${SIDE_PAD_PX}px`;
+  bottomRow.appendChild(el('div', { class: 'edge-cell' }));
+  bottomRow.appendChild(el('div', { class: 'edge-cell' }));
+  for (let i = 0; i < n; i++) {
+    const v = clues.bottom[i] ?? '';
+    bottomRow.appendChild(el('div', { class: 'edge-cell' }, String(v)));
+  }
+  bottomRow.appendChild(el('div', { class: 'edge-cell' }));
+  bottomRow.appendChild(el('div', { class: 'edge-cell' }));
+
+  const wrap = el('div', { class: 'board-wrap' });
+  wrap.appendChild(topRow);
+  wrap.appendChild(midRow);
+  wrap.appendChild(bottomRow);
+
+  // メイビーパネル（盤面全体の右側に配置）
+  const MAYBE_BTN_PX = Math.round(CELL_PX * 1.25);
   const maybePanel = el('div', { class: 'maybe-panel' });
   maybePanel.style.width = `${MAYBE_BTN_PX + 16}px`;
   if (state.maybeMode) {
@@ -666,48 +717,12 @@ function buildBoard(){
     btnWrap.appendChild(maybeBtn);
     maybePanel.appendChild(btnWrap);
   }
-  midRow.appendChild(maybePanel);
 
-  // 右手がかり（上2pxスペーサ + N×CELL + 下2pxスペーサ）
-  const rightCol = el('div', { class: 'edge-col' });
-  rightCol.style.gridTemplateRows = `${BORDER_PX}px repeat(${n}, ${CELL_PX}px) ${BORDER_PX}px`;
-  // 上スペーサ
-  rightCol.appendChild(el('div', { class: 'edge-cell' }));
-  for (let i = 0; i < n; i++) {
-    const v = clues.right[i] ?? '';
-    rightCol.appendChild(el('div', { class: 'edge-cell' }, String(v)));
-  }
-  // 下スペーサ
-  rightCol.appendChild(el('div', { class: 'edge-cell' }));
-
-  midRow.appendChild(leftCol);
-  midRow.appendChild(board);
-  midRow.appendChild(rightCol);
-
-  // ===== 下段（下側の手がかり）=====
-  const bottomRow = el('div', { class: 'edge-row' });
-  bottomRow.style.gridTemplateColumns =
-    `${SIDE_PAD_PX}px ${BORDER_PX}px repeat(${n}, ${CELL_PX}px) ${BORDER_PX}px ${SIDE_PAD_PX}px`;
-  // 左余白
-  bottomRow.appendChild(el('div', { class: 'edge-cell' }));
-  // 左ボーダー分のスペーサ
-  bottomRow.appendChild(el('div', { class: 'edge-cell' }));
-  // 下ヒント（N個）
-  for (let i = 0; i < n; i++) {
-    const v = clues.bottom[i] ?? '';
-    bottomRow.appendChild(el('div', { class: 'edge-cell' }, String(v)));
-  }
-  // 右ボーダー分のスペーサ
-  bottomRow.appendChild(el('div', { class: 'edge-cell' }));
-  // 右余白
-  bottomRow.appendChild(el('div', { class: 'edge-cell' }));
-
-  // ===== ラップ =====
-  const wrap = el('div', { class: 'board-wrap' });
-  wrap.appendChild(topRow);
-  wrap.appendChild(midRow);
-  wrap.appendChild(bottomRow);
-  area.appendChild(wrap);
+  // 盤面とメイビーパネルを横並びにするコンテナ
+  const container = el('div', { class: 'board-maybe-container' });
+  container.appendChild(wrap);
+  container.appendChild(maybePanel);
+  area.appendChild(container);
 }
 
 function validateProgress(){
