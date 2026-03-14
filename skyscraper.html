@@ -88,23 +88,23 @@
     .actions{ display:flex; gap:8px; align-items:center; justify-content:space-between; }
     .status{ font-size:12px; color:#334155; min-height:1.2em; font-weight:bold; }
 
-    /* 盤面+メイビーパネルの横並びコンテナ */
-    .board-maybe-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      align-items: center;
-      justify-content: center;
-    }
-    .board-maybe-container .board-wrap { flex-shrink: 0; }
-
-    /* 盤面＋メイビーパネルを横並び */
+    /* 盤面+メイビーパネルコンテナ */
     .board-maybe-container {
       display: flex;
       flex-direction: row;
-      align-items: center;
+      flex-wrap: wrap;
       gap: 12px;
-      justify-content: flex-start;
+      align-items: center;
+      justify-content: center; /* PC版：中央揃え */
+    }
+    .board-maybe-container .board-wrap { flex-shrink: 0; }
+
+    /* スマホ版：縦配置でボタンを盤面の下に */
+    @media (max-width: 639px) {
+      .board-maybe-container {
+        flex-direction: column;
+        justify-content: center;
+      }
     }
 
     /* メイビー用ボタン・パネル */
