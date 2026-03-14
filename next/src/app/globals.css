@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --wit-card-bg: rgba(30, 41, 59, 0.7);
+  --wit-border: rgba(255, 255, 255, 0.1);
+  --wit-accent-glow: rgba(59, 130, 246, 0.5);
+}
