@@ -322,18 +322,11 @@ export default function PairLinkGame() {
       const num = numbers.find((n) => n.x === p.x && n.y === p.y);
       if (num) {
         const v = String(num.val);
-        // 既に他セグメントの端点になっている数字には新規セグメントを作らない
-        const alreadyEndpoint = Object.entries(paths).some(([pv, pathList]) =>
-          pv === v &&
-          pathList.some(
-            (path) =>
-              (path.length > 0 &&
-                path[0].x === p.x &&
-                path[0].y === p.y) ||
-              (path.length > 0 &&
-                path[path.length - 1].x === p.x &&
-                path[path.length - 1].y === p.y)
-          )
+        // 既に端点になっている数字には新規セグメントを作らない（上ループで必ずマッチするが安全のため）
+        const alreadyEndpoint = (paths[v] ?? []).some(
+          (path) =>
+            (path[0]?.x === p.x && path[0]?.y === p.y) ||
+            (path[path.length - 1]?.x === p.x && path[path.length - 1]?.y === p.y)
         );
         if (alreadyEndpoint) return;
         setPaths((prev) => {
@@ -400,11 +393,11 @@ export default function PairLinkGame() {
           return next;
         }
 
-        // 数字の端点からは別方向に伸ばせない（戻すのみ）
-        const lastIsNum = numbers.some(
+        // 数字の端点からは別方向に伸ばせない（戻すのみ）。path.length===1は開始点からの初回伸ばしなので許可
+        const lastIsNumber = numbers.some(
           (n) => n.x === last.x && n.y === last.y && n.val === Number(av)
         );
-        if (lastIsNum) return prev;
+        if (lastIsNumber && path.length > 1) return prev;
 
         // 自分の開始数字へ戻る（ループ生成・2本目防止）
         if (
