@@ -146,16 +146,14 @@ export default function PairLinkGame() {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
 
+  // canvas 固定サイズ表示のためスケール補正不要（旧 HTML 版と同様の単純な座標計算）
   const getGridPos = useCallback(
     (clientX: number, clientY: number): PathPoint | null => {
       const canvas = canvasRef.current;
       if (!canvas || spacing <= 0) return null;
       const rect = canvas.getBoundingClientRect();
-      // 表示サイズとcanvas内部サイズが異なる場合の座標変換（HTML版と同様に正しくマス判定）
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      const canvasX = (clientX - rect.left) * scaleX;
-      const canvasY = (clientY - rect.top) * scaleY;
+      const canvasX = clientX - rect.left;
+      const canvasY = clientY - rect.top;
       const x = Math.round((canvasX - PADDING) / spacing);
       const y = Math.round((canvasY - PADDING) / spacing);
       if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) return { x, y };
@@ -169,11 +167,9 @@ export default function PairLinkGame() {
       const canvas = canvasRef.current;
       if (!canvas || spacing <= 0) return null;
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
       return {
-        x: (clientX - rect.left) * scaleX,
-        y: (clientY - rect.top) * scaleY,
+        x: clientX - rect.left,
+        y: clientY - rect.top,
       };
     },
     [spacing]
@@ -226,7 +222,7 @@ export default function PairLinkGame() {
         consider({ type: "number", x: n.x, y: n.y, val: n.val }, px, py);
       }
 
-      return best ? best.target : null;
+      return (best as { target: HitTarget } | null)?.target ?? null;
     },
     [paths, numbers, spacing, getCanvasPos]
   );
@@ -637,8 +633,8 @@ export default function PairLinkGame() {
               ref={canvasRef}
               width={canvasSize}
               height={canvasSize}
-              className="w-full max-w-[500px] border-2 border-slate-600 rounded-xl shadow-lg cursor-crosshair block mx-auto bg-slate-900"
-              style={{ touchAction: "none" }}
+              className="border-2 border-slate-600 rounded-xl shadow-lg cursor-crosshair block bg-slate-900"
+              style={{ width: canvasSize, height: canvasSize, touchAction: "none" }}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
