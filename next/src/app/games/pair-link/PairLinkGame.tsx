@@ -492,6 +492,22 @@ export default function PairLinkGame() {
           p.x === oPath[oPath.length - 1].x &&
           p.y === oPath[oPath.length - 1].y
         ) {
+          // 数字から伸びる線は1方向に限定：マージ後の経路は「数字-数字」でなければならない
+          // path[0] と oPath[0] が両方数字で、かつ異なるときのみマージ許可
+          const pathStart = path[0];
+          const oPathStart = oPath[0];
+          const pathStartIsNum = numbers.some(
+            (n) => n.x === pathStart.x && n.y === pathStart.y && n.val === Number(av)
+          );
+          const oPathStartIsNum = numbers.some(
+            (n) => n.x === oPathStart.x && n.y === oPathStart.y && n.val === Number(av)
+          );
+          if (
+            !pathStartIsNum ||
+            !oPathStartIsNum ||
+            (pathStart.x === oPathStart.x && pathStart.y === oPathStart.y)
+          )
+            return prev;
           didMerge = true;
           mergeJustHappenedRef.current = true;
           mergeIndexRef.current = path.length;
