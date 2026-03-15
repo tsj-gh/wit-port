@@ -543,8 +543,31 @@ export default function PairLinkGame() {
     setIsDrawing(false);
     setActiveVal(null);
     setActivePathIdx(null);
+
+    // 線を戻して数字が孤立した場合、その数字に path=[その数字] を与える
+    // （スプリットは mergeIndexRef が pointerUp で null になるため別セッションでは発生しない）
+    setPaths((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const n of numbers) {
+        const v = String(n.val);
+        const pathList = next[v] ?? [];
+        const isEndpoint = pathList.some(
+          (path) =>
+            (path[0]?.x === n.x && path[0]?.y === n.y) ||
+            (path[path.length - 1]?.x === n.x && path[path.length - 1]?.y === n.y)
+        );
+        if (!isEndpoint) {
+          if (!next[v]) next[v] = [];
+          next[v] = [...next[v], [{ x: n.x, y: n.y }]];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+
     checkClear();
-  }, [checkClear]);
+  }, [checkClear, numbers]);
 
   // HTML版と同様に window で pointermove/up を受信（指が canvas 外に出てもドラッグ継続）
   const handlePointerMoveRef = useRef(handlePointerMove);
