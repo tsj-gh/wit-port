@@ -55,6 +55,7 @@ export default function PairLinkGame() {
   const hasTriggeredClearRef = useRef(false);
   const isCheckingClearRef = useRef(false);
   const mergeIndexRef = useRef<number | null>(null);
+  const mergeJustHappenedRef = useRef(false);
 
   useEffect(() => {
     isDrawingRef.current = isDrawing;
@@ -438,6 +439,7 @@ export default function PairLinkGame() {
           p.x === path[path.length - 2].x &&
           p.y === path[path.length - 2].y
         ) {
+          if (mergeJustHappenedRef.current) return prev;
           const mergeIdx = mergeIndexRef.current;
           const popped = path.slice(0, -1);
           const firstIsNum = numbers.some(
@@ -491,6 +493,7 @@ export default function PairLinkGame() {
           p.y === oPath[oPath.length - 1].y
         ) {
           didMerge = true;
+          mergeJustHappenedRef.current = true;
           mergeIndexRef.current = path.length;
           const merged = [...path, ...[...oPath].reverse()];
           const seg = prev[av].filter((_, i) => i !== oIdx);
@@ -533,6 +536,7 @@ export default function PairLinkGame() {
 
   const handlePointerUp = useCallback(() => {
     mergeIndexRef.current = null;
+    mergeJustHappenedRef.current = false;
     isDrawingRef.current = false;
     activeValRef.current = null;
     activePathIdxRef.current = null;
