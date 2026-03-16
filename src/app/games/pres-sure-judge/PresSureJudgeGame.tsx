@@ -17,7 +17,19 @@ const MIN_ZOOM_SCALE = 0.5;
 const ZOOM_MARGIN = 80;
 const OFFSCREEN_INDICATOR_THRESHOLD = 180;
 const FLICK_VELOCITY_THRESHOLD = 500; // px/s
+const BEZIER_ARC_HEIGHT = 200; // px above start for control point
+const BEZIER_DURATION_BASE = 250; // duration = BASE/vx (seconds); fast flick = short duration
+const BEZIER_DURATION_MIN = 0.15;
+const BEZIER_DURATION_MAX = 0.6;
 const DEBUG = false;
+
+function bezier2(t: number, P0: { x: number; y: number }, P1: { x: number; y: number }, P2: { x: number; y: number }) {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * P0.x + 2 * mt * t * P1.x + t * t * P2.x,
+    y: mt * mt * P0.y + 2 * mt * t * P1.y + t * t * P2.y,
+  };
+}
 
 type Phase = "ready" | "npc" | "user" | "gameover" | "result";
 
@@ -189,9 +201,19 @@ type DraggableWeightBlockProps = {
   dropZoneRef: React.RefObject<HTMLDivElement | null>;
 };
 
+type FlyState = {
+  p0: { x: number; y: number };
+  p1: { x: number; y: number };
+  p2: { x: number; y: number };
+  duration: number;
+  startTime: number;
+};
+
 function DraggableWeightBlock({ item, onDragEnd, dropZoneRef }: DraggableWeightBlockProps) {
   const flickTrackRef = useRef<{ x: number; y: number; t: number } | null>(null);
-  const [isFlying, setIsFlying] = useState(false);
+  const [flyState, setFlyState] = useState<FlyState | null>(null);
+  const [flyPos, setFlyPos] = useState<{ x: number; y: number } | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     flickTrackRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
@@ -212,32 +234,70 @@ function DraggableWeightBlock({ item, onDragEnd, dropZoneRef }: DraggableWeightB
       const dx = endX - start.x;
       const dy = endY - start.y;
       const vx = (dx / dt) * 1000; // px/s
-      const vy = (dy / dt) * 1000;
 
       const isLaunch = vx >= FLICK_VELOCITY_THRESHOLD && vx > 0;
       if (isLaunch && dropZoneRef.current) {
-        setIsFlying(true);
         const rect = dropZoneRef.current.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        requestAnimationFrame(() => {
-          onDragEnd(item, { x: cx, y: cy });
-        });
+        const p2x = rect.left + rect.width / 2;
+        const p2y = rect.top + rect.height / 2;
+        const p0 = { x: endX, y: endY };
+        const p2 = { x: p2x, y: p2y };
+        const p1 = {
+          x: (p0.x + p2.x) / 2,
+          y: p0.y - BEZIER_ARC_HEIGHT,
+        };
+        const duration = Math.max(
+          BEZIER_DURATION_MIN,
+          Math.min(BEZIER_DURATION_MAX, BEZIER_DURATION_BASE / vx)
+        );
+        setFlyState({ p0, p1, p2, duration, startTime: performance.now() });
+        setFlyPos(p0);
       }
     },
-    [item, onDragEnd, dropZoneRef]
+    [dropZoneRef]
   );
 
-  if (isFlying) {
+  useEffect(() => {
+    if (!flyState) return;
+    const { p0, p1, p2, duration, startTime } = flyState;
+
+    const tick = () => {
+      const elapsed = performance.now() - startTime;
+      const t = Math.min(1, elapsed / duration);
+      const pos = bezier2(t, p0, p1, p2);
+      setFlyPos(pos);
+
+      if (t >= 1) {
+        rafRef.current = null;
+        onDragEnd(item, { x: p2.x, y: p2.y });
+        setFlyState(null);
+        setFlyPos(null);
+        return;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [flyState, item, onDragEnd]);
+
+  if (flyState && flyPos) {
     return (
       <motion.div
-        initial={{ opacity: 1 }}
-        animate={{ opacity: 0, scale: 0.9 }}
-        transition={{ duration: 0.15 }}
+        initial={{ opacity: 1, scale: 1 }}
+        animate={{ opacity: 1, scale: 1 }}
         className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm shrink-0 pointer-events-none ${getBlockSize(
           item.visual.size
         )} ${item.visual.bgClass} ${item.visual.borderClass}`}
-        style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.3)" }}
+        style={{
+          position: "fixed",
+          left: flyPos.x,
+          top: flyPos.y,
+          transform: "translate(-50%, -50%)",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+          zIndex: 100,
+        }}
       >
         {item.value}
       </motion.div>
@@ -257,7 +317,7 @@ function DraggableWeightBlock({ item, onDragEnd, dropZoneRef }: DraggableWeightB
         if (DEBUG) console.log("Drag Started", item.id);
       }}
       onDragEnd={(_, info) => {
-        if (isFlying) return;
+        if (flyState) return;
         const { x, y } = info.point;
         if (DEBUG) console.log("Drag Ended at:", x, y);
         if (dropZoneRef.current) {
