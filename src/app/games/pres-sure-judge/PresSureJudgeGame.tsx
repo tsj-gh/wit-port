@@ -505,9 +505,20 @@ export default function PresSureJudgeGame() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col min-h-0 flex-1 gap-4 h-[calc(100dvh-6rem)] max-h-[70vh] md:max-h-[min(70vh,calc(100dvh-8rem))]"
+              className="flex flex-col min-h-0 flex-1 gap-8 h-[calc(100dvh-6rem)] max-h-[70vh] md:max-h-[min(70vh,calc(100dvh-8rem))]"
               style={{ touchAction: "none" }}
             >
+              {phase === "user" && (
+                <div className="shrink-0 flex justify-center">
+                  <span
+                    className={`font-mono font-bold tabular-nums text-2xl md:text-3xl ${
+                      timer <= 3 ? "text-red-400 animate-pulse" : "text-amber-400/90"
+                    }`}
+                  >
+                    {timer}s
+                  </span>
+                </div>
+              )}
               <div className="relative flex flex-1 min-h-0 justify-center overflow-hidden shrink-0" style={{ minHeight: 200 }}>
                 {showOffscreenIndicators && (
                   <>
@@ -530,13 +541,13 @@ export default function PresSureJudgeGame() {
                   </>
                 )}
                 <motion.div
-                  className="relative w-full max-w-lg"
+                  className="relative w-full max-w-xl"
                   style={{ transformOrigin: "center center" }}
                   animate={{ y: scrollY, scale: zoomScale }}
                   transition={{ type: "spring", stiffness: 50, damping: 20 }}
                 >
                   <motion.div
-                    className="relative w-full max-w-lg h-56 flex items-end justify-center pb-4"
+                    className="relative w-full max-w-xl h-64 flex items-end justify-center pb-4"
                     style={{ transformOrigin: "center bottom" }}
                     animate={{
                       rotate: rotation,
@@ -555,29 +566,28 @@ export default function PresSureJudgeGame() {
                   />
 
                   <div
-                    className="absolute left-[5%] bottom-8 w-28 flex flex-col items-center"
+                    className="absolute left-[5%] bottom-8 w-32 flex flex-col items-center"
                     style={{ transformOrigin: "left bottom" }}
                   >
                     <span className="text-[10px] text-amber-400/90 font-medium mb-1">NPC</span>
                     <div
-                      className="relative min-h-[80px] w-28 rounded-b-xl border-2 border-amber-500/50 bg-amber-500/10 px-2 py-2 overflow-visible"
+                      className="relative min-h-[80px] w-32 rounded-b-xl border-2 border-amber-500/50 bg-amber-500/10 px-2 py-2 overflow-visible"
                       style={{ minHeight: PAN_MAX_VISIBLE_HEIGHT }}
                     >
                       {leftDisplay.map((w) => (
                         <PlacedWeightBlock key={w.id} w={w} />
                       ))}
                     </div>
-                    <span className="text-xs font-bold tabular-nums text-amber-200 mt-1">{leftTotal}</span>
                   </div>
 
                   <div
-                    className="absolute right-[5%] bottom-8 w-28 flex flex-col items-center"
+                    className="absolute right-[5%] bottom-8 w-32 flex flex-col items-center"
                     style={{ transformOrigin: "right bottom" }}
                   >
                     <span className="text-[10px] text-blue-400/90 font-medium mb-1">You</span>
                     <motion.div
                       ref={rightPanRef}
-                      className="relative min-h-[80px] w-28 rounded-b-xl border-2 px-2 py-2 border-blue-500/50 bg-blue-500/10 transition-colors overflow-visible"
+                      className="relative min-h-[80px] w-32 rounded-b-xl border-2 px-2 py-2 border-blue-500/50 bg-blue-500/10 transition-colors overflow-visible"
                       style={{ minHeight: PAN_MAX_VISIBLE_HEIGHT }}
                       whileHover={{ borderColor: "rgba(96,165,250,0.9)", backgroundColor: "rgba(59,130,246,0.2)" }}
                     >
@@ -585,35 +595,13 @@ export default function PresSureJudgeGame() {
                         <PlacedWeightBlock key={w.id} w={w} />
                       ))}
                     </motion.div>
-                    <span className="text-xs font-bold tabular-nums text-blue-200 mt-1">{rightTotal}</span>
                   </div>
                 </motion.div>
                 </motion.div>
-              </div>
-
-              <div className="text-center py-2 rounded-xl bg-white/5 border border-white/10">
-                <span className="text-wit-muted text-xs">有効傾き </span>
-                <span
-                  className={`font-mono font-bold tabular-nums text-lg ${
-                    Math.abs(effectiveBalance) > 80 ? "text-red-400" : Math.abs(effectiveBalance) > 50 ? "text-amber-400" : "text-wit-text"
-                  }`}
-                >
-                  {effectiveBalance}
-                </span>
               </div>
 
               {phase === "user" && (
                 <div className="space-y-4 p-4 rounded-2xl border border-white/10 bg-white/5 overflow-visible">
-                  <div className="flex items-center justify-between">
-                    <span className="text-wit-muted text-sm">在庫から皿へドラッグ</span>
-                    <span
-                      className={`font-mono font-bold tabular-nums text-xl ${
-                        timer <= 3 ? "text-red-400 animate-pulse" : "text-amber-400"
-                      }`}
-                    >
-                      {timer}s
-                    </span>
-                  </div>
                   <div
                     className="min-h-[72px] p-4 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible shrink-0"
                     style={{ touchAction: "none" }}
@@ -631,9 +619,6 @@ export default function PresSureJudgeGame() {
                       ))
                     )}
                   </div>
-                  <p className="text-wit-muted text-xs text-center">
-                    皿の合計: <span className="font-bold text-blue-300">{currentUserWeight}</span>
-                  </p>
                   <button
                     onClick={handleJudge}
                     className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-bold transition-colors border-2 border-amber-400/50"
