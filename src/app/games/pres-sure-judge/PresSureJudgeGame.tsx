@@ -16,11 +16,10 @@ const VIEW_HEIGHT = 360;
 const MIN_ZOOM_SCALE = 0.5;
 const ZOOM_MARGIN = 80;
 const OFFSCREEN_INDICATOR_THRESHOLD = 180;
-const FLICK_VELOCITY_THRESHOLD = 500; // px/s
-const BEZIER_ARC_HEIGHT = 200; // px above start for control point
-const BEZIER_DURATION_BASE = 250; // duration = BASE/vx (seconds); fast flick = short duration
-const BEZIER_DURATION_MIN = 0.15;
-const BEZIER_DURATION_MAX = 0.6;
+const BOUNDARY_ARC_HEIGHT = 350; // px above P0 for control point (boundary-triggered)
+const BOUNDARY_DURATION_MIN = 0.4;
+const BOUNDARY_DURATION_MAX = 0.8;
+const DEBUG_OVERLAY_DURATION_MS = 3000;
 const IMPACT_DIP_PX = 8; // Balance dips this much on landing
 const IMPACT_DURATION = 0.4; // seconds
 const FALL_DURATION = 0.6; // Miss shot: fall off screen
@@ -294,61 +293,33 @@ function FallingWeightBlock({ fall, onComplete }: { fall: FallingItem; onComplet
 type DraggableWeightBlockProps = {
   item: WeightItem;
   onLaunch: (item: WeightItem, flyData: Omit<FlyingItem, "item">) => void;
-  onDragEnd: (item: WeightItem, point: { x: number; y: number }) => void;
-  onMiss: (item: WeightItem, point: { x: number; y: number }) => void;
+  onDragCancel: (item: WeightItem) => void;
   dropZoneRef: React.RefObject<HTMLDivElement | null>;
+  inventoryContainerRef: React.RefObject<HTMLDivElement | null>;
 };
 
-type FlyState = {
-  p0: { x: number; y: number };
-  p1: { x: number; y: number };
-  p2: { x: number; y: number };
-  duration: number;
-  startTime: number;
-};
+function isOutsideRect(px: number, py: number, rect: DOMRect): boolean {
+  return px < rect.left || px > rect.right || py < rect.top || py > rect.bottom;
+}
 
-function DraggableWeightBlock({ item, onLaunch, onDragEnd, onMiss, dropZoneRef }: DraggableWeightBlockProps) {
-  const flickTrackRef = useRef<{ x: number; y: number; t: number } | null>(null);
+function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, inventoryContainerRef }: DraggableWeightBlockProps) {
+  const hasLaunchedRef = useRef(false);
 
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    flickTrackRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
-  }, []);
-
-  const handlePointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      const start = flickTrackRef.current;
-      flickTrackRef.current = null;
-      if (!start) return;
-
-      const endX = e.clientX;
-      const endY = e.clientY;
-      const endT = performance.now();
-      const dt = endT - start.t;
-      if (dt <= 0) return;
-
-      const dx = endX - start.x;
-      const dy = endY - start.y;
-      const vx = (dx / dt) * 1000; // px/s
-      const vy = (dy / dt) * 1000;
-
-      const isLaunch = vx >= FLICK_VELOCITY_THRESHOLD && vx > 0;
-      if (isLaunch && dropZoneRef.current) {
-        const rect = dropZoneRef.current.getBoundingClientRect();
-        const p2x = rect.left + rect.width / 2;
-        const p2y = rect.top + rect.height / 2;
-        const p0 = { x: endX, y: endY };
-        const p2 = { x: p2x, y: p2y };
-        const v = Math.sqrt(vx * vx + vy * vy);
-        const p1 = {
-          x: p0.x + (vx / Math.max(50, v)) * BEZIER_ARC_HEIGHT,
-          y: p0.y - BEZIER_ARC_HEIGHT,
-        };
-        const duration = Math.max(
-          BEZIER_DURATION_MIN,
-          Math.min(BEZIER_DURATION_MAX, BEZIER_DURATION_BASE / vx)
-        );
-        onLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy });
-      }
+  const tryLaunch = useCallback(
+    (p0: { x: number; y: number }, vx: number, vy: number) => {
+      if (hasLaunchedRef.current || !dropZoneRef.current) return;
+      hasLaunchedRef.current = true;
+      const rect = dropZoneRef.current.getBoundingClientRect();
+      const p2 = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      const p1 = {
+        x: (p0.x + p2.x) / 2,
+        y: p0.y - BOUNDARY_ARC_HEIGHT,
+      };
+      const duration = Math.max(
+        BOUNDARY_DURATION_MIN,
+        Math.min(BOUNDARY_DURATION_MAX, 600 / Math.max(Math.abs(vx), 100))
+      );
+      onLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy });
     },
     [item, dropZoneRef, onLaunch]
   );
@@ -359,25 +330,24 @@ function DraggableWeightBlock({ item, onLaunch, onDragEnd, onMiss, dropZoneRef }
       dragConstraints={false}
       dragElastic={0}
       dragMomentum={false}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={() => (flickTrackRef.current = null)}
-      onDragStart={() => {
-        if (DEBUG) console.log("Drag Started", item.id);
+      onDrag={(_, info) => {
+        if (hasLaunchedRef.current) return;
+        if (!inventoryContainerRef.current || !dropZoneRef.current) return;
+        const rect = inventoryContainerRef.current.getBoundingClientRect();
+        const { x, y } = info.point;
+        if (isOutsideRect(x, y, rect)) {
+          const vx = info.velocity?.x ?? 300;
+          const vy = info.velocity?.y ?? 0;
+          tryLaunch({ x, y }, vx, vy);
+        }
       }}
       onDragEnd={(_, info) => {
+        if (hasLaunchedRef.current) return;
+        if (!inventoryContainerRef.current) return;
+        const rect = inventoryContainerRef.current.getBoundingClientRect();
         const { x, y } = info.point;
-        if (DEBUG) console.log("Drag Ended at:", x, y);
-        if (dropZoneRef.current) {
-          const rect = dropZoneRef.current.getBoundingClientRect();
-          if (isPointInRect(x, y, rect)) {
-            if (DEBUG) console.log("Drop accepted");
-            onDragEnd(item, { x, y });
-          } else {
-            onMiss(item, { x, y });
-          }
-        } else {
-          onMiss(item, { x, y });
+        if (!isOutsideRect(x, y, rect)) {
+          onDragCancel(item);
         }
       }}
       className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm select-none cursor-grab active:cursor-grabbing shrink-0 ${getBlockSize(
@@ -405,50 +375,32 @@ type DebugThrowBlockProps = {
   item: WeightItem;
   onDebugLaunch: (item: WeightItem, flyData: Omit<FlyingItem, "item">) => void;
   dropZoneRef: React.RefObject<HTMLDivElement | null>;
+  inventoryContainerRef: React.RefObject<HTMLDivElement | null>;
 };
 
-function DebugThrowBlock({ item, onDebugLaunch, dropZoneRef }: DebugThrowBlockProps) {
-  const flickTrackRef = useRef<{ x: number; y: number; t: number } | null>(null);
+function DebugThrowBlock({
+  item,
+  onDebugLaunch,
+  dropZoneRef,
+  inventoryContainerRef,
+}: DebugThrowBlockProps) {
+  const hasLaunchedRef = useRef(false);
 
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    flickTrackRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
-  }, []);
-
-  const handlePointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      const start = flickTrackRef.current;
-      flickTrackRef.current = null;
-      if (!start) return;
-
-      const endX = e.clientX;
-      const endY = e.clientY;
-      const endT = performance.now();
-      const dt = endT - start.t;
-      if (dt <= 0) return;
-
-      const dx = endX - start.x;
-      const dy = endY - start.y;
-      const vx = (dx / dt) * 1000;
-      const vy = (dy / dt) * 1000;
-
-      const isLaunch = vx >= FLICK_VELOCITY_THRESHOLD && vx > 0;
-      if (isLaunch && dropZoneRef.current) {
-        const rect = dropZoneRef.current.getBoundingClientRect();
-        const p2x = rect.left + rect.width / 2;
-        const p2y = rect.top + rect.height / 2;
-        const p0 = { x: endX, y: endY };
-        const p2 = { x: p2x, y: p2y };
-        const v = Math.sqrt(vx * vx + vy * vy);
-        const p1 = {
-          x: p0.x + (vx / Math.max(50, v)) * BEZIER_ARC_HEIGHT,
-          y: p0.y - BEZIER_ARC_HEIGHT,
-        };
-        const duration = Math.max(
-          BEZIER_DURATION_MIN,
-          Math.min(BEZIER_DURATION_MAX, BEZIER_DURATION_BASE / vx)
-        );
-        onDebugLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy });
-      }
+  const tryLaunch = useCallback(
+    (p0: { x: number; y: number }, vx: number, vy: number) => {
+      if (hasLaunchedRef.current || !dropZoneRef.current) return;
+      hasLaunchedRef.current = true;
+      const rect = dropZoneRef.current.getBoundingClientRect();
+      const p2 = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      const p1 = {
+        x: (p0.x + p2.x) / 2,
+        y: p0.y - BOUNDARY_ARC_HEIGHT,
+      };
+      const duration = Math.max(
+        BOUNDARY_DURATION_MIN,
+        Math.min(BOUNDARY_DURATION_MAX, 600 / Math.max(Math.abs(vx), 100))
+      );
+      onDebugLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy });
     },
     [item, dropZoneRef, onDebugLaunch]
   );
@@ -459,9 +411,26 @@ function DebugThrowBlock({ item, onDebugLaunch, dropZoneRef }: DebugThrowBlockPr
       dragConstraints={false}
       dragElastic={0}
       dragMomentum={false}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={() => (flickTrackRef.current = null)}
+      onDrag={(_, info) => {
+        if (hasLaunchedRef.current) return;
+        if (!inventoryContainerRef.current || !dropZoneRef.current) return;
+        const rect = inventoryContainerRef.current.getBoundingClientRect();
+        const { x, y } = info.point;
+        if (isOutsideRect(x, y, rect)) {
+          const vx = info.velocity?.x ?? 300;
+          const vy = info.velocity?.y ?? 0;
+          tryLaunch({ x, y }, vx, vy);
+        }
+      }}
+      onDragEnd={(_, info) => {
+        if (hasLaunchedRef.current) return;
+        if (!inventoryContainerRef.current) return;
+        const rect = inventoryContainerRef.current.getBoundingClientRect();
+        const { x, y } = info.point;
+        if (!isOutsideRect(x, y, rect)) {
+          hasLaunchedRef.current = false;
+        }
+      }}
       className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm select-none cursor-grab active:cursor-grabbing shrink-0 ${getBlockSize(
         item.visual.size
       )} ${item.visual.bgClass} ${item.visual.borderClass}`}
@@ -511,6 +480,8 @@ export default function PresSureJudgeGame() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rightPanRef = useRef<HTMLDivElement>(null);
+  const inventoryContainerRef = useRef<HTMLDivElement>(null);
+  const [dragResetKey, setDragResetKey] = useState(0);
 
   const totalBalanceRef = useRef(totalBalance);
   const placedWeightsRef = useRef(placedWeights);
@@ -617,10 +588,15 @@ export default function PresSureJudgeGame() {
           vx: flyData.vx,
           vy: flyData.vy,
         });
+        setTimeout(() => setDebugOverlay(null), DEBUG_OVERLAY_DURATION_MS);
       }
     },
     [isDebugMode]
   );
+
+  const handleDragCancel = useCallback((item: WeightItem) => {
+    setDragResetKey((k) => k + 1);
+  }, []);
 
   const handleLanding = useCallback((item: WeightItem) => {
     setDebugOverlay(null);
@@ -635,13 +611,6 @@ export default function PresSureJudgeGame() {
     });
     setImpactOffset(IMPACT_DIP_PX);
     setTimeout(() => setImpactOffset(0), 80);
-  }, []);
-
-  const handleMiss = useCallback((item: WeightItem, point: { x: number; y: number }) => {
-    setInventorySlots((slots) =>
-      slots.map((s) => (s?.id === item.id ? null : s))
-    );
-    setFallingItems((prev) => [...prev, { item, startX: point.x, startY: point.y }]);
   }, []);
 
   const handleFallComplete = useCallback((item: WeightItem) => {
@@ -659,25 +628,11 @@ export default function PresSureJudgeGame() {
           vx: flyData.vx,
           vy: flyData.vy,
         });
+        setTimeout(() => setDebugOverlay(null), DEBUG_OVERLAY_DURATION_MS);
       }
     },
     [isDebugMode]
   );
-
-  const handleDrop = useCallback((item: WeightItem) => {
-    if (!inventorySlotsRef.current.some((s) => s?.id === item.id)) return;
-    setInventorySlots((slots) =>
-      slots.map((s) => (s?.id === item.id ? null : s))
-    );
-    setRightPanWeights((pan) => {
-      const rightPlaced = placedWeightsRef.current.filter((w) => w.side === "right");
-      const topY = rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
-      const panTopY = pan.length > 0 ? Math.min(...pan.map((w) => w.position.y)) : topY;
-      const stackTopY = Math.min(topY, panTopY);
-      const newY = stackTopY - getWeightHeight(item.value, "right");
-      return [...pan, { ...item, position: { x: 0, y: newY } }];
-    });
-  }, []);
 
   useEffect(() => {
     if (phase !== "npc") return;
@@ -837,6 +792,21 @@ export default function PresSureJudgeGame() {
                 strokeWidth="2"
                 strokeDasharray="4 4"
               />
+              {/* Velocity arrow (P0 → P0 + normalized v) */}
+              <line
+                x1={debugOverlay.p0.x}
+                y1={debugOverlay.p0.y}
+                x2={debugOverlay.p0.x + (debugOverlay.vx / Math.max(100, Math.hypot(debugOverlay.vx, debugOverlay.vy))) * 80}
+                y2={debugOverlay.p0.y + (debugOverlay.vy / Math.max(100, Math.hypot(debugOverlay.vx, debugOverlay.vy))) * 80}
+                stroke="#f59e0b"
+                strokeWidth="2"
+                markerEnd="url(#arrowhead)"
+              />
+              <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                  <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b" />
+                </marker>
+              </defs>
             </svg>
             <div
               className="absolute text-xs font-mono text-emerald-400"
@@ -846,10 +816,18 @@ export default function PresSureJudgeGame() {
             </div>
             <div
               className="absolute w-3 h-3 rounded-full bg-emerald-500 border-2 border-emerald-300"
-              style={{
-                left: debugOverlay.p0.x - 6,
-                top: debugOverlay.p0.y - 6,
-              }}
+              style={{ left: debugOverlay.p0.x - 6, top: debugOverlay.p0.y - 6 }}
+              title="P0"
+            />
+            <div
+              className="absolute w-3 h-3 rounded-full bg-amber-500 border-2 border-amber-300"
+              style={{ left: debugOverlay.p1.x - 6, top: debugOverlay.p1.y - 6 }}
+              title="P1"
+            />
+            <div
+              className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-blue-300"
+              style={{ left: debugOverlay.p2.x - 6, top: debugOverlay.p2.y - 6 }}
+              title="P2"
             />
           </div>
         )}
@@ -980,6 +958,7 @@ export default function PresSureJudgeGame() {
               {phase === "user" && (
                 <div className="space-y-4 p-4 rounded-2xl border border-white/10 bg-white/5 overflow-visible">
                   <div
+                    ref={inventoryContainerRef}
                     className="min-h-[72px] p-4 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible shrink-0"
                     style={{ touchAction: "none" }}
                   >
@@ -989,12 +968,12 @@ export default function PresSureJudgeGame() {
                       inventorySlots.map((slot, i) =>
                         slot ? (
                           <DraggableWeightBlock
-                            key={slot.id}
+                            key={`${slot.id}-${dragResetKey}`}
                             item={slot}
                             onLaunch={handleLaunch}
-                            onDragEnd={handleDrop}
-                            onMiss={handleMiss}
+                            onDragCancel={handleDragCancel}
                             dropZoneRef={rightPanRef}
+                            inventoryContainerRef={inventoryContainerRef}
                           />
                         ) : (
                           <div
@@ -1010,6 +989,7 @@ export default function PresSureJudgeGame() {
                         item={DEBUG_ITEM}
                         onDebugLaunch={handleDebugLaunch}
                         dropZoneRef={rightPanRef}
+                        inventoryContainerRef={inventoryContainerRef}
                       />
                     )}
                   </div>
