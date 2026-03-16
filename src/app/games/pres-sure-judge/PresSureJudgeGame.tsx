@@ -9,6 +9,8 @@ import {
   DragOverlay,
   DragStartEvent,
   PointerSensor,
+  TouchSensor,
+  pointerWithin,
   useSensor,
   useSensors,
   useDraggable,
@@ -106,6 +108,7 @@ function DraggableWeightBlock({ item }: { item: WeightItem }) {
       style={{
         opacity: isDragging ? 0.5 : 1,
         boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+        touchAction: "none",
       }}
     >
       {item.value}
@@ -193,11 +196,13 @@ export default function PresSureJudgeGame() {
   const rightPanWeightsRef = useRef(rightPanWeights);
   const leftPanWeightsRef = useRef(leftPanWeights);
   const roundRef = useRef(round);
+  const inventoryWeightsRef = useRef(inventoryWeights);
 
   totalBalanceRef.current = totalBalance;
   rightPanWeightsRef.current = rightPanWeights;
   leftPanWeightsRef.current = leftPanWeights;
   roundRef.current = round;
+  inventoryWeightsRef.current = inventoryWeights;
 
   const currentUserWeight = rightPanWeights.reduce((s, w) => s + w.value, 0);
   const currentNPCWeight = leftPanWeights.reduce((s, w) => s + w.value, 0);
@@ -208,7 +213,10 @@ export default function PresSureJudgeGame() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 8 },
     })
   );
 
@@ -309,7 +317,7 @@ export default function PresSureJudgeGame() {
     const data = active.data.current;
     if (!data?.item) return;
     const item = data.item as WeightItem;
-    if (!inventoryWeights.some((w) => w.id === item.id)) return;
+    if (!inventoryWeightsRef.current.some((w) => w.id === item.id)) return;
 
     setInventoryWeights((inv) => inv.filter((w) => w.id !== item.id));
     setRightPanWeights((pan) => {
@@ -397,7 +405,12 @@ export default function PresSureJudgeGame() {
               className="space-y-8"
             >
               <div className="flex justify-center">
-                <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={pointerWithin}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                >
                   <motion.div
                     className="relative w-full max-w-lg h-56 flex items-end justify-center pb-4"
                     style={{ transformOrigin: "center bottom" }}
