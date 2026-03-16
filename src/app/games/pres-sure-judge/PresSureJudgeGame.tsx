@@ -34,6 +34,19 @@ type HistoryEntry = {
   diff: number;
 };
 
+type PlacedWeight = {
+  id: string;
+  side: "left" | "right";
+  value: number;
+  x: number;
+  y: number;
+};
+
+function getWeightHeight(value: number, side: "left" | "right"): number {
+  if (side === "left") return value <= 20 ? 40 : 44;
+  return value <= 3 ? 28 : value <= 10 ? 32 : 36;
+}
+
 function createWeightItem(value: number, id?: string): WeightItem {
   const sizes = value <= 3 ? "sm" : value <= 10 ? "md" : "lg";
   const palettes: Record<string, { bg: string; border: string }> = {
@@ -66,6 +79,46 @@ function createNPCWeightItem(value: number): WeightItem {
 
 function getBlockSize(size: "sm" | "md" | "lg") {
   return size === "sm" ? "w-10 h-7" : size === "md" ? "w-12 h-8" : "w-14 h-9";
+}
+
+function PlacedWeightBlock({ w }: { w: PlacedWeight }) {
+  const size: "sm" | "md" | "lg" =
+    w.side === "left" ? (w.value <= 20 ? "md" : "lg") : w.value <= 3 ? "sm" : w.value <= 10 ? "md" : "lg";
+  const blockSize =
+    w.side === "left"
+      ? size === "sm"
+        ? "w-12 h-9"
+        : size === "md"
+          ? "w-14 h-10"
+          : "w-16 h-11"
+      : getBlockSize(size);
+  const bgClass =
+    w.side === "left"
+      ? "bg-gradient-to-br from-amber-600 to-orange-700"
+      : size === "sm"
+        ? "bg-slate-600"
+        : size === "md"
+          ? "bg-blue-600"
+          : "bg-indigo-600";
+  const borderClass =
+    w.side === "left" ? "border-amber-400" : size === "sm" ? "border-slate-400" : size === "md" ? "border-blue-400" : "border-indigo-400";
+  return (
+    <motion.div
+      layout
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm shrink-0 ${blockSize} ${bgClass} ${borderClass}`}
+      style={{
+        boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+        position: "absolute",
+        left: "50%",
+        transform: "translateX(-50%)",
+        bottom: `${-w.y}px`,
+      }}
+    >
+      {w.value}
+    </motion.div>
+  );
 }
 
 function getRotation(balance: number, collapsed: boolean): number {
@@ -183,6 +236,7 @@ export default function PresSureJudgeGame() {
   const [leftPanWeights, setLeftPanWeights] = useState<WeightItem[]>([]);
   const [rightPanWeights, setRightPanWeights] = useState<WeightItem[]>([]);
   const [inventoryWeights, setInventoryWeights] = useState<WeightItem[]>([]);
+  const [placedWeights, setPlacedWeights] = useState<PlacedWeight[]>([]);
   const [round, setRound] = useState(0);
   const [timer, setTimer] = useState(INITIAL_TIMER);
   const [collapseAnimDone, setCollapseAnimDone] = useState(false);
@@ -191,12 +245,14 @@ export default function PresSureJudgeGame() {
   const rightPanRef = useRef<HTMLDivElement>(null);
 
   const totalBalanceRef = useRef(totalBalance);
+  const placedWeightsRef = useRef(placedWeights);
   const rightPanWeightsRef = useRef(rightPanWeights);
   const leftPanWeightsRef = useRef(leftPanWeights);
   const roundRef = useRef(round);
   const inventoryWeightsRef = useRef(inventoryWeights);
 
   totalBalanceRef.current = totalBalance;
+  placedWeightsRef.current = placedWeights;
   rightPanWeightsRef.current = rightPanWeights;
   leftPanWeightsRef.current = leftPanWeights;
   roundRef.current = round;
@@ -213,6 +269,7 @@ export default function PresSureJudgeGame() {
     setPhase("npc");
     setTotalBalance(0);
     setHistory([]);
+    setPlacedWeights([]);
     setLeftPanWeights([]);
     setRightPanWeights([]);
     setInventoryWeights([]);
@@ -246,6 +303,29 @@ export default function PresSureJudgeGame() {
 
     setHistory((h) => [...h, { round: r, left: npcW, right: userW, diff: npcW - userW }]);
 
+    setPlacedWeights((prev) => {
+      const leftPlaced = prev.filter((w) => w.side === "left");
+      const rightPlaced = prev.filter((w) => w.side === "right");
+      const leftTopY = leftPlaced.length > 0 ? Math.min(...leftPlaced.map((w) => w.y)) : 0;
+      const rightTopY = rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
+
+      let curLeftY = leftTopY;
+      let curRightY = rightTopY;
+      const newPlaced: PlacedWeight[] = [];
+
+      for (const w of leftItems) {
+        const h = getWeightHeight(w.value, "left");
+        curLeftY = curLeftY - h;
+        newPlaced.push({ id: w.id, side: "left", value: w.value, x: 0, y: curLeftY });
+      }
+      for (const w of rightItems) {
+        const h = getWeightHeight(w.value, "right");
+        curRightY = curRightY - h;
+        newPlaced.push({ id: w.id, side: "right", value: w.value, x: 0, y: curRightY });
+      }
+      return [...prev, ...newPlaced];
+    });
+
     if (Math.abs(newBalance) > BALANCE_LIMIT) {
       setPhase("gameover");
       return;
@@ -259,11 +339,16 @@ export default function PresSureJudgeGame() {
     if (!inventoryWeightsRef.current.some((w) => w.id === item.id)) return;
     setInventoryWeights((inv) => inv.filter((w) => w.id !== item.id));
     setRightPanWeights((pan) => {
-      const stackIndex = pan.length;
-      return [
-        ...pan,
-        { ...item, position: { x: 0, y: -1 * stackIndex * BLOCK_HEIGHT } },
-      ];
+      const rightPlaced = placedWeightsRef.current.filter((w) => w.side === "right");
+      const topY =
+        rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
+      const panTopY =
+        pan.length > 0
+          ? Math.min(...pan.map((w) => w.position.y))
+          : topY;
+      const stackTopY = Math.min(topY, panTopY);
+      const newY = stackTopY - getWeightHeight(item.value, "right");
+      return [...pan, { ...item, position: { x: 0, y: newY } }];
     });
   }, []);
 
@@ -334,6 +419,24 @@ export default function PresSureJudgeGame() {
   }, [phase, history.length]);
 
   const rotation = getRotation(effectiveBalance, isCollapsed);
+
+  const leftPlaced = placedWeights.filter((w) => w.side === "left");
+  let leftTopY = leftPlaced.length > 0 ? Math.min(...leftPlaced.map((w) => w.y)) : 0;
+  const leftCurrent: PlacedWeight[] = leftPanWeights.map((w) => {
+    const y = leftTopY - getWeightHeight(w.value, "left");
+    leftTopY = y;
+    return { id: w.id, side: "left" as const, value: w.value, x: 0, y };
+  });
+  const leftDisplay = [...leftPlaced, ...leftCurrent].sort((a, b) => a.y - b.y);
+
+  const rightPlaced = placedWeights.filter((w) => w.side === "right");
+  let rightTopY = rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
+  const rightCurrent: PlacedWeight[] = rightPanWeights.map((w) => {
+    const y = rightTopY - getWeightHeight(w.value, "right");
+    rightTopY = y;
+    return { id: w.id, side: "right" as const, value: w.value, x: 0, y };
+  });
+  const rightDisplay = [...rightPlaced, ...rightCurrent].sort((a, b) => a.y - b.y);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text">
@@ -406,11 +509,12 @@ export default function PresSureJudgeGame() {
                     style={{ transformOrigin: "left bottom" }}
                   >
                     <span className="text-[10px] text-amber-400/90 font-medium mb-1">NPC</span>
-                    <div className="min-h-[80px] w-28 rounded-b-xl border-2 border-amber-500/50 bg-amber-500/10 flex flex-col-reverse items-center justify-end gap-1 px-2 py-2 overflow-hidden"
-                      style={{ maxHeight: PAN_MAX_VISIBLE_HEIGHT }}
+                    <div
+                      className="relative min-h-[80px] w-28 rounded-b-xl border-2 border-amber-500/50 bg-amber-500/10 px-2 py-2 overflow-visible"
+                      style={{ minHeight: PAN_MAX_VISIBLE_HEIGHT }}
                     >
-                      {leftPanWeights.map((w) => (
-                        <NPCDropBlock key={w.id} item={w} />
+                      {leftDisplay.map((w) => (
+                        <PlacedWeightBlock key={w.id} w={w} />
                       ))}
                     </div>
                     <span className="text-xs font-bold tabular-nums text-amber-200 mt-1">{leftTotal}</span>
@@ -423,12 +527,12 @@ export default function PresSureJudgeGame() {
                     <span className="text-[10px] text-blue-400/90 font-medium mb-1">You</span>
                     <motion.div
                       ref={rightPanRef}
-                      className="min-h-[80px] w-28 rounded-b-xl border-2 flex flex-col-reverse items-center justify-end gap-1 px-2 py-2 border-blue-500/50 bg-blue-500/10 transition-colors"
-                      style={{ maxHeight: PAN_MAX_VISIBLE_HEIGHT, overflow: "hidden" }}
+                      className="relative min-h-[80px] w-28 rounded-b-xl border-2 px-2 py-2 border-blue-500/50 bg-blue-500/10 transition-colors overflow-visible"
+                      style={{ minHeight: PAN_MAX_VISIBLE_HEIGHT }}
                       whileHover={{ borderColor: "rgba(96,165,250,0.9)", backgroundColor: "rgba(59,130,246,0.2)" }}
                     >
-                      {rightPanWeights.map((w) => (
-                        <WeightBlockStatic key={w.id} item={w} />
+                      {rightDisplay.map((w) => (
+                        <PlacedWeightBlock key={w.id} w={w} />
                       ))}
                     </motion.div>
                     <span className="text-xs font-bold tabular-nums text-blue-200 mt-1">{rightTotal}</span>
