@@ -26,6 +26,20 @@ const IMPACT_DURATION = 0.4; // seconds
 const FALL_DURATION = 0.6; // Miss shot: fall off screen
 const DEBUG = false;
 
+const DEBUG_ITEM: WeightItem = (() => {
+  const w = createWeightItem(0, "debug-item");
+  w.visual = { bgClass: "bg-emerald-600", borderClass: "border-emerald-400", size: "md" };
+  return w;
+})();
+
+type DebugOverlay = {
+  p0: { x: number; y: number };
+  p1: { x: number; y: number };
+  p2: { x: number; y: number };
+  vx: number;
+  vy: number;
+};
+
 function bezier2(t: number, P0: { x: number; y: number }, P1: { x: number; y: number }, P2: { x: number; y: number }) {
   const mt = 1 - t;
   return {
@@ -205,6 +219,8 @@ type FlyingItem = {
   p2: { x: number; y: number };
   duration: number;
   startTime: number;
+  vx?: number;
+  vy?: number;
 };
 
 type FallingItem = { item: WeightItem; startX: number; startY: number };
@@ -246,7 +262,7 @@ function FlyingWeightBlock({ fly, onLanding }: { fly: FlyingItem; onLanding: (it
         zIndex: 100,
       }}
     >
-      {fly.item.value}
+      {fly.item.id === "debug-item" ? "DEBUG" : fly.item.value}
     </motion.div>
   );
 }
@@ -313,6 +329,7 @@ function DraggableWeightBlock({ item, onLaunch, onDragEnd, onMiss, dropZoneRef }
       const dx = endX - start.x;
       const dy = endY - start.y;
       const vx = (dx / dt) * 1000; // px/s
+      const vy = (dy / dt) * 1000;
 
       const isLaunch = vx >= FLICK_VELOCITY_THRESHOLD && vx > 0;
       if (isLaunch && dropZoneRef.current) {
@@ -321,15 +338,16 @@ function DraggableWeightBlock({ item, onLaunch, onDragEnd, onMiss, dropZoneRef }
         const p2y = rect.top + rect.height / 2;
         const p0 = { x: endX, y: endY };
         const p2 = { x: p2x, y: p2y };
+        const v = Math.sqrt(vx * vx + vy * vy);
         const p1 = {
-          x: (p0.x + p2.x) / 2,
+          x: p0.x + (vx / Math.max(50, v)) * BEZIER_ARC_HEIGHT,
           y: p0.y - BEZIER_ARC_HEIGHT,
         };
         const duration = Math.max(
           BEZIER_DURATION_MIN,
           Math.min(BEZIER_DURATION_MAX, BEZIER_DURATION_BASE / vx)
         );
-        onLaunch(item, { p0, p1, p2, duration, startTime: performance.now() });
+        onLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy });
       }
     },
     [item, dropZoneRef, onLaunch]
@@ -383,6 +401,88 @@ function DraggableWeightBlock({ item, onLaunch, onDragEnd, onMiss, dropZoneRef }
   );
 }
 
+type DebugThrowBlockProps = {
+  item: WeightItem;
+  onDebugLaunch: (item: WeightItem, flyData: Omit<FlyingItem, "item">) => void;
+  dropZoneRef: React.RefObject<HTMLDivElement | null>;
+};
+
+function DebugThrowBlock({ item, onDebugLaunch, dropZoneRef }: DebugThrowBlockProps) {
+  const flickTrackRef = useRef<{ x: number; y: number; t: number } | null>(null);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    flickTrackRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
+  }, []);
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      const start = flickTrackRef.current;
+      flickTrackRef.current = null;
+      if (!start) return;
+
+      const endX = e.clientX;
+      const endY = e.clientY;
+      const endT = performance.now();
+      const dt = endT - start.t;
+      if (dt <= 0) return;
+
+      const dx = endX - start.x;
+      const dy = endY - start.y;
+      const vx = (dx / dt) * 1000;
+      const vy = (dy / dt) * 1000;
+
+      const isLaunch = vx >= FLICK_VELOCITY_THRESHOLD && vx > 0;
+      if (isLaunch && dropZoneRef.current) {
+        const rect = dropZoneRef.current.getBoundingClientRect();
+        const p2x = rect.left + rect.width / 2;
+        const p2y = rect.top + rect.height / 2;
+        const p0 = { x: endX, y: endY };
+        const p2 = { x: p2x, y: p2y };
+        const v = Math.sqrt(vx * vx + vy * vy);
+        const p1 = {
+          x: p0.x + (vx / Math.max(50, v)) * BEZIER_ARC_HEIGHT,
+          y: p0.y - BEZIER_ARC_HEIGHT,
+        };
+        const duration = Math.max(
+          BEZIER_DURATION_MIN,
+          Math.min(BEZIER_DURATION_MAX, BEZIER_DURATION_BASE / vx)
+        );
+        onDebugLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy });
+      }
+    },
+    [item, dropZoneRef, onDebugLaunch]
+  );
+
+  return (
+    <motion.div
+      drag
+      dragConstraints={false}
+      dragElastic={0}
+      dragMomentum={false}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={() => (flickTrackRef.current = null)}
+      className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm select-none cursor-grab active:cursor-grabbing shrink-0 ${getBlockSize(
+        item.visual.size
+      )} ${item.visual.bgClass} ${item.visual.borderClass}`}
+      style={{
+        boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+        touchAction: "none",
+        pointerEvents: "auto",
+        zIndex: 10,
+      }}
+      whileDrag={{
+        scale: 1.15,
+        opacity: 0.9,
+        zIndex: 50,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+      }}
+    >
+      DEBUG
+    </motion.div>
+  );
+}
+
 export default function PresSureJudgeGame() {
   const [phase, setPhase] = useState<Phase>("ready");
   const [totalBalance, setTotalBalance] = useState(0);
@@ -399,6 +499,15 @@ export default function PresSureJudgeGame() {
   const [round, setRound] = useState(0);
   const [timer, setTimer] = useState(INITIAL_TIMER);
   const [collapseAnimDone, setCollapseAnimDone] = useState(false);
+  const [isDebugMode, setIsDebugMode] = useState(false);
+  const [debugOverlay, setDebugOverlay] = useState<{
+    p0: { x: number; y: number };
+    p1: { x: number; y: number };
+    p2: { x: number; y: number };
+    vx: number;
+    vy: number;
+  } | null>(null);
+  const [debugFlyingItem, setDebugFlyingItem] = useState<FlyingItem | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rightPanRef = useRef<HTMLDivElement>(null);
@@ -494,14 +603,27 @@ export default function PresSureJudgeGame() {
     setPhase("npc");
   }, []);
 
-  const handleLaunch = useCallback((item: WeightItem, flyData: Omit<FlyingItem, "item">) => {
-    setInventorySlots((slots) =>
-      slots.map((s) => (s?.id === item.id ? null : s))
-    );
-    setFlyingItems((prev) => [...prev, { item, ...flyData }]);
-  }, []);
+  const handleLaunch = useCallback(
+    (item: WeightItem, flyData: Omit<FlyingItem, "item">) => {
+      setInventorySlots((slots) =>
+        slots.map((s) => (s?.id === item.id ? null : s))
+      );
+      setFlyingItems((prev) => [...prev, { item, ...flyData }]);
+      if (isDebugMode && flyData.vx != null && flyData.vy != null) {
+        setDebugOverlay({
+          p0: flyData.p0,
+          p1: flyData.p1,
+          p2: flyData.p2,
+          vx: flyData.vx,
+          vy: flyData.vy,
+        });
+      }
+    },
+    [isDebugMode]
+  );
 
   const handleLanding = useCallback((item: WeightItem) => {
+    setDebugOverlay(null);
     setFlyingItems((prev) => prev.filter((f) => f.item.id !== item.id));
     setRightPanWeights((pan) => {
       const rightPlaced = placedWeightsRef.current.filter((w) => w.side === "right");
@@ -525,6 +647,22 @@ export default function PresSureJudgeGame() {
   const handleFallComplete = useCallback((item: WeightItem) => {
     setFallingItems((prev) => prev.filter((f) => f.item.id !== item.id));
   }, []);
+
+  const handleDebugLaunch = useCallback(
+    (item: WeightItem, flyData: Omit<FlyingItem, "item">) => {
+      setDebugFlyingItem({ item, ...flyData });
+      if (isDebugMode && flyData.vx != null && flyData.vy != null) {
+        setDebugOverlay({
+          p0: flyData.p0,
+          p1: flyData.p1,
+          p2: flyData.p2,
+          vx: flyData.vx,
+          vy: flyData.vy,
+        });
+      }
+    },
+    [isDebugMode]
+  );
 
   const handleDrop = useCallback((item: WeightItem) => {
     if (!inventorySlotsRef.current.some((s) => s?.id === item.id)) return;
@@ -550,6 +688,7 @@ export default function PresSureJudgeGame() {
 
   useEffect(() => {
     if (phase !== "user") return;
+    if (isDebugMode) return; // Freeze timer in debug mode
     timerRef.current = setInterval(() => {
       setTimer((t) => {
         if (t <= 1) {
@@ -569,7 +708,7 @@ export default function PresSureJudgeGame() {
         timerRef.current = null;
       }
     };
-  }, [phase, performResolution]);
+  }, [phase, performResolution, isDebugMode]);
 
   const handleJudge = () => {
     if (phase !== "user") return;
@@ -648,6 +787,13 @@ export default function PresSureJudgeGame() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text isolate">
+      <button
+        onClick={() => setIsDebugMode((m) => !m)}
+        className="fixed right-4 top-4 z-50 px-3 py-1.5 rounded-lg text-xs font-mono border border-white/20"
+        style={{ background: isDebugMode ? "#10b981" : "#374151" }}
+      >
+        DEBUG {isDebugMode ? "ON" : "OFF"}
+      </button>
       <header className="relative z-20 shrink-0 flex justify-between items-center px-4 py-4 md:px-6 md:py-6 border-b border-white/10">
         <Link
           href="/"
@@ -668,6 +814,45 @@ export default function PresSureJudgeGame() {
         {fallingItems.map((fall) => (
           <FallingWeightBlock key={fall.item.id} fall={fall} onComplete={() => handleFallComplete(fall.item)} />
         ))}
+        {debugFlyingItem && (
+          <FlyingWeightBlock
+            key="debug-fly"
+            fly={debugFlyingItem}
+            onLanding={() => {
+              setDebugFlyingItem(null);
+              setDebugOverlay(null);
+            }}
+          />
+        )}
+        {isDebugMode && debugOverlay && (
+          <div
+            className="fixed inset-0 pointer-events-none"
+            style={{ zIndex: 90 }}
+          >
+            <svg width="100%" height="100%" className="absolute inset-0">
+              <path
+                d={`M ${debugOverlay.p0.x} ${debugOverlay.p0.y} Q ${debugOverlay.p1.x} ${debugOverlay.p1.y} ${debugOverlay.p2.x} ${debugOverlay.p2.y}`}
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="2"
+                strokeDasharray="4 4"
+              />
+            </svg>
+            <div
+              className="absolute text-xs font-mono text-emerald-400"
+              style={{ left: debugOverlay.p0.x + 8, top: debugOverlay.p0.y - 4 }}
+            >
+              vx: {debugOverlay.vx.toFixed(0)} vy: {debugOverlay.vy.toFixed(0)}
+            </div>
+            <div
+              className="absolute w-3 h-3 rounded-full bg-emerald-500 border-2 border-emerald-300"
+              style={{
+                left: debugOverlay.p0.x - 6,
+                top: debugOverlay.p0.y - 6,
+              }}
+            />
+          </div>
+        )}
         <AnimatePresence mode="wait">
           {phase === "ready" && (
             <motion.div
@@ -819,6 +1004,13 @@ export default function PresSureJudgeGame() {
                           />
                         )
                       )
+                    )}
+                    {isDebugMode && !debugFlyingItem && (
+                      <DebugThrowBlock
+                        item={DEBUG_ITEM}
+                        onDebugLaunch={handleDebugLaunch}
+                        dropZoneRef={rightPanRef}
+                      />
                     )}
                   </div>
                   <button
