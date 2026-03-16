@@ -12,6 +12,10 @@ const WEIGHT_VALUES = [1, 3, 5, 10, 20];
 const INVENTORY_COUNT = 8;
 const PAN_MAX_VISIBLE_HEIGHT = 120;
 const BLOCK_HEIGHT = 28;
+const VIEW_HEIGHT = 360;
+const MIN_ZOOM_SCALE = 0.5;
+const ZOOM_MARGIN = 80;
+const OFFSCREEN_INDICATOR_THRESHOLD = 180;
 const DEBUG = false;
 
 type Phase = "ready" | "npc" | "user" | "gameover" | "result";
@@ -438,11 +442,24 @@ export default function PresSureJudgeGame() {
   });
   const rightDisplay = [...rightPlaced, ...rightCurrent].sort((a, b) => a.y - b.y);
 
-  // より高い方（Y座標が小さい方）のスタック頂点に合わせてスクロール量を計算
+  // 左右の頂上Y座標と差を計算
   const leftMinY = leftDisplay.length > 0 ? Math.min(...leftDisplay.map((w) => w.y)) : 0;
   const rightMinY = rightDisplay.length > 0 ? Math.min(...rightDisplay.map((w) => w.y)) : 0;
-  const topOfStackY = Math.min(leftMinY, rightMinY);
-  const scrollY = Math.max(0, -topOfStackY);
+  const stackDiff = Math.abs(leftMinY - rightMinY);
+
+  // Vertical Center: 左右頂上の中間点をカメラ中心に
+  const midpointY = (leftMinY + rightMinY) / 2;
+  const scrollY = Math.max(0, -midpointY);
+
+  // Dynamic Zoom: 差が画面高さを超えそうならズームアウト
+  const zoomScale = Math.max(
+    MIN_ZOOM_SCALE,
+    Math.min(1, (VIEW_HEIGHT - ZOOM_MARGIN) / Math.max(stackDiff, 1))
+  );
+
+  // オフスクリーン判定（差が閾値超で片方が見えにくい）
+  const showOffscreenIndicators = stackDiff > OFFSCREEN_INDICATOR_THRESHOLD;
+  const leftIsHigher = leftMinY < rightMinY;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text">
@@ -490,10 +507,31 @@ export default function PresSureJudgeGame() {
               exit={{ opacity: 0 }}
               className="space-y-8"
             >
-              <div className="flex justify-center overflow-visible">
+              <div className="relative flex justify-center overflow-visible min-h-[240px]">
+                {showOffscreenIndicators && (
+                  <>
+                    <div
+                      className={`absolute left-1/2 -translate-x-1/2 top-0 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-b-lg text-xs font-bold tabular-nums ${
+                        leftIsHigher ? "bg-amber-500/90 text-amber-100" : "bg-blue-500/90 text-blue-100"
+                      }`}
+                    >
+                      <span>↑</span>
+                      <span>{leftIsHigher ? `NPC +${leftTotal}` : `You +${rightTotal}`}</span>
+                    </div>
+                    <div
+                      className={`absolute left-1/2 -translate-x-1/2 bottom-0 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-t-lg text-xs font-bold tabular-nums ${
+                        leftIsHigher ? "bg-blue-500/90 text-blue-100" : "bg-amber-500/90 text-amber-100"
+                      }`}
+                    >
+                      <span>↓</span>
+                      <span>{leftIsHigher ? `You +${rightTotal}` : `NPC +${leftTotal}`}</span>
+                    </div>
+                  </>
+                )}
                 <motion.div
                   className="relative w-full max-w-lg"
-                  animate={{ y: scrollY }}
+                  style={{ transformOrigin: "center center" }}
+                  animate={{ y: scrollY, scale: zoomScale }}
                   transition={{ type: "spring", stiffness: 50, damping: 20 }}
                 >
                   <motion.div
