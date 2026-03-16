@@ -21,6 +21,9 @@ const BEZIER_ARC_HEIGHT = 200; // px above start for control point
 const BEZIER_DURATION_BASE = 250; // duration = BASE/vx (seconds); fast flick = short duration
 const BEZIER_DURATION_MIN = 0.15;
 const BEZIER_DURATION_MAX = 0.6;
+const IMPACT_DIP_PX = 8; // Balance dips this much on landing
+const IMPACT_DURATION = 0.4; // seconds
+const FALL_DURATION = 0.6; // Miss shot: fall off screen
 const DEBUG = false;
 
 function bezier2(t: number, P0: { x: number; y: number }, P1: { x: number; y: number }, P2: { x: number; y: number }) {
@@ -195,9 +198,88 @@ function NPCDropBlock({ item }: { item: WeightItem }) {
   );
 }
 
+type FlyingItem = {
+  item: WeightItem;
+  p0: { x: number; y: number };
+  p1: { x: number; y: number };
+  p2: { x: number; y: number };
+  duration: number;
+  startTime: number;
+};
+
+type FallingItem = { item: WeightItem; startX: number; startY: number };
+
+function FlyingWeightBlock({ fly, onLanding }: { fly: FlyingItem; onLanding: (item: WeightItem) => void }) {
+  const [pos, setPos] = useState(fly.p0);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const { item, p0, p1, p2, duration, startTime } = fly;
+    const tick = () => {
+      const elapsed = performance.now() - startTime;
+      const t = Math.min(1, elapsed / duration);
+      setPos(bezier2(t, p0, p1, p2));
+      if (t >= 1) {
+        rafRef.current = null;
+        onLanding(item);
+        return;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [fly, onLanding]);
+
+  return (
+    <motion.div
+      className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm shrink-0 pointer-events-none ${getBlockSize(
+        fly.item.visual.size
+      )} ${fly.item.visual.bgClass} ${fly.item.visual.borderClass}`}
+      style={{
+        position: "fixed",
+        left: pos.x,
+        top: pos.y,
+        transform: "translate(-50%, -50%)",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+        zIndex: 100,
+      }}
+    >
+      {fly.item.value}
+    </motion.div>
+  );
+}
+
+function FallingWeightBlock({ fall, onComplete }: { fall: FallingItem; onComplete: () => void }) {
+  return (
+    <motion.div
+      className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm shrink-0 pointer-events-none ${getBlockSize(
+        fall.item.visual.size
+      )} ${fall.item.visual.bgClass} ${fall.item.visual.borderClass}`}
+      style={{
+        position: "fixed",
+        left: fall.startX,
+        top: fall.startY,
+        transform: "translate(-50%, -50%)",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+        zIndex: 100,
+      }}
+      initial={{ y: 0, opacity: 1 }}
+      animate={{ y: "100vh", opacity: 0 }}
+      transition={{ duration: FALL_DURATION, ease: "easeIn" }}
+      onAnimationComplete={onComplete}
+    >
+      {fall.item.value}
+    </motion.div>
+  );
+}
+
 type DraggableWeightBlockProps = {
   item: WeightItem;
+  onLaunch: (item: WeightItem, flyData: Omit<FlyingItem, "item">) => void;
   onDragEnd: (item: WeightItem, point: { x: number; y: number }) => void;
+  onMiss: (item: WeightItem, point: { x: number; y: number }) => void;
   dropZoneRef: React.RefObject<HTMLDivElement | null>;
 };
 
@@ -209,11 +291,8 @@ type FlyState = {
   startTime: number;
 };
 
-function DraggableWeightBlock({ item, onDragEnd, dropZoneRef }: DraggableWeightBlockProps) {
+function DraggableWeightBlock({ item, onLaunch, onDragEnd, onMiss, dropZoneRef }: DraggableWeightBlockProps) {
   const flickTrackRef = useRef<{ x: number; y: number; t: number } | null>(null);
-  const [flyState, setFlyState] = useState<FlyState | null>(null);
-  const [flyPos, setFlyPos] = useState<{ x: number; y: number } | null>(null);
-  const rafRef = useRef<number | null>(null);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     flickTrackRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
@@ -250,59 +329,11 @@ function DraggableWeightBlock({ item, onDragEnd, dropZoneRef }: DraggableWeightB
           BEZIER_DURATION_MIN,
           Math.min(BEZIER_DURATION_MAX, BEZIER_DURATION_BASE / vx)
         );
-        setFlyState({ p0, p1, p2, duration, startTime: performance.now() });
-        setFlyPos(p0);
+        onLaunch(item, { p0, p1, p2, duration, startTime: performance.now() });
       }
     },
-    [dropZoneRef]
+    [item, dropZoneRef, onLaunch]
   );
-
-  useEffect(() => {
-    if (!flyState) return;
-    const { p0, p1, p2, duration, startTime } = flyState;
-
-    const tick = () => {
-      const elapsed = performance.now() - startTime;
-      const t = Math.min(1, elapsed / duration);
-      const pos = bezier2(t, p0, p1, p2);
-      setFlyPos(pos);
-
-      if (t >= 1) {
-        rafRef.current = null;
-        onDragEnd(item, { x: p2.x, y: p2.y });
-        setFlyState(null);
-        setFlyPos(null);
-        return;
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [flyState, item, onDragEnd]);
-
-  if (flyState && flyPos) {
-    return (
-      <motion.div
-        initial={{ opacity: 1, scale: 1 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm shrink-0 pointer-events-none ${getBlockSize(
-          item.visual.size
-        )} ${item.visual.bgClass} ${item.visual.borderClass}`}
-        style={{
-          position: "fixed",
-          left: flyPos.x,
-          top: flyPos.y,
-          transform: "translate(-50%, -50%)",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-          zIndex: 100,
-        }}
-      >
-        {item.value}
-      </motion.div>
-    );
-  }
 
   return (
     <motion.div
@@ -317,7 +348,6 @@ function DraggableWeightBlock({ item, onDragEnd, dropZoneRef }: DraggableWeightB
         if (DEBUG) console.log("Drag Started", item.id);
       }}
       onDragEnd={(_, info) => {
-        if (flyState) return;
         const { x, y } = info.point;
         if (DEBUG) console.log("Drag Ended at:", x, y);
         if (dropZoneRef.current) {
@@ -325,7 +355,11 @@ function DraggableWeightBlock({ item, onDragEnd, dropZoneRef }: DraggableWeightB
           if (isPointInRect(x, y, rect)) {
             if (DEBUG) console.log("Drop accepted");
             onDragEnd(item, { x, y });
+          } else {
+            onMiss(item, { x, y });
           }
+        } else {
+          onMiss(item, { x, y });
         }
       }}
       className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm select-none cursor-grab active:cursor-grabbing shrink-0 ${getBlockSize(
@@ -355,7 +389,12 @@ export default function PresSureJudgeGame() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [leftPanWeights, setLeftPanWeights] = useState<WeightItem[]>([]);
   const [rightPanWeights, setRightPanWeights] = useState<WeightItem[]>([]);
-  const [inventoryWeights, setInventoryWeights] = useState<WeightItem[]>([]);
+  const [inventorySlots, setInventorySlots] = useState<(WeightItem | null)[]>(
+    () => Array.from<WeightItem | null>({ length: INVENTORY_COUNT }).fill(null)
+  );
+  const [flyingItems, setFlyingItems] = useState<FlyingItem[]>([]);
+  const [fallingItems, setFallingItems] = useState<FallingItem[]>([]);
+  const [impactOffset, setImpactOffset] = useState(0);
   const [placedWeights, setPlacedWeights] = useState<PlacedWeight[]>([]);
   const [round, setRound] = useState(0);
   const [timer, setTimer] = useState(INITIAL_TIMER);
@@ -369,14 +408,14 @@ export default function PresSureJudgeGame() {
   const rightPanWeightsRef = useRef(rightPanWeights);
   const leftPanWeightsRef = useRef(leftPanWeights);
   const roundRef = useRef(round);
-  const inventoryWeightsRef = useRef(inventoryWeights);
+  const inventorySlotsRef = useRef(inventorySlots);
 
   totalBalanceRef.current = totalBalance;
   placedWeightsRef.current = placedWeights;
   rightPanWeightsRef.current = rightPanWeights;
   leftPanWeightsRef.current = leftPanWeights;
   roundRef.current = round;
-  inventoryWeightsRef.current = inventoryWeights;
+  inventorySlotsRef.current = inventorySlots;
 
   const currentUserWeight = rightPanWeights.reduce((s, w) => s + w.value, 0);
   const currentNPCWeight = leftPanWeights.reduce((s, w) => s + w.value, 0);
@@ -392,7 +431,7 @@ export default function PresSureJudgeGame() {
     setPlacedWeights([]);
     setLeftPanWeights([]);
     setRightPanWeights([]);
-    setInventoryWeights([]);
+    setInventorySlots(Array.from<WeightItem | null>({ length: INVENTORY_COUNT }).fill(null));
     setRound(0);
     setTimer(INITIAL_TIMER);
     setCollapseAnimDone(false);
@@ -405,7 +444,7 @@ export default function PresSureJudgeGame() {
     setRightPanWeights([]);
     setTotalBalance((b) => b + value);
     setRound((r) => r + 1);
-    setInventoryWeights(generateRoundInventory());
+    setInventorySlots(generateRoundInventory());
     setPhase("user");
     setTimer(INITIAL_TIMER);
   }, []);
@@ -455,17 +494,47 @@ export default function PresSureJudgeGame() {
     setPhase("npc");
   }, []);
 
-  const handleDrop = useCallback((item: WeightItem) => {
-    if (!inventoryWeightsRef.current.some((w) => w.id === item.id)) return;
-    setInventoryWeights((inv) => inv.filter((w) => w.id !== item.id));
+  const handleLaunch = useCallback((item: WeightItem, flyData: Omit<FlyingItem, "item">) => {
+    setInventorySlots((slots) =>
+      slots.map((s) => (s?.id === item.id ? null : s))
+    );
+    setFlyingItems((prev) => [...prev, { item, ...flyData }]);
+  }, []);
+
+  const handleLanding = useCallback((item: WeightItem) => {
+    setFlyingItems((prev) => prev.filter((f) => f.item.id !== item.id));
     setRightPanWeights((pan) => {
       const rightPlaced = placedWeightsRef.current.filter((w) => w.side === "right");
-      const topY =
-        rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
-      const panTopY =
-        pan.length > 0
-          ? Math.min(...pan.map((w) => w.position.y))
-          : topY;
+      const topY = rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
+      const panTopY = pan.length > 0 ? Math.min(...pan.map((w) => w.position.y)) : topY;
+      const stackTopY = Math.min(topY, panTopY);
+      const newY = stackTopY - getWeightHeight(item.value, "right");
+      return [...pan, { ...item, position: { x: 0, y: newY } }];
+    });
+    setImpactOffset(IMPACT_DIP_PX);
+    setTimeout(() => setImpactOffset(0), 80);
+  }, []);
+
+  const handleMiss = useCallback((item: WeightItem, point: { x: number; y: number }) => {
+    setInventorySlots((slots) =>
+      slots.map((s) => (s?.id === item.id ? null : s))
+    );
+    setFallingItems((prev) => [...prev, { item, startX: point.x, startY: point.y }]);
+  }, []);
+
+  const handleFallComplete = useCallback((item: WeightItem) => {
+    setFallingItems((prev) => prev.filter((f) => f.item.id !== item.id));
+  }, []);
+
+  const handleDrop = useCallback((item: WeightItem) => {
+    if (!inventorySlotsRef.current.some((s) => s?.id === item.id)) return;
+    setInventorySlots((slots) =>
+      slots.map((s) => (s?.id === item.id ? null : s))
+    );
+    setRightPanWeights((pan) => {
+      const rightPlaced = placedWeightsRef.current.filter((w) => w.side === "right");
+      const topY = rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
+      const panTopY = pan.length > 0 ? Math.min(...pan.map((w) => w.position.y)) : topY;
       const stackTopY = Math.min(topY, panTopY);
       const newY = stackTopY - getWeightHeight(item.value, "right");
       return [...pan, { ...item, position: { x: 0, y: newY } }];
@@ -593,6 +662,12 @@ export default function PresSureJudgeGame() {
       </header>
 
       <main className="relative z-0 flex-1 min-h-0 mx-auto w-full max-w-[640px] px-4 py-4 md:py-8 flex flex-col overflow-hidden">
+        {flyingItems.map((fly) => (
+          <FlyingWeightBlock key={fly.item.id} fly={fly} onLanding={handleLanding} />
+        ))}
+        {fallingItems.map((fall) => (
+          <FallingWeightBlock key={fall.item.id} fall={fall} onComplete={() => handleFallComplete(fall.item)} />
+        ))}
         <AnimatePresence mode="wait">
           {phase === "ready" && (
             <motion.div
@@ -668,6 +743,7 @@ export default function PresSureJudgeGame() {
                     animate={{
                       rotate: rotation,
                       scale: phase === "gameover" ? (collapseAnimDone ? 0.95 : 1) : 1,
+                      y: impactOffset,
                     }}
                     transition={{
                       type: "spring",
@@ -722,17 +798,27 @@ export default function PresSureJudgeGame() {
                     className="min-h-[72px] p-4 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible shrink-0"
                     style={{ touchAction: "none" }}
                   >
-                    {inventoryWeights.length === 0 ? (
+                    {inventorySlots.every((s) => !s) ? (
                       <span className="text-wit-muted text-sm">在庫なし</span>
                     ) : (
-                      inventoryWeights.map((item) => (
-                        <DraggableWeightBlock
-                          key={item.id}
-                          item={item}
-                          onDragEnd={handleDrop}
-                          dropZoneRef={rightPanRef}
-                        />
-                      ))
+                      inventorySlots.map((slot, i) =>
+                        slot ? (
+                          <DraggableWeightBlock
+                            key={slot.id}
+                            item={slot}
+                            onLaunch={handleLaunch}
+                            onDragEnd={handleDrop}
+                            onMiss={handleMiss}
+                            dropZoneRef={rightPanRef}
+                          />
+                        ) : (
+                          <div
+                            key={`empty-${i}`}
+                            className="w-12 h-8 rounded-lg border-2 border-dashed border-white/20 bg-white/5 shrink-0"
+                            aria-hidden
+                          />
+                        )
+                      )
                     )}
                   </div>
                   <button
