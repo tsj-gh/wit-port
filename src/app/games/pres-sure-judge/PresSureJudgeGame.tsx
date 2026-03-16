@@ -16,6 +16,7 @@ const VIEW_HEIGHT = 360;
 const MIN_ZOOM_SCALE = 0.5;
 const ZOOM_MARGIN = 80;
 const OFFSCREEN_INDICATOR_THRESHOLD = 180;
+const FLICK_VELOCITY_THRESHOLD = 500; // px/s
 const DEBUG = false;
 
 type Phase = "ready" | "npc" | "user" | "gameover" | "result";
@@ -189,19 +190,74 @@ type DraggableWeightBlockProps = {
 };
 
 function DraggableWeightBlock({ item, onDragEnd, dropZoneRef }: DraggableWeightBlockProps) {
+  const flickTrackRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const [isFlying, setIsFlying] = useState(false);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    flickTrackRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
+  }, []);
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      const start = flickTrackRef.current;
+      flickTrackRef.current = null;
+      if (!start) return;
+
+      const endX = e.clientX;
+      const endY = e.clientY;
+      const endT = performance.now();
+      const dt = endT - start.t;
+      if (dt <= 0) return;
+
+      const dx = endX - start.x;
+      const dy = endY - start.y;
+      const vx = (dx / dt) * 1000; // px/s
+      const vy = (dy / dt) * 1000;
+
+      const isLaunch = vx >= FLICK_VELOCITY_THRESHOLD && vx > 0;
+      if (isLaunch && dropZoneRef.current) {
+        setIsFlying(true);
+        const rect = dropZoneRef.current.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        requestAnimationFrame(() => {
+          onDragEnd(item, { x: cx, y: cy });
+        });
+      }
+    },
+    [item, onDragEnd, dropZoneRef]
+  );
+
+  if (isFlying) {
+    return (
+      <motion.div
+        initial={{ opacity: 1 }}
+        animate={{ opacity: 0, scale: 0.9 }}
+        transition={{ duration: 0.15 }}
+        className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm shrink-0 pointer-events-none ${getBlockSize(
+          item.visual.size
+        )} ${item.visual.bgClass} ${item.visual.borderClass}`}
+        style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.3)" }}
+      >
+        {item.value}
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       drag
       dragConstraints={false}
       dragElastic={0}
       dragMomentum={false}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={() => (flickTrackRef.current = null)}
       onDragStart={() => {
         if (DEBUG) console.log("Drag Started", item.id);
       }}
-      onDrag={(_, info) => {
-        if (DEBUG) console.log("Drag point:", info.point.x, info.point.y);
-      }}
       onDragEnd={(_, info) => {
+        if (isFlying) return;
         const { x, y } = info.point;
         if (DEBUG) console.log("Drag Ended at:", x, y);
         if (dropZoneRef.current) {
