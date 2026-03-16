@@ -3,19 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  TouchSensor,
-  pointerWithin,
-  useSensor,
-  useSensors,
-  useDraggable,
-  useDroppable,
-} from "@dnd-kit/core";
 
 const BALANCE_LIMIT = 100;
 const NPC_WEIGHT_MIN = 10;
@@ -25,6 +12,7 @@ const WEIGHT_VALUES = [1, 3, 5, 10, 20];
 const INVENTORY_COUNT = 8;
 const PAN_MAX_VISIBLE_HEIGHT = 120;
 const BLOCK_HEIGHT = 28;
+const DEBUG = false;
 
 type Phase = "ready" | "npc" | "user" | "gameover" | "result";
 
@@ -91,29 +79,8 @@ function generateRoundInventory(): WeightItem[] {
   return pool.slice(0, INVENTORY_COUNT).map((v) => createWeightItem(v));
 }
 
-function DraggableWeightBlock({ item }: { item: WeightItem }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: item.id,
-    data: { item },
-  });
-  return (
-    <motion.div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      layout
-      className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm select-none cursor-grab active:cursor-grabbing ${getBlockSize(
-        item.visual.size
-      )} ${item.visual.bgClass} ${item.visual.borderClass}`}
-      style={{
-        opacity: isDragging ? 0.5 : 1,
-        boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-        touchAction: "none",
-      }}
-    >
-      {item.value}
-    </motion.div>
-  );
+function isPointInRect(px: number, py: number, rect: DOMRect): boolean {
+  return px >= rect.left && px <= rect.right && py >= rect.top && py <= rect.bottom;
 }
 
 function WeightBlockStatic({ item }: { item: WeightItem }) {
@@ -158,23 +125,54 @@ function NPCDropBlock({ item }: { item: WeightItem }) {
   );
 }
 
-function RightPanDroppable({ weights }: { weights: WeightItem[] }) {
-  const { setNodeRef, isOver } = useDroppable({ id: "right-pan" });
+type DraggableWeightBlockProps = {
+  item: WeightItem;
+  onDragEnd: (item: WeightItem, point: { x: number; y: number }) => void;
+  dropZoneRef: React.RefObject<HTMLDivElement | null>;
+};
+
+function DraggableWeightBlock({ item, onDragEnd, dropZoneRef }: DraggableWeightBlockProps) {
   return (
-    <div
-      ref={setNodeRef}
-      className={`min-h-[80px] w-28 rounded-b-xl border-2 flex flex-col-reverse items-center justify-end gap-1 px-2 py-2 transition-colors ${
-        isOver ? "border-blue-400 bg-blue-500/25" : "border-blue-500/50 bg-blue-500/10"
-      }`}
+    <motion.div
+      drag
+      dragConstraints={false}
+      dragElastic={0}
+      dragMomentum={false}
+      onDragStart={() => {
+        if (DEBUG) console.log("Drag Started", item.id);
+      }}
+      onDrag={(_, info) => {
+        if (DEBUG) console.log("Drag point:", info.point.x, info.point.y);
+      }}
+      onDragEnd={(_, info) => {
+        const { x, y } = info.point;
+        if (DEBUG) console.log("Drag Ended at:", x, y);
+        if (dropZoneRef.current) {
+          const rect = dropZoneRef.current.getBoundingClientRect();
+          if (isPointInRect(x, y, rect)) {
+            if (DEBUG) console.log("Drop accepted");
+            onDragEnd(item, { x, y });
+          }
+        }
+      }}
+      className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm select-none cursor-grab active:cursor-grabbing shrink-0 ${getBlockSize(
+        item.visual.size
+      )} ${item.visual.bgClass} ${item.visual.borderClass}`}
       style={{
-        maxHeight: PAN_MAX_VISIBLE_HEIGHT,
-        overflow: "hidden",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+        touchAction: "none",
+        pointerEvents: "auto",
+        zIndex: 10,
+      }}
+      whileDrag={{
+        scale: 1.15,
+        opacity: 0.9,
+        zIndex: 50,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
       }}
     >
-      {weights.map((w) => (
-        <WeightBlockStatic key={w.id} item={w} />
-      ))}
-    </div>
+      {item.value}
+    </motion.div>
   );
 }
 
@@ -188,9 +186,9 @@ export default function PresSureJudgeGame() {
   const [round, setRound] = useState(0);
   const [timer, setTimer] = useState(INITIAL_TIMER);
   const [collapseAnimDone, setCollapseAnimDone] = useState(false);
-  const [activeDragItem, setActiveDragItem] = useState<WeightItem | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const rightPanRef = useRef<HTMLDivElement>(null);
 
   const totalBalanceRef = useRef(totalBalance);
   const rightPanWeightsRef = useRef(rightPanWeights);
@@ -210,15 +208,6 @@ export default function PresSureJudgeGame() {
   const isCollapsed = phase === "gameover" && collapseAnimDone;
   const leftTotal = history.reduce((s, e) => s + e.left, 0) + currentNPCWeight;
   const rightTotal = history.reduce((s, e) => s + e.right, 0) + currentUserWeight;
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 8 },
-    })
-  );
 
   const startGame = useCallback(() => {
     setPhase("npc");
@@ -266,6 +255,18 @@ export default function PresSureJudgeGame() {
     setPhase("npc");
   }, []);
 
+  const handleDrop = useCallback((item: WeightItem) => {
+    if (!inventoryWeightsRef.current.some((w) => w.id === item.id)) return;
+    setInventoryWeights((inv) => inv.filter((w) => w.id !== item.id));
+    setRightPanWeights((pan) => {
+      const stackIndex = pan.length;
+      return [
+        ...pan,
+        { ...item, position: { x: 0, y: -1 * stackIndex * BLOCK_HEIGHT } },
+      ];
+    });
+  }, []);
+
   useEffect(() => {
     if (phase !== "npc") return;
     const delay = round === 0 ? 300 : 600;
@@ -303,30 +304,6 @@ export default function PresSureJudgeGame() {
       timerRef.current = null;
     }
     performResolution();
-  };
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const data = event.active.data.current;
-    if (data?.item) setActiveDragItem(data.item as WeightItem);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    setActiveDragItem(null);
-    const { active, over } = event;
-    if (!over || over.id !== "right-pan") return;
-    const data = active.data.current;
-    if (!data?.item) return;
-    const item = data.item as WeightItem;
-    if (!inventoryWeightsRef.current.some((w) => w.id === item.id)) return;
-
-    setInventoryWeights((inv) => inv.filter((w) => w.id !== item.id));
-    setRightPanWeights((pan) => {
-      const stackIndex = pan.length;
-      return [
-        ...pan,
-        { ...item, position: { x: 0, y: stackIndex * BLOCK_HEIGHT } },
-      ];
-    });
   };
 
   const showResult = () => setPhase("result");
@@ -404,70 +381,59 @@ export default function PresSureJudgeGame() {
               exit={{ opacity: 0 }}
               className="space-y-8"
             >
-              <div className="flex justify-center">
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={pointerWithin}
-                  onDragStart={handleDragStart}
-                  onDragEnd={handleDragEnd}
+              <div className="flex justify-center overflow-visible">
+                <motion.div
+                  className="relative w-full max-w-lg h-56 flex items-end justify-center pb-4"
+                  style={{ transformOrigin: "center bottom" }}
+                  animate={{
+                    rotate: rotation,
+                    scale: phase === "gameover" ? (collapseAnimDone ? 0.95 : 1) : 1,
+                  }}
+                  transition={{
+                    type: "spring",
+                    stiffness: phase === "gameover" ? 50 : 120,
+                    damping: phase === "gameover" ? 15 : 20,
+                  }}
                 >
-                  <motion.div
-                    className="relative w-full max-w-lg h-56 flex items-end justify-center pb-4"
-                    style={{ transformOrigin: "center bottom" }}
-                    animate={{
-                      rotate: rotation,
-                      scale: phase === "gameover" ? (collapseAnimDone ? 0.95 : 1) : 1,
-                    }}
-                    transition={{
-                      type: "spring",
-                      stiffness: phase === "gameover" ? 50 : 120,
-                      damping: phase === "gameover" ? 15 : 20,
-                    }}
+                  <div className="absolute left-1/2 bottom-0 w-[85%] h-2 -translate-x-1/2 rounded-full bg-gradient-to-r from-transparent via-slate-500 to-transparent" />
+                  <div
+                    className="absolute left-1/2 bottom-0 w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-300 -translate-x-1/2 translate-y-1/2 z-20 shadow-[0_0_16px_rgba(245,158,11,0.7)]"
+                    style={{ transformOrigin: "center center" }}
+                  />
+
+                  <div
+                    className="absolute left-[5%] bottom-8 w-28 flex flex-col items-center"
+                    style={{ transformOrigin: "left bottom" }}
                   >
-                    <div className="absolute left-1/2 bottom-0 w-[85%] h-2 -translate-x-1/2 rounded-full bg-gradient-to-r from-transparent via-slate-500 to-transparent" />
-                    <div
-                      className="absolute left-1/2 bottom-0 w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-300 -translate-x-1/2 translate-y-1/2 z-20 shadow-[0_0_16px_rgba(245,158,11,0.7)]"
-                      style={{ transformOrigin: "center center" }}
-                    />
-
-                    <div
-                      className="absolute left-[5%] bottom-8 w-28 flex flex-col items-center"
-                      style={{ transformOrigin: "left bottom" }}
+                    <span className="text-[10px] text-amber-400/90 font-medium mb-1">NPC</span>
+                    <div className="min-h-[80px] w-28 rounded-b-xl border-2 border-amber-500/50 bg-amber-500/10 flex flex-col-reverse items-center justify-end gap-1 px-2 py-2 overflow-hidden"
+                      style={{ maxHeight: PAN_MAX_VISIBLE_HEIGHT }}
                     >
-                      <span className="text-[10px] text-amber-400/90 font-medium mb-1">NPC</span>
-                      <div className="min-h-[80px] w-28 rounded-b-xl border-2 border-amber-500/50 bg-amber-500/10 flex flex-col-reverse items-center justify-end gap-1 px-2 py-2 overflow-hidden"
-                        style={{ maxHeight: PAN_MAX_VISIBLE_HEIGHT }}
-                      >
-                        {leftPanWeights.map((w) => (
-                          <NPCDropBlock key={w.id} item={w} />
-                        ))}
-                      </div>
-                      <span className="text-xs font-bold tabular-nums text-amber-200 mt-1">{leftTotal}</span>
+                      {leftPanWeights.map((w) => (
+                        <NPCDropBlock key={w.id} item={w} />
+                      ))}
                     </div>
+                    <span className="text-xs font-bold tabular-nums text-amber-200 mt-1">{leftTotal}</span>
+                  </div>
 
-                    <div
-                      className="absolute right-[5%] bottom-8 w-28 flex flex-col items-center"
-                      style={{ transformOrigin: "right bottom" }}
+                  <div
+                    className="absolute right-[5%] bottom-8 w-28 flex flex-col items-center"
+                    style={{ transformOrigin: "right bottom" }}
+                  >
+                    <span className="text-[10px] text-blue-400/90 font-medium mb-1">You</span>
+                    <motion.div
+                      ref={rightPanRef}
+                      className="min-h-[80px] w-28 rounded-b-xl border-2 flex flex-col-reverse items-center justify-end gap-1 px-2 py-2 border-blue-500/50 bg-blue-500/10 transition-colors"
+                      style={{ maxHeight: PAN_MAX_VISIBLE_HEIGHT, overflow: "hidden" }}
+                      whileHover={{ borderColor: "rgba(96,165,250,0.9)", backgroundColor: "rgba(59,130,246,0.2)" }}
                     >
-                      <span className="text-[10px] text-blue-400/90 font-medium mb-1">You</span>
-                      <RightPanDroppable weights={rightPanWeights} />
-                      <span className="text-xs font-bold tabular-nums text-blue-200 mt-1">{rightTotal}</span>
-                    </div>
-                  </motion.div>
-
-                  <DragOverlay>
-                    {activeDragItem ? (
-                      <div
-                        className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm ${getBlockSize(
-                          activeDragItem.visual.size
-                        )} ${activeDragItem.visual.bgClass} ${activeDragItem.visual.borderClass}`}
-                        style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}
-                      >
-                        {activeDragItem.value}
-                      </div>
-                    ) : null}
-                  </DragOverlay>
-                </DndContext>
+                      {rightPanWeights.map((w) => (
+                        <WeightBlockStatic key={w.id} item={w} />
+                      ))}
+                    </motion.div>
+                    <span className="text-xs font-bold tabular-nums text-blue-200 mt-1">{rightTotal}</span>
+                  </div>
+                </motion.div>
               </div>
 
               <div className="text-center py-2 rounded-xl bg-white/5 border border-white/10">
@@ -482,7 +448,7 @@ export default function PresSureJudgeGame() {
               </div>
 
               {phase === "user" && (
-                <div className="space-y-4 p-4 rounded-2xl border border-white/10 bg-white/5">
+                <div className="space-y-4 p-4 rounded-2xl border border-white/10 bg-white/5 overflow-visible">
                   <div className="flex items-center justify-between">
                     <span className="text-wit-muted text-sm">在庫から皿へドラッグ</span>
                     <span
@@ -493,11 +459,21 @@ export default function PresSureJudgeGame() {
                       {timer}s
                     </span>
                   </div>
-                  <div className="min-h-[72px] p-4 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center">
+                  <div
+                    className="min-h-[72px] p-4 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible"
+                    style={{ touchAction: "pan-y" }}
+                  >
                     {inventoryWeights.length === 0 ? (
                       <span className="text-wit-muted text-sm">在庫なし</span>
                     ) : (
-                      inventoryWeights.map((item) => <DraggableWeightBlock key={item.id} item={item} />)
+                      inventoryWeights.map((item) => (
+                        <DraggableWeightBlock
+                          key={item.id}
+                          item={item}
+                          onDragEnd={handleDrop}
+                          dropZoneRef={rightPanRef}
+                        />
+                      ))
                     )}
                   </div>
                   <p className="text-wit-muted text-xs text-center">
