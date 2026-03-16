@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import SkyscraperGame from "./SkyscraperGame";
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-port.vercel.app";
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
 
 export const metadata: Metadata = {
   title: "空の上から（Skyscrapers）",

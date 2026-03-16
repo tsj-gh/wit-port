@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import PairLinkGame from "./PairLinkGame";
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-port.vercel.app";
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
 
 export const metadata: Metadata = {
   title: "ペアリンク（ナンバーリンク）",
