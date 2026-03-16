@@ -438,6 +438,12 @@ export default function PresSureJudgeGame() {
   });
   const rightDisplay = [...rightPlaced, ...rightCurrent].sort((a, b) => a.y - b.y);
 
+  // より高い方（Y座標が小さい方）のスタック頂点に合わせてスクロール量を計算
+  const leftMinY = leftDisplay.length > 0 ? Math.min(...leftDisplay.map((w) => w.y)) : 0;
+  const rightMinY = rightDisplay.length > 0 ? Math.min(...rightDisplay.map((w) => w.y)) : 0;
+  const topOfStackY = Math.min(leftMinY, rightMinY);
+  const scrollY = Math.max(0, -topOfStackY);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text">
       <header className="flex justify-between items-center px-6 py-6 border-b border-white/10">
@@ -486,18 +492,23 @@ export default function PresSureJudgeGame() {
             >
               <div className="flex justify-center overflow-visible">
                 <motion.div
-                  className="relative w-full max-w-lg h-56 flex items-end justify-center pb-4"
-                  style={{ transformOrigin: "center bottom" }}
-                  animate={{
-                    rotate: rotation,
-                    scale: phase === "gameover" ? (collapseAnimDone ? 0.95 : 1) : 1,
-                  }}
-                  transition={{
-                    type: "spring",
-                    stiffness: phase === "gameover" ? 50 : 120,
-                    damping: phase === "gameover" ? 15 : 20,
-                  }}
+                  className="relative w-full max-w-lg"
+                  animate={{ y: scrollY }}
+                  transition={{ type: "spring", stiffness: 50, damping: 20 }}
                 >
+                  <motion.div
+                    className="relative w-full max-w-lg h-56 flex items-end justify-center pb-4"
+                    style={{ transformOrigin: "center bottom" }}
+                    animate={{
+                      rotate: rotation,
+                      scale: phase === "gameover" ? (collapseAnimDone ? 0.95 : 1) : 1,
+                    }}
+                    transition={{
+                      type: "spring",
+                      stiffness: phase === "gameover" ? 50 : 120,
+                      damping: phase === "gameover" ? 15 : 20,
+                    }}
+                  >
                   <div className="absolute left-1/2 bottom-0 w-[85%] h-2 -translate-x-1/2 rounded-full bg-gradient-to-r from-transparent via-slate-500 to-transparent" />
                   <div
                     className="absolute left-1/2 bottom-0 w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-300 -translate-x-1/2 translate-y-1/2 z-20 shadow-[0_0_16px_rgba(245,158,11,0.7)]"
@@ -537,6 +548,7 @@ export default function PresSureJudgeGame() {
                     </motion.div>
                     <span className="text-xs font-bold tabular-nums text-blue-200 mt-1">{rightTotal}</span>
                   </div>
+                </motion.div>
                 </motion.div>
               </div>
 
