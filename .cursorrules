@@ -3,4 +3,4 @@
 - メッセージは簡潔かつ、変更内容が具体的に伝わるようにしてください。
 - 出力の末尾に以下のように配置してください：
   ---
-  Commit Message: git commit -m "ここに内容"
+  Commit Message: git commit -m "ここに内容を日本語で"
