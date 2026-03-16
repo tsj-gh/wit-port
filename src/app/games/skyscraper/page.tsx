@@ -1,29 +1,60 @@
 import type { Metadata } from "next";
 import SkyscraperGame from "./SkyscraperGame";
 
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-port.vercel.app";
+
 export const metadata: Metadata = {
   title: "空の上から（Skyscrapers）",
   description:
     "外枠の数字をヒントに、重なり合うビルの高さを推理する無料知育パズル。メイビー蜂さんの力で論理の糸口を掴もう。",
-  keywords: ["知育", "パズル", "無料", "スカイスクレイパー", "ビルパズル", "ロジックパズル"],
+  keywords: ["知育", "パズル", "無料", "スカイスクレイパー", "ビルパズル", "ロジックパズル", "算数", "幼児"],
+  applicationName: "WIT PORT",
+  other: {
+    "application:category": "EducationalGame",
+    "application:operating-system": "Windows, macOS, Android, iOS",
+  },
+};
+
+const skyscraperJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "空の上から（スカイスクレイパー / ビルパズル）",
+  applicationCategory: "EducationalGame",
+  operatingSystem: "Windows, macOS, Android, iOS",
+  description:
+    "外枠の数字をヒントに、重なり合うビルの高さを推理する無料知育パズル。メイビー蜂さんの力で論理の糸口を掴もう。",
+  url: `${BASE_URL}/games/skyscraper`,
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "JPY",
+  },
+  author: {
+    "@type": "Organization",
+    name: "WIT PORT",
+  },
+  featureList: ["知育", "論理的思考", "数感の育成", "無料", "幼児向け", "算数", "ロジックパズル"],
 };
 
 export default function SkyscraperPage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(skyscraperJsonLd) }}
+      />
       <SkyscraperGame />
-      <section className="mx-auto max-w-[1080px] w-full px-4 py-6 pb-12">
-        <div className="rounded-2xl p-6 sm:p-8 border border-white/10 bg-white/5 backdrop-blur space-y-6">
-          <h2 className="text-lg font-bold text-wit-text">空の上から（スカイスクレイパー）の遊び方</h2>
-          <p className="text-wit-muted text-sm leading-relaxed">
-            スカイスクレイパーは、グリッド上にビルの高さ（1〜N）を配置するロジックパズルです。4辺に書かれた数字がヒントで、その方向から見たときに「いくつのビルが見えるか」を表しています。手前から順に、より高いビルが現れるたびに見える本数が1つ増えます。各行・各列に1〜Nの数字が1つずつ入るルール（ラテン方陣）を満たしつつ、すべてのヒントと矛盾しないようにマスを埋めていきます。メイビー蜂さんの「メイビーモード」では、仮の数字を試しながら推論を進められるため、難しい問題にも挑戦しやすくなっています。
-          </p>
-
-          <h2 className="text-lg font-bold text-wit-text">知育効果</h2>
-          <p className="text-wit-muted text-sm leading-relaxed">
-            スカイスクレイパーは 論理的推論力・制約充足の理解・数的センスを養うのに適した知育パズルです。ヒントから「このマスにはこの数字しか入らない」といった確定パターンを見つけることで、消去法的思考が身につきます。また、複数の条件を同時に満たすよう試行錯誤する過程で、問題解決の戦略的思考が育まれます。小学校中学年以降から大人まで、段階的に難易度を上げて楽しめます。無料で繰り返しプレイでき、脳の活性化や集中力の維持にも役立ちます。
-          </p>
-        </div>
+      <section className="mx-auto max-w-[1080px] w-full px-4 py-6 pb-12" aria-label="このパズルの知育効果">
+        <details className="group rounded-2xl border border-white/10 bg-white/5 backdrop-blur overflow-hidden">
+          <summary className="cursor-pointer list-none px-6 py-4 text-wit-muted text-sm hover:text-wit-text transition-colors select-none">
+            <span className="font-medium">このパズルの知育効果について（知育・算数・無料・幼児向け）</span>
+          </summary>
+          <div className="px-6 pb-6 pt-0">
+            <p className="text-wit-muted text-sm leading-relaxed">
+              空の上から（スカイスクレイパー・ビルパズル）は、幼児から大人まで楽しめる無料の知育パズルです。外枠の数字をヒントに、グリッド上にビルの高さを推理して配置していくロジックパズルで、論理的思考力と数感の育成に最適です。算数の基礎となる「数の大小比較」「順序の理解」「推理と仮説の検証」が、遊びながら自然に身につきます。ヒントから「このマスにはこの数字しか入らない」といった消去法的思考を繰り返すことで、論理的推論力が養われ、複数の条件を同時に満たす試行錯誤の過程で問題解決力が育まれます。無料で何度でもプレイできるため、家庭で気軽に知育に取り組め、幼児の数の感覚づくりから小学校中学年の論理パズル、大人の脳トレまで幅広く活用できます。メイビー蜂さんのメイビーモードで仮の数字を試せるので、難しい問題にも段階的に挑戦でき、算数が苦手な子も楽しみながら数感を伸ばせます。Windows、macOS、Android、iOS対応で、タブレットやスマホからも手軽に無料で知育に取り組め、外出先や隙間時間の算数遊びとしておすすめです。
+            </p>
+          </div>
+        </details>
       </section>
     </>
   );
