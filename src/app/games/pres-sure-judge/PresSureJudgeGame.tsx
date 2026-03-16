@@ -462,8 +462,8 @@ export default function PresSureJudgeGame() {
   const leftIsHigher = leftMinY < rightMinY;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text">
-      <header className="flex justify-between items-center px-6 py-6 border-b border-white/10">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text isolate">
+      <header className="relative z-20 shrink-0 flex justify-between items-center px-4 py-4 md:px-6 md:py-6 border-b border-white/10">
         <Link
           href="/"
           className="flex items-center gap-3 text-xl font-black tracking-wider text-wit-text no-underline hover:opacity-90"
@@ -476,7 +476,7 @@ export default function PresSureJudgeGame() {
         )}
       </header>
 
-      <main className="mx-auto max-w-[640px] px-4 py-8">
+      <main className="relative z-0 flex-1 min-h-0 mx-auto w-full max-w-[640px] px-4 py-4 md:py-8 flex flex-col overflow-hidden">
         <AnimatePresence mode="wait">
           {phase === "ready" && (
             <motion.div
@@ -505,9 +505,10 @@ export default function PresSureJudgeGame() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="space-y-8"
+              className="flex flex-col min-h-0 flex-1 gap-4 h-[calc(100dvh-6rem)] max-h-[70vh] md:max-h-[min(70vh,calc(100dvh-8rem))]"
+              style={{ touchAction: "none" }}
             >
-              <div className="relative flex justify-center overflow-visible min-h-[240px]">
+              <div className="relative flex flex-1 min-h-0 justify-center overflow-hidden shrink-0" style={{ minHeight: 200 }}>
                 {showOffscreenIndicators && (
                   <>
                     <div
@@ -614,8 +615,8 @@ export default function PresSureJudgeGame() {
                     </span>
                   </div>
                   <div
-                    className="min-h-[72px] p-4 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible"
-                    style={{ touchAction: "pan-y" }}
+                    className="min-h-[72px] p-4 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible shrink-0"
+                    style={{ touchAction: "none" }}
                   >
                     {inventoryWeights.length === 0 ? (
                       <span className="text-wit-muted text-sm">在庫なし</span>
