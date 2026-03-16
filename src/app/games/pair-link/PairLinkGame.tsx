@@ -633,7 +633,7 @@ export default function PairLinkGame() {
           className="flex items-center gap-3 text-xl sm:text-2xl font-black tracking-wider text-wit-text no-underline hover:opacity-90"
         >
           <span className="block w-8 h-8 rounded-lg bg-gradient-to-br from-wit-emerald to-teal-600" />
-          WIT PORT
+          Wit-Spot
         </Link>
         <div className="flex items-center gap-2 text-wit-muted text-sm">
           <span className="tabular-nums">{formatTime(timeSeconds)}</span>

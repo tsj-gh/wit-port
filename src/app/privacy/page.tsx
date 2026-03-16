@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "プライバシーポリシー",
   description:
-    "WIT PORTのプライバシーポリシー。広告配信とクッキー（Cookie）の利用についてご説明します。",
+    "Wit-Spotのプライバシーポリシー。広告配信とクッキー（Cookie）の利用についてご説明します。",
   keywords: ["知育", "パズル", "無料", "プライバシーポリシー"],
 };
 
@@ -17,7 +17,7 @@ export default function PrivacyPage() {
           className="flex items-center gap-3 text-[28px] font-black tracking-[2px] text-wit-text no-underline hover:opacity-90"
         >
           <span className="block w-8 h-8 rounded-lg bg-gradient-to-br from-wit-accent to-purple-500 shadow-[0_0_15px_var(--wit-accent-glow)]" />
-          WIT PORT
+          Wit-Spot
         </Link>
         <Link
           href="/"
@@ -35,7 +35,7 @@ export default function PrivacyPage() {
 
         <article className="rounded-2xl p-6 sm:p-8 border border-white/10 bg-white/5 backdrop-blur">
           <p className="text-wit-muted leading-relaxed mb-6">
-            WIT PORT（ウィッポ）では、パズルプレイ体験の向上のため、第三者広告配信サービスを利用しています。本ページでは、当サイトにおける広告配信とクッキー（Cookie）の利用についてご説明します。
+            Wit-Spot（ウィスポ）では、パズルプレイ体験の向上のため、第三者広告配信サービスを利用しています。本ページでは、当サイトにおける広告配信とクッキー（Cookie）の利用についてご説明します。
           </p>
 
           <h2 className="text-lg font-bold mt-6 mb-3 text-wit-text">

@@ -11,19 +11,19 @@ export default function HomePage() {
           className="flex items-center gap-3 text-[28px] font-black tracking-[2px] text-wit-text no-underline"
         >
           <span className="block w-8 h-8 rounded-lg bg-gradient-to-br from-wit-accent to-purple-500 shadow-[0_0_15px_var(--wit-accent-glow)]" />
-          WIT PORT
+          Wit-Spot
         </Link>
       </header>
 
       <main>
         <section className="text-center py-[60px] pb-20 animate-fade-in-up-delay">
           <h1 className="text-[clamp(32px,5vw,56px)] font-extrabold leading-tight mb-6 bg-gradient-to-r from-white to-wit-muted bg-clip-text text-transparent">
-            知恵が集まる、港。
+            知育スポーツの拠点
           </h1>
           <p className="text-[clamp(16px,2vw,20px)] text-wit-muted max-w-[600px] mx-auto leading-relaxed">
             直感と論理を交差させる、洗練されたパズルの世界へようこそ。
             <br />
-            あなたの「ひらめき」が、ここから出航します。
+            あなたの「ひらめき」が、ここから始まります。
           </p>
         </section>
 

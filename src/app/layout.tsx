@@ -6,11 +6,11 @@ import Footer from "@/components/Footer";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://wit-port.vercel.app"),
   title: {
-    default: "WIT PORT（ウィッポ）| 知恵が集まる、港。",
-    template: "%s | WIT PORT",
+    default: "Wit-Spot（ウィスポ）| 知育スポーツの拠点",
+    template: "%s | Wit-Spot",
   },
   description:
-    "WIT PORTは、直感と論理を交差させる知恵の港。ペアリンクやビルパズルなど、洗練された知育ロジックゲームを無料でお楽しみください。",
+    "Wit-Spot（ウィスポ）は、知育スポーツの拠点。直感と論理を交差させるペアリンクやビルパズルなど、洗練された知育ロジックゲームを無料でお楽しみください。",
   keywords: ["知育", "パズル", "無料", "ロジックパズル", "ナンバーリンク", "スカイスクレイパー", "脳トレ"],
   openGraph: { type: "website" },
   manifest: "/manifest.json",

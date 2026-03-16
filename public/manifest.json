@@ -1,7 +1,7 @@
 {
-  "name": "WIT PORT（ウィッポ）| 知恵が集まる、港。",
-  "short_name": "WIT PORT",
-  "description": "直感と論理を交差させる知恵の港。ペアリンクやビルパズルなど、洗練された知育ロジックゲームを無料でお楽しみください。",
+  "name": "Wit-Spot（ウィスポ）| 知育スポーツの拠点",
+  "short_name": "ウィスポ",
+  "description": "Wit-Spot（ウィスポ）は知育スポーツの拠点。直感と論理を交差させるペアリンクやビルパズルなど、洗練された知育ロジックゲームを無料でお楽しみください。",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0b1020",

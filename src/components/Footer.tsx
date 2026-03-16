@@ -14,7 +14,7 @@ export default function Footer() {
           href="/"
           className="text-[13px] text-wit-muted no-underline transition-colors hover:text-wit-text"
         >
-          WIT PORT（トップ）
+          ウィスポ（トップ）
         </Link>
         <span className="text-wit-muted/50" aria-hidden="true">|</span>
         <Link
@@ -32,7 +32,7 @@ export default function Footer() {
         </Link>
       </nav>
       <p className="text-center text-sm text-wit-muted">
-        &copy; 2026 WIT PORT. All rights reserved.
+        &copy; 2026 Wit-Spot. All rights reserved.
       </p>
     </footer>
   );
