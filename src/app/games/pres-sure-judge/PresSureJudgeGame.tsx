@@ -1056,10 +1056,10 @@ export default function PresSureJudgeGame() {
                 {/* ラッパー：中央寄せを担当（Framer Motion の transform 上書きを避ける） */}
                 <div
                   ref={scaleContainerRef}
-                  className="fixed left-1/2 w-full max-w-xl -translate-x-1/2"
+                  className="absolute left-1/2 w-full max-w-xl -translate-x-1/2"
                   style={{
-                    /* 支点（◯）を画面縦中央に：top + アーム高256px = 50dvh */
-                    top: "calc(50dvh - 256px)",
+                    /* 支点（◯）をスケールエリアの中央に：top + アーム高256px = 50% */
+                    top: "clamp(0px, calc(50% - 256px), calc(100% - 320px))",
                   }}
                 >
                   <motion.div
