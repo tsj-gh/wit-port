@@ -899,7 +899,10 @@ export default function PresSureJudgeGame() {
           zIndex: 1,
         }}
       />
-      <main className="relative z-0 flex-1 min-h-0 mx-auto w-full max-w-[640px] px-4 py-4 md:py-8 flex flex-col overflow-hidden">
+      <main
+        className="relative z-0 flex-1 min-h-0 mx-auto w-full max-w-[640px] px-4 py-4 md:py-8 flex flex-col overflow-y-auto overflow-x-hidden min-h-[calc(100dvh-6rem)]"
+        style={{ paddingBottom: "max(6rem, env(safe-area-inset-bottom, 0px) + 6rem)" }}
+      >
         {flyingItems.map((fly) => (
           <FlyingWeightBlock key={fly.item.id} fly={fly} onLanding={handleLanding} />
         ))}
@@ -1042,7 +1045,8 @@ export default function PresSureJudgeGame() {
                   ref={scaleContainerRef}
                   className="absolute left-1/2 w-full max-w-xl -translate-x-1/2"
                   style={{
-                    top: "clamp(0px, calc(35% - 200px), 999px)",
+                    /* 支点（◯）をスケールエリアの中央に：top + アーム高256px = 50% */
+                    top: "clamp(0px, calc(50% - 256px), calc(100% - 320px))",
                   }}
                 >
                   <motion.div
@@ -1132,7 +1136,7 @@ export default function PresSureJudgeGame() {
               </div>
 
               {phase === "user" && (
-                <div className="mt-6 space-y-4 p-4 rounded-2xl border border-white/10 bg-white/5 overflow-visible shrink-0">
+                <div className="mt-6 mb-4 space-y-4 p-4 rounded-2xl border border-white/10 bg-white/5 overflow-visible shrink-0">
                   <div
                     ref={inventoryContainerRef}
                     className="min-h-[72px] p-4 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible shrink-0"
