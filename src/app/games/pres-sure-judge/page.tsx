@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import PresSureJudgeGame from "./PresSureJudgeGame";
 
 export const metadata: Metadata = {
@@ -9,5 +10,9 @@ export const metadata: Metadata = {
 };
 
 export default function PresSureJudgePage() {
-  return <PresSureJudgeGame />;
+  return (
+    <Suspense fallback={null}>
+      <PresSureJudgeGame />
+    </Suspense>
+  );
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
 const BALANCE_LIMIT = 100;
@@ -519,7 +520,21 @@ export default function PresSureJudgeGame() {
   const [round, setRound] = useState(0);
   const [timer, setTimer] = useState(INITIAL_TIMER);
   const [collapseAnimDone, setCollapseAnimDone] = useState(false);
+  const searchParams = useSearchParams();
   const [isDebugMode, setIsDebugMode] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("devtj") === "true") {
+      setIsDebugMode(true);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!isDebugMode) {
+      setDebugFlyingItem(null);
+      setDebugOverlay(null);
+    }
+  }, [isDebugMode]);
   const [debugOverlay, setDebugOverlay] = useState<{
     p0: { x: number; y: number };
     p1: { x: number; y: number };
@@ -838,40 +853,38 @@ export default function PresSureJudgeGame() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text isolate">
-      <div className="fixed right-4 top-4 z-50 flex items-center gap-3">
-        {isDebugMode && (
-          <>
-            <label className="flex items-center gap-2 text-xs font-mono">
-              <span className="text-emerald-400">P1 offset Y:</span>
-              <input
-                type="number"
-                value={p1OffsetY}
-                onChange={(e) => setP1OffsetY(Number(e.target.value) || DEFAULT_P1_OFFSET_Y)}
-                className="w-16 px-2 py-1 rounded bg-black/60 border border-white/20 text-emerald-300"
-              />
-            </label>
-            <label className="flex items-center gap-2 text-xs font-mono">
-              <span className="text-amber-400">初速倍率:</span>
-              <input
-                type="number"
-                step="0.1"
-                min="0.1"
-                max="5"
-                value={velocityMultiplier}
-                onChange={(e) => setVelocityMultiplier(Math.max(0.1, Math.min(5, Number(e.target.value) || 1)))}
-                className="w-14 px-2 py-1 rounded bg-black/60 border border-white/20 text-amber-300"
-              />
-            </label>
-          </>
-        )}
-        <button
-          onClick={() => setIsDebugMode((m) => !m)}
-          className="px-3 py-1.5 rounded-lg text-xs font-mono border border-white/20"
-          style={{ background: isDebugMode ? "#10b981" : "#374151" }}
-        >
-          DEBUG {isDebugMode ? "ON" : "OFF"}
-        </button>
-      </div>
+      {isDebugMode && (
+        <div className="fixed right-4 top-4 z-50 flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs font-mono">
+            <span className="text-emerald-400">P1 offset Y:</span>
+            <input
+              type="number"
+              value={p1OffsetY}
+              onChange={(e) => setP1OffsetY(Number(e.target.value) || DEFAULT_P1_OFFSET_Y)}
+              className="w-16 px-2 py-1 rounded bg-black/60 border border-white/20 text-emerald-300"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-xs font-mono">
+            <span className="text-amber-400">初速倍率:</span>
+            <input
+              type="number"
+              step="0.1"
+              min="0.1"
+              max="5"
+              value={velocityMultiplier}
+              onChange={(e) => setVelocityMultiplier(Math.max(0.1, Math.min(5, Number(e.target.value) || 1)))}
+              className="w-14 px-2 py-1 rounded bg-black/60 border border-white/20 text-amber-300"
+            />
+          </label>
+          <button
+            onClick={() => setIsDebugMode(false)}
+            className="px-3 py-1.5 rounded-lg text-xs font-mono border border-white/20"
+            style={{ background: "#10b981" }}
+          >
+            DEBUG ON
+          </button>
+        </div>
+      )}
       <header className="relative z-20 shrink-0 flex justify-between items-center px-4 py-4 md:px-6 md:py-6 border-b border-white/10">
         <Link
           href="/"
@@ -909,7 +922,7 @@ export default function PresSureJudgeGame() {
         {fallingItems.map((fall) => (
           <FallingWeightBlock key={fall.item.id} fall={fall} onComplete={() => handleFallComplete(fall.item)} />
         ))}
-        {debugFlyingItem && (
+        {isDebugMode && debugFlyingItem && (
           <FlyingWeightBlock
             key="debug-fly"
             fly={debugFlyingItem}
