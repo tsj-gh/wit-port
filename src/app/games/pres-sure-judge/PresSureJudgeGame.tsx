@@ -761,10 +761,12 @@ export default function PresSureJudgeGame() {
             w.y + getWeightHeight(w.value, "right")
           );
         }
-        let rightContentTop = rightContentBottom;
-        for (const w of pan) {
-          rightContentTop = Math.min(rightContentTop, w.position.y);
+        if (pan.length === 0) {
+          // 1個目：器の底（既存コンテンツの下）に積む
+          return [{ ...item, position: { x: 0, y: rightContentBottom } }];
         }
+        // 2個目以降：既存の上に積む（既存を下にシフト）
+        const rightContentTop = Math.min(...pan.map((w) => w.position.y));
         const newItemY = rightContentTop - newHeight;
         const shiftedPan = pan.map((w) => ({
           ...w,
