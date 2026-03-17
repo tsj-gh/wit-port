@@ -18,6 +18,7 @@ const MIN_ZOOM_SCALE = 0.5;
 const ZOOM_MARGIN = 80;
 const OFFSCREEN_INDICATOR_THRESHOLD = 180;
 const DEFAULT_P1_OFFSET_Y = -350; // P1.y = P0.y + p1OffsetY
+const LAUNCH_THRESHOLD_PX = 12; // 枠外判定：ポインタが在庫枠からこのpx以上離れたときにのみ発射（誤発射防止）
 const DURATION_MIN = 0.3;
 const DURATION_MAX = 0.8;
 const DEBUG_OVERLAY_DURATION_MS = 3000;
@@ -328,6 +329,12 @@ function isOutsideRect(px: number, py: number, rect: DOMRect): boolean {
   return px < rect.left || px > rect.right || py < rect.top || py > rect.bottom;
 }
 
+/** 在庫枠から margin px 以上外に出た時のみ true（誤発射防止・微動で発射しない） */
+function isOutsideWithThreshold(px: number, py: number, rect: DOMRect, margin: number): boolean {
+  const m = Math.min(margin, rect.width / 3, rect.height / 3);
+  return px < rect.left - m || px > rect.right + m || py < rect.top - m || py > rect.bottom + m;
+}
+
 function getFixedP2(dropZoneRef: React.RefObject<HTMLDivElement | null>, landingPadRef: React.RefObject<HTMLDivElement | null>) {
   if (landingPadRef?.current) {
     const r = landingPadRef.current.getBoundingClientRect();
@@ -344,6 +351,7 @@ function getFixedP2(dropZoneRef: React.RefObject<HTMLDivElement | null>, landing
 function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, landingPadRef, inventoryContainerRef, p1OffsetY, velocityMultiplier }: DraggableWeightBlockProps) {
   const hasLaunchedRef = useRef(false);
   const blockRef = useRef<HTMLDivElement>(null);
+  const dragStartP0Ref = useRef<{ x: number; y: number } | null>(null);
 
   const tryLaunch = useCallback(
     (p0: { x: number; y: number }, rawVx: number, rawVy: number, launchSource: "double-click" | "flick") => {
@@ -381,15 +389,22 @@ function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, landi
       dragConstraints={false}
       dragElastic={0}
       dragMomentum={false}
+      onDragStart={() => {
+        if (blockRef.current) {
+          const r = blockRef.current.getBoundingClientRect();
+          dragStartP0Ref.current = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        }
+      }}
       onDrag={(_, info) => {
         if (hasLaunchedRef.current) return;
         if (!inventoryContainerRef.current || !getFixedP2(dropZoneRef, landingPadRef)) return;
         const rect = inventoryContainerRef.current.getBoundingClientRect();
         const { x, y } = info.point;
-        if (isOutsideRect(x, y, rect)) {
+        if (isOutsideWithThreshold(x, y, rect, LAUNCH_THRESHOLD_PX)) {
+          const p0 = dragStartP0Ref.current ?? { x, y };
           const vx = info.velocity?.x ?? 300;
           const vy = info.velocity?.y ?? 0;
-          tryLaunch({ x, y }, vx, vy, "flick");
+          tryLaunch(p0, vx, vy, "flick");
         }
       }}
       onDoubleClick={handleDoubleClick}
@@ -399,6 +414,7 @@ function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, landi
         const rect = inventoryContainerRef.current.getBoundingClientRect();
         const { x, y } = info.point;
         if (!isOutsideRect(x, y, rect)) {
+          dragStartP0Ref.current = null;
           onDragCancel(item);
         }
       }}
@@ -444,6 +460,7 @@ function DebugThrowBlock({
 }: DebugThrowBlockProps) {
   const hasLaunchedRef = useRef(false);
   const blockRef = useRef<HTMLDivElement>(null);
+  const dragStartP0Ref = useRef<{ x: number; y: number } | null>(null);
 
   const tryLaunch = useCallback(
     (p0: { x: number; y: number }, rawVx: number, rawVy: number, launchSource: "double-click" | "flick") => {
@@ -480,15 +497,22 @@ function DebugThrowBlock({
       dragConstraints={false}
       dragElastic={0}
       dragMomentum={false}
+      onDragStart={() => {
+        if (blockRef.current) {
+          const r = blockRef.current.getBoundingClientRect();
+          dragStartP0Ref.current = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        }
+      }}
       onDrag={(_, info) => {
         if (hasLaunchedRef.current) return;
         if (!inventoryContainerRef.current || !getFixedP2(dropZoneRef, landingPadRef)) return;
         const rect = inventoryContainerRef.current.getBoundingClientRect();
         const { x, y } = info.point;
-        if (isOutsideRect(x, y, rect)) {
+        if (isOutsideWithThreshold(x, y, rect, LAUNCH_THRESHOLD_PX)) {
+          const p0 = dragStartP0Ref.current ?? { x, y };
           const vx = info.velocity?.x ?? 300;
           const vy = info.velocity?.y ?? 0;
-          tryLaunch({ x, y }, vx, vy, "flick");
+          tryLaunch(p0, vx, vy, "flick");
         }
       }}
       onDoubleClick={handleDoubleClick}
@@ -498,6 +522,7 @@ function DebugThrowBlock({
         const rect = inventoryContainerRef.current.getBoundingClientRect();
         const { x, y } = info.point;
         if (!isOutsideRect(x, y, rect)) {
+          dragStartP0Ref.current = null;
           hasLaunchedRef.current = false;
         }
       }}
