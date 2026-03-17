@@ -332,7 +332,7 @@ function isOutsideRect(px: number, py: number, rect: DOMRect): boolean {
 /** オブジェクトの中心が在庫枠の上端を超えた時 true（上方向へのドラッグでベジエ発射） */
 function isObjectExitedFromTop(objectRect: DOMRect, frameRect: DOMRect): boolean {
   const centerY = objectRect.top + objectRect.height / 2;
-  return centerY < frameRect.top;
+  return objectRect.top < frameRect.top;// テスト用：中心ではなく上端で判定
 }
 
 function getP2(
