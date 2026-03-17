@@ -319,8 +319,9 @@ type DraggableWeightBlockProps = {
   onLaunch: (item: WeightItem, flyData: Omit<FlyingItem, "item">) => void;
   onDragCancel: (item: WeightItem) => void;
   dropZoneRef: React.RefObject<HTMLDivElement | null>;
-  landingPadRef: React.RefObject<HTMLDivElement | null>;
+  rightPanConnectionRef: React.RefObject<HTMLDivElement | null>;
   inventoryContainerRef: React.RefObject<HTMLDivElement | null>;
+  dragConstraintRef: React.RefObject<HTMLDivElement | null>;
   p1OffsetY: number;
   velocityMultiplier: number;
 };
@@ -329,15 +330,18 @@ function isOutsideRect(px: number, py: number, rect: DOMRect): boolean {
   return px < rect.left || px > rect.right || py < rect.top || py > rect.bottom;
 }
 
-/** 在庫枠から margin px 以上外に出た時のみ true（誤発射防止・微動で発射しない） */
-function isOutsideWithThreshold(px: number, py: number, rect: DOMRect, margin: number): boolean {
-  const m = Math.min(margin, rect.width / 3, rect.height / 3);
-  return px < rect.left - m || px > rect.right + m || py < rect.top - m || py > rect.bottom + m;
+/** 在庫枠の上側から margin px 以上外に出た時のみ true（上方向へのドラッグでベジエ発射） */
+function isExitedFromTop(px: number, py: number, rect: DOMRect, margin: number): boolean {
+  const m = Math.min(margin, rect.height / 3);
+  return py < rect.top - m;
 }
 
-function getFixedP2(dropZoneRef: React.RefObject<HTMLDivElement | null>, landingPadRef: React.RefObject<HTMLDivElement | null>) {
-  if (landingPadRef?.current) {
-    const r = landingPadRef.current.getBoundingClientRect();
+function getP2(
+  rightPanConnectionRef: React.RefObject<HTMLDivElement | null>,
+  dropZoneRef: React.RefObject<HTMLDivElement | null>
+) {
+  if (rightPanConnectionRef?.current) {
+    const r = rightPanConnectionRef.current.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
   if (dropZoneRef?.current) {
@@ -348,14 +352,14 @@ function getFixedP2(dropZoneRef: React.RefObject<HTMLDivElement | null>, landing
   return null;
 }
 
-function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, landingPadRef, inventoryContainerRef, p1OffsetY, velocityMultiplier }: DraggableWeightBlockProps) {
+function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, rightPanConnectionRef, inventoryContainerRef, dragConstraintRef, p1OffsetY, velocityMultiplier }: DraggableWeightBlockProps) {
   const hasLaunchedRef = useRef(false);
   const blockRef = useRef<HTMLDivElement>(null);
   const dragStartP0Ref = useRef<{ x: number; y: number } | null>(null);
 
   const tryLaunch = useCallback(
     (p0: { x: number; y: number }, rawVx: number, rawVy: number, launchSource: "double-click" | "flick") => {
-      const p2 = getFixedP2(dropZoneRef, landingPadRef);
+      const p2 = getP2(rightPanConnectionRef, dropZoneRef);
       if (hasLaunchedRef.current || !p2) return;
       hasLaunchedRef.current = true;
       const vx = rawVx * velocityMultiplier;
@@ -367,7 +371,7 @@ function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, landi
       const duration = Math.max(DURATION_MIN, Math.min(DURATION_MAX, 800 / Math.max(Math.abs(vx), 50)));
       onLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy, launchSource });
     },
-    [item, dropZoneRef, landingPadRef, onLaunch, p1OffsetY, velocityMultiplier]
+    [item, dropZoneRef, rightPanConnectionRef, onLaunch, p1OffsetY, velocityMultiplier]
   );
 
   const handleDoubleClick = useCallback(
@@ -386,7 +390,7 @@ function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, landi
     <motion.div
       ref={blockRef}
       drag
-      dragConstraints={false}
+      dragConstraints={dragConstraintRef}
       dragElastic={0}
       dragMomentum={false}
       onDragStart={() => {
@@ -397,10 +401,10 @@ function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, landi
       }}
       onDrag={(_, info) => {
         if (hasLaunchedRef.current) return;
-        if (!inventoryContainerRef.current || !getFixedP2(dropZoneRef, landingPadRef)) return;
+        if (!inventoryContainerRef.current || !getP2(rightPanConnectionRef, dropZoneRef)) return;
         const rect = inventoryContainerRef.current.getBoundingClientRect();
         const { x, y } = info.point;
-        if (isOutsideWithThreshold(x, y, rect, LAUNCH_THRESHOLD_PX)) {
+        if (isExitedFromTop(x, y, rect, LAUNCH_THRESHOLD_PX)) {
           const p0 = dragStartP0Ref.current ?? { x, y };
           const vx = info.velocity?.x ?? 300;
           const vy = info.velocity?.y ?? 0;
@@ -443,8 +447,9 @@ type DebugThrowBlockProps = {
   item: WeightItem;
   onDebugLaunch: (item: WeightItem, flyData: Omit<FlyingItem, "item">) => void;
   dropZoneRef: React.RefObject<HTMLDivElement | null>;
-  landingPadRef: React.RefObject<HTMLDivElement | null>;
+  rightPanConnectionRef: React.RefObject<HTMLDivElement | null>;
   inventoryContainerRef: React.RefObject<HTMLDivElement | null>;
+  dragConstraintRef: React.RefObject<HTMLDivElement | null>;
   p1OffsetY: number;
   velocityMultiplier: number;
 };
@@ -453,8 +458,9 @@ function DebugThrowBlock({
   item,
   onDebugLaunch,
   dropZoneRef,
-  landingPadRef,
+  rightPanConnectionRef,
   inventoryContainerRef,
+  dragConstraintRef,
   p1OffsetY,
   velocityMultiplier,
 }: DebugThrowBlockProps) {
@@ -464,7 +470,7 @@ function DebugThrowBlock({
 
   const tryLaunch = useCallback(
     (p0: { x: number; y: number }, rawVx: number, rawVy: number, launchSource: "double-click" | "flick") => {
-      const p2 = getFixedP2(dropZoneRef, landingPadRef);
+      const p2 = getP2(rightPanConnectionRef, dropZoneRef);
       if (hasLaunchedRef.current || !p2) return;
       hasLaunchedRef.current = true;
       const vx = rawVx * velocityMultiplier;
@@ -476,7 +482,7 @@ function DebugThrowBlock({
       const duration = Math.max(DURATION_MIN, Math.min(DURATION_MAX, 800 / Math.max(Math.abs(vx), 50)));
       onDebugLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy, launchSource });
     },
-    [item, dropZoneRef, landingPadRef, onDebugLaunch, p1OffsetY, velocityMultiplier]
+    [item, dropZoneRef, rightPanConnectionRef, onDebugLaunch, p1OffsetY, velocityMultiplier]
   );
 
   const handleDoubleClick = useCallback(
@@ -494,7 +500,7 @@ function DebugThrowBlock({
   return (
     <motion.div
       drag
-      dragConstraints={false}
+      dragConstraints={dragConstraintRef}
       dragElastic={0}
       dragMomentum={false}
       onDragStart={() => {
@@ -505,10 +511,10 @@ function DebugThrowBlock({
       }}
       onDrag={(_, info) => {
         if (hasLaunchedRef.current) return;
-        if (!inventoryContainerRef.current || !getFixedP2(dropZoneRef, landingPadRef)) return;
+        if (!inventoryContainerRef.current || !getP2(rightPanConnectionRef, dropZoneRef)) return;
         const rect = inventoryContainerRef.current.getBoundingClientRect();
         const { x, y } = info.point;
-        if (isOutsideWithThreshold(x, y, rect, LAUNCH_THRESHOLD_PX)) {
+        if (isExitedFromTop(x, y, rect, LAUNCH_THRESHOLD_PX)) {
           const p0 = dragStartP0Ref.current ?? { x, y };
           const vx = info.velocity?.x ?? 300;
           const vy = info.velocity?.y ?? 0;
@@ -601,8 +607,9 @@ export default function PresSureJudgeGame() {
   const scaleContainerRef = useRef<HTMLDivElement>(null);
   const [scaleContainerWidth, setScaleContainerWidth] = useState(512);
   const rightPanRef = useRef<HTMLDivElement>(null);
-  const landingPadRef = useRef<HTMLDivElement>(null);
+  const rightPanConnectionRef = useRef<HTMLDivElement>(null);
   const inventoryContainerRef = useRef<HTMLDivElement>(null);
+  const dragConstraintRef = useRef<HTMLDivElement>(null);
   const [dragResetKey, setDragResetKey] = useState(0);
 
   useEffect(() => {
@@ -1009,20 +1016,6 @@ export default function PresSureJudgeGame() {
         )}
       </header>
 
-      <div
-        ref={landingPadRef}
-        aria-hidden
-        className="pointer-events-none invisible absolute"
-        style={{
-          position: "fixed",
-          left: "50%",
-          top: `${FIXED_P2_Y_RATIO * 100}vh`,
-          width: 2,
-          height: 2,
-          transform: "translate(calc(120px - 50%), -50%)",
-          zIndex: 1,
-        }}
-      />
       <main
         className="relative z-0 flex-1 min-h-0 mx-auto w-full max-w-[640px] px-4 py-2 md:py-4 flex flex-col overflow-hidden"
         style={{
@@ -1267,6 +1260,17 @@ export default function PresSureJudgeGame() {
                       ))}
                     </motion.div>
                   </div>
+                  {/* P2用：右器接続点（常に配置・getBoundingClientRectで座標取得） */}
+                  <div
+                    ref={rightPanConnectionRef}
+                    aria-hidden
+                    className="absolute w-1 h-1 pointer-events-none opacity-0"
+                    style={{
+                      left: rightEndX,
+                      top: panBottomBase + rightEndY,
+                      transform: "translate(-50%, -50%)",
+                    }}
+                  />
                   {isDebugMode && showConnectionPoints && (
                     <>
                       <div
@@ -1295,11 +1299,17 @@ export default function PresSureJudgeGame() {
 
               {phase === "user" && (
                 <div className="mt-2 mb-2 space-y-3 p-3 rounded-2xl border border-white/10 bg-white/5 overflow-visible shrink-0">
+                  {/* ドラッグ制約：上方向に拡張し左右下は枠内で止まる */}
                   <div
-                    ref={inventoryContainerRef}
-                    className="min-h-[72px] p-3 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible shrink-0"
-                    style={{ touchAction: "none" }}
+                    ref={dragConstraintRef}
+                    className="relative min-w-0"
+                    style={{ paddingTop: 200, marginTop: -200 }}
                   >
+                    <div
+                      ref={inventoryContainerRef}
+                      className="min-h-[72px] p-3 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible shrink-0"
+                      style={{ touchAction: "none" }}
+                    >
                     {inventorySlots.every((s) => !s) ? (
                       <span className="text-wit-muted text-sm">在庫なし</span>
                     ) : (
@@ -1311,8 +1321,9 @@ export default function PresSureJudgeGame() {
                             onLaunch={handleLaunch}
                             onDragCancel={handleDragCancel}
                             dropZoneRef={rightPanRef}
-                            landingPadRef={landingPadRef}
+                            rightPanConnectionRef={rightPanConnectionRef}
                             inventoryContainerRef={inventoryContainerRef}
+                            dragConstraintRef={dragConstraintRef}
                             p1OffsetY={p1OffsetY}
                             velocityMultiplier={velocityMultiplier}
                           />
@@ -1330,12 +1341,14 @@ export default function PresSureJudgeGame() {
                         item={DEBUG_ITEM}
                         onDebugLaunch={handleDebugLaunch}
                         dropZoneRef={rightPanRef}
-                        landingPadRef={landingPadRef}
+                        rightPanConnectionRef={rightPanConnectionRef}
                         inventoryContainerRef={inventoryContainerRef}
+                        dragConstraintRef={dragConstraintRef}
                         p1OffsetY={p1OffsetY}
                         velocityMultiplier={velocityMultiplier}
                       />
                     )}
+                    </div>
                   </div>
                   <button
                     onClick={handleJudge}
