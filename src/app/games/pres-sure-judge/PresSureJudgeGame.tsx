@@ -21,6 +21,10 @@ const DURATION_MIN = 0.3;
 const DURATION_MAX = 0.8;
 const DEBUG_OVERLAY_DURATION_MS = 3000;
 const IMPACT_DIP_PX = 8; // Balance dips this much on landing
+const IMPACT_RISE_PX = -4; // Slight upward nudge after dip
+const CYLINDER_DIP_MS = 80; // Dip duration before rise
+const CYLINDER_RISE_MS = 120; // Rise-back duration
+const FIXED_P2_Y_RATIO = 0.45; // P2 at 45% from top of viewport (stable target)
 const IMPACT_DURATION = 0.4; // seconds
 const FALL_DURATION = 0.6; // Miss shot: fall off screen
 const DEBUG = false;
@@ -296,6 +300,7 @@ type DraggableWeightBlockProps = {
   onLaunch: (item: WeightItem, flyData: Omit<FlyingItem, "item">) => void;
   onDragCancel: (item: WeightItem) => void;
   dropZoneRef: React.RefObject<HTMLDivElement | null>;
+  landingPadRef: React.RefObject<HTMLDivElement | null>;
   inventoryContainerRef: React.RefObject<HTMLDivElement | null>;
   p1OffsetY: number;
 };
@@ -304,15 +309,27 @@ function isOutsideRect(px: number, py: number, rect: DOMRect): boolean {
   return px < rect.left || px > rect.right || py < rect.top || py > rect.bottom;
 }
 
-function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, inventoryContainerRef, p1OffsetY }: DraggableWeightBlockProps) {
+function getFixedP2(dropZoneRef: React.RefObject<HTMLDivElement | null>, landingPadRef: React.RefObject<HTMLDivElement | null>) {
+  if (landingPadRef?.current) {
+    const r = landingPadRef.current.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+  if (dropZoneRef?.current) {
+    const r = dropZoneRef.current.getBoundingClientRect();
+    const fixedY = typeof window !== "undefined" ? window.innerHeight * FIXED_P2_Y_RATIO : r.top + r.height / 2;
+    return { x: r.left + r.width / 2, y: fixedY };
+  }
+  return null;
+}
+
+function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, landingPadRef, inventoryContainerRef, p1OffsetY }: DraggableWeightBlockProps) {
   const hasLaunchedRef = useRef(false);
 
   const tryLaunch = useCallback(
     (p0: { x: number; y: number }, vx: number, vy: number) => {
-      if (hasLaunchedRef.current || !dropZoneRef.current) return;
+      const p2 = getFixedP2(dropZoneRef, landingPadRef);
+      if (hasLaunchedRef.current || !p2) return;
       hasLaunchedRef.current = true;
-      const rect = dropZoneRef.current.getBoundingClientRect();
-      const p2 = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
       const p1 = {
         x: (p0.x + p2.x) / 2,
         y: p0.y + p1OffsetY,
@@ -320,7 +337,7 @@ function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, inven
       const duration = Math.max(DURATION_MIN, Math.min(DURATION_MAX, 800 / Math.max(Math.abs(vx), 50)));
       onLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy });
     },
-    [item, dropZoneRef, onLaunch, p1OffsetY]
+    [item, dropZoneRef, landingPadRef, onLaunch, p1OffsetY]
   );
 
   return (
@@ -331,7 +348,7 @@ function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, inven
       dragMomentum={false}
       onDrag={(_, info) => {
         if (hasLaunchedRef.current) return;
-        if (!inventoryContainerRef.current || !dropZoneRef.current) return;
+        if (!inventoryContainerRef.current || !getFixedP2(dropZoneRef, landingPadRef)) return;
         const rect = inventoryContainerRef.current.getBoundingClientRect();
         const { x, y } = info.point;
         if (isOutsideRect(x, y, rect)) {
@@ -374,6 +391,7 @@ type DebugThrowBlockProps = {
   item: WeightItem;
   onDebugLaunch: (item: WeightItem, flyData: Omit<FlyingItem, "item">) => void;
   dropZoneRef: React.RefObject<HTMLDivElement | null>;
+  landingPadRef: React.RefObject<HTMLDivElement | null>;
   inventoryContainerRef: React.RefObject<HTMLDivElement | null>;
   p1OffsetY: number;
 };
@@ -382,6 +400,7 @@ function DebugThrowBlock({
   item,
   onDebugLaunch,
   dropZoneRef,
+  landingPadRef,
   inventoryContainerRef,
   p1OffsetY,
 }: DebugThrowBlockProps) {
@@ -389,10 +408,9 @@ function DebugThrowBlock({
 
   const tryLaunch = useCallback(
     (p0: { x: number; y: number }, vx: number, vy: number) => {
-      if (hasLaunchedRef.current || !dropZoneRef.current) return;
+      const p2 = getFixedP2(dropZoneRef, landingPadRef);
+      if (hasLaunchedRef.current || !p2) return;
       hasLaunchedRef.current = true;
-      const rect = dropZoneRef.current.getBoundingClientRect();
-      const p2 = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
       const p1 = {
         x: (p0.x + p2.x) / 2,
         y: p0.y + p1OffsetY,
@@ -400,7 +418,7 @@ function DebugThrowBlock({
       const duration = Math.max(DURATION_MIN, Math.min(DURATION_MAX, 800 / Math.max(Math.abs(vx), 50)));
       onDebugLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy });
     },
-    [item, dropZoneRef, onDebugLaunch, p1OffsetY]
+    [item, dropZoneRef, landingPadRef, onDebugLaunch, p1OffsetY]
   );
 
   return (
@@ -411,7 +429,7 @@ function DebugThrowBlock({
       dragMomentum={false}
       onDrag={(_, info) => {
         if (hasLaunchedRef.current) return;
-        if (!inventoryContainerRef.current || !dropZoneRef.current) return;
+        if (!inventoryContainerRef.current || !getFixedP2(dropZoneRef, landingPadRef)) return;
         const rect = inventoryContainerRef.current.getBoundingClientRect();
         const { x, y } = info.point;
         if (isOutsideRect(x, y, rect)) {
@@ -480,6 +498,7 @@ export default function PresSureJudgeGame() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rightPanRef = useRef<HTMLDivElement>(null);
+  const landingPadRef = useRef<HTMLDivElement>(null);
   const inventoryContainerRef = useRef<HTMLDivElement>(null);
   const [dragResetKey, setDragResetKey] = useState(0);
 
@@ -603,17 +622,28 @@ export default function PresSureJudgeGame() {
     (item: WeightItem) => {
       if (!isDebugMode) setDebugOverlay(null);
       setFlyingItems((prev) => prev.filter((f) => f.item.id !== item.id));
-    setRightPanWeights((pan) => {
-      const rightPlaced = placedWeightsRef.current.filter((w) => w.side === "right");
-      const topY = rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
-      const panTopY = pan.length > 0 ? Math.min(...pan.map((w) => w.position.y)) : topY;
-      const stackTopY = Math.min(topY, panTopY);
-      const newY = stackTopY - getWeightHeight(item.value, "right");
-      return [...pan, { ...item, position: { x: 0, y: newY } }];
-    });
-    setImpactOffset(IMPACT_DIP_PX);
-    setTimeout(() => setImpactOffset(0), 80);
-  }, [isDebugMode]);
+      const newHeight = getWeightHeight(item.value, "right");
+      setPlacedWeights((prev) =>
+        prev.map((w) => (w.side === "right" ? { ...w, y: w.y + newHeight } : w))
+      );
+      setRightPanWeights((pan) => {
+        const rightPlaced = placedWeightsRef.current.filter((w) => w.side === "right");
+        const topY = rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
+        const sunkPan = pan.map((w) => ({
+          ...w,
+          position: { ...w.position, y: w.position.y + newHeight },
+        }));
+        const panTopY = sunkPan.length > 0 ? Math.min(...sunkPan.map((w) => w.position.y)) : topY;
+        const stackTopY = Math.min(topY, panTopY);
+        const newY = stackTopY - newHeight;
+        return [...sunkPan, { ...item, position: { x: 0, y: newY } }];
+      });
+      setImpactOffset(IMPACT_DIP_PX);
+      setTimeout(() => setImpactOffset(IMPACT_RISE_PX), CYLINDER_DIP_MS);
+      setTimeout(() => setImpactOffset(0), CYLINDER_DIP_MS + CYLINDER_RISE_MS);
+    },
+    [isDebugMode]
+  );
 
   const handleFallComplete = useCallback((item: WeightItem) => {
     setFallingItems((prev) => prev.filter((f) => f.item.id !== item.id));
@@ -721,12 +751,13 @@ export default function PresSureJudgeGame() {
   const leftDisplay = [...leftPlaced, ...leftCurrent].sort((a, b) => a.y - b.y);
 
   const rightPlaced = placedWeights.filter((w) => w.side === "right");
-  let rightTopY = rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
-  const rightCurrent: PlacedWeight[] = rightPanWeights.map((w) => {
-    const y = rightTopY - getWeightHeight(w.value, "right");
-    rightTopY = y;
-    return { id: w.id, side: "right" as const, value: w.value, x: 0, y };
-  });
+  const rightCurrent: PlacedWeight[] = rightPanWeights.map((w) => ({
+    id: w.id,
+    side: "right" as const,
+    value: w.value,
+    x: 0,
+    y: w.position.y,
+  }));
   const rightDisplay = [...rightPlaced, ...rightCurrent].sort((a, b) => a.y - b.y);
 
   // 左右の頂上Y座標と差を計算
@@ -783,6 +814,20 @@ export default function PresSureJudgeGame() {
         )}
       </header>
 
+      <div
+        ref={landingPadRef}
+        aria-hidden
+        className="pointer-events-none invisible absolute"
+        style={{
+          position: "fixed",
+          left: "50%",
+          top: `${FIXED_P2_Y_RATIO * 100}vh`,
+          width: 2,
+          height: 2,
+          transform: "translate(calc(120px - 50%), -50%)",
+          zIndex: 1,
+        }}
+      />
       <main className="relative z-0 flex-1 min-h-0 mx-auto w-full max-w-[640px] px-4 py-4 md:py-8 flex flex-col overflow-hidden">
         {flyingItems.map((fly) => (
           <FlyingWeightBlock key={fly.item.id} fly={fly} onLanding={handleLanding} />
@@ -994,6 +1039,7 @@ export default function PresSureJudgeGame() {
                             onLaunch={handleLaunch}
                             onDragCancel={handleDragCancel}
                             dropZoneRef={rightPanRef}
+                            landingPadRef={landingPadRef}
                             inventoryContainerRef={inventoryContainerRef}
                             p1OffsetY={p1OffsetY}
                           />
@@ -1011,6 +1057,7 @@ export default function PresSureJudgeGame() {
                         item={DEBUG_ITEM}
                         onDebugLaunch={handleDebugLaunch}
                         dropZoneRef={rightPanRef}
+                        landingPadRef={landingPadRef}
                         inventoryContainerRef={inventoryContainerRef}
                         p1OffsetY={p1OffsetY}
                       />
