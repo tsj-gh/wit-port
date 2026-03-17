@@ -12,6 +12,8 @@ const INITIAL_TIMER = 10;
 const WEIGHT_VALUES = [1, 3, 5, 10, 20];
 const INVENTORY_COUNT = 8;
 const PAN_MAX_VISIBLE_HEIGHT = 120;
+/** 器のコンテンツ領域の下端（py-2で上下8pxあるため） */
+const PAN_CONTENT_BOTTOM = PAN_MAX_VISIBLE_HEIGHT - 16;
 const BLOCK_HEIGHT = 28;
 const VIEW_HEIGHT = 360;
 const MIN_ZOOM_SCALE = 0.5;
@@ -762,8 +764,12 @@ export default function PresSureJudgeGame() {
           );
         }
         if (pan.length === 0) {
-          // 1個目：器の底（既存コンテンツの下）に積む
-          return [{ ...item, position: { x: 0, y: rightContentBottom } }];
+          // 1個目：器の底（下辺）に積む。y=0は上辺なので、底にするには (容器高さ - アイテム高さ) を使用
+          const baseY =
+            rightPlaced.length > 0
+              ? rightContentBottom
+              : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - newHeight);
+          return [{ ...item, position: { x: 0, y: baseY } }];
         }
         // 2個目以降：既存の上に積む（既存を下にシフト）
         const rightContentTop = Math.min(...pan.map((w) => w.position.y));
@@ -889,10 +895,14 @@ export default function PresSureJudgeGame() {
   let leftBottomOffset =
     leftPlaced.length > 0
       ? Math.max(...leftPlaced.map((w) => w.y + getWeightHeight(w.value, "left")))
-      : 0;
+      : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - 40); // 1個目は器の底に。leftは高さ40 or 44が典型
   const leftCurrent: PlacedWeight[] = leftPanWeights.map((w) => {
+    const h = getWeightHeight(w.value, "left");
+    if (leftPlaced.length === 0 && leftBottomOffset === Math.max(0, PAN_MAX_VISIBLE_HEIGHT - 40)) {
+      leftBottomOffset = Math.max(0, PAN_MAX_VISIBLE_HEIGHT - h); // 実際の高さで底位置を算出
+    }
     const y = leftBottomOffset;
-    leftBottomOffset += getWeightHeight(w.value, "left");
+    leftBottomOffset += h;
     return { id: w.id, side: "left" as const, value: w.value, x: 0, y };
   });
   const leftDisplay = [...leftPlaced, ...leftCurrent].sort((a, b) => a.y - b.y);
