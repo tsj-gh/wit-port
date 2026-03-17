@@ -20,10 +20,6 @@ const DEFAULT_P1_OFFSET_Y = -350; // P1.y = P0.y + p1OffsetY
 const DURATION_MIN = 0.3;
 const DURATION_MAX = 0.8;
 const DEBUG_OVERLAY_DURATION_MS = 3000;
-const IMPACT_DIP_PX = 8; // Balance dips this much on landing
-const IMPACT_RISE_PX = -4; // Slight upward nudge after dip
-const CYLINDER_DIP_MS = 80; // Dip duration before rise
-const CYLINDER_RISE_MS = 120; // Rise-back duration
 const FIXED_P2_Y_RATIO = 0.45; // P2 at 45% from top of viewport (stable target)
 const DEFAULT_DOUBLE_CLICK_VX = 800;
 const DEFAULT_DOUBLE_CLICK_VY = -200;
@@ -519,7 +515,6 @@ export default function PresSureJudgeGame() {
   );
   const [flyingItems, setFlyingItems] = useState<FlyingItem[]>([]);
   const [fallingItems, setFallingItems] = useState<FallingItem[]>([]);
-  const [impactOffset, setImpactOffset] = useState(0);
   const [placedWeights, setPlacedWeights] = useState<PlacedWeight[]>([]);
   const [round, setRound] = useState(0);
   const [timer, setTimer] = useState(INITIAL_TIMER);
@@ -539,10 +534,25 @@ export default function PresSureJudgeGame() {
   const [velocityMultiplier, setVelocityMultiplier] = useState(1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scaleContainerRef = useRef<HTMLDivElement>(null);
+  const [scaleContainerWidth, setScaleContainerWidth] = useState(512);
   const rightPanRef = useRef<HTMLDivElement>(null);
   const landingPadRef = useRef<HTMLDivElement>(null);
   const inventoryContainerRef = useRef<HTMLDivElement>(null);
   const [dragResetKey, setDragResetKey] = useState(0);
+
+  useEffect(() => {
+    const el = scaleContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const w = e.contentRect.width;
+        if (w > 0) setScaleContainerWidth(w);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const totalBalanceRef = useRef(totalBalance);
   const placedWeightsRef = useRef(placedWeights);
@@ -681,9 +691,6 @@ export default function PresSureJudgeGame() {
         const newY = stackTopY - newHeight;
         return [...sunkPan, { ...item, position: { x: 0, y: newY } }];
       });
-      setImpactOffset(IMPACT_DIP_PX);
-      setTimeout(() => setImpactOffset(IMPACT_RISE_PX), CYLINDER_DIP_MS);
-      setTimeout(() => setImpactOffset(0), CYLINDER_DIP_MS + CYLINDER_RISE_MS);
     },
     [isDebugMode]
   );
@@ -784,6 +791,16 @@ export default function PresSureJudgeGame() {
   }, [phase, history.length]);
 
   const rotation = getRotation(effectiveBalance, isCollapsed);
+
+  // アーム先端座標（皿を鉛直に保つため回転に追従して配置）
+  const armHalf = scaleContainerWidth * 0.425;
+  const rotRad = (rotation * Math.PI) / 180;
+  const leftEndX = scaleContainerWidth / 2 - armHalf * Math.cos(rotRad);
+  const leftEndY = armHalf * Math.sin(rotRad);
+  const rightEndX = scaleContainerWidth / 2 + armHalf * Math.cos(rotRad);
+  const rightEndY = -armHalf * Math.sin(rotRad);
+  const panWidth = 128;
+  const panBottomBase = 32;
 
   const leftPlaced = placedWeights.filter((w) => w.side === "left");
   let leftTopY = leftPlaced.length > 0 ? Math.min(...leftPlaced.map((w) => w.y)) : 0;
@@ -1022,18 +1039,19 @@ export default function PresSureJudgeGame() {
                   </>
                 )}
                 <motion.div
+                  ref={scaleContainerRef}
                   className="relative w-full max-w-xl"
                   style={{ transformOrigin: "center center" }}
                   animate={{ y: scrollY, scale: zoomScale }}
                   transition={{ type: "spring", stiffness: 50, damping: 20 }}
                 >
+                  {/* アームと支点のみ回転（天秤は初期位置固定・回転のみ） */}
                   <motion.div
-                    className="relative w-full max-w-xl h-64 flex items-end justify-center pb-4"
+                    className="absolute left-0 right-0 bottom-0 h-64 flex items-end justify-center pb-4 pointer-events-none"
                     style={{ transformOrigin: "center bottom" }}
                     animate={{
                       rotate: rotation,
                       scale: phase === "gameover" ? (collapseAnimDone ? 0.95 : 1) : 1,
-                      y: impactOffset,
                     }}
                     transition={{
                       type: "spring",
@@ -1041,20 +1059,33 @@ export default function PresSureJudgeGame() {
                       damping: phase === "gameover" ? 15 : 20,
                     }}
                   >
-                  <div className="absolute left-1/2 bottom-0 w-[85%] h-2 -translate-x-1/2 rounded-full bg-gradient-to-r from-transparent via-slate-500 to-transparent" />
-                  <div
-                    className="absolute left-1/2 bottom-0 w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-300 -translate-x-1/2 translate-y-1/2 z-20 shadow-[0_0_16px_rgba(245,158,11,0.7)]"
-                    style={{ transformOrigin: "center center" }}
-                  />
+                    <div className="absolute left-1/2 bottom-0 w-[85%] h-2 -translate-x-1/2 rounded-full bg-gradient-to-r from-transparent via-slate-500 to-transparent" />
+                    <div
+                      className="absolute left-1/2 bottom-0 w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-300 -translate-x-1/2 translate-y-1/2 z-20 shadow-[0_0_16px_rgba(245,158,11,0.7)]"
+                      style={{ transformOrigin: "center center" }}
+                    />
+                  </motion.div>
 
+                  {/* 左皿：鉛直シリンダー（回転に追従せず常に直立） */}
                   <div
-                    className="absolute left-[5%] bottom-8 w-32 flex flex-col items-center"
-                    style={{ transformOrigin: "left bottom" }}
+                    className="absolute flex flex-col items-center pointer-events-none"
+                    style={{
+                      left: leftEndX - panWidth / 2,
+                      bottom: panBottomBase + leftEndY,
+                      width: panWidth,
+                      transform: "rotate(0deg)",
+                    }}
                   >
                     <span className="text-[10px] text-amber-400/90 font-medium mb-1">NPC</span>
                     <div
-                      className="relative min-h-[80px] w-32 rounded-b-xl border-2 border-amber-500/50 bg-amber-500/10 px-2 py-2 overflow-visible"
-                      style={{ minHeight: PAN_MAX_VISIBLE_HEIGHT }}
+                      className="relative w-32 rounded-b-xl border-2 border-amber-500/50 bg-amber-500/10 px-2 py-2 overflow-visible"
+                      style={{
+                        minHeight: PAN_MAX_VISIBLE_HEIGHT,
+                        height:
+                          leftDisplay.length > 0
+                            ? Math.max(PAN_MAX_VISIBLE_HEIGHT, Math.abs(Math.min(...leftDisplay.map((w) => w.y))) + 44)
+                            : PAN_MAX_VISIBLE_HEIGHT,
+                      }}
                     >
                       {leftDisplay.map((w) => (
                         <PlacedWeightBlock key={w.id} w={w} />
@@ -1062,15 +1093,27 @@ export default function PresSureJudgeGame() {
                     </div>
                   </div>
 
+                  {/* 右皿：鉛直シリンダー（回転に追従せず常に直立） */}
                   <div
-                    className="absolute right-[5%] bottom-8 w-32 flex flex-col items-center"
-                    style={{ transformOrigin: "right bottom" }}
+                    className="absolute flex flex-col items-center"
+                    style={{
+                      left: rightEndX - panWidth / 2,
+                      bottom: panBottomBase + rightEndY,
+                      width: panWidth,
+                      transform: "rotate(0deg)",
+                    }}
                   >
                     <span className="text-[10px] text-blue-400/90 font-medium mb-1">You</span>
                     <motion.div
                       ref={rightPanRef}
-                      className="relative min-h-[80px] w-32 rounded-b-xl border-2 px-2 py-2 border-blue-500/50 bg-blue-500/10 transition-colors overflow-visible"
-                      style={{ minHeight: PAN_MAX_VISIBLE_HEIGHT }}
+                      className="relative w-32 rounded-b-xl border-2 px-2 py-2 border-blue-500/50 bg-blue-500/10 transition-colors overflow-visible"
+                      style={{
+                        minHeight: PAN_MAX_VISIBLE_HEIGHT,
+                        height:
+                          rightDisplay.length > 0
+                            ? Math.max(PAN_MAX_VISIBLE_HEIGHT, Math.abs(Math.min(...rightDisplay.map((w) => w.y))) + 44)
+                            : PAN_MAX_VISIBLE_HEIGHT,
+                      }}
                       whileHover={{ borderColor: "rgba(96,165,250,0.9)", backgroundColor: "rgba(59,130,246,0.2)" }}
                     >
                       {rightDisplay.map((w) => (
@@ -1078,7 +1121,6 @@ export default function PresSureJudgeGame() {
                       ))}
                     </motion.div>
                   </div>
-                </motion.div>
                 </motion.div>
               </div>
 
