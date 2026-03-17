@@ -38,8 +38,8 @@ type LayoutParams = {
   headerHeightRem: number;
 };
 const DEBUG_LAYOUT_DEFAULTS: LayoutParams = {
-  scaleWrapperTopOffset: 256, // calc(50% - Xpx) の X
-  scaleWrapperMaxOffset: 320, // calc(100% - Xpx) の X
+  scaleWrapperTopOffset: 0,
+  scaleWrapperMaxOffset: 60,
   scaleAreaMinHeight: 200,
   armHeight: 256,
   gameGap: 12,
@@ -167,7 +167,7 @@ function PlacedWeightBlock({ w }: { w: PlacedWeight }) {
         position: "absolute",
         left: "50%",
         transform: "translateX(-50%)",
-        bottom: `${-w.y}px`,
+        top: `${w.y}px`,
       }}
     >
       {w.value}
@@ -654,22 +654,28 @@ export default function PresSureJudgeGame() {
     setPlacedWeights((prev) => {
       const leftPlaced = prev.filter((w) => w.side === "left");
       const rightPlaced = prev.filter((w) => w.side === "right");
-      const leftTopY = leftPlaced.length > 0 ? Math.min(...leftPlaced.map((w) => w.y)) : 0;
-      const rightTopY = rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
+      const leftBottomOffset =
+        leftPlaced.length > 0
+          ? Math.max(...leftPlaced.map((w) => w.y + getWeightHeight(w.value, "left")))
+          : 0;
+      const rightBottomOffset =
+        rightPlaced.length > 0
+          ? Math.max(...rightPlaced.map((w) => w.y + getWeightHeight(w.value, "right")))
+          : 0;
 
-      let curLeftY = leftTopY;
-      let curRightY = rightTopY;
+      let curLeftBottom = leftBottomOffset;
+      let curRightBottom = rightBottomOffset;
       const newPlaced: PlacedWeight[] = [];
 
       for (const w of leftItems) {
         const h = getWeightHeight(w.value, "left");
-        curLeftY = curLeftY - h;
-        newPlaced.push({ id: w.id, side: "left", value: w.value, x: 0, y: curLeftY });
+        newPlaced.push({ id: w.id, side: "left", value: w.value, x: 0, y: curLeftBottom });
+        curLeftBottom += h;
       }
       for (const w of rightItems) {
         const h = getWeightHeight(w.value, "right");
-        curRightY = curRightY - h;
-        newPlaced.push({ id: w.id, side: "right", value: w.value, x: 0, y: curRightY });
+        newPlaced.push({ id: w.id, side: "right", value: w.value, x: 0, y: curRightBottom });
+        curRightBottom += h;
       }
       return [...prev, ...newPlaced];
     });
@@ -714,20 +720,22 @@ export default function PresSureJudgeGame() {
       if (!isDebugMode) setDebugOverlay(null);
       setFlyingItems((prev) => prev.filter((f) => f.item.id !== item.id));
       const newHeight = getWeightHeight(item.value, "right");
-      setPlacedWeights((prev) =>
-        prev.map((w) => (w.side === "right" ? { ...w, y: w.y + newHeight } : w))
-      );
       setRightPanWeights((pan) => {
         const rightPlaced = placedWeightsRef.current.filter((w) => w.side === "right");
-        const topY = rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
-        const sunkPan = pan.map((w) => ({
-          ...w,
-          position: { ...w.position, y: w.position.y + newHeight },
-        }));
-        const panTopY = sunkPan.length > 0 ? Math.min(...sunkPan.map((w) => w.position.y)) : topY;
-        const stackTopY = Math.min(topY, panTopY);
-        const newY = stackTopY - newHeight;
-        return [...sunkPan, { ...item, position: { x: 0, y: newY } }];
+        let rightContentBottom = 0;
+        for (const w of rightPlaced) {
+          rightContentBottom = Math.max(
+            rightContentBottom,
+            w.y + getWeightHeight(w.value, "right")
+          );
+        }
+        for (const w of pan) {
+          rightContentBottom = Math.max(
+            rightContentBottom,
+            w.position.y + getWeightHeight(w.value, "right")
+          );
+        }
+        return [...pan, { ...item, position: { x: 0, y: rightContentBottom } }];
       });
     },
     [isDebugMode]
@@ -841,10 +849,13 @@ export default function PresSureJudgeGame() {
   const panBottomBase = 32;
 
   const leftPlaced = placedWeights.filter((w) => w.side === "left");
-  let leftTopY = leftPlaced.length > 0 ? Math.min(...leftPlaced.map((w) => w.y)) : 0;
+  let leftBottomOffset =
+    leftPlaced.length > 0
+      ? Math.max(...leftPlaced.map((w) => w.y + getWeightHeight(w.value, "left")))
+      : 0;
   const leftCurrent: PlacedWeight[] = leftPanWeights.map((w) => {
-    const y = leftTopY - getWeightHeight(w.value, "left");
-    leftTopY = y;
+    const y = leftBottomOffset;
+    leftBottomOffset += getWeightHeight(w.value, "left");
     return { id: w.id, side: "left" as const, value: w.value, x: 0, y };
   });
   const leftDisplay = [...leftPlaced, ...leftCurrent].sort((a, b) => a.y - b.y);
@@ -859,12 +870,18 @@ export default function PresSureJudgeGame() {
   }));
   const rightDisplay = [...rightPlaced, ...rightCurrent].sort((a, b) => a.y - b.y);
 
-  // 左右の頂上Y座標と差を計算
-  const leftMinY = leftDisplay.length > 0 ? Math.min(...leftDisplay.map((w) => w.y)) : 0;
-  const rightMinY = rightDisplay.length > 0 ? Math.min(...rightDisplay.map((w) => w.y)) : 0;
-  const stackDiff = Math.abs(leftMinY - rightMinY);
+  // 左右の器のコンテンツ高さ（上辺接続・下へ伸びる）とズーム計算
+  const leftContentHeight =
+    leftDisplay.length > 0
+      ? Math.max(...leftDisplay.map((w) => w.y + getWeightHeight(w.value, "left")))
+      : 0;
+  const rightContentHeight =
+    rightDisplay.length > 0
+      ? Math.max(...rightDisplay.map((w) => w.y + getWeightHeight(w.value, "right")))
+      : 0;
+  const stackDiff = Math.max(leftContentHeight, rightContentHeight);
 
-  // Dynamic Zoom: 差が画面高さを超えそうならズームアウト（天秤Y座標は固定のため scrollY は不使用）
+  // Dynamic Zoom: コンテンツ高さが画面を超えそうならズームアウト
   const zoomScale = Math.max(
     MIN_ZOOM_SCALE,
     Math.min(1, (VIEW_HEIGHT - ZOOM_MARGIN) / Math.max(stackDiff, 1))
@@ -872,7 +889,7 @@ export default function PresSureJudgeGame() {
 
   // オフスクリーン判定（差が閾値超で片方が見えにくい）
   const showOffscreenIndicators = stackDiff > OFFSCREEN_INDICATOR_THRESHOLD;
-  const leftIsHigher = leftMinY < rightMinY;
+  const leftIsHigher = leftContentHeight > rightContentHeight;
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text isolate">
@@ -912,50 +929,6 @@ export default function PresSureJudgeGame() {
                 className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
               />
               <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.scaleWrapperMaxOffset})</span>
-            </label>
-            <label className="flex items-center justify-between gap-2">
-              <span className="text-amber-300/90">scaleAreaMinHeight:</span>
-              <input
-                type="number"
-                value={layoutParamsDraft.scaleAreaMinHeight}
-                onChange={(e) =>
-                  setLayoutParamsDraft((p) => ({ ...p, scaleAreaMinHeight: Number(e.target.value) || 0 }))
-                }
-                className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
-              />
-              <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.scaleAreaMinHeight})</span>
-            </label>
-            <label className="flex items-center justify-between gap-2">
-              <span className="text-amber-300/90">armHeight:</span>
-              <input
-                type="number"
-                value={layoutParamsDraft.armHeight}
-                onChange={(e) => setLayoutParamsDraft((p) => ({ ...p, armHeight: Number(e.target.value) || 0 }))}
-                className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
-              />
-              <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.armHeight})</span>
-            </label>
-            <label className="flex items-center justify-between gap-2">
-              <span className="text-amber-300/90">gameGap:</span>
-              <input
-                type="number"
-                value={layoutParamsDraft.gameGap}
-                onChange={(e) => setLayoutParamsDraft((p) => ({ ...p, gameGap: Number(e.target.value) || 0 }))}
-                className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
-              />
-              <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.gameGap})</span>
-            </label>
-            <label className="flex items-center justify-between gap-2">
-              <span className="text-amber-300/90">headerHeightRem:</span>
-              <input
-                type="number"
-                value={layoutParamsDraft.headerHeightRem}
-                onChange={(e) =>
-                  setLayoutParamsDraft((p) => ({ ...p, headerHeightRem: Number(e.target.value) || 0 }))
-                }
-                className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
-              />
-              <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.headerHeightRem})</span>
             </label>
           </div>
           <button
@@ -1199,12 +1172,12 @@ export default function PresSureJudgeGame() {
                     />
                   </motion.div>
 
-                  {/* 左皿：鉛直シリンダー（回転に追従せず常に直立） */}
+                  {/* 左皿：上辺でアームに接続・下へ伸びる器 */}
                   <div
                     className="absolute flex flex-col items-center pointer-events-none"
                     style={{
                       left: leftEndX - panWidth / 2,
-                      bottom: panBottomBase + leftEndY,
+                      top: panBottomBase + leftEndY,
                       width: panWidth,
                       transform: "rotate(0deg)",
                     }}
@@ -1216,7 +1189,10 @@ export default function PresSureJudgeGame() {
                         minHeight: PAN_MAX_VISIBLE_HEIGHT,
                         height:
                           leftDisplay.length > 0
-                            ? Math.max(PAN_MAX_VISIBLE_HEIGHT, Math.abs(Math.min(...leftDisplay.map((w) => w.y))) + 44)
+                            ? Math.max(
+                                PAN_MAX_VISIBLE_HEIGHT,
+                                Math.max(...leftDisplay.map((w) => w.y + getWeightHeight(w.value, "left")))
+                              )
                             : PAN_MAX_VISIBLE_HEIGHT,
                       }}
                     >
@@ -1226,12 +1202,12 @@ export default function PresSureJudgeGame() {
                     </div>
                   </div>
 
-                  {/* 右皿：鉛直シリンダー（回転に追従せず常に直立） */}
+                  {/* 右皿：上辺でアームに接続・下へ伸びる器 */}
                   <div
                     className="absolute flex flex-col items-center"
                     style={{
                       left: rightEndX - panWidth / 2,
-                      bottom: panBottomBase + rightEndY,
+                      top: panBottomBase + rightEndY,
                       width: panWidth,
                       transform: "rotate(0deg)",
                     }}
@@ -1244,7 +1220,10 @@ export default function PresSureJudgeGame() {
                         minHeight: PAN_MAX_VISIBLE_HEIGHT,
                         height:
                           rightDisplay.length > 0
-                            ? Math.max(PAN_MAX_VISIBLE_HEIGHT, Math.abs(Math.min(...rightDisplay.map((w) => w.y))) + 44)
+                            ? Math.max(
+                                PAN_MAX_VISIBLE_HEIGHT,
+                                Math.max(...rightDisplay.map((w) => w.y + getWeightHeight(w.value, "right")))
+                              )
                             : PAN_MAX_VISIBLE_HEIGHT,
                       }}
                       whileHover={{ borderColor: "rgba(96,165,250,0.9)", backgroundColor: "rgba(59,130,246,0.2)" }}
