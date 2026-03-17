@@ -1037,16 +1037,20 @@ export default function PresSureJudgeGame() {
                     </div>
                   </>
                 )}
-                <motion.div
+                {/* ラッパー：中央寄せを担当（Framer Motion の transform 上書きを避ける） */}
+                <div
                   ref={scaleContainerRef}
                   className="absolute left-1/2 w-full max-w-xl -translate-x-1/2"
                   style={{
-                    transformOrigin: "center center",
                     top: "clamp(0px, calc(35% - 200px), 999px)",
                   }}
-                  animate={{ scale: zoomScale }}
-                  transition={{ type: "spring", stiffness: 50, damping: 20 }}
                 >
+                  <motion.div
+                    className="relative w-full"
+                    style={{ transformOrigin: "center center" }}
+                    animate={{ scale: zoomScale }}
+                    transition={{ type: "spring", stiffness: 50, damping: 20 }}
+                  >
                   {/* アームと支点のみ回転（天秤は初期位置固定・回転のみ） */}
                   <motion.div
                     className="absolute left-0 right-0 bottom-0 h-64 flex items-end justify-center pb-4 pointer-events-none"
@@ -1124,6 +1128,7 @@ export default function PresSureJudgeGame() {
                     </motion.div>
                   </div>
                 </motion.div>
+                </div>
               </div>
 
               {phase === "user" && (
