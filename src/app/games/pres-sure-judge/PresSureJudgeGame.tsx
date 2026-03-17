@@ -25,6 +25,8 @@ const IMPACT_RISE_PX = -4; // Slight upward nudge after dip
 const CYLINDER_DIP_MS = 80; // Dip duration before rise
 const CYLINDER_RISE_MS = 120; // Rise-back duration
 const FIXED_P2_Y_RATIO = 0.45; // P2 at 45% from top of viewport (stable target)
+const DEFAULT_DOUBLE_CLICK_VX = 800;
+const DEFAULT_DOUBLE_CLICK_VY = -200;
 const IMPACT_DURATION = 0.4; // seconds
 const FALL_DURATION = 0.6; // Miss shot: fall off screen
 const DEBUG = false;
@@ -224,6 +226,7 @@ type FlyingItem = {
   startTime: number;
   vx?: number;
   vy?: number;
+  launchSource?: "double-click" | "flick";
 };
 
 type FallingItem = { item: WeightItem; startX: number; startY: number };
@@ -303,6 +306,7 @@ type DraggableWeightBlockProps = {
   landingPadRef: React.RefObject<HTMLDivElement | null>;
   inventoryContainerRef: React.RefObject<HTMLDivElement | null>;
   p1OffsetY: number;
+  velocityMultiplier: number;
 };
 
 function isOutsideRect(px: number, py: number, rect: DOMRect): boolean {
@@ -322,26 +326,42 @@ function getFixedP2(dropZoneRef: React.RefObject<HTMLDivElement | null>, landing
   return null;
 }
 
-function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, landingPadRef, inventoryContainerRef, p1OffsetY }: DraggableWeightBlockProps) {
+function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, landingPadRef, inventoryContainerRef, p1OffsetY, velocityMultiplier }: DraggableWeightBlockProps) {
   const hasLaunchedRef = useRef(false);
+  const blockRef = useRef<HTMLDivElement>(null);
 
   const tryLaunch = useCallback(
-    (p0: { x: number; y: number }, vx: number, vy: number) => {
+    (p0: { x: number; y: number }, rawVx: number, rawVy: number, launchSource: "double-click" | "flick") => {
       const p2 = getFixedP2(dropZoneRef, landingPadRef);
       if (hasLaunchedRef.current || !p2) return;
       hasLaunchedRef.current = true;
+      const vx = rawVx * velocityMultiplier;
+      const vy = rawVy * velocityMultiplier;
       const p1 = {
         x: (p0.x + p2.x) / 2,
         y: p0.y + p1OffsetY,
       };
       const duration = Math.max(DURATION_MIN, Math.min(DURATION_MAX, 800 / Math.max(Math.abs(vx), 50)));
-      onLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy });
+      onLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy, launchSource });
     },
-    [item, dropZoneRef, landingPadRef, onLaunch, p1OffsetY]
+    [item, dropZoneRef, landingPadRef, onLaunch, p1OffsetY, velocityMultiplier]
+  );
+
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (hasLaunchedRef.current) return;
+      const el = blockRef.current || (e.currentTarget as HTMLDivElement);
+      const rect = el.getBoundingClientRect();
+      const p0 = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      tryLaunch(p0, DEFAULT_DOUBLE_CLICK_VX, DEFAULT_DOUBLE_CLICK_VY, "double-click");
+    },
+    [tryLaunch]
   );
 
   return (
     <motion.div
+      ref={blockRef}
       drag
       dragConstraints={false}
       dragElastic={0}
@@ -354,9 +374,10 @@ function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, landi
         if (isOutsideRect(x, y, rect)) {
           const vx = info.velocity?.x ?? 300;
           const vy = info.velocity?.y ?? 0;
-          tryLaunch({ x, y }, vx, vy);
+          tryLaunch({ x, y }, vx, vy, "flick");
         }
       }}
+      onDoubleClick={handleDoubleClick}
       onDragEnd={(_, info) => {
         if (hasLaunchedRef.current) return;
         if (!inventoryContainerRef.current) return;
@@ -394,6 +415,7 @@ type DebugThrowBlockProps = {
   landingPadRef: React.RefObject<HTMLDivElement | null>;
   inventoryContainerRef: React.RefObject<HTMLDivElement | null>;
   p1OffsetY: number;
+  velocityMultiplier: number;
 };
 
 function DebugThrowBlock({
@@ -403,22 +425,38 @@ function DebugThrowBlock({
   landingPadRef,
   inventoryContainerRef,
   p1OffsetY,
+  velocityMultiplier,
 }: DebugThrowBlockProps) {
   const hasLaunchedRef = useRef(false);
+  const blockRef = useRef<HTMLDivElement>(null);
 
   const tryLaunch = useCallback(
-    (p0: { x: number; y: number }, vx: number, vy: number) => {
+    (p0: { x: number; y: number }, rawVx: number, rawVy: number, launchSource: "double-click" | "flick") => {
       const p2 = getFixedP2(dropZoneRef, landingPadRef);
       if (hasLaunchedRef.current || !p2) return;
       hasLaunchedRef.current = true;
+      const vx = rawVx * velocityMultiplier;
+      const vy = rawVy * velocityMultiplier;
       const p1 = {
         x: (p0.x + p2.x) / 2,
         y: p0.y + p1OffsetY,
       };
       const duration = Math.max(DURATION_MIN, Math.min(DURATION_MAX, 800 / Math.max(Math.abs(vx), 50)));
-      onDebugLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy });
+      onDebugLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy, launchSource });
     },
-    [item, dropZoneRef, landingPadRef, onDebugLaunch, p1OffsetY]
+    [item, dropZoneRef, landingPadRef, onDebugLaunch, p1OffsetY, velocityMultiplier]
+  );
+
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (hasLaunchedRef.current) return;
+      const el = blockRef.current || (e.currentTarget as HTMLDivElement);
+      const rect = el.getBoundingClientRect();
+      const p0 = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      tryLaunch(p0, DEFAULT_DOUBLE_CLICK_VX, DEFAULT_DOUBLE_CLICK_VY, "double-click");
+    },
+    [tryLaunch]
   );
 
   return (
@@ -435,9 +473,10 @@ function DebugThrowBlock({
         if (isOutsideRect(x, y, rect)) {
           const vx = info.velocity?.x ?? 300;
           const vy = info.velocity?.y ?? 0;
-          tryLaunch({ x, y }, vx, vy);
+          tryLaunch({ x, y }, vx, vy, "flick");
         }
       }}
+      onDoubleClick={handleDoubleClick}
       onDragEnd={(_, info) => {
         if (hasLaunchedRef.current) return;
         if (!inventoryContainerRef.current) return;
@@ -447,6 +486,7 @@ function DebugThrowBlock({
           hasLaunchedRef.current = false;
         }
       }}
+      ref={blockRef}
       className={`flex items-center justify-center rounded-lg border-2 font-bold text-white text-sm select-none cursor-grab active:cursor-grabbing shrink-0 ${getBlockSize(
         item.visual.size
       )} ${item.visual.bgClass} ${item.visual.borderClass}`}
@@ -492,9 +532,11 @@ export default function PresSureJudgeGame() {
     vx: number;
     vy: number;
     p1OffsetY: number;
+    launchSource?: "double-click" | "flick";
   } | null>(null);
   const [debugFlyingItem, setDebugFlyingItem] = useState<FlyingItem | null>(null);
   const [p1OffsetY, setP1OffsetY] = useState(DEFAULT_P1_OFFSET_Y);
+  const [velocityMultiplier, setVelocityMultiplier] = useState(1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rightPanRef = useRef<HTMLDivElement>(null);
@@ -607,6 +649,7 @@ export default function PresSureJudgeGame() {
           vx: flyData.vx,
           vy: flyData.vy,
           p1OffsetY,
+          launchSource: flyData.launchSource,
         });
         if (!isDebugMode) setTimeout(() => setDebugOverlay(null), DEBUG_OVERLAY_DURATION_MS);
       }
@@ -660,6 +703,7 @@ export default function PresSureJudgeGame() {
           vx: flyData.vx,
           vy: flyData.vy,
           p1OffsetY,
+          launchSource: flyData.launchSource,
         });
         if (!isDebugMode) setTimeout(() => setDebugOverlay(null), DEBUG_OVERLAY_DURATION_MS);
       }
@@ -783,15 +827,29 @@ export default function PresSureJudgeGame() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text isolate">
       <div className="fixed right-4 top-4 z-50 flex items-center gap-3">
         {isDebugMode && (
-          <label className="flex items-center gap-2 text-xs font-mono">
-            <span className="text-emerald-400">P1 offset Y:</span>
-            <input
-              type="number"
-              value={p1OffsetY}
-              onChange={(e) => setP1OffsetY(Number(e.target.value) || DEFAULT_P1_OFFSET_Y)}
-              className="w-16 px-2 py-1 rounded bg-black/60 border border-white/20 text-emerald-300"
-            />
-          </label>
+          <>
+            <label className="flex items-center gap-2 text-xs font-mono">
+              <span className="text-emerald-400">P1 offset Y:</span>
+              <input
+                type="number"
+                value={p1OffsetY}
+                onChange={(e) => setP1OffsetY(Number(e.target.value) || DEFAULT_P1_OFFSET_Y)}
+                className="w-16 px-2 py-1 rounded bg-black/60 border border-white/20 text-emerald-300"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-xs font-mono">
+              <span className="text-amber-400">初速倍率:</span>
+              <input
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="5"
+                value={velocityMultiplier}
+                onChange={(e) => setVelocityMultiplier(Math.max(0.1, Math.min(5, Number(e.target.value) || 1)))}
+                className="w-14 px-2 py-1 rounded bg-black/60 border border-white/20 text-amber-300"
+              />
+            </label>
+          </>
         )}
         <button
           onClick={() => setIsDebugMode((m) => !m)}
@@ -875,9 +933,12 @@ export default function PresSureJudgeGame() {
               className="absolute text-xs font-mono text-emerald-400"
               style={{ left: debugOverlay.p0.x + 8, top: debugOverlay.p0.y - 4 }}
             >
-              vx: {debugOverlay.vx.toFixed(0)} vy: {debugOverlay.vy.toFixed(0)}
+              <span className="block">適用初速: vx={debugOverlay.vx.toFixed(0)} vy={debugOverlay.vy.toFixed(0)}</span>
+              <span className="block text-amber-400">
+                発射: {debugOverlay.launchSource === "double-click" ? "ダブルクリック" : "フリック"}
+              </span>
               {debugOverlay.p1OffsetY != null && (
-                <span className="block text-amber-400">p1OffsetY: {debugOverlay.p1OffsetY}</span>
+                <span className="block text-emerald-500/80">p1OffsetY: {debugOverlay.p1OffsetY}</span>
               )}
             </div>
             <div
@@ -1042,6 +1103,7 @@ export default function PresSureJudgeGame() {
                             landingPadRef={landingPadRef}
                             inventoryContainerRef={inventoryContainerRef}
                             p1OffsetY={p1OffsetY}
+                            velocityMultiplier={velocityMultiplier}
                           />
                         ) : (
                           <div
@@ -1060,6 +1122,7 @@ export default function PresSureJudgeGame() {
                         landingPadRef={landingPadRef}
                         inventoryContainerRef={inventoryContainerRef}
                         p1OffsetY={p1OffsetY}
+                        velocityMultiplier={velocityMultiplier}
                       />
                     )}
                   </div>
