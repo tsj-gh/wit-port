@@ -28,6 +28,24 @@ const IMPACT_DURATION = 0.4; // seconds
 const FALL_DURATION = 0.6; // Miss shot: fall off screen
 const DEBUG = false;
 
+// 天秤位置デバッグ用デフォルト値
+type LayoutParams = {
+  scaleWrapperTopOffset: number;
+  scaleWrapperMaxOffset: number;
+  scaleAreaMinHeight: number;
+  armHeight: number;
+  gameGap: number;
+  headerHeightRem: number;
+};
+const DEBUG_LAYOUT_DEFAULTS: LayoutParams = {
+  scaleWrapperTopOffset: 256, // calc(50% - Xpx) の X
+  scaleWrapperMaxOffset: 320, // calc(100% - Xpx) の X
+  scaleAreaMinHeight: 200,
+  armHeight: 256,
+  gameGap: 12,
+  headerHeightRem: 96,
+};
+
 const DEBUG_ITEM: WeightItem = (() => {
   const w = createWeightItem(0, "debug-item");
   w.visual = { bgClass: "bg-emerald-600", borderClass: "border-emerald-400", size: "md" };
@@ -547,6 +565,11 @@ export default function PresSureJudgeGame() {
   const [debugFlyingItem, setDebugFlyingItem] = useState<FlyingItem | null>(null);
   const [p1OffsetY, setP1OffsetY] = useState(DEFAULT_P1_OFFSET_Y);
   const [velocityMultiplier, setVelocityMultiplier] = useState(1);
+
+  // 天秤位置デバッグ用（反映済み）
+  const [layoutParams, setLayoutParams] = useState<LayoutParams>(DEBUG_LAYOUT_DEFAULTS);
+  // 天秤位置デバッグ用（入力中・未反映）
+  const [layoutParamsDraft, setLayoutParamsDraft] = useState<LayoutParams>(DEBUG_LAYOUT_DEFAULTS);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scaleContainerRef = useRef<HTMLDivElement>(null);
@@ -854,35 +877,116 @@ export default function PresSureJudgeGame() {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text isolate">
       {isDebugMode && (
-        <div className="fixed right-4 top-4 z-50 flex items-center gap-3">
-          <label className="flex items-center gap-2 text-xs font-mono">
-            <span className="text-emerald-400">P1 offset Y:</span>
-            <input
-              type="number"
-              value={p1OffsetY}
-              onChange={(e) => setP1OffsetY(Number(e.target.value) || DEFAULT_P1_OFFSET_Y)}
-              className="w-16 px-2 py-1 rounded bg-black/60 border border-white/20 text-emerald-300"
-            />
-          </label>
-          <label className="flex items-center gap-2 text-xs font-mono">
-            <span className="text-amber-400">初速倍率:</span>
-            <input
-              type="number"
-              step="0.1"
-              min="0.1"
-              max="5"
-              value={velocityMultiplier}
-              onChange={(e) => setVelocityMultiplier(Math.max(0.1, Math.min(5, Number(e.target.value) || 1)))}
-              className="w-14 px-2 py-1 rounded bg-black/60 border border-white/20 text-amber-300"
-            />
-          </label>
+        <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="font-bold text-emerald-400">天秤位置パラメータ</span>
+            <button
+              onClick={() => setIsDebugMode(false)}
+              className="shrink-0 px-2 py-1 rounded border border-white/20"
+              style={{ background: "#10b981" }}
+            >
+              DEBUG ON
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            <label className="flex items-center justify-between gap-2">
+              <span className="text-amber-300/90">scaleWrapperTopOffset:</span>
+              <input
+                type="number"
+                value={layoutParamsDraft.scaleWrapperTopOffset}
+                onChange={(e) =>
+                  setLayoutParamsDraft((p) => ({ ...p, scaleWrapperTopOffset: Number(e.target.value) || 0 }))
+                }
+                className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
+              />
+              <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.scaleWrapperTopOffset})</span>
+            </label>
+            <label className="flex items-center justify-between gap-2">
+              <span className="text-amber-300/90">scaleWrapperMaxOffset:</span>
+              <input
+                type="number"
+                value={layoutParamsDraft.scaleWrapperMaxOffset}
+                onChange={(e) =>
+                  setLayoutParamsDraft((p) => ({ ...p, scaleWrapperMaxOffset: Number(e.target.value) || 0 }))
+                }
+                className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
+              />
+              <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.scaleWrapperMaxOffset})</span>
+            </label>
+            <label className="flex items-center justify-between gap-2">
+              <span className="text-amber-300/90">scaleAreaMinHeight:</span>
+              <input
+                type="number"
+                value={layoutParamsDraft.scaleAreaMinHeight}
+                onChange={(e) =>
+                  setLayoutParamsDraft((p) => ({ ...p, scaleAreaMinHeight: Number(e.target.value) || 0 }))
+                }
+                className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
+              />
+              <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.scaleAreaMinHeight})</span>
+            </label>
+            <label className="flex items-center justify-between gap-2">
+              <span className="text-amber-300/90">armHeight:</span>
+              <input
+                type="number"
+                value={layoutParamsDraft.armHeight}
+                onChange={(e) => setLayoutParamsDraft((p) => ({ ...p, armHeight: Number(e.target.value) || 0 }))}
+                className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
+              />
+              <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.armHeight})</span>
+            </label>
+            <label className="flex items-center justify-between gap-2">
+              <span className="text-amber-300/90">gameGap:</span>
+              <input
+                type="number"
+                value={layoutParamsDraft.gameGap}
+                onChange={(e) => setLayoutParamsDraft((p) => ({ ...p, gameGap: Number(e.target.value) || 0 }))}
+                className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
+              />
+              <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.gameGap})</span>
+            </label>
+            <label className="flex items-center justify-between gap-2">
+              <span className="text-amber-300/90">headerHeightRem:</span>
+              <input
+                type="number"
+                value={layoutParamsDraft.headerHeightRem}
+                onChange={(e) =>
+                  setLayoutParamsDraft((p) => ({ ...p, headerHeightRem: Number(e.target.value) || 0 }))
+                }
+                className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
+              />
+              <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.headerHeightRem})</span>
+            </label>
+          </div>
           <button
-            onClick={() => setIsDebugMode(false)}
-            className="px-3 py-1.5 rounded-lg text-xs font-mono border border-white/20"
-            style={{ background: "#10b981" }}
+            onClick={() => setLayoutParams(layoutParamsDraft)}
+            className="mt-2 w-full rounded border border-amber-500/50 bg-amber-500/20 py-1.5 text-amber-400 hover:bg-amber-500/30"
           >
-            DEBUG ON
+            値を反映
           </button>
+          <div className="mt-2 border-t border-white/10 pt-2">
+            <label className="flex items-center gap-2">
+              <span className="text-emerald-400">P1 offset Y:</span>
+              <input
+                type="number"
+                value={p1OffsetY}
+                onChange={(e) => setP1OffsetY(Number(e.target.value) || DEFAULT_P1_OFFSET_Y)}
+                className="w-16 px-2 py-1 rounded bg-black/60 border border-white/20 text-emerald-300"
+              />
+            </label>
+            <label className="mt-1 flex items-center gap-2">
+              <span className="text-amber-400">初速倍率:</span>
+              <input
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="5"
+                value={velocityMultiplier}
+                onChange={(e) => setVelocityMultiplier(Math.max(0.1, Math.min(5, Number(e.target.value) || 1)))}
+                className="w-14 px-2 py-1 rounded bg-black/60 border border-white/20 text-amber-300"
+              />
+            </label>
+          </div>
         </div>
       )}
       <header className="relative z-20 shrink-0 flex justify-between items-center px-4 py-4 md:px-6 md:py-6 border-b border-white/10">
@@ -913,8 +1017,11 @@ export default function PresSureJudgeGame() {
         }}
       />
       <main
-        className="relative z-0 flex-1 min-h-0 mx-auto w-full max-w-[640px] px-4 py-2 md:py-4 flex flex-col overflow-hidden min-h-[calc(100dvh-6rem)]"
-        style={{ paddingBottom: "max(5rem, env(safe-area-inset-bottom, 0px) + 4rem)" }}
+        className="relative z-0 flex-1 min-h-0 mx-auto w-full max-w-[640px] px-4 py-2 md:py-4 flex flex-col overflow-hidden"
+        style={{
+          paddingBottom: "max(5rem, env(safe-area-inset-bottom, 0px) + 4rem)",
+          minHeight: `calc(100dvh - ${layoutParams.headerHeightRem}px)`,
+        }}
       >
         {flyingItems.map((fly) => (
           <FlyingWeightBlock key={fly.item.id} fly={fly} onLanding={handleLanding} />
@@ -1015,8 +1122,12 @@ export default function PresSureJudgeGame() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col min-h-0 flex-1 gap-3 h-[calc(100dvh-6rem)] max-h-[85vh] md:max-h-[85vh]"
-              style={{ touchAction: "none" }}
+              className="flex flex-col min-h-0 flex-1 max-h-[85vh] md:max-h-[85vh]"
+              style={{
+                gap: layoutParams.gameGap,
+                height: `calc(100dvh - ${layoutParams.headerHeightRem}px)`,
+                touchAction: "none",
+              }}
             >
               {phase === "user" && (
                 <div className="shrink-0 flex justify-center">
@@ -1031,7 +1142,7 @@ export default function PresSureJudgeGame() {
               )}
               <div
                 className="relative flex flex-1 min-h-0 justify-center overflow-visible shrink-0"
-                style={{ minHeight: 200 }}
+                style={{ minHeight: layoutParams.scaleAreaMinHeight }}
               >
                 {showOffscreenIndicators && (
                   <>
@@ -1058,8 +1169,7 @@ export default function PresSureJudgeGame() {
                   ref={scaleContainerRef}
                   className="absolute left-1/2 w-full max-w-xl -translate-x-1/2"
                   style={{
-                    /* 支点（◯）をスケールエリアの中央に：top + アーム高256px = 50% */
-                    top: "clamp(0px, calc(50% - 256px), calc(100% - 320px))",
+                    top: `clamp(0px, calc(50% - ${layoutParams.scaleWrapperTopOffset}px), calc(100% - ${layoutParams.scaleWrapperMaxOffset}px))`,
                   }}
                 >
                   <motion.div
@@ -1070,8 +1180,8 @@ export default function PresSureJudgeGame() {
                   >
                   {/* アームと支点のみ回転（天秤は初期位置固定・回転のみ） */}
                   <motion.div
-                    className="absolute left-0 right-0 bottom-0 h-64 flex items-end justify-center pb-2 pointer-events-none"
-                    style={{ transformOrigin: "center bottom" }}
+                    className="absolute left-0 right-0 bottom-0 flex items-end justify-center pb-2 pointer-events-none"
+                    style={{ height: layoutParams.armHeight, transformOrigin: "center bottom" }}
                     animate={{
                       rotate: rotation,
                       scale: phase === "gameover" ? (collapseAnimDone ? 0.95 : 1) : 1,
