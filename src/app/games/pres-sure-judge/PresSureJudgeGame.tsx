@@ -1291,12 +1291,8 @@ export default function PresSureJudgeGame() {
 
               {phase === "user" && (
                 <div className="relative z-10 mt-2 mb-2 space-y-3 p-3 rounded-2xl border border-white/10 bg-gradient-to-br from-[#0a0e18] to-[#0f172a] overflow-visible shrink-0">
-                  {/* ドラッグ制約：上方向に拡張し左右下は枠内で止まる */}
-                  <div
-                    ref={dragConstraintRef}
-                    className="relative min-w-0"
-                    style={{ paddingTop: 200, marginTop: -200 }}
-                  >
+                  {/* ドラッグ制約：在庫枠内に収める（左右上下すべて枠内で止まる） */}
+                  <div ref={dragConstraintRef} className="relative min-w-0">
                     <div
                       ref={inventoryContainerRef}
                       className="min-h-[72px] p-3 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible shrink-0"
