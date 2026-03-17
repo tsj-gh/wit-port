@@ -18,7 +18,6 @@ const MIN_ZOOM_SCALE = 0.5;
 const ZOOM_MARGIN = 80;
 const OFFSCREEN_INDICATOR_THRESHOLD = 180;
 const DEFAULT_P1_OFFSET_Y = -350; // P1.y = P0.y + p1OffsetY
-const LAUNCH_THRESHOLD_PX = 12; // 枠外判定：ポインタが在庫枠からこのpx以上離れたときにのみ発射（誤発射防止）
 const DURATION_MIN = 0.3;
 const DURATION_MAX = 0.8;
 const DEBUG_OVERLAY_DURATION_MS = 3000;
@@ -330,10 +329,9 @@ function isOutsideRect(px: number, py: number, rect: DOMRect): boolean {
   return px < rect.left || px > rect.right || py < rect.top || py > rect.bottom;
 }
 
-/** 在庫枠の上側から margin px 以上外に出た時のみ true（上方向へのドラッグでベジエ発射） */
-function isExitedFromTop(px: number, py: number, rect: DOMRect, margin: number): boolean {
-  const m = Math.min(margin, rect.height / 3);
-  return py < rect.top - m;
+/** オブジェクトの上端が在庫枠の上端を超えた時 true（上方向へのドラッグでベジエ発射） */
+function isObjectExitedFromTop(objectRect: DOMRect, frameRect: DOMRect): boolean {
+  return objectRect.top < frameRect.top;
 }
 
 function getP2(
@@ -401,11 +399,11 @@ function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, right
       }}
       onDrag={(_, info) => {
         if (hasLaunchedRef.current) return;
-        if (!inventoryContainerRef.current || !getP2(rightPanConnectionRef, dropZoneRef)) return;
-        const rect = inventoryContainerRef.current.getBoundingClientRect();
-        const { x, y } = info.point;
-        if (isExitedFromTop(x, y, rect, LAUNCH_THRESHOLD_PX)) {
-          const p0 = dragStartP0Ref.current ?? { x, y };
+        if (!blockRef.current || !inventoryContainerRef.current || !getP2(rightPanConnectionRef, dropZoneRef)) return;
+        const objectRect = blockRef.current.getBoundingClientRect();
+        const frameRect = inventoryContainerRef.current.getBoundingClientRect();
+        if (isObjectExitedFromTop(objectRect, frameRect)) {
+          const p0 = dragStartP0Ref.current ?? { x: objectRect.left + objectRect.width / 2, y: objectRect.top + objectRect.height / 2 };
           const vx = info.velocity?.x ?? 300;
           const vy = info.velocity?.y ?? 0;
           tryLaunch(p0, vx, vy, "flick");
@@ -511,11 +509,11 @@ function DebugThrowBlock({
       }}
       onDrag={(_, info) => {
         if (hasLaunchedRef.current) return;
-        if (!inventoryContainerRef.current || !getP2(rightPanConnectionRef, dropZoneRef)) return;
-        const rect = inventoryContainerRef.current.getBoundingClientRect();
-        const { x, y } = info.point;
-        if (isExitedFromTop(x, y, rect, LAUNCH_THRESHOLD_PX)) {
-          const p0 = dragStartP0Ref.current ?? { x, y };
+        if (!blockRef.current || !inventoryContainerRef.current || !getP2(rightPanConnectionRef, dropZoneRef)) return;
+        const objectRect = blockRef.current.getBoundingClientRect();
+        const frameRect = inventoryContainerRef.current.getBoundingClientRect();
+        if (isObjectExitedFromTop(objectRect, frameRect)) {
+          const p0 = dragStartP0Ref.current ?? { x: objectRect.left + objectRect.width / 2, y: objectRect.top + objectRect.height / 2 };
           const vx = info.velocity?.x ?? 300;
           const vy = info.velocity?.y ?? 0;
           tryLaunch(p0, vx, vy, "flick");
