@@ -16,9 +16,9 @@ const VIEW_HEIGHT = 360;
 const MIN_ZOOM_SCALE = 0.5;
 const ZOOM_MARGIN = 80;
 const OFFSCREEN_INDICATOR_THRESHOLD = 180;
-const BOUNDARY_ARC_HEIGHT = 350; // px above P0 for control point (boundary-triggered)
-const BOUNDARY_DURATION_MIN = 0.4;
-const BOUNDARY_DURATION_MAX = 0.8;
+const DEFAULT_P1_OFFSET_Y = -350; // P1.y = P0.y + p1OffsetY
+const DURATION_MIN = 0.3;
+const DURATION_MAX = 0.8;
 const DEBUG_OVERLAY_DURATION_MS = 3000;
 const IMPACT_DIP_PX = 8; // Balance dips this much on landing
 const IMPACT_DURATION = 0.4; // seconds
@@ -230,9 +230,10 @@ function FlyingWeightBlock({ fly, onLanding }: { fly: FlyingItem; onLanding: (it
 
   useEffect(() => {
     const { item, p0, p1, p2, duration, startTime } = fly;
+    const durationMs = duration * 1000;
     const tick = () => {
       const elapsed = performance.now() - startTime;
-      const t = Math.min(1, elapsed / duration);
+      const t = Math.min(1, elapsed / durationMs);
       setPos(bezier2(t, p0, p1, p2));
       if (t >= 1) {
         rafRef.current = null;
@@ -296,13 +297,14 @@ type DraggableWeightBlockProps = {
   onDragCancel: (item: WeightItem) => void;
   dropZoneRef: React.RefObject<HTMLDivElement | null>;
   inventoryContainerRef: React.RefObject<HTMLDivElement | null>;
+  p1OffsetY: number;
 };
 
 function isOutsideRect(px: number, py: number, rect: DOMRect): boolean {
   return px < rect.left || px > rect.right || py < rect.top || py > rect.bottom;
 }
 
-function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, inventoryContainerRef }: DraggableWeightBlockProps) {
+function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, inventoryContainerRef, p1OffsetY }: DraggableWeightBlockProps) {
   const hasLaunchedRef = useRef(false);
 
   const tryLaunch = useCallback(
@@ -313,15 +315,12 @@ function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, inven
       const p2 = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
       const p1 = {
         x: (p0.x + p2.x) / 2,
-        y: p0.y - BOUNDARY_ARC_HEIGHT,
+        y: p0.y + p1OffsetY,
       };
-      const duration = Math.max(
-        BOUNDARY_DURATION_MIN,
-        Math.min(BOUNDARY_DURATION_MAX, 600 / Math.max(Math.abs(vx), 100))
-      );
+      const duration = Math.max(DURATION_MIN, Math.min(DURATION_MAX, 800 / Math.max(Math.abs(vx), 50)));
       onLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy });
     },
-    [item, dropZoneRef, onLaunch]
+    [item, dropZoneRef, onLaunch, p1OffsetY]
   );
 
   return (
@@ -376,6 +375,7 @@ type DebugThrowBlockProps = {
   onDebugLaunch: (item: WeightItem, flyData: Omit<FlyingItem, "item">) => void;
   dropZoneRef: React.RefObject<HTMLDivElement | null>;
   inventoryContainerRef: React.RefObject<HTMLDivElement | null>;
+  p1OffsetY: number;
 };
 
 function DebugThrowBlock({
@@ -383,6 +383,7 @@ function DebugThrowBlock({
   onDebugLaunch,
   dropZoneRef,
   inventoryContainerRef,
+  p1OffsetY,
 }: DebugThrowBlockProps) {
   const hasLaunchedRef = useRef(false);
 
@@ -394,15 +395,12 @@ function DebugThrowBlock({
       const p2 = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
       const p1 = {
         x: (p0.x + p2.x) / 2,
-        y: p0.y - BOUNDARY_ARC_HEIGHT,
+        y: p0.y + p1OffsetY,
       };
-      const duration = Math.max(
-        BOUNDARY_DURATION_MIN,
-        Math.min(BOUNDARY_DURATION_MAX, 600 / Math.max(Math.abs(vx), 100))
-      );
+      const duration = Math.max(DURATION_MIN, Math.min(DURATION_MAX, 800 / Math.max(Math.abs(vx), 50)));
       onDebugLaunch(item, { p0, p1, p2, duration, startTime: performance.now(), vx, vy });
     },
-    [item, dropZoneRef, onDebugLaunch]
+    [item, dropZoneRef, onDebugLaunch, p1OffsetY]
   );
 
   return (
@@ -475,8 +473,10 @@ export default function PresSureJudgeGame() {
     p2: { x: number; y: number };
     vx: number;
     vy: number;
+    p1OffsetY: number;
   } | null>(null);
   const [debugFlyingItem, setDebugFlyingItem] = useState<FlyingItem | null>(null);
+  const [p1OffsetY, setP1OffsetY] = useState(DEFAULT_P1_OFFSET_Y);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rightPanRef = useRef<HTMLDivElement>(null);
@@ -587,20 +587,22 @@ export default function PresSureJudgeGame() {
           p2: flyData.p2,
           vx: flyData.vx,
           vy: flyData.vy,
+          p1OffsetY,
         });
-        setTimeout(() => setDebugOverlay(null), DEBUG_OVERLAY_DURATION_MS);
+        if (!isDebugMode) setTimeout(() => setDebugOverlay(null), DEBUG_OVERLAY_DURATION_MS);
       }
     },
-    [isDebugMode]
+    [isDebugMode, p1OffsetY]
   );
 
   const handleDragCancel = useCallback((item: WeightItem) => {
     setDragResetKey((k) => k + 1);
   }, []);
 
-  const handleLanding = useCallback((item: WeightItem) => {
-    setDebugOverlay(null);
-    setFlyingItems((prev) => prev.filter((f) => f.item.id !== item.id));
+  const handleLanding = useCallback(
+    (item: WeightItem) => {
+      if (!isDebugMode) setDebugOverlay(null);
+      setFlyingItems((prev) => prev.filter((f) => f.item.id !== item.id));
     setRightPanWeights((pan) => {
       const rightPlaced = placedWeightsRef.current.filter((w) => w.side === "right");
       const topY = rightPlaced.length > 0 ? Math.min(...rightPlaced.map((w) => w.y)) : 0;
@@ -611,7 +613,7 @@ export default function PresSureJudgeGame() {
     });
     setImpactOffset(IMPACT_DIP_PX);
     setTimeout(() => setImpactOffset(0), 80);
-  }, []);
+  }, [isDebugMode]);
 
   const handleFallComplete = useCallback((item: WeightItem) => {
     setFallingItems((prev) => prev.filter((f) => f.item.id !== item.id));
@@ -627,12 +629,18 @@ export default function PresSureJudgeGame() {
           p2: flyData.p2,
           vx: flyData.vx,
           vy: flyData.vy,
+          p1OffsetY,
         });
-        setTimeout(() => setDebugOverlay(null), DEBUG_OVERLAY_DURATION_MS);
+        if (!isDebugMode) setTimeout(() => setDebugOverlay(null), DEBUG_OVERLAY_DURATION_MS);
       }
     },
-    [isDebugMode]
+    [isDebugMode, p1OffsetY]
   );
+
+  const handleDebugLanding = useCallback(() => {
+    setDebugFlyingItem(null);
+    if (!isDebugMode) setDebugOverlay(null);
+  }, [isDebugMode]);
 
   useEffect(() => {
     if (phase !== "npc") return;
@@ -742,13 +750,26 @@ export default function PresSureJudgeGame() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text isolate">
-      <button
-        onClick={() => setIsDebugMode((m) => !m)}
-        className="fixed right-4 top-4 z-50 px-3 py-1.5 rounded-lg text-xs font-mono border border-white/20"
-        style={{ background: isDebugMode ? "#10b981" : "#374151" }}
-      >
-        DEBUG {isDebugMode ? "ON" : "OFF"}
-      </button>
+      <div className="fixed right-4 top-4 z-50 flex items-center gap-3">
+        {isDebugMode && (
+          <label className="flex items-center gap-2 text-xs font-mono">
+            <span className="text-emerald-400">P1 offset Y:</span>
+            <input
+              type="number"
+              value={p1OffsetY}
+              onChange={(e) => setP1OffsetY(Number(e.target.value) || DEFAULT_P1_OFFSET_Y)}
+              className="w-16 px-2 py-1 rounded bg-black/60 border border-white/20 text-emerald-300"
+            />
+          </label>
+        )}
+        <button
+          onClick={() => setIsDebugMode((m) => !m)}
+          className="px-3 py-1.5 rounded-lg text-xs font-mono border border-white/20"
+          style={{ background: isDebugMode ? "#10b981" : "#374151" }}
+        >
+          DEBUG {isDebugMode ? "ON" : "OFF"}
+        </button>
+      </div>
       <header className="relative z-20 shrink-0 flex justify-between items-center px-4 py-4 md:px-6 md:py-6 border-b border-white/10">
         <Link
           href="/"
@@ -773,10 +794,7 @@ export default function PresSureJudgeGame() {
           <FlyingWeightBlock
             key="debug-fly"
             fly={debugFlyingItem}
-            onLanding={() => {
-              setDebugFlyingItem(null);
-              setDebugOverlay(null);
-            }}
+            onLanding={handleDebugLanding}
           />
         )}
         {isDebugMode && debugOverlay && (
@@ -813,6 +831,9 @@ export default function PresSureJudgeGame() {
               style={{ left: debugOverlay.p0.x + 8, top: debugOverlay.p0.y - 4 }}
             >
               vx: {debugOverlay.vx.toFixed(0)} vy: {debugOverlay.vy.toFixed(0)}
+              {debugOverlay.p1OffsetY != null && (
+                <span className="block text-amber-400">p1OffsetY: {debugOverlay.p1OffsetY}</span>
+              )}
             </div>
             <div
               className="absolute w-3 h-3 rounded-full bg-emerald-500 border-2 border-emerald-300"
@@ -974,6 +995,7 @@ export default function PresSureJudgeGame() {
                             onDragCancel={handleDragCancel}
                             dropZoneRef={rightPanRef}
                             inventoryContainerRef={inventoryContainerRef}
+                            p1OffsetY={p1OffsetY}
                           />
                         ) : (
                           <div
@@ -990,6 +1012,7 @@ export default function PresSureJudgeGame() {
                         onDebugLaunch={handleDebugLaunch}
                         dropZoneRef={rightPanRef}
                         inventoryContainerRef={inventoryContainerRef}
+                        p1OffsetY={p1OffsetY}
                       />
                     )}
                   </div>
