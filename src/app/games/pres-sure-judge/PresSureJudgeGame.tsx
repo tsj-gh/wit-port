@@ -826,11 +826,7 @@ export default function PresSureJudgeGame() {
   const rightMinY = rightDisplay.length > 0 ? Math.min(...rightDisplay.map((w) => w.y)) : 0;
   const stackDiff = Math.abs(leftMinY - rightMinY);
 
-  // Vertical Center: 左右頂上の中間点をカメラ中心に
-  const midpointY = (leftMinY + rightMinY) / 2;
-  const scrollY = Math.max(0, -midpointY);
-
-  // Dynamic Zoom: 差が画面高さを超えそうならズームアウト
+  // Dynamic Zoom: 差が画面高さを超えそうならズームアウト（天秤Y座標は固定のため scrollY は不使用）
   const zoomScale = Math.max(
     MIN_ZOOM_SCALE,
     Math.min(1, (VIEW_HEIGHT - ZOOM_MARGIN) / Math.max(stackDiff, 1))
@@ -1017,7 +1013,10 @@ export default function PresSureJudgeGame() {
                   </span>
                 </div>
               )}
-              <div className="relative flex flex-1 min-h-0 justify-center overflow-hidden shrink-0" style={{ minHeight: 200 }}>
+              <div
+                className="relative flex flex-1 min-h-0 justify-center overflow-visible shrink-0"
+                style={{ minHeight: 360 }}
+              >
                 {showOffscreenIndicators && (
                   <>
                     <div
@@ -1040,9 +1039,12 @@ export default function PresSureJudgeGame() {
                 )}
                 <motion.div
                   ref={scaleContainerRef}
-                  className="relative w-full max-w-xl"
-                  style={{ transformOrigin: "center center" }}
-                  animate={{ y: scrollY, scale: zoomScale }}
+                  className="absolute left-1/2 w-full max-w-xl -translate-x-1/2"
+                  style={{
+                    transformOrigin: "center center",
+                    top: "clamp(0px, calc(35% - 200px), 999px)",
+                  }}
+                  animate={{ scale: zoomScale }}
                   transition={{ type: "spring", stiffness: 50, damping: 20 }}
                 >
                   {/* アームと支点のみ回転（天秤は初期位置固定・回転のみ） */}
@@ -1125,7 +1127,7 @@ export default function PresSureJudgeGame() {
               </div>
 
               {phase === "user" && (
-                <div className="space-y-4 p-4 rounded-2xl border border-white/10 bg-white/5 overflow-visible">
+                <div className="mt-6 space-y-4 p-4 rounded-2xl border border-white/10 bg-white/5 overflow-visible shrink-0">
                   <div
                     ref={inventoryContainerRef}
                     className="min-h-[72px] p-4 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible shrink-0"
