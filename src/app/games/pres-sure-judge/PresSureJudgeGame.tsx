@@ -329,9 +329,10 @@ function isOutsideRect(px: number, py: number, rect: DOMRect): boolean {
   return px < rect.left || px > rect.right || py < rect.top || py > rect.bottom;
 }
 
-/** オブジェクトの上端が在庫枠の上端を超えた時 true（上方向へのドラッグでベジエ発射） */
+/** オブジェクトの中心が在庫枠の上端を超えた時 true（上方向へのドラッグでベジエ発射） */
 function isObjectExitedFromTop(objectRect: DOMRect, frameRect: DOMRect): boolean {
-  return objectRect.top < frameRect.top;
+  const centerY = objectRect.top + objectRect.height / 2;
+  return centerY < frameRect.top;
 }
 
 function getP2(
@@ -403,7 +404,7 @@ function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, right
         const objectRect = blockRef.current.getBoundingClientRect();
         const frameRect = inventoryContainerRef.current.getBoundingClientRect();
         if (isObjectExitedFromTop(objectRect, frameRect)) {
-          const p0 = dragStartP0Ref.current ?? { x: objectRect.left + objectRect.width / 2, y: objectRect.top + objectRect.height / 2 };
+          const p0 = { x: objectRect.left + objectRect.width / 2, y: objectRect.top + objectRect.height / 2 };
           const vx = info.velocity?.x ?? 300;
           const vy = info.velocity?.y ?? 0;
           tryLaunch(p0, vx, vy, "flick");
@@ -513,7 +514,7 @@ function DebugThrowBlock({
         const objectRect = blockRef.current.getBoundingClientRect();
         const frameRect = inventoryContainerRef.current.getBoundingClientRect();
         if (isObjectExitedFromTop(objectRect, frameRect)) {
-          const p0 = dragStartP0Ref.current ?? { x: objectRect.left + objectRect.width / 2, y: objectRect.top + objectRect.height / 2 };
+          const p0 = { x: objectRect.left + objectRect.width / 2, y: objectRect.top + objectRect.height / 2 };
           const vx = info.velocity?.x ?? 300;
           const vy = info.velocity?.y ?? 0;
           tryLaunch(p0, vx, vy, "flick");
