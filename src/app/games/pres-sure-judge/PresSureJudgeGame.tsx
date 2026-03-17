@@ -565,6 +565,7 @@ export default function PresSureJudgeGame() {
   const [debugFlyingItem, setDebugFlyingItem] = useState<FlyingItem | null>(null);
   const [p1OffsetY, setP1OffsetY] = useState(DEFAULT_P1_OFFSET_Y);
   const [velocityMultiplier, setVelocityMultiplier] = useState(1);
+  const [showConnectionPoints, setShowConnectionPoints] = useState(false);
 
   // 天秤位置デバッグ用（反映済み）
   const [layoutParams, setLayoutParams] = useState<LayoutParams>(DEBUG_LAYOUT_DEFAULTS);
@@ -842,9 +843,9 @@ export default function PresSureJudgeGame() {
   const armHalf = scaleContainerWidth * 0.425;
   const rotRad = (rotation * Math.PI) / 180;
   const leftEndX = scaleContainerWidth / 2 - armHalf * Math.cos(rotRad);
-  const leftEndY = armHalf * Math.sin(rotRad);
+  const leftEndY = -armHalf * Math.sin(rotRad);
   const rightEndX = scaleContainerWidth / 2 + armHalf * Math.cos(rotRad);
-  const rightEndY = -armHalf * Math.sin(rotRad);
+  const rightEndY = armHalf * Math.sin(rotRad);
   const panWidth = 128;
   const panBottomBase = 32;
 
@@ -946,6 +947,14 @@ export default function PresSureJudgeGame() {
                 onChange={(e) => setP1OffsetY(Number(e.target.value) || DEFAULT_P1_OFFSET_Y)}
                 className="w-16 px-2 py-1 rounded bg-black/60 border border-white/20 text-emerald-300"
               />
+            </label>
+            <label className="mt-1 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showConnectionPoints}
+                onChange={(e) => setShowConnectionPoints(e.target.checked)}
+              />
+              <span className="text-amber-400">アームと器の接続位置を●で表示</span>
             </label>
             <label className="mt-1 flex items-center gap-2">
               <span className="text-amber-400">初速倍率:</span>
@@ -1233,6 +1242,28 @@ export default function PresSureJudgeGame() {
                       ))}
                     </motion.div>
                   </div>
+                  {isDebugMode && showConnectionPoints && (
+                    <>
+                      <div
+                        className="absolute w-3 h-3 rounded-full border-2 border-amber-300 bg-amber-500 pointer-events-none z-30"
+                        style={{
+                          left: leftEndX,
+                          top: panBottomBase + leftEndY,
+                          transform: "translate(-50%, -50%)",
+                        }}
+                        title="NPC接続点"
+                      />
+                      <div
+                        className="absolute w-3 h-3 rounded-full border-2 border-blue-300 bg-blue-500 pointer-events-none z-30"
+                        style={{
+                          left: rightEndX,
+                          top: panBottomBase + rightEndY,
+                          transform: "translate(-50%, -50%)",
+                        }}
+                        title="You接続点"
+                      />
+                    </>
+                  )}
                 </motion.div>
                 </div>
               </div>
