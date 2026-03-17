@@ -595,7 +595,7 @@ export default function PresSureJudgeGame() {
   } | null>(null);
   const [debugFlyingItem, setDebugFlyingItem] = useState<FlyingItem | null>(null);
   const [p1OffsetY, setP1OffsetY] = useState(DEFAULT_P1_OFFSET_Y);
-  const [velocityMultiplier, setVelocityMultiplier] = useState(1);
+  const [velocityMultiplier, setVelocityMultiplier] = useState(2.25);
   const [showConnectionPoints, setShowConnectionPoints] = useState(false);
 
   // 天秤位置デバッグ用（反映済み）
@@ -903,7 +903,7 @@ export default function PresSureJudgeGame() {
   }));
   const rightDisplay = [...rightPlaced, ...rightCurrent].sort((a, b) => a.y - b.y);
 
-  // 左右の器のコンテンツ高さ（上辺接続・下へ伸びる）とズーム計算
+  // 左右の器のコンテンツ高さ（オフスクリーン判定用）
   const leftContentHeight =
     leftDisplay.length > 0
       ? Math.max(...leftDisplay.map((w) => w.y + getWeightHeight(w.value, "left")))
@@ -913,12 +913,6 @@ export default function PresSureJudgeGame() {
       ? Math.max(...rightDisplay.map((w) => w.y + getWeightHeight(w.value, "right")))
       : 0;
   const stackDiff = Math.max(leftContentHeight, rightContentHeight);
-
-  // Dynamic Zoom: コンテンツ高さが画面を超えそうならズームアウト
-  const zoomScale = Math.max(
-    MIN_ZOOM_SCALE,
-    Math.min(1, (VIEW_HEIGHT - ZOOM_MARGIN) / Math.max(stackDiff, 1))
-  );
 
   // オフスクリーン判定（差が閾値超で片方が見えにくい）
   const showOffscreenIndicators = stackDiff > OFFSCREEN_INDICATOR_THRESHOLD;
@@ -1175,8 +1169,6 @@ export default function PresSureJudgeGame() {
                   <motion.div
                     className="relative w-full"
                     style={{ transformOrigin: "center center" }}
-                    animate={{ scale: zoomScale }}
-                    transition={{ type: "spring", stiffness: 50, damping: 20 }}
                   >
                   {/* アームと支点のみ回転（天秤は初期位置固定・回転のみ） */}
                   <motion.div
@@ -1298,7 +1290,7 @@ export default function PresSureJudgeGame() {
               </div>
 
               {phase === "user" && (
-                <div className="mt-2 mb-2 space-y-3 p-3 rounded-2xl border border-white/10 bg-white/5 overflow-visible shrink-0">
+                <div className="relative z-10 mt-2 mb-2 space-y-3 p-3 rounded-2xl border border-white/10 bg-gradient-to-br from-[#0a0e18] to-[#0f172a] overflow-visible shrink-0">
                   {/* ドラッグ制約：上方向に拡張し左右下は枠内で止まる */}
                   <div
                     ref={dragConstraintRef}
