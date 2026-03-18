@@ -612,6 +612,7 @@ export default function PresSureJudgeGame() {
   const inventoryContainerRef = useRef<HTMLDivElement>(null);
   const dragConstraintRef = useRef<HTMLDivElement>(null);
   const [dragResetKey, setDragResetKey] = useState(0);
+  const sinkTargetRef = useRef<{ itemId: string; targetY: number } | null>(null);
 
   useEffect(() => {
     const el = scaleContainerRef.current;
@@ -625,6 +626,22 @@ export default function PresSureJudgeGame() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    const pending = sinkTargetRef.current;
+    if (!pending) return;
+    const id = requestAnimationFrame(() => {
+      sinkTargetRef.current = null;
+      setRightPanWeights((pan) =>
+        pan.map((w) =>
+          w.id === pending.itemId
+            ? { ...w, position: { ...w.position, y: pending.targetY } }
+            : w
+        )
+      );
+    });
+    return () => cancelAnimationFrame(id);
+  }, [rightPanWeights]);
 
   const totalBalanceRef = useRef(totalBalance);
   const placedWeightsRef = useRef(placedWeights);
@@ -771,13 +788,14 @@ export default function PresSureJudgeGame() {
               : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - newHeight);
           return [{ ...item, position: { x: 0, y: baseY } }];
         }
-        // 2個目以降：既存の上に積む（既存を下にシフト）。新規は1つ目の旧位置を継ぎ、隙間なく積む
+        // 2個目以降：既存の上に積む（既存を下にシフト）。新規は着地位置から沈み込みアニメで最終位置へ
         const rightContentTop = Math.min(...pan.map((w) => w.position.y));
         const shiftedPan = pan.map((w) => ({
           ...w,
           position: { ...w.position, y: w.position.y + newHeight },
         }));
-        return [...shiftedPan, { ...item, position: { x: 0, y: rightContentTop } }];
+        sinkTargetRef.current = { itemId: item.id, targetY: rightContentTop };
+        return [...shiftedPan, { ...item, position: { x: 0, y: rightContentTop - newHeight } }];
       });
     },
     [isDebugMode]
