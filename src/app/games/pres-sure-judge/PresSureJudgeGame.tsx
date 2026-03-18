@@ -1278,15 +1278,21 @@ export default function PresSureJudgeGame() {
                 touchAction: "none",
               }}
             >
-              {phase === "user" && (
-                <div className="shrink-0 flex justify-center">
-                  <span
-                    className={`font-mono font-bold tabular-nums text-2xl md:text-3xl ${
-                      timer <= 3 ? "text-red-400 animate-pulse" : "text-amber-400/90"
-                    }`}
-                  >
-                    {timer}s
-                  </span>
+              {(phase === "user" || phase === "transition") && (
+                <div className="shrink-0 flex justify-center min-h-[2.5rem] md:min-h-[3rem]">
+                  {phase === "user" ? (
+                    <span
+                      className={`font-mono font-bold tabular-nums text-2xl md:text-3xl ${
+                        timer <= 3 ? "text-red-400 animate-pulse" : "text-amber-400/90"
+                      }`}
+                    >
+                      {timer}s
+                    </span>
+                  ) : (
+                    <span className="invisible font-mono font-bold tabular-nums text-2xl md:text-3xl">
+                      0s
+                    </span>
+                  )}
                 </div>
               )}
               <div
