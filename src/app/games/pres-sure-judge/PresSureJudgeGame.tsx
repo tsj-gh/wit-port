@@ -808,14 +808,11 @@ export default function PresSureJudgeGame() {
               : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - newHeight);
           return [{ ...item, position: { x: 0, y: baseY } }];
         }
-        // 2個目以降：既存の上に積む（既存を下にシフト）。新規は着地位置から沈み込みアニメで最終位置へ
+        // 2個目以降：既存の上に積む（シフトなしで全員が沈み込まないよう上に配置）
         const rightContentTop = Math.min(...pan.map((w) => w.position.y));
-        const shiftedPan = pan.map((w) => ({
-          ...w,
-          position: { ...w.position, y: w.position.y + newHeight },
-        }));
-        sinkTargetRef.current = { itemId: item.id, targetY: rightContentTop };
-        return [...shiftedPan, { ...item, position: { x: 0, y: rightContentTop - newHeight } }];
+        const newY = rightContentTop - newHeight;
+        sinkTargetRef.current = { itemId: item.id, targetY: newY };
+        return [...pan, { ...item, position: { x: 0, y: newY } }];
       });
     },
     [isDebugMode]
@@ -875,7 +872,7 @@ export default function PresSureJudgeGame() {
         if (leftPlaced.length > 0) {
           baseY = Math.max(0, Math.min(...leftPlaced.map((w) => w.y)) - newHeight);
         } else if (pan.length > 0) {
-          baseY = Math.max(...pan.map((w) => w.position.y + getWeightHeight(w.value, "left")));
+          baseY = Math.max(0, Math.min(...pan.map((w) => w.position.y)) - newHeight);
         } else {
           baseY = Math.max(0, PAN_MAX_VISIBLE_HEIGHT - newHeight);
         }
@@ -1005,12 +1002,10 @@ export default function PresSureJudgeGame() {
   let leftBottomOffset =
     leftPlaced.length > 0
       ? Math.max(0, Math.min(...leftPlaced.map((w) => w.y)) - leftCurrentTotalHeight)
-      : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - 40); // 1個目は器の底に
-  const leftCurrent: PlacedWeight[] = leftPanWeights.map((w) => {
+      : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - leftCurrentTotalHeight); // 器の底から
+  // leftPanWeightsは[底,…,上]の順。底に大きいyを割り当てるため逆順で処理
+  const leftCurrent: PlacedWeight[] = [...leftPanWeights].reverse().map((w) => {
     const h = getWeightHeight(w.value, "left");
-    if (leftPlaced.length === 0 && leftBottomOffset === Math.max(0, PAN_MAX_VISIBLE_HEIGHT - 40)) {
-      leftBottomOffset = Math.max(0, PAN_MAX_VISIBLE_HEIGHT - h); // 実際の高さで底位置を算出
-    }
     const y = leftBottomOffset;
     leftBottomOffset += h;
     return { id: w.id, side: "left" as const, value: w.value, x: 0, y };
