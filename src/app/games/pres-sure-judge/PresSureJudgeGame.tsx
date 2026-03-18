@@ -723,14 +723,16 @@ export default function PresSureJudgeGame() {
     setPlacedWeights((prev) => {
       const leftPlaced = prev.filter((w) => w.side === "left");
       const rightPlaced = prev.filter((w) => w.side === "right");
+      const leftNewTotalHeight = leftItems.reduce((s, w) => s + getWeightHeight(w.value, "left"), 0);
+      const rightNewTotalHeight = rightItems.reduce((s, w) => s + getWeightHeight(w.value, "right"), 0);
       const leftBottomOffset =
         leftPlaced.length > 0
           ? Math.max(...leftPlaced.map((w) => w.y + getWeightHeight(w.value, "left")))
-          : 0;
+          : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - leftNewTotalHeight);
       const rightBottomOffset =
         rightPlaced.length > 0
           ? Math.max(...rightPlaced.map((w) => w.y + getWeightHeight(w.value, "right")))
-          : 0;
+          : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - rightNewTotalHeight);
 
       let curLeftBottom = leftBottomOffset;
       let curRightBottom = rightBottomOffset;
