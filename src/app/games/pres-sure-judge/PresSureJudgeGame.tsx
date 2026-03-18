@@ -33,6 +33,8 @@ const DEBUG = false;
 const NPC_ITEM_APPEAR_DELAY_MS = 300;
 const NPC_ITEM_FLY_DELAY_MS = 500;
 const NPC_LEFT_SINK_WAIT_MS = 400;
+/** 支点から各接続点までのX方向距離（左右等距離に揃える） */
+const ARM_HALF_PX = 186;
 
 // 天秤位置デバッグ用デフォルト値
 type LayoutParams = {
@@ -631,6 +633,7 @@ export default function PresSureJudgeGame() {
   const [scaleContainerWidth, setScaleContainerWidth] = useState(512);
   const [scaleContainerHeight, setScaleContainerHeight] = useState(300);
   const [fulcrumPos, setFulcrumPos] = useState<{ x: number; y: number } | null>(null);
+  const [connPos, setConnPos] = useState<{ left: { x: number; y: number }; right: { x: number; y: number } } | null>(null);
   const rightPanRef = useRef<HTMLDivElement>(null);
   const leftPanRef = useRef<HTMLDivElement>(null);
   const armRef = useRef<HTMLDivElement>(null);
@@ -1003,28 +1006,40 @@ export default function PresSureJudgeGame() {
 
   const rotation = getRotation(effectiveBalance, isCollapsed);
 
-  // アーム先端座標（皿を鉛直に保つため回転に追従して配置）
-  const armHalf = scaleContainerWidth * 0.425;
+  // アーム先端座標（支点中心・左右186pxで揃える。支点はgetBoundingClientRectで取得）
+  const armHalf = ARM_HALF_PX;
   const rotRad = (rotation * Math.PI) / 180;
-  const leftEndX = scaleContainerWidth / 2 - armHalf * Math.cos(rotRad);
+  const centerX = fulcrumPos?.x ?? scaleContainerWidth / 2;
+  const leftEndX = centerX - armHalf * Math.cos(rotRad);
   const leftEndY = -armHalf * Math.sin(rotRad);
-  const rightEndX = scaleContainerWidth / 2 + armHalf * Math.cos(rotRad);
+  const rightEndX = centerX + armHalf * Math.cos(rotRad);
   const rightEndY = armHalf * Math.sin(rotRad);
   const panWidth = 128;
   const panBottomBase = 32;
 
   useLayoutEffect(() => {
-    if (!showArmLines || !scaleContainerRef.current || !fulcrumRef.current) {
-      setFulcrumPos(null);
-      return;
-    }
-    const scaleRect = scaleContainerRef.current.getBoundingClientRect();
-    const fulcrumRect = fulcrumRef.current.getBoundingClientRect();
+    const scaleEl = scaleContainerRef.current;
+    const fulcrumEl = fulcrumRef.current;
+    const leftConnEl = leftPanConnectionRef.current;
+    const rightConnEl = rightPanConnectionRef.current;
+    if (!scaleEl || !fulcrumEl) return;
+    const scaleRect = scaleEl.getBoundingClientRect();
+    const fulcrumRect = fulcrumEl.getBoundingClientRect();
     setFulcrumPos({
       x: fulcrumRect.left + fulcrumRect.width / 2 - scaleRect.left,
       y: fulcrumRect.top + fulcrumRect.height / 2 - scaleRect.top,
     });
-  }, [showArmLines, rotation, phase, collapseAnimDone]);
+    if (leftConnEl && rightConnEl) {
+      const leftR = leftConnEl.getBoundingClientRect();
+      const rightR = rightConnEl.getBoundingClientRect();
+      setConnPos({
+        left: { x: leftR.left + leftR.width / 2 - scaleRect.left, y: leftR.top + leftR.height / 2 - scaleRect.top },
+        right: { x: rightR.left + rightR.width / 2 - scaleRect.left, y: rightR.top + rightR.height / 2 - scaleRect.top },
+      });
+    } else {
+      setConnPos(null);
+    }
+  }, [rotation, phase, collapseAnimDone]);
 
   useLayoutEffect(() => {
     if (!isDebugMode || !showBoundingBox) {
@@ -1615,10 +1630,10 @@ export default function PresSureJudgeGame() {
                   {isDebugMode && showArmLines && fulcrumPos && (() => {
                     const fulcrumX = fulcrumPos.x;
                     const fulcrumY = fulcrumPos.y;
-                    const leftX = leftEndX;
-                    const leftY = panBottomBase + leftEndY;
-                    const rightX = rightEndX;
-                    const rightY = panBottomBase + rightEndY;
+                    const leftX = connPos?.left.x ?? leftEndX;
+                    const leftY = connPos?.left.y ?? panBottomBase + leftEndY;
+                    const rightX = connPos?.right.x ?? rightEndX;
+                    const rightY = connPos?.right.y ?? panBottomBase + rightEndY;
                     const distLeft = Math.hypot(leftX - fulcrumX, leftY - fulcrumY);
                     const distRight = Math.hypot(rightX - fulcrumX, rightY - fulcrumY);
                     const midLeftX = (fulcrumX + leftX) / 2;
