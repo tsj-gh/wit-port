@@ -725,13 +725,14 @@ export default function PresSureJudgeGame() {
       const rightPlaced = prev.filter((w) => w.side === "right");
       const leftNewTotalHeight = leftItems.reduce((s, w) => s + getWeightHeight(w.value, "left"), 0);
       const rightNewTotalHeight = rightItems.reduce((s, w) => s + getWeightHeight(w.value, "right"), 0);
+      // 既存あり: 頂上(min y)の上に積む。既存なし: 器の底から
       const leftBottomOffset =
         leftPlaced.length > 0
-          ? Math.max(...leftPlaced.map((w) => w.y + getWeightHeight(w.value, "left")))
+          ? Math.max(0, Math.min(...leftPlaced.map((w) => w.y)) - leftNewTotalHeight)
           : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - leftNewTotalHeight);
       const rightBottomOffset =
         rightPlaced.length > 0
-          ? Math.max(...rightPlaced.map((w) => w.y + getWeightHeight(w.value, "right")))
+          ? Math.max(0, Math.min(...rightPlaced.map((w) => w.y)) - rightNewTotalHeight)
           : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - rightNewTotalHeight);
 
       let curLeftBottom = leftBottomOffset;
@@ -799,18 +800,11 @@ export default function PresSureJudgeGame() {
       const newHeight = getWeightHeight(item.value, "right");
       setRightPanWeights((pan) => {
         const rightPlaced = placedWeightsRef.current.filter((w) => w.side === "right");
-        let rightContentBottom = 0;
-        for (const w of rightPlaced) {
-          rightContentBottom = Math.max(
-            rightContentBottom,
-            w.y + getWeightHeight(w.value, "right")
-          );
-        }
         if (pan.length === 0) {
-          // 1個目：器の底（下辺）に積む。y=0は上辺なので、底にするには (容器高さ - アイテム高さ) を使用
+          // 1個目：既存あれば頂上(min y)の上に、なければ器の底に
           const baseY =
             rightPlaced.length > 0
-              ? rightContentBottom
+              ? Math.max(0, Math.min(...rightPlaced.map((w) => w.y)) - newHeight)
               : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - newHeight);
           return [{ ...item, position: { x: 0, y: baseY } }];
         }
@@ -879,7 +873,7 @@ export default function PresSureJudgeGame() {
         const leftPlaced = placedWeightsRef.current.filter((w) => w.side === "left");
         let baseY: number;
         if (leftPlaced.length > 0) {
-          baseY = Math.max(...leftPlaced.map((w) => w.y + getWeightHeight(w.value, "left")));
+          baseY = Math.max(0, Math.min(...leftPlaced.map((w) => w.y)) - newHeight);
         } else if (pan.length > 0) {
           baseY = Math.max(...pan.map((w) => w.position.y + getWeightHeight(w.value, "left")));
         } else {
@@ -1004,10 +998,14 @@ export default function PresSureJudgeGame() {
   const panBottomBase = 32;
 
   const leftPlaced = placedWeights.filter((w) => w.side === "left");
+  const leftCurrentTotalHeight = leftPanWeights.reduce(
+    (s, w) => s + getWeightHeight(w.value, "left"),
+    0
+  );
   let leftBottomOffset =
     leftPlaced.length > 0
-      ? Math.max(...leftPlaced.map((w) => w.y + getWeightHeight(w.value, "left")))
-      : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - 40); // 1個目は器の底に。leftは高さ40 or 44が典型
+      ? Math.max(0, Math.min(...leftPlaced.map((w) => w.y)) - leftCurrentTotalHeight)
+      : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - 40); // 1個目は器の底に
   const leftCurrent: PlacedWeight[] = leftPanWeights.map((w) => {
     const h = getWeightHeight(w.value, "left");
     if (leftPlaced.length === 0 && leftBottomOffset === Math.max(0, PAN_MAX_VISIBLE_HEIGHT - 40)) {
