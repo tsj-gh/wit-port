@@ -771,14 +771,13 @@ export default function PresSureJudgeGame() {
               : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - newHeight);
           return [{ ...item, position: { x: 0, y: baseY } }];
         }
-        // 2個目以降：既存の上に積む（既存を下にシフト）
+        // 2個目以降：既存の上に積む（既存を下にシフト）。新規は1つ目の旧位置を継ぎ、隙間なく積む
         const rightContentTop = Math.min(...pan.map((w) => w.position.y));
-        const newItemY = rightContentTop - newHeight;
         const shiftedPan = pan.map((w) => ({
           ...w,
           position: { ...w.position, y: w.position.y + newHeight },
         }));
-        return [...shiftedPan, { ...item, position: { x: 0, y: newItemY } }];
+        return [...shiftedPan, { ...item, position: { x: 0, y: rightContentTop } }];
       });
     },
     [isDebugMode]
