@@ -18,7 +18,6 @@ const BLOCK_HEIGHT = 28;
 const VIEW_HEIGHT = 360;
 const MIN_ZOOM_SCALE = 0.5;
 const ZOOM_MARGIN = 80;
-const OFFSCREEN_INDICATOR_THRESHOLD = 180;
 const DEFAULT_P1_OFFSET_Y = -350; // P1.y = P0.y + p1OffsetY
 const DURATION_MIN = 0.3;
 const DURATION_MAX = 0.8;
@@ -720,8 +719,6 @@ export default function PresSureJudgeGame() {
   const currentNPCWeight = leftPanWeights.reduce((s, w) => s + w.value, 0);
   const effectiveBalance = phase === "user" ? totalBalance - currentUserWeight : totalBalance;
   const isCollapsed = phase === "gameover" && collapseAnimDone;
-  const leftTotal = history.reduce((s, e) => s + e.left, 0) + currentNPCWeight;
-  const rightTotal = history.reduce((s, e) => s + e.right, 0) + currentUserWeight;
 
   const startGame = useCallback(() => {
     setTotalBalance(0);
@@ -1127,21 +1124,6 @@ export default function PresSureJudgeGame() {
   const leftDisplay = applySinkIfNeeded(leftDisplayRaw);
   const rightDisplay = applySinkIfNeeded(rightDisplayRaw);
 
-  // 左右の器のコンテンツ高さ（オフスクリーン判定用）
-  const leftContentHeight =
-    leftDisplay.length > 0
-      ? Math.max(...leftDisplay.map((w) => w.y + getWeightHeight(w.value, "left")))
-      : 0;
-  const rightContentHeight =
-    rightDisplay.length > 0
-      ? Math.max(...rightDisplay.map((w) => w.y + getWeightHeight(w.value, "right")))
-      : 0;
-  const stackDiff = Math.max(leftContentHeight, rightContentHeight);
-
-  // オフスクリーン判定（差が閾値超で片方が見えにくい）
-  const showOffscreenIndicators = stackDiff > OFFSCREEN_INDICATOR_THRESHOLD;
-  const leftIsHigher = leftContentHeight > rightContentHeight;
-
   const isDevTj = searchParams.get("devtj") === "true";
 
   return (
@@ -1533,26 +1515,6 @@ export default function PresSureJudgeGame() {
                 className="relative flex flex-1 min-h-0 justify-center overflow-hidden shrink-0"
                 style={{ minHeight: layoutParams.scaleAreaMinHeight }}
               >
-                {showOffscreenIndicators && (
-                  <>
-                    <div
-                      className={`absolute left-1/2 -translate-x-1/2 top-0 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-b-lg text-xs font-bold tabular-nums ${
-                        leftIsHigher ? "bg-amber-500/90 text-amber-100" : "bg-blue-500/90 text-blue-100"
-                      }`}
-                    >
-                      <span>↑</span>
-                      <span>{leftIsHigher ? `NPC +${leftTotal}` : `You +${rightTotal}`}</span>
-                    </div>
-                    <div
-                      className={`absolute left-1/2 -translate-x-1/2 bottom-0 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-t-lg text-xs font-bold tabular-nums ${
-                        leftIsHigher ? "bg-blue-500/90 text-blue-100" : "bg-amber-500/90 text-amber-100"
-                      }`}
-                    >
-                      <span>↓</span>
-                      <span>{leftIsHigher ? `You +${rightTotal}` : `NPC +${leftTotal}`}</span>
-                    </div>
-                  </>
-                )}
                 {/* ラッパー：中央寄せを担当（Framer Motion の transform 上書きを避ける） */}
                 <div
                   ref={scaleContainerRef}
