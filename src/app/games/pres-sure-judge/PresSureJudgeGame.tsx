@@ -48,6 +48,8 @@ type LayoutParams = {
   armHeight: number;
   gameGap: number;
   headerHeightRem: number;
+  /** モバイル版アーム長比率（0.1～1.0）。決定されたarmHalfに乗算する */
+  armLengthRatio: number;
 };
 const DEBUG_LAYOUT_DEFAULTS: LayoutParams = {
   scaleWrapperTopOffset: 100,
@@ -56,6 +58,7 @@ const DEBUG_LAYOUT_DEFAULTS: LayoutParams = {
   armHeight: 256,
   gameGap: 12,
   headerHeightRem: 96,
+  armLengthRatio: 1,
 };
 
 const DEBUG_ITEM: WeightItem = (() => {
@@ -1011,10 +1014,11 @@ export default function PresSureJudgeGame() {
   const effectiveWidth = forcedWidth ?? (typeof window !== "undefined" ? window.innerWidth : viewportWidth);
   // forcedWidth指定時はscaleContainerWidthの代わりに使用（ResizeObserver発火前のズレを解消）
   const effectiveScaleWidth = forcedWidth ?? scaleContainerWidth;
-  const armHalf = Math.min(
-    ARM_HALF_MAX_PX,
-    Math.max(80, Math.min(effectiveWidth * 0.4, Math.floor((effectiveScaleWidth - PAN_WIDTH) / 2)))
-  );
+  const armHalf =
+    Math.min(
+      ARM_HALF_MAX_PX,
+      Math.max(80, Math.min(effectiveWidth * 0.4, Math.floor((effectiveScaleWidth - PAN_WIDTH) / 2)))
+    ) * Math.max(0.1, Math.min(1, layoutParams.armLengthRatio));
   const rotRad = (rotation * Math.PI) / 180;
   const centerX = fulcrumPos?.x ?? effectiveScaleWidth / 2;
   const leftEndX = centerX - armHalf * Math.cos(rotRad);
@@ -1200,6 +1204,24 @@ export default function PresSureJudgeGame() {
                 className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
               />
               <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.scaleWrapperMaxOffset})</span>
+            </label>
+            <label className="flex items-center justify-between gap-2">
+              <span className="text-amber-300/90">モバイル版アーム長比率 (0.1～1.0):</span>
+              <input
+                type="number"
+                min="0.1"
+                max="1"
+                step="0.1"
+                value={layoutParamsDraft.armLengthRatio}
+                onChange={(e) =>
+                  setLayoutParamsDraft((p) => ({
+                    ...p,
+                    armLengthRatio: Math.max(0.1, Math.min(1, Number(e.target.value) || 1)),
+                  }))
+                }
+                className="w-14 px-1.5 py-0.5 rounded bg-black/60 border border-white/20 text-amber-300"
+              />
+              <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.armLengthRatio})</span>
             </label>
           </div>
           <button
