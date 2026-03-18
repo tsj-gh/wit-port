@@ -595,6 +595,8 @@ export default function PresSureJudgeGame() {
     if (!isDebugMode) {
       setDebugFlyingItem(null);
       setDebugOverlay(null);
+      setShowBoundingBox(false);
+      setBoxLabels({});
     }
   }, [isDebugMode]);
   const [debugOverlay, setDebugOverlay] = useState<{
@@ -630,8 +632,18 @@ export default function PresSureJudgeGame() {
   const [scaleContainerHeight, setScaleContainerHeight] = useState(300);
   const [fulcrumPos, setFulcrumPos] = useState<{ x: number; y: number } | null>(null);
   const rightPanRef = useRef<HTMLDivElement>(null);
+  const leftPanRef = useRef<HTMLDivElement>(null);
+  const armRef = useRef<HTMLDivElement>(null);
   const rightPanConnectionRef = useRef<HTMLDivElement>(null);
   const leftPanConnectionRef = useRef<HTMLDivElement>(null);
+  const [showBoundingBox, setShowBoundingBox] = useState(false);
+  const [boxLabels, setBoxLabels] = useState<{
+    scale?: { w: number; h: number; x: number; y: number };
+    arm?: { w: number; h: number; x: number; y: number };
+    leftPan?: { w: number; h: number; x: number; y: number };
+    rightPan?: { w: number; h: number; x: number; y: number };
+    pivot?: { w: number; h: number; x: number; y: number };
+  }>({});
   const inventoryContainerRef = useRef<HTMLDivElement>(null);
   const dragConstraintRef = useRef<HTMLDivElement>(null);
   const [dragResetKey, setDragResetKey] = useState(0);
@@ -1014,6 +1026,40 @@ export default function PresSureJudgeGame() {
     });
   }, [showArmLines, rotation, phase, collapseAnimDone]);
 
+  useLayoutEffect(() => {
+    if (!isDebugMode || !showBoundingBox) {
+      setBoxLabels({});
+      return;
+    }
+    const labels: typeof boxLabels = {};
+    const scaleEl = scaleContainerRef.current;
+    if (scaleEl) {
+      const r = scaleEl.getBoundingClientRect();
+      labels.scale = { w: r.width, h: r.height, x: r.left, y: r.top };
+    }
+    const armEl = armRef.current;
+    if (armEl) {
+      const r = armEl.getBoundingClientRect();
+      labels.arm = { w: r.width, h: r.height, x: r.left, y: r.top };
+    }
+    const leftEl = leftPanRef.current;
+    if (leftEl) {
+      const r = leftEl.getBoundingClientRect();
+      labels.leftPan = { w: r.width, h: r.height, x: r.left, y: r.top };
+    }
+    const rightEl = rightPanRef.current;
+    if (rightEl) {
+      const r = rightEl.getBoundingClientRect();
+      labels.rightPan = { w: r.width, h: r.height, x: r.left, y: r.top };
+    }
+    const pivotEl = fulcrumRef.current;
+    if (pivotEl) {
+      const r = pivotEl.getBoundingClientRect();
+      labels.pivot = { w: r.width, h: r.height, x: r.left, y: r.top };
+    }
+    setBoxLabels(labels);
+  }, [isDebugMode, showBoundingBox, rotation, phase, leftEndX, rightEndX, leftEndY, rightEndY]);
+
   const leftPlaced = placedWeights.filter((w) => w.side === "left");
   const leftCurrentTotalHeight = leftPanWeights.reduce(
     (s, w) => s + getWeightHeight(w.value, "left"),
@@ -1150,6 +1196,14 @@ export default function PresSureJudgeGame() {
               <span className="text-amber-400">ベジエ軌道を表示</span>
             </label>
             <label className="mt-1 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showBoundingBox}
+                onChange={(e) => setShowBoundingBox(e.target.checked)}
+              />
+              <span className="text-amber-400">境界枠を表示</span>
+            </label>
+            <label className="mt-1 flex items-center gap-2">
               <span className="text-amber-400">初速倍率:</span>
               <input
                 type="number"
@@ -1187,6 +1241,50 @@ export default function PresSureJudgeGame() {
               <div>Time: {process.env.NEXT_PUBLIC_BUILD_DATE || "-"}</div>
             </div>
           </div>
+        </div>
+      )}
+      {isDebugMode && showBoundingBox && (
+        <div className="fixed inset-0 pointer-events-none z-[100]" aria-hidden>
+          {boxLabels.scale && (
+            <div
+              className="absolute text-[9px] font-mono bg-red-950/90 text-red-300 px-1 rounded"
+              style={{ left: boxLabels.scale.x, top: boxLabels.scale.y - 14 }}
+            >
+              Scale {boxLabels.scale.w.toFixed(0)}×{boxLabels.scale.h.toFixed(0)}
+            </div>
+          )}
+          {boxLabels.arm && (
+            <div
+              className="absolute text-[9px] font-mono bg-blue-950/90 text-blue-300 px-1 rounded"
+              style={{ left: boxLabels.arm.x, top: boxLabels.arm.y - 14 }}
+            >
+              Arm {boxLabels.arm.w.toFixed(0)}×{boxLabels.arm.h.toFixed(0)}
+            </div>
+          )}
+          {boxLabels.leftPan && (
+            <div
+              className="absolute text-[9px] font-mono bg-green-950/90 text-green-300 px-1 rounded"
+              style={{ left: boxLabels.leftPan.x, top: boxLabels.leftPan.y - 14 }}
+            >
+              L {boxLabels.leftPan.w.toFixed(0)}×{boxLabels.leftPan.h.toFixed(0)}
+            </div>
+          )}
+          {boxLabels.rightPan && (
+            <div
+              className="absolute text-[9px] font-mono bg-green-950/90 text-green-300 px-1 rounded"
+              style={{ left: boxLabels.rightPan.x, top: boxLabels.rightPan.y - 14 }}
+            >
+              R {boxLabels.rightPan.w.toFixed(0)}×{boxLabels.rightPan.h.toFixed(0)}
+            </div>
+          )}
+          {boxLabels.pivot && (
+            <div
+              className="absolute text-[9px] font-mono bg-yellow-950/90 text-yellow-300 px-1 rounded"
+              style={{ left: boxLabels.pivot.x + boxLabels.pivot.w / 2 - 20, top: boxLabels.pivot.y - 14 }}
+            >
+              Pivot {boxLabels.pivot.w.toFixed(0)}×{boxLabels.pivot.h.toFixed(0)}
+            </div>
+          )}
         </div>
       )}
       <header className="relative z-20 shrink-0 flex justify-between items-center px-4 py-4 md:px-6 md:py-6 border-b border-white/10">
@@ -1365,6 +1463,7 @@ export default function PresSureJudgeGame() {
                   className="absolute left-1/2 w-full max-w-xl -translate-x-1/2"
                   style={{
                     top: `clamp(0px, calc(50% - ${layoutParams.scaleWrapperTopOffset}px), calc(100% - ${layoutParams.scaleWrapperMaxOffset}px))`,
+                    ...(isDebugMode && showBoundingBox && { outline: "2px solid red", outlineOffset: -1 }),
                   }}
                 >
                   <motion.div
@@ -1373,11 +1472,13 @@ export default function PresSureJudgeGame() {
                   >
                   {/* アームと支点のみ回転（支点を接続点の幾何中心＝panBottomBaseに配置） */}
                   <motion.div
+                    ref={armRef}
                     className="absolute left-0 right-0 flex items-end justify-center pointer-events-none"
                     style={{
                       bottom: `calc(100% - ${panBottomBase}px)`,
                       height: layoutParams.armHeight,
                       transformOrigin: "center bottom",
+                      ...(isDebugMode && showBoundingBox && { outline: "1px dashed blue", outlineOffset: -1 }),
                     }}
                     animate={{
                       rotate: rotation,
@@ -1396,7 +1497,10 @@ export default function PresSureJudgeGame() {
                     <div
                       ref={fulcrumRef}
                       className="absolute left-1/2 bottom-0 w-6 h-6 rounded-full bg-slate-400 border-2 border-slate-300 -translate-x-1/2 translate-y-1/2 z-20 shadow-[0_0_16px_rgba(148,163,184,0.7)]"
-                      style={{ transformOrigin: "center center" }}
+                      style={{
+                        transformOrigin: "center center",
+                        ...(isDebugMode && showBoundingBox && { outline: "1px solid yellow", outlineOffset: 1 }),
+                      }}
                     />
                   </motion.div>
 
@@ -1412,6 +1516,7 @@ export default function PresSureJudgeGame() {
                   >
                     <span className="text-[10px] text-amber-400/90 font-medium mb-1">NPC</span>
                     <div
+                      ref={leftPanRef}
                       className="relative w-32 rounded-b-xl border-2 border-amber-500/50 bg-amber-500/10 px-2 py-2 overflow-visible"
                       style={{
                         minHeight: PAN_MAX_VISIBLE_HEIGHT,
@@ -1422,6 +1527,7 @@ export default function PresSureJudgeGame() {
                                 Math.max(...leftDisplay.map((w) => w.y + getWeightHeight(w.value, "left")))
                               )
                             : PAN_MAX_VISIBLE_HEIGHT,
+                        ...(isDebugMode && showBoundingBox && { outline: "1px solid green", outlineOffset: -1 }),
                       }}
                     >
                       {leftDisplay.map((w) => (
@@ -1445,6 +1551,7 @@ export default function PresSureJudgeGame() {
                       ref={rightPanRef}
                       className="relative w-32 rounded-b-xl border-2 px-2 py-2 border-blue-500/50 bg-blue-500/10 transition-colors overflow-visible"
                       style={{
+                        ...(isDebugMode && showBoundingBox && { outline: "1px solid green", outlineOffset: -1 }),
                         minHeight: PAN_MAX_VISIBLE_HEIGHT,
                         height:
                           rightDisplay.length > 0
