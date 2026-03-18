@@ -198,9 +198,10 @@ function getRotation(balance: number, collapsed: boolean): number {
   return -clamped * 0.25;
 }
 
-function generateRoundInventory(): WeightItem[] {
-  const pool = [...WEIGHT_VALUES, ...WEIGHT_VALUES].sort(() => Math.random() - 0.5);
-  return pool.slice(0, INVENTORY_COUNT).map((v) => createWeightItem(v));
+function generateRoundInventory(count = INVENTORY_COUNT): WeightItem[] {
+  const repeat = Math.ceil(count / WEIGHT_VALUES.length);
+  const pool = Array.from({ length: repeat }, () => [...WEIGHT_VALUES]).flat().sort(() => Math.random() - 0.5);
+  return pool.slice(0, count).map((v) => createWeightItem(v));
 }
 
 function isPointInRect(px: number, py: number, rect: DOMRect): boolean {
@@ -657,6 +658,7 @@ export default function PresSureJudgeGame() {
   const rightPanConnectionRef = useRef<HTMLDivElement>(null);
   const leftPanConnectionRef = useRef<HTMLDivElement>(null);
   const [showBoundingBox, setShowBoundingBox] = useState(false);
+  const [debugDoubleInventory, setDebugDoubleInventory] = useState(false);
   const [boxLabels, setBoxLabels] = useState<{
     scale?: { w: number; h: number; x: number; y: number };
     arm?: { w: number; h: number; x: number; y: number };
@@ -995,11 +997,12 @@ export default function PresSureJudgeGame() {
 
   const completeTransition = useCallback(() => {
     setTransitionNpcItem(null);
-    setInventorySlots(generateRoundInventory());
+    const count = debugDoubleInventory ? INVENTORY_COUNT * 2 : INVENTORY_COUNT;
+    setInventorySlots(generateRoundInventory(count));
     setRound((r) => r + 1);
     setPhase("user");
     setTimer(INITIAL_TIMER);
-  }, []);
+  }, [debugDoubleInventory]);
 
   const handleNPCLanding = useCallback(
     (item: WeightItem) => {
@@ -1382,6 +1385,14 @@ export default function PresSureJudgeGame() {
                 onChange={(e) => setVelocityMultiplier(Math.max(0.1, Math.min(5, Number(e.target.value) || 1)))}
                 className="w-14 px-2 py-1 rounded bg-black/60 border border-white/20 text-amber-300"
               />
+            </label>
+            <label className="mt-1 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={debugDoubleInventory}
+                onChange={(e) => setDebugDoubleInventory(e.target.checked)}
+              />
+              <span className="text-amber-400">次のラウンドの在庫を2倍にする</span>
             </label>
             <div className="mt-2 border-t border-white/10 pt-2">
               <span className="text-emerald-400">ラウンド切替 NPC アイテム</span>
@@ -1867,7 +1878,7 @@ export default function PresSureJudgeGame() {
                     <div className="relative h-[96px] md:h-[56px] shrink-0">
                       <div
                         ref={inventoryContainerRef}
-                        className="h-full w-full p-3 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-nowrap gap-3 items-center overflow-x-auto overflow-y-hidden scroll-smooth"
+                        className="h-full w-full p-3 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap md:flex-nowrap gap-3 items-center overflow-x-auto overflow-y-hidden scroll-smooth"
                         style={{ touchAction: "none", scrollBehavior: "smooth" }}
                         onPointerDownCapture={handleInventoryPointerDown}
                         onPointerMove={handleInventoryPointerMove}
