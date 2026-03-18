@@ -1875,10 +1875,12 @@ export default function PresSureJudgeGame() {
               {(phase === "user" || phase === "transition") && (
                 <div className="relative z-10 mt-2 mb-2 space-y-3 p-3 rounded-2xl border border-white/10 bg-gradient-to-br from-[#0a0e18] to-[#0f172a] overflow-visible shrink-0">
                   <div ref={dragConstraintRef} className="relative min-w-0">
-                    <div className="relative h-[96px] md:h-[56px] shrink-0">
+                    <div
+                      className={`relative shrink-0 ${forcedWidth === 375 ? "h-[96px]" : "h-[96px] md:h-[56px]"}`}
+                    >
                       <div
                         ref={inventoryContainerRef}
-                        className="h-full w-full p-3 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap md:flex-nowrap gap-3 items-center overflow-x-auto overflow-y-hidden scroll-smooth"
+                        className={`h-full w-full p-3 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex gap-3 items-center overflow-x-auto overflow-y-hidden scroll-smooth ${forcedWidth === 375 ? "flex-wrap" : "flex-wrap md:flex-nowrap"}`}
                         style={{ touchAction: "none", scrollBehavior: "smooth" }}
                         onPointerDownCapture={handleInventoryPointerDown}
                         onPointerMove={handleInventoryPointerMove}
