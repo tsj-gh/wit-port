@@ -49,6 +49,8 @@ type LayoutParams = {
   headerHeightRem: number;
   /** モバイル版アーム長比率（0.1～1.0）。決定されたarmHalfに乗算する */
   armLengthRatio: number;
+  /** アイテムへのタッチとみなす拡張マージン（px）。ボタン境界からこの値までをアイテムヒット領域とする */
+  itemHitAreaMarginPx: number;
 };
 const DEBUG_LAYOUT_DEFAULTS: LayoutParams = {
   scaleWrapperTopOffset: 100,
@@ -58,6 +60,7 @@ const DEBUG_LAYOUT_DEFAULTS: LayoutParams = {
   gameGap: 12,
   headerHeightRem: 96,
   armLengthRatio: 1,
+  itemHitAreaMarginPx: 8,
 };
 
 const DEBUG_ITEM: WeightItem = (() => {
@@ -224,6 +227,7 @@ function NPCDropBlock({ item }: { item: WeightItem }) {
   const blockSize = item.visual.size === "sm" ? "w-12 h-9" : item.visual.size === "md" ? "w-14 h-10" : "w-16 h-11";
   return (
     <motion.div
+      data-inventory-item
       initial={{ y: -100, opacity: 0, scale: 0.3 }}
       animate={{
         y: 0,
@@ -410,6 +414,7 @@ function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, right
   return (
     <motion.div
       ref={blockRef}
+      data-inventory-item
       drag
       dragConstraints={dragConstraintRef}
       dragElastic={0}
@@ -520,6 +525,7 @@ function DebugThrowBlock({
 
   return (
     <motion.div
+      data-inventory-item
       drag
       dragConstraints={dragConstraintRef}
       dragElastic={0}
@@ -662,6 +668,117 @@ export default function PresSureJudgeGame() {
   const dragConstraintRef = useRef<HTMLDivElement>(null);
   const [dragResetKey, setDragResetKey] = useState(0);
   const sinkTargetRef = useRef<{ itemId: string; targetY: number } | null>(null);
+
+  const inventorySlideRef = useRef<{ startX: number; startScroll: number } | null>(null);
+  const lastMoveRef = useRef<{ x: number; t: number } | null>(null);
+  const momentumRafRef = useRef<number | null>(null);
+  const [inventoryHasMoreRight, setInventoryHasMoreRight] = useState(false);
+
+  const updateInventoryHasMoreRight = useCallback(() => {
+    const el = inventoryContainerRef.current;
+    if (!el) return;
+    setInventoryHasMoreRight(el.scrollWidth > el.clientWidth && el.scrollLeft < el.scrollWidth - el.clientWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    const el = inventoryContainerRef.current;
+    if (!el) return;
+    updateInventoryHasMoreRight();
+    el.addEventListener("scroll", updateInventoryHasMoreRight);
+    const ro = new ResizeObserver(() => updateInventoryHasMoreRight());
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateInventoryHasMoreRight);
+      ro.disconnect();
+    };
+  }, [updateInventoryHasMoreRight, phase]);
+
+  const isPointOnItem = useCallback(
+    (clientX: number, clientY: number, marginPx: number) => {
+      const container = inventoryContainerRef.current;
+      if (!container) return false;
+      const items = Array.from(container.querySelectorAll<HTMLElement>("[data-inventory-item]"));
+      for (const el of items) {
+        const r = el.getBoundingClientRect();
+        if (
+          clientX >= r.left - marginPx &&
+          clientX <= r.right + marginPx &&
+          clientY >= r.top - marginPx &&
+          clientY <= r.bottom + marginPx
+        ) {
+          return true;
+        }
+      }
+      return false;
+    },
+    []
+  );
+
+  const handleInventoryPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0 && e.button !== undefined) return;
+      const marginPx = layoutParams.itemHitAreaMarginPx;
+      if (isPointOnItem(e.clientX, e.clientY, marginPx)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const el = inventoryContainerRef.current;
+      if (!el) return;
+      inventorySlideRef.current = { startX: e.clientX, startScroll: el.scrollLeft };
+      lastMoveRef.current = { x: e.clientX, t: performance.now() };
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    [layoutParams.itemHitAreaMarginPx, isPointOnItem]
+  );
+
+  const handleInventoryPointerMove = useCallback((e: React.PointerEvent) => {
+    const slide = inventorySlideRef.current;
+    if (!slide) return;
+    const el = inventoryContainerRef.current;
+    if (!el) return;
+    const dx = e.clientX - slide.startX;
+    el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, slide.startScroll - dx));
+    lastMoveRef.current = { x: e.clientX, t: performance.now() };
+  }, []);
+
+  const handleInventoryPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      const slide = inventorySlideRef.current;
+      inventorySlideRef.current = null;
+      if (!slide) return;
+      const el = inventoryContainerRef.current;
+      if (!el) return;
+      const last = lastMoveRef.current;
+      const dt = last ? performance.now() - last.t : 0;
+      let vx = 0;
+      if (last && dt > 0) {
+        vx = (e.clientX - last.x) / dt;
+      }
+      const decay = 0.92;
+      let v = vx * 12;
+      let pos = el.scrollLeft;
+      const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+      const tick = () => {
+        pos += v;
+        v *= decay;
+        if (pos < 0) pos = 0;
+        if (pos > maxScroll) pos = maxScroll;
+        el.scrollLeft = pos;
+        if (Math.abs(v) > 0.5 && pos >= 0 && pos <= maxScroll) {
+          momentumRafRef.current = requestAnimationFrame(tick);
+        }
+      };
+      if (Math.abs(v) > 10) {
+        momentumRafRef.current = requestAnimationFrame(tick);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    return () => {
+      if (momentumRafRef.current) cancelAnimationFrame(momentumRafRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const updateViewport = () => setViewportWidth(typeof window !== "undefined" ? window.innerWidth : 512);
@@ -1747,11 +1864,20 @@ export default function PresSureJudgeGame() {
               {(phase === "user" || phase === "transition") && (
                 <div className="relative z-10 mt-2 mb-2 space-y-3 p-3 rounded-2xl border border-white/10 bg-gradient-to-br from-[#0a0e18] to-[#0f172a] overflow-visible shrink-0">
                   <div ref={dragConstraintRef} className="relative min-w-0">
-                    <div
-                      ref={inventoryContainerRef}
-                      className="min-h-[72px] p-3 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible shrink-0 relative"
-                      style={{ touchAction: "none" }}
-                    >
+                    <div className="relative h-[96px] md:h-[56px] shrink-0">
+                      <div
+                        ref={inventoryContainerRef}
+                        className="h-full w-full p-3 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-nowrap gap-3 items-center overflow-x-auto overflow-y-hidden scroll-smooth"
+                        style={{ touchAction: "none", scrollBehavior: "smooth" }}
+                        onPointerDownCapture={handleInventoryPointerDown}
+                        onPointerMove={handleInventoryPointerMove}
+                        onPointerUp={handleInventoryPointerUp}
+                        onPointerCancel={handleInventoryPointerUp}
+                        onScroll={() => {
+                          const el = inventoryContainerRef.current;
+                          if (el) setInventoryHasMoreRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+                        }}
+                      >
                     {phase === "user" && inventorySlots.every((s) => !s) ? (
                       <span className="text-wit-muted text-sm">在庫なし</span>
                     ) : phase === "user" ? (
@@ -1793,6 +1919,16 @@ export default function PresSureJudgeGame() {
                       />
                     )}
                     </div>
+                    {inventoryHasMoreRight && (
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-12 pointer-events-none shrink-0"
+                        style={{
+                          background: "linear-gradient(to right, transparent, rgba(10, 14, 24, 0.9))",
+                        }}
+                        aria-hidden
+                      />
+                    )}
+                  </div>
                   </div>
                   <button
                     onClick={handleJudge}
