@@ -1010,7 +1010,7 @@ export default function PresSureJudgeGame() {
     leftBottomOffset += h;
     return { id: w.id, side: "left" as const, value: w.value, x: 0, y };
   });
-  const leftDisplay = [...leftPlaced, ...leftCurrent].sort((a, b) => a.y - b.y);
+  const leftDisplayRaw = [...leftPlaced, ...leftCurrent].sort((a, b) => a.y - b.y);
 
   const rightPlaced = placedWeights.filter((w) => w.side === "right");
   const rightCurrent: PlacedWeight[] = rightPanWeights.map((w) => ({
@@ -1020,7 +1020,18 @@ export default function PresSureJudgeGame() {
     x: 0,
     y: w.position.y,
   }));
-  const rightDisplay = [...rightPlaced, ...rightCurrent].sort((a, b) => a.y - b.y);
+  const rightDisplayRaw = [...rightPlaced, ...rightCurrent].sort((a, b) => a.y - b.y);
+
+  // 上辺を超えそう（min y < 0）なときはアイテム全体を沈み込み、器の下辺を伸ばす
+  const applySinkIfNeeded = (display: PlacedWeight[]): PlacedWeight[] => {
+    if (display.length === 0) return display;
+    const topY = Math.min(...display.map((w) => w.y));
+    if (topY >= 0) return display;
+    const sinkOffset = -topY;
+    return display.map((w) => ({ ...w, y: w.y + sinkOffset }));
+  };
+  const leftDisplay = applySinkIfNeeded(leftDisplayRaw);
+  const rightDisplay = applySinkIfNeeded(rightDisplayRaw);
 
   // 左右の器のコンテンツ高さ（オフスクリーン判定用）
   const leftContentHeight =
