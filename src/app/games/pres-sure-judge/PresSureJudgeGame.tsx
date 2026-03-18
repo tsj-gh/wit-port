@@ -801,10 +801,10 @@ export default function PresSureJudgeGame() {
       setRightPanWeights((pan) => {
         const rightPlaced = placedWeightsRef.current.filter((w) => w.side === "right");
         if (pan.length === 0) {
-          // 1個目：既存あれば頂上(min y)の上に、なければ器の底に
+          // 1個目：2ラウンド目以降で既存あれば頂上(min y)の上に積む、それ以外は器の底に
           const baseY =
             rightPlaced.length > 0
-              ? Math.max(0, Math.min(...rightPlaced.map((w) => w.y)) - newHeight)
+              ? Math.min(...rightPlaced.map((w) => w.y)) - newHeight
               : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - newHeight);
           return [{ ...item, position: { x: 0, y: baseY } }];
         }
