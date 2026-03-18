@@ -1143,8 +1143,21 @@ export default function PresSureJudgeGame() {
   const showOffscreenIndicators = stackDiff > OFFSCREEN_INDICATOR_THRESHOLD;
   const leftIsHigher = leftContentHeight > rightContentHeight;
 
+  const isDevTj = searchParams.get("devtj") === "true";
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text isolate">
+      {isDevTj && !isDebugMode && (
+        <div className="fixed right-4 top-4 z-50">
+          <button
+            onClick={() => setIsDebugMode(true)}
+            className="px-2 py-1 rounded border border-white/20 text-xs font-mono"
+            style={{ background: "#334155" }}
+          >
+            DEBUG OFF
+          </button>
+        </div>
+      )}
       {isDebugMode && (
         <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -1267,6 +1280,7 @@ export default function PresSureJudgeGame() {
             <div className="mt-2 border-t border-white/10 pt-2 space-y-0.5 text-slate-400/90 text-[10px]">
               <div>Build: {typeof window !== "undefined" && window.location.hostname === "localhost" ? "LOCAL" : process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "-"}</div>
               <div>Time: {process.env.NEXT_PUBLIC_BUILD_DATE || "-"}</div>
+              <div>Viewport: {viewportWidth}px</div>
             </div>
           </div>
         </div>
