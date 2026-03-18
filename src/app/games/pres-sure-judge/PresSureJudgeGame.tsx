@@ -906,7 +906,7 @@ export default function PresSureJudgeGame() {
         };
         const p1 = {
           x: (p0.x + p2.x) / 2,
-          y: p0.y - p1OffsetY,
+          y: p0.y + p1OffsetY, // 左右でYを揃える（右器投げと同様）
         };
         const duration = Math.max(DURATION_MIN, Math.min(DURATION_MAX, 800 / Math.max(Math.abs(DEFAULT_DOUBLE_CLICK_VX), 50)));
         setNpcFlyingToLeft({
