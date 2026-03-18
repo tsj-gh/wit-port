@@ -1495,7 +1495,14 @@ export default function PresSureJudgeGame() {
                 }
               >
               {(phase === "user" || phase === "transition") && (
-                <div className="shrink-0 flex justify-center min-h-[2.5rem] md:min-h-[3rem]">
+                <div
+                  className="shrink-0 flex justify-center min-h-[2.5rem] md:min-h-[3rem]"
+                  style={
+                    isDebugMode && showBoundingBox
+                      ? { outline: "1px dotted red", outlineOffset: -1 }
+                      : undefined
+                  }
+                >
                   {phase === "user" ? (
                     <span
                       className={`font-mono font-bold tabular-nums text-2xl md:text-3xl ${
