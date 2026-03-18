@@ -738,12 +738,13 @@ export default function PresSureJudgeGame() {
       let curRightBottom = rightBottomOffset;
       const newPlaced: PlacedWeight[] = [];
 
-      for (const w of leftItems) {
+      // leftPanWeights/rightPanWeights は [底, …, 上] の順。底に大きいyを割り当てるため逆順で処理
+      for (const w of [...leftItems].reverse()) {
         const h = getWeightHeight(w.value, "left");
         newPlaced.push({ id: w.id, side: "left", value: w.value, x: 0, y: curLeftBottom });
         curLeftBottom += h;
       }
-      for (const w of rightItems) {
+      for (const w of [...rightItems].reverse()) {
         const h = getWeightHeight(w.value, "right");
         newPlaced.push({ id: w.id, side: "right", value: w.value, x: 0, y: curRightBottom });
         curRightBottom += h;
