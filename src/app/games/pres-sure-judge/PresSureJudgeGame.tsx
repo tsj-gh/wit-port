@@ -59,7 +59,7 @@ const DEBUG_LAYOUT_DEFAULTS: LayoutParams = {
   armHeight: 256,
   gameGap: 12,
   headerHeightRem: 96,
-  armLengthRatio: 1,
+  armLengthRatio: 0.8,
   itemHitAreaMarginPx: 8,
 };
 
