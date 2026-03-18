@@ -611,6 +611,7 @@ export default function PresSureJudgeGame() {
   const [velocityMultiplier, setVelocityMultiplier] = useState(2.25);
   const [showConnectionPoints, setShowConnectionPoints] = useState(false);
   const [showArmLines, setShowArmLines] = useState(false);
+  const [showBezierTrajectory, setShowBezierTrajectory] = useState(false);
 
   // 天秤位置デバッグ用（反映済み）
   const [layoutParams, setLayoutParams] = useState<LayoutParams>(DEBUG_LAYOUT_DEFAULTS);
@@ -1126,6 +1127,14 @@ export default function PresSureJudgeGame() {
               <span className="text-amber-400">支点からアームの線を描画</span>
             </label>
             <label className="mt-1 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showBezierTrajectory}
+                onChange={(e) => setShowBezierTrajectory(e.target.checked)}
+              />
+              <span className="text-amber-400">ベジエ軌道を表示</span>
+            </label>
+            <label className="mt-1 flex items-center gap-2">
               <span className="text-amber-400">初速倍率:</span>
               <input
                 type="number"
@@ -1197,7 +1206,7 @@ export default function PresSureJudgeGame() {
             onLanding={handleDebugLanding}
           />
         )}
-        {isDebugMode && debugOverlay && (
+        {isDebugMode && debugOverlay && showBezierTrajectory && (
           <div
             className="fixed inset-0 pointer-events-none"
             style={{ zIndex: 90 }}
