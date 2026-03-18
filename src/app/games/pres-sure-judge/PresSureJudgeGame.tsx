@@ -30,6 +30,10 @@ const IMPACT_DURATION = 0.4; // seconds
 const FALL_DURATION = 0.6; // Miss shot: fall off screen
 const DEBUG = false;
 
+const NPC_ITEM_APPEAR_DELAY_MS = 300;
+const NPC_ITEM_FLY_DELAY_MS = 500;
+const NPC_LEFT_SINK_WAIT_MS = 400;
+
 // 天秤位置デバッグ用デフォルト値
 type LayoutParams = {
   scaleWrapperTopOffset: number;
@@ -70,7 +74,7 @@ function bezier2(t: number, P0: { x: number; y: number }, P1: { x: number; y: nu
   };
 }
 
-type Phase = "ready" | "npc" | "user" | "gameover" | "result";
+type Phase = "ready" | "npc" | "transition" | "user" | "gameover" | "result";
 
 type WeightItem = {
   id: string;
@@ -353,6 +357,14 @@ function getP2(
   return null;
 }
 
+function getLeftP2(leftPanConnectionRef: React.RefObject<HTMLDivElement | null>) {
+  if (leftPanConnectionRef?.current) {
+    const r = leftPanConnectionRef.current.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+  return null;
+}
+
 function DraggableWeightBlock({ item, onLaunch, onDragCancel, dropZoneRef, rightPanConnectionRef, inventoryContainerRef, dragConstraintRef, p1OffsetY, velocityMultiplier }: DraggableWeightBlockProps) {
   const hasLaunchedRef = useRef(false);
   const blockRef = useRef<HTMLDivElement>(null);
@@ -603,12 +615,18 @@ export default function PresSureJudgeGame() {
   const [layoutParams, setLayoutParams] = useState<LayoutParams>(DEBUG_LAYOUT_DEFAULTS);
   // 天秤位置デバッグ用（入力中・未反映）
   const [layoutParamsDraft, setLayoutParamsDraft] = useState<LayoutParams>(DEBUG_LAYOUT_DEFAULTS);
+  const [npcItemAppearDelayMs, setNpcItemAppearDelayMs] = useState(NPC_ITEM_APPEAR_DELAY_MS);
+  const [npcItemFlyDelayMs, setNpcItemFlyDelayMs] = useState(NPC_ITEM_FLY_DELAY_MS);
+  const [transitionNpcItem, setTransitionNpcItem] = useState<WeightItem | null>(null);
+  const [transitionNpcItemVisible, setTransitionNpcItemVisible] = useState(false);
+  const [npcFlyingToLeft, setNpcFlyingToLeft] = useState<FlyingItem | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scaleContainerRef = useRef<HTMLDivElement>(null);
   const [scaleContainerWidth, setScaleContainerWidth] = useState(512);
   const rightPanRef = useRef<HTMLDivElement>(null);
   const rightPanConnectionRef = useRef<HTMLDivElement>(null);
+  const leftPanConnectionRef = useRef<HTMLDivElement>(null);
   const inventoryContainerRef = useRef<HTMLDivElement>(null);
   const dragConstraintRef = useRef<HTMLDivElement>(null);
   const [dragResetKey, setDragResetKey] = useState(0);
@@ -737,7 +755,12 @@ export default function PresSureJudgeGame() {
     }
     setLeftPanWeights([]);
     setRightPanWeights([]);
-    setPhase("npc");
+    setFlyingItems([]);
+    const npcValue = Math.floor(Math.random() * (NPC_WEIGHT_MAX - NPC_WEIGHT_MIN + 1)) + NPC_WEIGHT_MIN;
+    const npcItem = createNPCWeightItem(npcValue);
+    setTransitionNpcItem(npcItem);
+    setInventorySlots(Array.from<WeightItem | null>({ length: INVENTORY_COUNT }).fill(null));
+    setPhase("transition");
   }, []);
 
   const handleLaunch = useCallback(
@@ -835,6 +858,75 @@ export default function PresSureJudgeGame() {
     const id = setTimeout(runNPCTurn, delay);
     return () => clearTimeout(id);
   }, [phase, round, runNPCTurn]);
+
+  const completeTransition = useCallback(() => {
+    setTransitionNpcItem(null);
+    setInventorySlots(generateRoundInventory());
+    setRound((r) => r + 1);
+    setPhase("user");
+    setTimer(INITIAL_TIMER);
+  }, []);
+
+  const handleNPCLanding = useCallback(
+    (item: WeightItem) => {
+      setNpcFlyingToLeft(null);
+      setTotalBalance((b) => b + item.value);
+      const newHeight = getWeightHeight(item.value, "left");
+      setLeftPanWeights((pan) => {
+        const leftPlaced = placedWeightsRef.current.filter((w) => w.side === "left");
+        let baseY: number;
+        if (leftPlaced.length > 0) {
+          baseY = Math.max(...leftPlaced.map((w) => w.y + getWeightHeight(w.value, "left")));
+        } else if (pan.length > 0) {
+          baseY = Math.max(...pan.map((w) => w.position.y + getWeightHeight(w.value, "left")));
+        } else {
+          baseY = Math.max(0, PAN_MAX_VISIBLE_HEIGHT - newHeight);
+        }
+        return [...pan, { ...item, position: { x: 0, y: baseY } }];
+      });
+      setTimeout(completeTransition, NPC_LEFT_SINK_WAIT_MS);
+    },
+    [completeTransition]
+  );
+
+  useEffect(() => {
+    if (phase !== "transition" || !transitionNpcItem) return;
+    setTransitionNpcItemVisible(false);
+    const appearTimer = setTimeout(() => {
+      setTransitionNpcItemVisible(true);
+    }, npcItemAppearDelayMs);
+    const flyTimer = setTimeout(() => {
+      const p2 = getLeftP2(leftPanConnectionRef);
+      const inventoryRect = inventoryContainerRef.current?.getBoundingClientRect();
+      if (p2 && inventoryRect) {
+        setTransitionNpcItemVisible(false);
+        const p0 = {
+          x: inventoryRect.left + inventoryRect.width / 2,
+          y: inventoryRect.top + inventoryRect.height / 2,
+        };
+        const p1 = {
+          x: (p0.x + p2.x) / 2,
+          y: p0.y - p1OffsetY,
+        };
+        const duration = Math.max(DURATION_MIN, Math.min(DURATION_MAX, 800 / Math.max(Math.abs(DEFAULT_DOUBLE_CLICK_VX), 50)));
+        setNpcFlyingToLeft({
+          item: transitionNpcItem,
+          p0,
+          p1,
+          p2,
+          duration,
+          startTime: performance.now(),
+          vx: DEFAULT_DOUBLE_CLICK_VX,
+          vy: DEFAULT_DOUBLE_CLICK_VY,
+          launchSource: "double-click",
+        });
+      }
+    }, npcItemAppearDelayMs + npcItemFlyDelayMs);
+    return () => {
+      clearTimeout(appearTimer);
+      clearTimeout(flyTimer);
+    };
+  }, [phase, transitionNpcItem, npcItemAppearDelayMs, npcItemFlyDelayMs, p1OffsetY]);
 
   useEffect(() => {
     if (phase !== "user") return;
@@ -1025,6 +1117,27 @@ export default function PresSureJudgeGame() {
                 className="w-14 px-2 py-1 rounded bg-black/60 border border-white/20 text-amber-300"
               />
             </label>
+            <div className="mt-2 border-t border-white/10 pt-2">
+              <span className="text-emerald-400">ラウンド切替 NPC アイテム</span>
+              <label className="mt-1 flex items-center justify-between gap-2">
+                <span className="text-amber-300/90">出現遅延(ms):</span>
+                <input
+                  type="number"
+                  value={npcItemAppearDelayMs}
+                  onChange={(e) => setNpcItemAppearDelayMs(Math.max(0, Number(e.target.value) || NPC_ITEM_APPEAR_DELAY_MS))}
+                  className="w-14 px-2 py-1 rounded bg-black/60 border border-white/20 text-amber-300"
+                />
+              </label>
+              <label className="mt-1 flex items-center justify-between gap-2">
+                <span className="text-amber-300/90">発射遅延(ms):</span>
+                <input
+                  type="number"
+                  value={npcItemFlyDelayMs}
+                  onChange={(e) => setNpcItemFlyDelayMs(Math.max(0, Number(e.target.value) || NPC_ITEM_FLY_DELAY_MS))}
+                  className="w-14 px-2 py-1 rounded bg-black/60 border border-white/20 text-amber-300"
+                />
+              </label>
+            </div>
           </div>
         </div>
       )}
@@ -1054,6 +1167,9 @@ export default function PresSureJudgeGame() {
         {fallingItems.map((fall) => (
           <FallingWeightBlock key={fall.item.id} fall={fall} onComplete={() => handleFallComplete(fall.item)} />
         ))}
+        {npcFlyingToLeft && (
+          <FlyingWeightBlock key={npcFlyingToLeft.item.id} fly={npcFlyingToLeft} onLanding={handleNPCLanding} />
+        )}
         {isDebugMode && debugFlyingItem && (
           <FlyingWeightBlock
             key="debug-fly"
@@ -1294,6 +1410,17 @@ export default function PresSureJudgeGame() {
                       transform: "translate(-50%, -50%)",
                     }}
                   />
+                  {/* P2用：左器接続点（NPCアイテム投入のベジエ終端） */}
+                  <div
+                    ref={leftPanConnectionRef}
+                    aria-hidden
+                    className="absolute w-1 h-1 pointer-events-none opacity-0"
+                    style={{
+                      left: leftEndX,
+                      top: panBottomBase + leftEndY,
+                      transform: "translate(-50%, -50%)",
+                    }}
+                  />
                   {isDebugMode && showConnectionPoints && (
                     <>
                       <div
@@ -1320,18 +1447,17 @@ export default function PresSureJudgeGame() {
                 </div>
               </div>
 
-              {phase === "user" && (
+              {(phase === "user" || phase === "transition") && (
                 <div className="relative z-10 mt-2 mb-2 space-y-3 p-3 rounded-2xl border border-white/10 bg-gradient-to-br from-[#0a0e18] to-[#0f172a] overflow-visible shrink-0">
-                  {/* ドラッグ制約：在庫枠内に収める（左右上下すべて枠内で止まる） */}
                   <div ref={dragConstraintRef} className="relative min-w-0">
                     <div
                       ref={inventoryContainerRef}
-                      className="min-h-[72px] p-3 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible shrink-0"
+                      className="min-h-[72px] p-3 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex flex-wrap gap-3 items-center justify-center overflow-visible shrink-0 relative"
                       style={{ touchAction: "none" }}
                     >
-                    {inventorySlots.every((s) => !s) ? (
+                    {phase === "user" && inventorySlots.every((s) => !s) ? (
                       <span className="text-wit-muted text-sm">在庫なし</span>
-                    ) : (
+                    ) : phase === "user" ? (
                       inventorySlots.map((slot, i) =>
                         slot ? (
                           <DraggableWeightBlock
@@ -1354,8 +1480,10 @@ export default function PresSureJudgeGame() {
                           />
                         )
                       )
-                    )}
-                    {isDebugMode && !debugFlyingItem && (
+                    ) : phase === "transition" && transitionNpcItemVisible && transitionNpcItem ? (
+                      <NPCDropBlock item={transitionNpcItem} />
+                    ) : null}
+                    {phase === "user" && isDebugMode && !debugFlyingItem && (
                       <DebugThrowBlock
                         item={DEBUG_ITEM}
                         onDebugLaunch={handleDebugLaunch}
@@ -1371,7 +1499,12 @@ export default function PresSureJudgeGame() {
                   </div>
                   <button
                     onClick={handleJudge}
-                    className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-bold transition-colors border-2 border-amber-400/50"
+                    disabled={phase === "transition"}
+                    className={`w-full py-3 rounded-xl font-bold transition-colors border-2 border-amber-400/50 ${
+                      phase === "transition"
+                        ? "bg-amber-500/50 text-black/60 cursor-not-allowed"
+                        : "bg-amber-500 hover:bg-amber-600 text-black"
+                    }`}
                   >
                     Judge（確定）
                   </button>
