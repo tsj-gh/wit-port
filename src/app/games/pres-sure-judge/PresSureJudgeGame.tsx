@@ -610,6 +610,7 @@ export default function PresSureJudgeGame() {
   const [p1OffsetY, setP1OffsetY] = useState(DEFAULT_P1_OFFSET_Y);
   const [velocityMultiplier, setVelocityMultiplier] = useState(2.25);
   const [showConnectionPoints, setShowConnectionPoints] = useState(false);
+  const [showArmLines, setShowArmLines] = useState(false);
 
   // 天秤位置デバッグ用（反映済み）
   const [layoutParams, setLayoutParams] = useState<LayoutParams>(DEBUG_LAYOUT_DEFAULTS);
@@ -624,6 +625,7 @@ export default function PresSureJudgeGame() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scaleContainerRef = useRef<HTMLDivElement>(null);
   const [scaleContainerWidth, setScaleContainerWidth] = useState(512);
+  const [scaleContainerHeight, setScaleContainerHeight] = useState(300);
   const rightPanRef = useRef<HTMLDivElement>(null);
   const rightPanConnectionRef = useRef<HTMLDivElement>(null);
   const leftPanConnectionRef = useRef<HTMLDivElement>(null);
@@ -638,7 +640,9 @@ export default function PresSureJudgeGame() {
     const ro = new ResizeObserver((entries) => {
       for (const e of entries) {
         const w = e.contentRect.width;
+        const h = e.contentRect.height;
         if (w > 0) setScaleContainerWidth(w);
+        if (h > 0) setScaleContainerHeight(h);
       }
     });
     ro.observe(el);
@@ -1114,6 +1118,14 @@ export default function PresSureJudgeGame() {
               <span className="text-amber-400">アームと器の接続位置を●で表示</span>
             </label>
             <label className="mt-1 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showArmLines}
+                onChange={(e) => setShowArmLines(e.target.checked)}
+              />
+              <span className="text-amber-400">支点からアームの線を描画</span>
+            </label>
+            <label className="mt-1 flex items-center gap-2">
               <span className="text-amber-400">初速倍率:</span>
               <input
                 type="number"
@@ -1345,12 +1357,9 @@ export default function PresSureJudgeGame() {
                       damping: phase === "gameover" ? 15 : 20,
                     }}
                   >
+                    <div className="absolute left-1/2 bottom-0 w-[85%] h-2 -translate-x-1/2 rounded-full bg-gradient-to-r from-transparent via-slate-500 to-transparent" />
                     <div
-                      className="absolute bottom-0 h-2 rounded-full bg-gradient-to-r from-transparent via-slate-500 to-transparent"
-                      style={{ left: leftEndX, width: rightEndX - leftEndX }}
-                    />
-                    <div
-                      className="absolute left-1/2 bottom-0 w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-300 -translate-x-1/2 translate-y-1/2 z-20 shadow-[0_0_16px_rgba(245,158,11,0.7)]"
+                      className="absolute left-1/2 bottom-0 w-6 h-6 rounded-full bg-slate-400 border-2 border-slate-300 -translate-x-1/2 translate-y-1/2 z-20 shadow-[0_0_16px_rgba(148,163,184,0.7)]"
                       style={{ transformOrigin: "center center" }}
                     />
                   </motion.div>
@@ -1460,6 +1469,70 @@ export default function PresSureJudgeGame() {
                       />
                     </>
                   )}
+                  {isDebugMode && showArmLines && (() => {
+                    const cx = scaleContainerWidth / 2;
+                    const cy = scaleContainerHeight;
+                    const fulcrumX = cx - 12 * Math.sin(rotRad);
+                    const fulcrumY = cy + 12 * Math.cos(rotRad);
+                    const leftX = leftEndX;
+                    const leftY = panBottomBase + leftEndY;
+                    const rightX = rightEndX;
+                    const rightY = panBottomBase + rightEndY;
+                    const distLeft = Math.hypot(leftX - fulcrumX, leftY - fulcrumY);
+                    const distRight = Math.hypot(rightX - fulcrumX, rightY - fulcrumY);
+                    const midLeftX = (fulcrumX + leftX) / 2;
+                    const midLeftY = (fulcrumY + leftY) / 2;
+                    const midRightX = (fulcrumX + rightX) / 2;
+                    const midRightY = (fulcrumY + rightY) / 2;
+                    return (
+                      <svg
+                        className="absolute left-0 top-0 pointer-events-none z-25"
+                        width={scaleContainerWidth}
+                        height={scaleContainerHeight}
+                      >
+                        <line
+                          x1={fulcrumX}
+                          y1={fulcrumY}
+                          x2={leftX}
+                          y2={leftY}
+                          stroke="#f59e0b"
+                          strokeWidth="2"
+                          strokeDasharray="4 4"
+                        />
+                        <line
+                          x1={fulcrumX}
+                          y1={fulcrumY}
+                          x2={rightX}
+                          y2={rightY}
+                          stroke="#3b82f6"
+                          strokeWidth="2"
+                          strokeDasharray="4 4"
+                        />
+                        <text
+                          x={midLeftX}
+                          y={midLeftY}
+                          fill="#f59e0b"
+                          fontSize="10"
+                          fontFamily="monospace"
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                        >
+                          {distLeft.toFixed(0)}px
+                        </text>
+                        <text
+                          x={midRightX}
+                          y={midRightY}
+                          fill="#3b82f6"
+                          fontSize="10"
+                          fontFamily="monospace"
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                        >
+                          {distRight.toFixed(0)}px
+                        </text>
+                      </svg>
+                    );
+                  })()}
                 </motion.div>
                 </div>
               </div>
