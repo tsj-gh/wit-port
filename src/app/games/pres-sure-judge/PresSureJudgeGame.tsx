@@ -37,6 +37,8 @@ const NPC_LEFT_SINK_WAIT_MS = 400;
 const ARM_HALF_MAX_PX = 186;
 /** 器の幅（px）※アーム長計算で使用 */
 const PAN_WIDTH = 128;
+/** スケールコンテナの左右パディング（px）※座標系をコンテンツボックスに揃える */
+const SCALE_CONTAINER_PADDING_X = 10;
 
 // 天秤位置デバッグ用デフォルト値
 type LayoutParams = {
@@ -1030,16 +1032,17 @@ export default function PresSureJudgeGame() {
     if (!scaleEl || !fulcrumEl) return;
     const scaleRect = scaleEl.getBoundingClientRect();
     const fulcrumRect = fulcrumEl.getBoundingClientRect();
+    const contentLeft = scaleRect.left + SCALE_CONTAINER_PADDING_X;
     setFulcrumPos({
-      x: fulcrumRect.left + fulcrumRect.width / 2 - scaleRect.left,
+      x: fulcrumRect.left + fulcrumRect.width / 2 - contentLeft,
       y: fulcrumRect.top + fulcrumRect.height / 2 - scaleRect.top,
     });
     if (leftConnEl && rightConnEl) {
       const leftR = leftConnEl.getBoundingClientRect();
       const rightR = rightConnEl.getBoundingClientRect();
       setConnPos({
-        left: { x: leftR.left + leftR.width / 2 - scaleRect.left, y: leftR.top + leftR.height / 2 - scaleRect.top },
-        right: { x: rightR.left + rightR.width / 2 - scaleRect.left, y: rightR.top + rightR.height / 2 - scaleRect.top },
+        left: { x: leftR.left + leftR.width / 2 - contentLeft, y: leftR.top + leftR.height / 2 - scaleRect.top },
+        right: { x: rightR.left + rightR.width / 2 - contentLeft, y: rightR.top + rightR.height / 2 - scaleRect.top },
       });
     } else {
       setConnPos(null);
