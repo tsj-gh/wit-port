@@ -633,7 +633,9 @@ export default function PresSureJudgeGame() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scaleContainerRef = useRef<HTMLDivElement>(null);
   const fulcrumRef = useRef<HTMLDivElement>(null);
-  const [scaleContainerWidth, setScaleContainerWidth] = useState(512);
+  const [scaleContainerWidth, setScaleContainerWidth] = useState(() =>
+    typeof window !== "undefined" ? Math.min(576, window.innerWidth) : 512
+  );
   const [scaleContainerHeight, setScaleContainerHeight] = useState(300);
   const [viewportWidth, setViewportWidth] = useState(512);
   const [forcedWidth, setForcedWidth] = useState<number | null>(null);
@@ -1282,6 +1284,7 @@ export default function PresSureJudgeGame() {
               <div>Build: {typeof window !== "undefined" && window.location.hostname === "localhost" ? "LOCAL" : process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "-"}</div>
               <div>Time: {process.env.NEXT_PUBLIC_BUILD_DATE || "-"}</div>
               <div>Viewport: {viewportWidth}px</div>
+              <div>Scale: {scaleContainerWidth}px</div>
               {isDevTj && (
                 <div className="flex gap-1 mt-2">
                   {([{ label: "PC", value: null }, { label: "Mobile", value: 375 }, { label: "Tablet", value: 768 }] as const).map(({ label, value }) => (
