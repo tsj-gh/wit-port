@@ -635,6 +635,7 @@ export default function PresSureJudgeGame() {
   const [scaleContainerWidth, setScaleContainerWidth] = useState(512);
   const [scaleContainerHeight, setScaleContainerHeight] = useState(300);
   const [viewportWidth, setViewportWidth] = useState(512);
+  const [forcedWidth, setForcedWidth] = useState<number | null>(null);
   const [fulcrumPos, setFulcrumPos] = useState<{ x: number; y: number } | null>(null);
   const [connPos, setConnPos] = useState<{ left: { x: number; y: number }; right: { x: number; y: number } } | null>(null);
   const rightPanRef = useRef<HTMLDivElement>(null);
@@ -1001,10 +1002,11 @@ export default function PresSureJudgeGame() {
 
   const rotation = getRotation(effectiveBalance, isCollapsed);
 
-  // アーム先端座標（画面幅に応じて可変。PCは最大186px、モバイルは容器幅に収まるよう縮小）
+  // アーム先端座標（画面幅に応じて可変。PCは最大186px、モバイルは容器幅に収まるよう縮小。forcedWidthで疑似ビューポート指定時はそれを使用）
+  const effectiveWidth = forcedWidth ?? (typeof window !== "undefined" ? window.innerWidth : viewportWidth);
   const armHalf = Math.min(
     ARM_HALF_MAX_PX,
-    Math.max(80, Math.min(viewportWidth * 0.4, Math.floor((scaleContainerWidth - PAN_WIDTH) / 2)))
+    Math.max(80, Math.min(effectiveWidth * 0.4, Math.floor((scaleContainerWidth - PAN_WIDTH) / 2)))
   );
   const rotRad = (rotation * Math.PI) / 180;
   const centerX = fulcrumPos?.x ?? scaleContainerWidth / 2;
@@ -1266,6 +1268,21 @@ export default function PresSureJudgeGame() {
               <div>Build: {typeof window !== "undefined" && window.location.hostname === "localhost" ? "LOCAL" : process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "-"}</div>
               <div>Time: {process.env.NEXT_PUBLIC_BUILD_DATE || "-"}</div>
               <div>Viewport: {viewportWidth}px</div>
+              {isDevTj && (
+                <div className="flex gap-1 mt-2">
+                  {([{ label: "PC", value: null }, { label: "Mobile", value: 375 }, { label: "Tablet", value: 768 }] as const).map(({ label, value }) => (
+                    <button
+                      key={label}
+                      onClick={() => setForcedWidth(value)}
+                      className={`px-2 py-0.5 rounded text-[10px] border border-white/20 transition-colors ${
+                        forcedWidth === value ? "bg-emerald-600/80 border-emerald-400" : "bg-black/60 hover:bg-white/10"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1443,6 +1460,14 @@ export default function PresSureJudgeGame() {
                 touchAction: "none",
               }}
             >
+              <div
+                className="flex flex-col min-h-0 flex-1 w-full"
+                style={
+                  forcedWidth != null && isDevTj
+                    ? { width: `${forcedWidth}px`, margin: "0 auto", border: "1px solid red" }
+                    : { width: "100%", margin: 0, border: "none" }
+                }
+              >
               {(phase === "user" || phase === "transition") && (
                 <div className="shrink-0 flex justify-center min-h-[2.5rem] md:min-h-[3rem]">
                   {phase === "user" ? (
@@ -1782,6 +1807,7 @@ export default function PresSureJudgeGame() {
                   </button>
                 </motion.div>
               )}
+              </div>
             </motion.div>
           )}
 
