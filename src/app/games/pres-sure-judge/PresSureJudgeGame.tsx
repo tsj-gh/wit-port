@@ -715,7 +715,6 @@ export default function PresSureJudgeGame() {
   const rightTotal = history.reduce((s, e) => s + e.right, 0) + currentUserWeight;
 
   const startGame = useCallback(() => {
-    setPhase("npc");
     setTotalBalance(0);
     setHistory([]);
     setPlacedWeights([]);
@@ -725,18 +724,11 @@ export default function PresSureJudgeGame() {
     setRound(0);
     setTimer(INITIAL_TIMER);
     setCollapseAnimDone(false);
-  }, []);
-
-  const runNPCTurn = useCallback(() => {
+    // ラウンド跨ぎと同様: 天秤は平衡・器は空の状態から、在庫枠に1つ表示してベジエで左器へ発射
     const value = Math.floor(Math.random() * (NPC_WEIGHT_MAX - NPC_WEIGHT_MIN + 1)) + NPC_WEIGHT_MIN;
     const npcItem = createNPCWeightItem(value);
-    setLeftPanWeights([npcItem]);
-    setRightPanWeights([]);
-    setTotalBalance((b) => b + value);
-    setRound((r) => r + 1);
-    setInventorySlots(generateRoundInventory());
-    setPhase("user");
-    setTimer(INITIAL_TIMER);
+    setTransitionNpcItem(npcItem);
+    setPhase("transition");
   }, []);
 
   const performResolution = useCallback(() => {
@@ -877,13 +869,6 @@ export default function PresSureJudgeGame() {
     setDebugFlyingItem(null);
     if (!isDebugMode) setDebugOverlay(null);
   }, [isDebugMode]);
-
-  useEffect(() => {
-    if (phase !== "npc") return;
-    const delay = round === 0 ? 300 : 600;
-    const id = setTimeout(runNPCTurn, delay);
-    return () => clearTimeout(id);
-  }, [phase, round, runNPCTurn]);
 
   const completeTransition = useCallback(() => {
     setTransitionNpcItem(null);
