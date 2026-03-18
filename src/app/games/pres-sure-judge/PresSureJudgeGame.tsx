@@ -1371,10 +1371,14 @@ export default function PresSureJudgeGame() {
                     className="relative w-full"
                     style={{ transformOrigin: "center center" }}
                   >
-                  {/* アームと支点のみ回転（天秤は初期位置固定・回転のみ） */}
+                  {/* アームと支点のみ回転（支点を接続点の幾何中心＝panBottomBaseに配置） */}
                   <motion.div
-                    className="absolute left-0 right-0 bottom-0 flex items-end justify-center pb-2 pointer-events-none"
-                    style={{ height: layoutParams.armHeight, transformOrigin: "center bottom" }}
+                    className="absolute left-0 right-0 flex items-end justify-center pointer-events-none"
+                    style={{
+                      bottom: `calc(100% - ${panBottomBase}px)`,
+                      height: layoutParams.armHeight,
+                      transformOrigin: "center bottom",
+                    }}
                     animate={{
                       rotate: rotation,
                       scale: phase === "gameover" ? (collapseAnimDone ? 0.95 : 1) : 1,
