@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -625,8 +625,10 @@ export default function PresSureJudgeGame() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scaleContainerRef = useRef<HTMLDivElement>(null);
+  const fulcrumRef = useRef<HTMLDivElement>(null);
   const [scaleContainerWidth, setScaleContainerWidth] = useState(512);
   const [scaleContainerHeight, setScaleContainerHeight] = useState(300);
+  const [fulcrumPos, setFulcrumPos] = useState<{ x: number; y: number } | null>(null);
   const rightPanRef = useRef<HTMLDivElement>(null);
   const rightPanConnectionRef = useRef<HTMLDivElement>(null);
   const leftPanConnectionRef = useRef<HTMLDivElement>(null);
@@ -999,6 +1001,19 @@ export default function PresSureJudgeGame() {
   const panWidth = 128;
   const panBottomBase = 32;
 
+  useLayoutEffect(() => {
+    if (!showArmLines || !scaleContainerRef.current || !fulcrumRef.current) {
+      setFulcrumPos(null);
+      return;
+    }
+    const scaleRect = scaleContainerRef.current.getBoundingClientRect();
+    const fulcrumRect = fulcrumRef.current.getBoundingClientRect();
+    setFulcrumPos({
+      x: fulcrumRect.left + fulcrumRect.width / 2 - scaleRect.left,
+      y: fulcrumRect.top + fulcrumRect.height / 2 - scaleRect.top,
+    });
+  }, [showArmLines, rotation, phase, collapseAnimDone]);
+
   const leftPlaced = placedWeights.filter((w) => w.side === "left");
   const leftCurrentTotalHeight = leftPanWeights.reduce(
     (s, w) => s + getWeightHeight(w.value, "left"),
@@ -1366,8 +1381,12 @@ export default function PresSureJudgeGame() {
                       damping: phase === "gameover" ? 15 : 20,
                     }}
                   >
-                    <div className="absolute left-1/2 bottom-0 w-[85%] h-2 -translate-x-1/2 rounded-full bg-gradient-to-r from-transparent via-slate-500 to-transparent" />
                     <div
+                      className="absolute bottom-0 h-2 rounded-full bg-gradient-to-r from-transparent via-slate-500 to-transparent"
+                      style={{ left: leftEndX, width: rightEndX - leftEndX }}
+                    />
+                    <div
+                      ref={fulcrumRef}
                       className="absolute left-1/2 bottom-0 w-6 h-6 rounded-full bg-slate-400 border-2 border-slate-300 -translate-x-1/2 translate-y-1/2 z-20 shadow-[0_0_16px_rgba(148,163,184,0.7)]"
                       style={{ transformOrigin: "center center" }}
                     />
@@ -1478,11 +1497,9 @@ export default function PresSureJudgeGame() {
                       />
                     </>
                   )}
-                  {isDebugMode && showArmLines && (() => {
-                    const cx = scaleContainerWidth / 2;
-                    const cy = scaleContainerHeight;
-                    const fulcrumX = cx - 12 * Math.sin(rotRad);
-                    const fulcrumY = cy + 12 * Math.cos(rotRad);
+                  {isDebugMode && showArmLines && fulcrumPos && (() => {
+                    const fulcrumX = fulcrumPos.x;
+                    const fulcrumY = fulcrumPos.y;
                     const leftX = leftEndX;
                     const leftY = panBottomBase + leftEndY;
                     const rightX = rightEndX;
