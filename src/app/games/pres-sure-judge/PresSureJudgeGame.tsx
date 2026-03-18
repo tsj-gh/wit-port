@@ -33,8 +33,10 @@ const DEBUG = false;
 const NPC_ITEM_APPEAR_DELAY_MS = 300;
 const NPC_ITEM_FLY_DELAY_MS = 500;
 const NPC_LEFT_SINK_WAIT_MS = 400;
-/** 支点から各接続点までのX方向距離（左右等距離に揃える） */
-const ARM_HALF_PX = 186;
+/** アーム半長の最大値（px）※PC等広い画面用 */
+const ARM_HALF_MAX_PX = 186;
+/** 器の幅（px）※アーム長計算で使用 */
+const PAN_WIDTH = 128;
 
 // 天秤位置デバッグ用デフォルト値
 type LayoutParams = {
@@ -632,6 +634,7 @@ export default function PresSureJudgeGame() {
   const fulcrumRef = useRef<HTMLDivElement>(null);
   const [scaleContainerWidth, setScaleContainerWidth] = useState(512);
   const [scaleContainerHeight, setScaleContainerHeight] = useState(300);
+  const [viewportWidth, setViewportWidth] = useState(512);
   const [fulcrumPos, setFulcrumPos] = useState<{ x: number; y: number } | null>(null);
   const [connPos, setConnPos] = useState<{ left: { x: number; y: number }; right: { x: number; y: number } } | null>(null);
   const rightPanRef = useRef<HTMLDivElement>(null);
@@ -651,6 +654,13 @@ export default function PresSureJudgeGame() {
   const dragConstraintRef = useRef<HTMLDivElement>(null);
   const [dragResetKey, setDragResetKey] = useState(0);
   const sinkTargetRef = useRef<{ itemId: string; targetY: number } | null>(null);
+
+  useEffect(() => {
+    const updateViewport = () => setViewportWidth(typeof window !== "undefined" ? window.innerWidth : 512);
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
 
   useEffect(() => {
     const el = scaleContainerRef.current;
@@ -1006,15 +1016,18 @@ export default function PresSureJudgeGame() {
 
   const rotation = getRotation(effectiveBalance, isCollapsed);
 
-  // アーム先端座標（支点中心・左右186pxで揃える。支点はgetBoundingClientRectで取得）
-  const armHalf = ARM_HALF_PX;
+  // アーム先端座標（画面幅に応じて可変。PCは最大186px、モバイルは容器幅に収まるよう縮小）
+  const armHalf = Math.min(
+    ARM_HALF_MAX_PX,
+    Math.max(80, Math.min(viewportWidth * 0.4, Math.floor((scaleContainerWidth - PAN_WIDTH) / 2)))
+  );
   const rotRad = (rotation * Math.PI) / 180;
   const centerX = fulcrumPos?.x ?? scaleContainerWidth / 2;
   const leftEndX = centerX - armHalf * Math.cos(rotRad);
   const leftEndY = -armHalf * Math.sin(rotRad);
   const rightEndX = centerX + armHalf * Math.cos(rotRad);
   const rightEndY = armHalf * Math.sin(rotRad);
-  const panWidth = 128;
+  const panWidth = PAN_WIDTH;
   const panBottomBase = 32;
 
   useLayoutEffect(() => {
@@ -1475,9 +1488,10 @@ export default function PresSureJudgeGame() {
                 {/* ラッパー：中央寄せを担当（Framer Motion の transform 上書きを避ける） */}
                 <div
                   ref={scaleContainerRef}
-                  className="absolute left-1/2 w-full max-w-xl -translate-x-1/2"
+                  className="absolute left-1/2 w-full -translate-x-1/2 box-border px-[10px]"
                   style={{
                     top: `clamp(0px, calc(50% - ${layoutParams.scaleWrapperTopOffset}px), calc(100% - ${layoutParams.scaleWrapperMaxOffset}px))`,
+                    maxWidth: "min(576px, 100vw)",
                     ...(isDebugMode && showBoundingBox && { outline: "2px solid red", outlineOffset: -1 }),
                   }}
                 >
