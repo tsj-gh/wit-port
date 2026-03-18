@@ -588,6 +588,7 @@ export default function PresSureJudgeGame() {
   const [collapseAnimDone, setCollapseAnimDone] = useState(false);
   const searchParams = useSearchParams();
   const [isDebugMode, setIsDebugMode] = useState(false);
+  const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
 
   useEffect(() => {
     if (searchParams.get("devtj") === "true") {
@@ -1149,17 +1150,28 @@ export default function PresSureJudgeGame() {
       )}
       {isDebugMode && (
         <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="font-bold text-emerald-400">天秤位置パラメータ</span>
-            <button
-              onClick={() => setIsDebugMode(false)}
-              className="shrink-0 px-2 py-1 rounded border border-white/20"
-              style={{ background: "#10b981" }}
-            >
-              DEBUG ON
-            </button>
+          <div className="flex items-center justify-between gap-2">
+            {isDebugPanelExpanded && <span className="font-bold text-emerald-400 shrink-0">天秤位置パラメータ</span>}
+            <div className="flex items-center gap-1 shrink-0 ml-auto">
+              <button
+                onClick={() => setIsDebugMode(false)}
+                className="px-2 py-1 rounded border border-white/20"
+                style={{ background: "#10b981" }}
+              >
+                DEBUG ON
+              </button>
+              <button
+                onClick={() => setIsDebugPanelExpanded((v) => !v)}
+                className="p-1 rounded border border-white/20 hover:bg-white/10 text-white/80"
+                title={isDebugPanelExpanded ? "パネルを閉じる" : "パネルを開く"}
+              >
+                {isDebugPanelExpanded ? "▲" : "▼"}
+              </button>
+            </div>
           </div>
-          <div className="space-y-1.5">
+          {isDebugPanelExpanded && (
+          <>
+          <div className="mt-2 space-y-1.5">
             <label className="flex items-center justify-between gap-2">
               <span className="text-amber-300/90">scaleWrapperTopOffset:</span>
               <input
@@ -1287,6 +1299,8 @@ export default function PresSureJudgeGame() {
               )}
             </div>
           </div>
+          </>
+          )}
         </div>
       )}
       {isDebugMode && showBoundingBox && (
