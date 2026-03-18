@@ -870,9 +870,9 @@ export default function PresSureJudgeGame() {
         const leftPlaced = placedWeightsRef.current.filter((w) => w.side === "left");
         let baseY: number;
         if (leftPlaced.length > 0) {
-          baseY = Math.max(0, Math.min(...leftPlaced.map((w) => w.y)) - newHeight);
+          baseY = Math.min(...leftPlaced.map((w) => w.y)) - newHeight;
         } else if (pan.length > 0) {
-          baseY = Math.max(0, Math.min(...pan.map((w) => w.position.y)) - newHeight);
+          baseY = Math.min(...pan.map((w) => w.position.y)) - newHeight;
         } else {
           baseY = Math.max(0, PAN_MAX_VISIBLE_HEIGHT - newHeight);
         }
@@ -999,10 +999,11 @@ export default function PresSureJudgeGame() {
     (s, w) => s + getWeightHeight(w.value, "left"),
     0
   );
+  // 既存あり: 0クランプしない（applySinkIfNeededで沈み込み）。既存なし: 器の底から
   let leftBottomOffset =
     leftPlaced.length > 0
-      ? Math.max(0, Math.min(...leftPlaced.map((w) => w.y)) - leftCurrentTotalHeight)
-      : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - leftCurrentTotalHeight); // 器の底から
+      ? Math.min(...leftPlaced.map((w) => w.y)) - leftCurrentTotalHeight
+      : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - leftCurrentTotalHeight);
   // leftPanWeightsは[底,…,上]の順。底に大きいyを割り当てるため逆順で処理
   const leftCurrent: PlacedWeight[] = [...leftPanWeights].reverse().map((w) => {
     const h = getWeightHeight(w.value, "left");
