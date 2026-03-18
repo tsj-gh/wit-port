@@ -44,8 +44,8 @@ type LayoutParams = {
   headerHeightRem: number;
 };
 const DEBUG_LAYOUT_DEFAULTS: LayoutParams = {
-  scaleWrapperTopOffset: 0,
-  scaleWrapperMaxOffset: 60,
+  scaleWrapperTopOffset: 100,
+  scaleWrapperMaxOffset: 200,
   scaleAreaMinHeight: 200,
   armHeight: 256,
   gameGap: 12,
@@ -725,14 +725,14 @@ export default function PresSureJudgeGame() {
       const rightPlaced = prev.filter((w) => w.side === "right");
       const leftNewTotalHeight = leftItems.reduce((s, w) => s + getWeightHeight(w.value, "left"), 0);
       const rightNewTotalHeight = rightItems.reduce((s, w) => s + getWeightHeight(w.value, "right"), 0);
-      // 既存あり: 頂上(min y)の上に積む。既存なし: 器の底から
+      // 既存あり: 頂上(min y)の上に積む（0クランプしない・applySinkIfNeededが伸びを維持）。既存なし: 器の底から
       const leftBottomOffset =
         leftPlaced.length > 0
-          ? Math.max(0, Math.min(...leftPlaced.map((w) => w.y)) - leftNewTotalHeight)
+          ? Math.min(...leftPlaced.map((w) => w.y)) - leftNewTotalHeight
           : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - leftNewTotalHeight);
       const rightBottomOffset =
         rightPlaced.length > 0
-          ? Math.max(0, Math.min(...rightPlaced.map((w) => w.y)) - rightNewTotalHeight)
+          ? Math.min(...rightPlaced.map((w) => w.y)) - rightNewTotalHeight
           : Math.max(0, PAN_MAX_VISIBLE_HEIGHT - rightNewTotalHeight);
 
       let curLeftBottom = leftBottomOffset;
