@@ -1345,7 +1345,10 @@ export default function PresSureJudgeGame() {
                       damping: phase === "gameover" ? 15 : 20,
                     }}
                   >
-                    <div className="absolute left-1/2 bottom-0 w-[85%] h-2 -translate-x-1/2 rounded-full bg-gradient-to-r from-transparent via-slate-500 to-transparent" />
+                    <div
+                      className="absolute bottom-0 h-2 rounded-full bg-gradient-to-r from-transparent via-slate-500 to-transparent"
+                      style={{ left: leftEndX, width: rightEndX - leftEndX }}
+                    />
                     <div
                       className="absolute left-1/2 bottom-0 w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-300 -translate-x-1/2 translate-y-1/2 z-20 shadow-[0_0_16px_rgba(245,158,11,0.7)]"
                       style={{ transformOrigin: "center center" }}
