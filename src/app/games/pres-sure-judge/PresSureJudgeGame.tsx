@@ -2014,7 +2014,9 @@ export default function PresSureJudgeGame() {
                         )
                       )
                     ) : phase === "transition" && transitionNpcItemVisible && transitionNpcItem ? (
-                      <NPCDropBlock item={transitionNpcItem} />
+                      <div className="w-full flex justify-center shrink-0">
+                        <NPCDropBlock item={transitionNpcItem} />
+                      </div>
                     ) : null}
                     {phase === "user" && isDebugMode && !debugFlyingItem && (
                       <DebugThrowBlock
