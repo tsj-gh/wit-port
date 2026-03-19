@@ -49,11 +49,13 @@ export function usePuzzleStock(
   manualPrefetch: () => void;
   isPrefetching: boolean;
   lastGenerationTimeMs: number | null;
+  lastProfile: Record<string, number> | null;
 } {
   const { gridSize = 6, persist = true } = options;
   const [stockCount, setStockCount] = useState(0);
   const [isPrefetching, setIsPrefetching] = useState(false);
   const [lastGenerationTimeMs, setLastGenerationTimeMs] = useState<number | null>(null);
+  const [lastProfile, setLastProfile] = useState<Record<string, number> | null>(null);
   const stockRef = useRef<GenerateResult[]>([]);
   const isFetchingRef = useRef(false);
 
@@ -80,11 +82,19 @@ export function usePuzzleStock(
     try {
       const puzzle = await fetchOne();
       const t1 = performance.now();
-      setLastGenerationTimeMs(Math.round(t1 - t0));
-      if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
-        console.log(`[Prefetch] 盤面生成 ${Math.round(t1 - t0)}ms`);
-      }
+      const elapsed = Math.round(t1 - t0);
+      setLastGenerationTimeMs(elapsed);
       if (puzzle) {
+        if (puzzle.profile) {
+          setLastProfile(puzzle.profile);
+          if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
+            const total = Object.values(puzzle.profile).reduce((a, b) => a + b, 0);
+            console.group("Board Generation Profile");
+            Object.entries(puzzle.profile).forEach(([k, v]) => console.log(`${k}: ${v}ms`));
+            console.log(`合計: ${total}ms (往復含む: ${elapsed}ms)`);
+            console.groupEnd();
+          }
+        }
         stockRef.current = [...stockRef.current, puzzle];
         if (persist) saveToStorage(gridSize, stockRef.current);
         flushCount();
@@ -105,8 +115,15 @@ export function usePuzzleStock(
       const t1 = performance.now();
       const elapsed = Math.round(t1 - t0);
       setLastGenerationTimeMs(elapsed);
-      if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
-        console.log(`[Prefetch] 手動実行 ${elapsed}ms`);
+      if (puzzle?.profile) {
+        setLastProfile(puzzle.profile);
+        if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
+          const total = Object.values(puzzle.profile).reduce((a, b) => a + b, 0);
+          console.group("Board Generation Profile");
+          Object.entries(puzzle.profile).forEach(([k, v]) => console.log(`${k}: ${v}ms`));
+          console.log(`合計: ${total}ms (往復含む: ${elapsed}ms)`);
+          console.groupEnd();
+        }
       }
       if (puzzle && stockRef.current.length < STOCK_MAX) {
         stockRef.current = [...stockRef.current, puzzle];
@@ -171,5 +188,6 @@ export function usePuzzleStock(
     manualPrefetch,
     isPrefetching,
     lastGenerationTimeMs,
+    lastProfile,
   };
 }

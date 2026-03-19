@@ -119,7 +119,7 @@ export default function PairLinkGame() {
     gridSize > 1 ? (canvasPixelSize - PADDING * 2) / (gridSize - 1) : 0;
   const canvasSize = Math.round(PADDING * 2 + (gridSize - 1) * spacing) || 420;
 
-  const { getPuzzle, stockCount, prefetch, manualPrefetch, isPrefetching, lastGenerationTimeMs } = usePuzzleStock({ gridSize, persist: true });
+  const { getPuzzle, stockCount, prefetch, manualPrefetch, isPrefetching, lastGenerationTimeMs, lastProfile } = usePuzzleStock({ gridSize, persist: true });
 
   const initGame = useCallback(
     async (size: number) => {
@@ -725,6 +725,20 @@ export default function PairLinkGame() {
                   最終生成時間:{" "}
                   <span className="tabular-nums">{lastGenerationTimeMs != null ? `${lastGenerationTimeMs}ms` : "—"}</span>
                 </div>
+                {lastProfile && Object.keys(lastProfile).length > 0 && (
+                  <div className="mt-1 pt-1 border-t border-white/10">
+                    <div className="font-semibold text-slate-300 mb-0.5">[生成内訳]</div>
+                    {Object.entries(lastProfile).map(([step, ms]) => {
+                      const cn = ms > 100 ? "text-red-400 font-bold" : ms > 16.7 ? "text-amber-400" : "";
+                      return (
+                        <div key={step} className="flex justify-between gap-2">
+                          <span>{step}:</span>
+                          <span className={`tabular-nums shrink-0 ${cn}`}>{ms} ms</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 <div>
                   広告リフレッシュ: 最終{" "}
                   {adsRefreshState.lastRefreshAt

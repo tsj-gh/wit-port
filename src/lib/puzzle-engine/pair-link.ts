@@ -12,7 +12,11 @@ export type PuzzleResult = {
   pairs: Pair[];
   gridSize: number;
   pairCount: number;
+  profile?: GenerationProfile;
 };
+
+/** 工程別の所要時間（ms）デバッグ用 */
+export type GenerationProfile = Record<string, number>;
 
 const COLORS = [
   "#ff4757", "#2e86de", "#2ed573", "#ffa502", "#a29bfe",
@@ -315,15 +319,22 @@ function generateFullCoverByBeam(gridSize: number, pairCount: number): number[][
   return null;
 }
 
-function generateCandidate6x6(gridSize: number, pairCount: number): {
+function generateCandidate6x6(
+  gridSize: number,
+  pairCount: number,
+  profile?: GenerationProfile
+): {
   grid: number[][];
   pairs: Pair[];
   difficultyScore: number;
 } | null {
   const n = gridSize;
+  let t0 = performance.now();
   const forestGrid = generateFullCoverByBeam(n, pairCount);
+  if (profile) profile.BeamSearch = Math.round(performance.now() - t0);
   if (!forestGrid) return null;
 
+  t0 = performance.now();
   const pairs: Pair[] = [];
   const dirs: [number, number][] = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 
@@ -356,9 +367,12 @@ function generateCandidate6x6(gridSize: number, pairCount: number): {
     solveGrid[p.start[0]][p.start[1]] = p.id;
     solveGrid[p.end[0]][p.end[1]] = p.id;
   });
+  if (profile) profile.ExtractPairs = Math.round(performance.now() - t0);
 
+  t0 = performance.now();
   const stats = { nodes: 0, nodeLimit: n * n * pairCount * 40 };
   const solCount = countSolutions(solveGrid, pairs, 0, 2, stats);
+  if (profile) profile.UniqueCheck = Math.round(performance.now() - t0);
   if (solCount !== 1) return null;
 
   return { grid: forestGrid, pairs, difficultyScore: stats.nodes };
@@ -366,9 +380,11 @@ function generateCandidate6x6(gridSize: number, pairCount: number): {
 
 function generateCandidate8x8(
   gridSize: number,
-  pairCount: number
+  pairCount: number,
+  profile?: GenerationProfile
 ): { grid: null; pairs: Pair[]; difficultyScore: number } | null {
   const n = gridSize;
+  let t0 = performance.now();
   const cells: { r: number; c: number }[] = [];
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) cells.push({ r, c });
   for (let i = cells.length - 1; i > 0; i--) {
@@ -388,7 +404,9 @@ function generateCandidate8x8(
     isTerminal[c1.r][c1.c] = true;
     isTerminal[c2.r][c2.c] = true;
   }
+  if (profile) profile.InitTerminals = Math.round(performance.now() - t0);
 
+  t0 = performance.now();
   const vertCount = (n - 1) * n;
   const horizCount = n * (n - 1);
   const edgeOffset = 0;
@@ -499,8 +517,11 @@ function generateCandidate8x8(
       }
     }
   }
+  if (profile) profile.BuildClauses = Math.round(performance.now() - t0);
 
+  t0 = performance.now();
   const assign = solveSat(numVars, clauses, 2000);
+  if (profile) profile.SolveSat = Math.round(performance.now() - t0);
   if (!assign) return null;
 
   let difficultyScore = 0;
@@ -512,7 +533,7 @@ function generateCandidate8x8(
   return { grid: null, pairs, difficultyScore };
 }
 
-function generateCandidate(gridSize: number): {
+function generateCandidate(gridSize: number, profile?: GenerationProfile): {
   grid: number[][] | null;
   pairs: Pair[];
   difficultyScore?: number;
@@ -520,9 +541,9 @@ function generateCandidate(gridSize: number): {
   const pairCount = getPairCount(gridSize);
 
   if (gridSize <= 6) {
-    return generateCandidate6x6(gridSize, pairCount);
+    return generateCandidate6x6(gridSize, pairCount, profile);
   }
-  return generateCandidate8x8(gridSize, pairCount);
+  return generateCandidate8x8(gridSize, pairCount, profile);
 }
 
 /**
@@ -533,17 +554,20 @@ export function generatePairLinkPuzzle(gridSize: number): PuzzleResult | null {
   const baseThreshold = gridSize * pairCount * 10;
   const timeLimitMs = 50000;
   const start = performance.now();
+  const profile: GenerationProfile = {};
 
   for (;;) {
     if (performance.now() - start > timeLimitMs) return null;
 
-    const candidate = generateCandidate(gridSize);
+    Object.keys(profile).forEach((k) => delete profile[k]);
+    const candidate = generateCandidate(gridSize, profile);
     if (!candidate) continue;
 
     if (gridSize <= 6 && candidate.difficultyScore != null && candidate.difficultyScore < baseThreshold) {
       continue;
     }
 
+    const t0 = performance.now();
     const numbers: NumberCell[] = [];
     candidate.pairs.forEach((p, idx) => {
       const color = COLORS[idx % COLORS.length];
@@ -552,12 +576,14 @@ export function generatePairLinkPuzzle(gridSize: number): PuzzleResult | null {
       numbers.push({ x: c1, y: r1, val: p.id, color });
       numbers.push({ x: c2, y: r2, val: p.id, color });
     });
+    profile.Format = Math.round(performance.now() - t0);
 
     return {
       numbers,
       pairs: candidate.pairs,
       gridSize,
       pairCount,
+      profile,
     };
   }
 }

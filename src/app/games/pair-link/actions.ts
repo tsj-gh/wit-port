@@ -4,6 +4,7 @@ import {
   generatePairLinkPuzzle,
   validatePaths,
   type Pair,
+  type GenerationProfile,
 } from "@/lib/puzzle-engine/pair-link";
 
 export type GenerateResult = {
@@ -12,6 +13,7 @@ export type GenerateResult = {
   gridSize: number;
   pairCount: number;
   error?: string;
+  profile?: GenerationProfile;
 };
 
 /** プリフェッチ等で複数リクエストが同時に来ても問題なし（純粋関数・共有状態なし） */
@@ -33,6 +35,7 @@ export async function generatePuzzleAction(
     pairs: result.pairs,
     gridSize: result.gridSize,
     pairCount: result.pairCount,
+    profile: result.profile,
   };
 }
 
