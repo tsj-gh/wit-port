@@ -4,6 +4,7 @@ next/node_modules/
 
 # Build outputs
 .next/
+tsconfig.tsbuildinfo
 next/.next/
 out/
 build/
