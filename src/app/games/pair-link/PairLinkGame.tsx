@@ -94,6 +94,8 @@ export default function PairLinkGame() {
   }, [forcedWidth]);
 
   const effectiveViewportWidth = forcedWidth ?? windowWidth - 40;
+  const isMobile =
+    forcedWidth === 375 || (forcedWidth == null && windowWidth < 768);
   const canvasPixelSize = Math.min(500, Math.max(300, effectiveViewportWidth));
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -777,8 +779,8 @@ export default function PairLinkGame() {
         </div>
       </header>
 
-      {/* 広告枠1: ヘッダーとパズルエリアの間 */}
-      <div className="mb-4">
+      {/* 広告枠1: PCは上部、モバイルでは盤面直下へ配置（Switching Logic） */}
+      <div className={isMobile ? "hidden" : "mb-4"}>
         <PairLinkAdSlot slotIndex={1} isDebugMode={isDebugMode} />
       </div>
 
@@ -836,8 +838,14 @@ export default function PairLinkGame() {
               onPointerCancel={handlePointerUp}
             />
           </div>
+          {/* 広告枠1（モバイルのみ）: 盤面直下・操作UIの上に配置 */}
+          {isMobile && (
+            <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
+              <PairLinkAdSlot slotIndex={1} isDebugMode={isDebugMode} />
+            </div>
+          )}
           {/* 広告枠2: キャンバス直下（パズル視認性を損なわない位置） */}
-          <div className="mt-4 w-full max-w-[520px] mx-auto">
+          <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
             <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
           </div>
         </div>
