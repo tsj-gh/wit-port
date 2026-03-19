@@ -29,23 +29,34 @@ function decodePuzzle(
 export type GenerateResult = {
   clues: Clues;
   n: number;
+  seed?: string;
   error?: string;
 };
 
 export async function generatePuzzleAction(
   n: number,
-  difficulty: "easy" | "normal" | "hard"
+  difficulty: "easy" | "normal" | "hard",
+  seed?: string
 ): Promise<GenerateResult> {
-  const { solution, clues } = generateUniquePuzzle(n, difficulty);
-  const cookieStore = await cookies();
-  cookieStore.set(PUZZLE_COOKIE, encodePuzzle(solution, n), {
+  try {
+    const result = generateUniquePuzzle(n, difficulty, 40, seed);
+    const { solution, clues } = result;
+    const cookieStore = await cookies();
+    cookieStore.set(PUZZLE_COOKIE, encodePuzzle(solution, n), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     maxAge: COOKIE_MAX_AGE,
     path: "/",
   });
-  return { clues, n };
+    return { clues, n, seed: result.seed };
+  } catch (err) {
+    return {
+      clues: { top: [], bottom: [], left: [], right: [] },
+      n,
+      error: err instanceof Error ? err.message : "パズルの生成に失敗しました。",
+    };
+  }
 }
 
 export type ValidateResult = {

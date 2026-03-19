@@ -18,13 +18,16 @@ export type GenerateResult = {
   attempts?: number;
   /** 生成開始から終了までの全体所要時間（ms） */
   totalMs?: number;
+  /** 盤面生成に使用したシード値（再現用） */
+  seed?: string;
 };
 
 /** プリフェッチ等で複数リクエストが同時に来ても問題なし（純粋関数・共有状態なし） */
 export async function generatePuzzleAction(
-  gridSize: number
+  gridSize: number,
+  seed?: string
 ): Promise<GenerateResult> {
-  const result = generatePairLinkPuzzle(gridSize);
+  const result = generatePairLinkPuzzle(gridSize, seed);
   if (!result) {
     return {
       numbers: [],
@@ -42,6 +45,7 @@ export async function generatePuzzleAction(
     profile: result.profile,
     attempts: result.attempts,
     totalMs: result.totalMs,
+    seed: result.seed,
   };
 }
 

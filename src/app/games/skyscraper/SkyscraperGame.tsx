@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import confetti from "canvas-confetti";
 import {
@@ -44,38 +45,46 @@ export default function SkyscraperGame() {
   const [loading, setLoading] = useState(true);
   const [timeSeconds, setTimeSeconds] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
+  const [currentSeed, setCurrentSeed] = useState<string | null>(null);
+  const [hashInput, setHashInput] = useState("");
+  const searchParams = useSearchParams();
+  const isDevTj = searchParams.get("devtj") === "true";
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeSecondsRef = useRef(0);
   const selectedCellRef = useRef<{ r: number; c: number } | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const swipeHandledRef = useRef(false);
 
-  const loadPuzzle = useCallback(async (size: number, diff: "easy" | "normal" | "hard") => {
-    setLoading(true);
-    setSolved(false);
-    setShowClearOverlay(false);
-    setN(size);
-    setDifficulty(diff);
-    setTimeSeconds(0);
-    timeSecondsRef.current = 0;
-    setTimerActive(false);
-    setMaybeMode(false);
-    setMaybeGridSnapshot(null);
-    setSinceMaybeHistory([]);
-    setFirstDeterminedCell(null);
-    const result = await generatePuzzleAction(size, diff);
-    if (result.error) {
-      setStatus(result.error);
+  const loadPuzzle = useCallback(
+    async (size: number, diff: "easy" | "normal" | "hard", seed?: string) => {
+      setLoading(true);
+      setSolved(false);
+      setShowClearOverlay(false);
+      setN(size);
+      setDifficulty(diff);
+      setTimeSeconds(0);
+      timeSecondsRef.current = 0;
+      setTimerActive(false);
+      setMaybeMode(false);
+      setMaybeGridSnapshot(null);
+      setSinceMaybeHistory([]);
+      setFirstDeterminedCell(null);
+      const result = await generatePuzzleAction(size, diff, seed);
+      if (result.error) {
+        setStatus(result.error);
+        setLoading(false);
+        return;
+      }
+      setClues(result.clues);
+      setN(result.n);
+      setGrid(emptyGrid(result.n));
+      setStatus("");
+      setCurrentSeed(result.seed ?? null);
       setLoading(false);
-      return;
-    }
-    setClues(result.clues);
-    setN(result.n);
-    setGrid(emptyGrid(result.n));
-    setStatus("");
-    setLoading(false);
-    setTimerActive(true);
-  }, []);
+      setTimerActive(true);
+    },
+    []
+  );
 
   useEffect(() => {
     loadPuzzle(n, difficulty);
@@ -313,6 +322,46 @@ export default function SkyscraperGame() {
 
   return (
     <div className="mx-auto max-w-[1080px] w-full px-4 py-6">
+      {isDevTj && (
+        <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono">
+          <div className="font-bold text-emerald-400 mb-2">デバッグパネル（シード）</div>
+          <div className="space-y-2 text-slate-400/90 text-[10px]">
+            <div className="flex items-center gap-1">
+              <span className="shrink-0">Current Hash:</span>
+              <code className="text-[9px] truncate max-w-[140px] bg-black/40 px-1 rounded" title={currentSeed ?? ""}>
+                {currentSeed ?? "—"}
+              </code>
+              <button
+                onClick={() => currentSeed && navigator.clipboard?.writeText(currentSeed)}
+                disabled={!currentSeed}
+                className="px-1 py-0.5 rounded text-[9px] border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50"
+              >
+                コピー
+              </button>
+            </div>
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="shrink-0">Input Hash:</span>
+              <input
+                type="text"
+                value={hashInput}
+                onChange={(e) => setHashInput(e.target.value)}
+                placeholder="ハッシュを入力"
+                className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+              />
+              <button
+                onClick={() => {
+                  const s = hashInput.trim();
+                  if (s) loadPuzzle(n, difficulty, s);
+                }}
+                disabled={!hashInput.trim() || loading}
+                className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50"
+              >
+                ハッシュから生成
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <header className="flex justify-between items-center mb-6">
         <Link
           href="/"

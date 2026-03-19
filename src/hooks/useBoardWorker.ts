@@ -11,6 +11,8 @@ export type GenerateResult = {
   profile?: Record<string, number>;
   attempts?: number;
   totalMs?: number;
+  /** 盤面生成に使用したシード値（再現用） */
+  seed?: string;
 };
 
 /** Worker との通信メッセージ（全タイプで requestId を任意に持てる） */
@@ -18,7 +20,7 @@ type WorkerMessage =
   | { type: "STATUS"; status: string; requestId?: string }
   | {
       type: "SUCCESS";
-      board: Omit<GenerateResult, "profile" | "attempts" | "totalMs" | "error">;
+      board: Omit<GenerateResult, "profile" | "attempts" | "totalMs" | "error"> & { seed?: string };
       metrics: { profile?: Record<string, number>; attempts?: number; totalMs?: number };
       requestId: string;
     }
@@ -45,6 +47,7 @@ function releaseWorker(): void {
 
 type QueueItem = {
   gridSize: number;
+  seed?: string;
   resolve: (r: GenerateResult) => void;
   reject: (e: Error) => void;
   requestId: string;
@@ -55,7 +58,7 @@ type QueueItem = {
  * Pair-link ページ・トップページの両方で利用可能
  */
 export function useBoardWorker(): {
-  generate: (gridSize: number) => Promise<GenerateResult>;
+  generate: (gridSize: number, seed?: string) => Promise<GenerateResult>;
   isGenerating: boolean;
 } {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -115,11 +118,16 @@ export function useBoardWorker(): {
 
     worker.addEventListener("message", onMessage);
     worker.addEventListener("error", onError);
-    worker.postMessage({ type: "GENERATE", gridSize: item.gridSize, requestId: item.requestId });
+    worker.postMessage({
+      type: "GENERATE",
+      gridSize: item.gridSize,
+      seed: item.seed,
+      requestId: item.requestId,
+    });
   }, []);
 
   const generate = useCallback(
-    (gridSize: number): Promise<GenerateResult> => {
+    (gridSize: number, seed?: string): Promise<GenerateResult> => {
       return new Promise((resolve, reject) => {
         if (!mountedRef.current) {
           reject(new Error("Unmounted"));
@@ -129,6 +137,7 @@ export function useBoardWorker(): {
         const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
         queueRef.current.push({
           gridSize,
+          seed,
           resolve,
           reject,
           requestId,

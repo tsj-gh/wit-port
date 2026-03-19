@@ -1,7 +1,32 @@
 /**
  * Board Worker: Pair-link puzzle generation
  * Plain JS port of src/lib/puzzle-engine/pair-link.ts
+ * シード値指定可能な PRNG（Mulberry32）で再現性を確保
  */
+
+function hashString(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  }
+  return h >>> 0;
+}
+
+function mulberry32(a) {
+  return function () {
+    let t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function createRandom(seed) {
+  if (seed != null && String(seed).trim() !== "") {
+    return mulberry32(hashString(String(seed)));
+  }
+  return () => Math.random();
+}
 
 const COLORS = [
   "#ff4757", "#2e86de", "#2ed573", "#ffa502", "#a29bfe",
@@ -18,7 +43,7 @@ function getPairCount(gridSize) {
   }
 }
 
-function countSolutions(grid, pairs, pairIndex, maxSolutions, stats) {
+function countSolutions(grid, pairs, pairIndex, maxSolutions, stats, random) {
   const n = grid.length;
   if (pairIndex === pairs.length) {
     for (let r = 0; r < n; r++) {
@@ -36,7 +61,7 @@ function countSolutions(grid, pairs, pairIndex, maxSolutions, stats) {
 
   const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
   for (let i = dirs.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
   }
 
@@ -49,7 +74,7 @@ function countSolutions(grid, pairs, pairIndex, maxSolutions, stats) {
     if (stats.nodes > stats.nodeLimit) return;
 
     if (r === tr && c === tc) {
-      solutions += countSolutions(grid, pairs, pairIndex + 1, maxSolutions - solutions, stats);
+      solutions += countSolutions(grid, pairs, pairIndex + 1, maxSolutions - solutions, stats, random);
       return;
     }
 
@@ -219,7 +244,7 @@ function evaluateForestGrid(grid) {
   return score;
 }
 
-function generateFullCoverByBeam(gridSize, pairCount) {
+function generateFullCoverByBeam(gridSize, pairCount, random) {
   const n = gridSize;
   const beamWidth = 20;
   const maxSteps = n * n * 8;
@@ -227,7 +252,7 @@ function generateFullCoverByBeam(gridSize, pairCount) {
   const cells = [];
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) cells.push({ r, c });
   for (let i = cells.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [cells[i], cells[j]] = [cells[j], cells[i]];
   }
 
@@ -290,10 +315,10 @@ function generateFullCoverByBeam(gridSize, pairCount) {
   return null;
 }
 
-function generateCandidate6x6(gridSize, pairCount, profile) {
+function generateCandidate6x6(gridSize, pairCount, profile, random) {
   const n = gridSize;
   let t0 = performance.now();
-  const forestGrid = generateFullCoverByBeam(n, pairCount);
+  const forestGrid = generateFullCoverByBeam(n, pairCount, random);
   if (profile) profile.BeamSearch = Math.round(performance.now() - t0);
   if (!forestGrid) return null;
 
@@ -334,20 +359,20 @@ function generateCandidate6x6(gridSize, pairCount, profile) {
 
   t0 = performance.now();
   const stats = { nodes: 0, nodeLimit: n * n * pairCount * 40 };
-  const solCount = countSolutions(solveGrid, pairs, 0, 2, stats);
+  const solCount = countSolutions(solveGrid, pairs, 0, 2, stats, random);
   if (profile) profile.UniqueCheck = Math.round(performance.now() - t0);
   if (solCount !== 1) return null;
 
   return { grid: forestGrid, pairs, difficultyScore: stats.nodes };
 }
 
-function generateCandidate8x8(gridSize, pairCount, profile) {
+function generateCandidate8x8(gridSize, pairCount, profile, random) {
   const n = gridSize;
   let t0 = performance.now();
   const cells = [];
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) cells.push({ r, c });
   for (let i = cells.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [cells[i], cells[j]] = [cells[j], cells[i]];
   }
 
@@ -492,13 +517,13 @@ function generateCandidate8x8(gridSize, pairCount, profile) {
   return { grid: null, pairs, difficultyScore };
 }
 
-function generateCandidate(gridSize, profile) {
+function generateCandidate(gridSize, profile, random) {
   const pairCount = getPairCount(gridSize);
 
   if (gridSize <= 6) {
-    return generateCandidate6x6(gridSize, pairCount, profile);
+    return generateCandidate6x6(gridSize, pairCount, profile, random);
   }
-  return generateCandidate8x8(gridSize, pairCount, profile);
+  return generateCandidate8x8(gridSize, pairCount, profile, random);
 }
 
 function addToCumulative(cumulative, delta) {
@@ -507,7 +532,7 @@ function addToCumulative(cumulative, delta) {
   }
 }
 
-function generatePairLinkPuzzle(gridSize) {
+function generatePairLinkPuzzle(gridSize, seed) {
   const pairCount = getPairCount(gridSize);
   const baseThreshold = gridSize * pairCount * 10;
   const timeLimitMs = 50000;
@@ -515,19 +540,26 @@ function generatePairLinkPuzzle(gridSize) {
   const cumulativeProfile = {};
   let attempts = 0;
 
+  const hasSeed = seed != null && String(seed).trim() !== "";
+
   for (;;) {
     if (performance.now() - totalStart > timeLimitMs) return null;
     attempts += 1;
 
+    const attemptSeed = hasSeed ? String(seed) : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+    const random = createRandom(attemptSeed);
+
     const attemptProfile = {};
-    const candidate = generateCandidate(gridSize, attemptProfile);
+    const candidate = generateCandidate(gridSize, attemptProfile, random);
     if (!candidate) {
       addToCumulative(cumulativeProfile, attemptProfile);
+      if (hasSeed) return null;
       continue;
     }
 
     if (gridSize <= 6 && candidate.difficultyScore != null && candidate.difficultyScore < baseThreshold) {
       addToCumulative(cumulativeProfile, attemptProfile);
+      if (hasSeed) return null;
       continue;
     }
 
@@ -552,18 +584,19 @@ function generatePairLinkPuzzle(gridSize) {
       profile: cumulativeProfile,
       attempts,
       totalMs,
+      seed: attemptSeed,
     };
   }
 }
 
 self.onmessage = function (e) {
-  const { type, gridSize, requestId } = e.data || {};
+  const { type, gridSize, seed, requestId } = e.data || {};
   if (type !== 'GENERATE') return;
 
   self.postMessage({ type: 'STATUS', status: 'RUNNING', requestId });
 
   try {
-    const result = generatePairLinkPuzzle(gridSize ?? 8);
+    const result = generatePairLinkPuzzle(gridSize ?? 8, seed);
     if (result) {
       self.postMessage({
         type: 'SUCCESS',
@@ -572,6 +605,7 @@ self.onmessage = function (e) {
           pairs: result.pairs,
           gridSize: result.gridSize,
           pairCount: result.pairCount,
+          seed: result.seed,
         },
         metrics: {
           profile: result.profile,

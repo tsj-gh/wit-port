@@ -42,7 +42,7 @@ export type UsePuzzleStockOptions = {
 export function usePuzzleStock(
   options: UsePuzzleStockOptions = {}
 ): {
-  getPuzzle: (requestedSize?: number) => Promise<GenerateResult>;
+  getPuzzle: (requestedSize?: number, seed?: string) => Promise<GenerateResult>;
   stockCount: number;
   prefetch: () => void;
   manualPrefetch: () => void;
@@ -68,10 +68,10 @@ export function usePuzzleStock(
   }, []);
 
   const fetchOne = useCallback(
-    async (size?: number): Promise<GenerateResult | null> => {
+    async (size?: number, seed?: string): Promise<GenerateResult | null> => {
       const sz = size ?? gridSize;
       try {
-        const result = await workerGenerate(sz);
+        const result = await workerGenerate(sz, seed);
         return result;
       } catch {
         return null;
@@ -152,8 +152,13 @@ export function usePuzzleStock(
   }, [fetchOne, gridSize, persist, flushCount]);
 
   const getPuzzle = useCallback(
-    async (requestedSize?: number): Promise<GenerateResult> => {
+    async (requestedSize?: number, seed?: string): Promise<GenerateResult> => {
       const size = requestedSize ?? gridSize;
+      if (seed != null && seed.trim() !== "") {
+        const puzzle = await fetchOne(size, seed);
+        if (puzzle) return puzzle;
+        throw new Error("指定されたハッシュでの生成に失敗しました。");
+      }
       if (size === gridSize) {
         const head = stockRef.current[0];
         if (head) {

@@ -3,6 +3,8 @@
  * クライアントには一切エクスポートしない
  */
 
+import { createSeededRandom, generateRandomSeed } from "@/lib/prng";
+
 export type Difficulty = "easy" | "normal" | "hard";
 
 export interface Clues {
@@ -17,10 +19,10 @@ export interface Puzzle {
   clues: Clues;
 }
 
-function shuffle<T>(a: T[]): T[] {
+function shuffle<T>(a: T[], random: () => number): T[] {
   const b = [...a];
   for (let i = b.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [b[i], b[j]] = [b[j], b[i]];
   }
   return b;
@@ -32,23 +34,23 @@ function latinBase(n: number): number[][] {
   );
 }
 
-function permuteGrid(grid: number[][]): number[][] {
+function permuteGrid(grid: number[][], random: () => number): number[][] {
   const n = grid.length;
   let g = grid.map((r) => [...r]);
 
   for (let k = 0; k < n * 2; k++) {
-    const r1 = Math.floor(Math.random() * n);
-    const r2 = Math.floor(Math.random() * n);
+    const r1 = Math.floor(random() * n);
+    const r2 = Math.floor(random() * n);
     [g[r1], g[r2]] = [g[r2], g[r1]];
   }
   for (let k = 0; k < n * 2; k++) {
-    const c1 = Math.floor(Math.random() * n);
-    const c2 = Math.floor(Math.random() * n);
+    const c1 = Math.floor(random() * n);
+    const c2 = Math.floor(random() * n);
     for (let r = 0; r < n; r++) {
       [g[r][c1], g[r][c2]] = [g[r][c2], g[r][c1]];
     }
   }
-  const map = shuffle(Array.from({ length: n }, (_, i) => i + 1));
+  const map = shuffle(Array.from({ length: n }, (_, i) => i + 1), random);
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       g[r][c] = map[g[r][c] - 1];
@@ -192,9 +194,12 @@ function countSolutionsWithClues(
 export function generateUniquePuzzle(
   n: number,
   difficulty: Difficulty = "normal",
-  maxTries = 40
-): Puzzle {
-  let solution = permuteGrid(latinBase(n));
+  maxTries = 40,
+  seed?: string
+): Puzzle & { seed?: string } {
+  const random = createSeededRandom(seed);
+
+  let solution = permuteGrid(latinBase(n), random);
   let full = computeClues(solution);
   const sideCount = 4 * n;
   const keepRatio =
@@ -214,7 +219,7 @@ export function generateUniquePuzzle(
     ).length;
   }
 
-  let order = shuffle(pos);
+  let order = shuffle(pos, random);
   let tries = 0;
 
   while (tries < maxTries) {
@@ -230,14 +235,18 @@ export function generateUniquePuzzle(
       best = cand;
       break;
     }
-    solution = permuteGrid(latinBase(n));
+    if (seed) {
+      throw new Error("指定されたシードでは有効なパズルを生成できませんでした。");
+    }
+    solution = permuteGrid(latinBase(n), random);
     full = computeClues(solution);
     best = cloneClues(full);
-    order = shuffle(pos);
+    order = shuffle(pos, random);
     tries++;
   }
 
-  return { solution, clues: best };
+  const usedSeed = seed ?? generateRandomSeed();
+  return { solution, clues: best, seed: usedSeed };
 }
 
 /** ルールベースの途中判定（手がかりとの整合性、重複チェック） */

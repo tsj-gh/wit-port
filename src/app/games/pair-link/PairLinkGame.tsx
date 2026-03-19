@@ -53,6 +53,8 @@ export default function PairLinkGame() {
   const [adsRefreshState, setAdsRefreshState] = useState(() => getAdsRefreshState());
   const [countFlashing, setCountFlashing] = useState(false);
   const [tick, setTick] = useState(0);
+  const [currentSeed, setCurrentSeed] = useState<string | null>(null);
+  const [hashInput, setHashInput] = useState("");
   const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : 500)
@@ -129,7 +131,7 @@ export default function PairLinkGame() {
   const { getPuzzle, stockCount, prefetch, manualPrefetch, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs } = usePuzzleStock({ gridSize, persist: true });
 
   const initGame = useCallback(
-    async (size: number) => {
+    async (size: number, seed?: string) => {
       hasTriggeredClearRef.current = false;
       isCheckingClearRef.current = false;
       setSolved(false);
@@ -137,14 +139,14 @@ export default function PairLinkGame() {
       setTimeSeconds(0);
       setTimerActive(false);
 
-      const hasStock = size === gridSize && stockCount > 0;
+      const hasStock = size === gridSize && stockCount > 0 && !seed;
       if (!hasStock) {
         setLoading(true);
-        setStatus("探索中");
+        setStatus(seed ? "ハッシュから生成中" : "探索中");
       }
 
       try {
-        const result = await getPuzzle(size);
+        const result = await getPuzzle(size, seed);
         if (result.error) {
           setStatus(result.error ?? "生成に失敗しました");
           return;
@@ -156,6 +158,7 @@ export default function PairLinkGame() {
         setStatus("Playing");
         setTimerActive(true);
         setPuzzleKey((k) => k + 1);
+        setCurrentSeed(result.seed ?? null);
       } catch (err) {
         setStatus(
           err instanceof Error ? err.message : "生成に失敗しました。もう一度お試しください。"
@@ -794,6 +797,48 @@ export default function PairLinkGame() {
                     </span>
                   ) : null}
                 </div>
+                {isDevTj && (
+                  <div className="mt-1 pt-1 border-t border-white/10 space-y-1">
+                    <div className="font-semibold text-slate-300">シード（再現用）</div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-400 shrink-0">Current Hash:</span>
+                      <code className="text-[9px] truncate max-w-[140px] bg-black/40 px-1 rounded" title={currentSeed ?? ""}>
+                        {currentSeed ?? "—"}
+                      </code>
+                      <button
+                        onClick={() => {
+                          if (currentSeed && navigator.clipboard) {
+                            navigator.clipboard.writeText(currentSeed);
+                          }
+                        }}
+                        disabled={!currentSeed}
+                        className="px-1 py-0.5 rounded text-[9px] border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        コピー
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-slate-400 shrink-0">Input Hash:</span>
+                      <input
+                        type="text"
+                        value={hashInput}
+                        onChange={(e) => setHashInput(e.target.value)}
+                        placeholder="ハッシュを入力"
+                        className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+                      />
+                      <button
+                        onClick={() => {
+                          const s = hashInput.trim();
+                          if (s) initGame(gridSize, s);
+                        }}
+                        disabled={!hashInput.trim() || loading}
+                        className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        ハッシュから生成
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div>
                   リフレッシュ回数:{" "}
                   <span
