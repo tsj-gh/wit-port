@@ -30,6 +30,8 @@ export type GenerateResult = {
   clues: Clues;
   n: number;
   seed?: string;
+  randomSequenceId?: number;
+  coreGridHash?: string;
   error?: string;
 };
 
@@ -49,7 +51,13 @@ export async function generatePuzzleAction(
     maxAge: COOKIE_MAX_AGE,
     path: "/",
   });
-    return { clues, n, seed: result.seed };
+    return {
+      clues,
+      n,
+      seed: result.seed,
+      randomSequenceId: result.randomSequenceId,
+      coreGridHash: result.coreGridHash,
+    };
   } catch (err) {
     return {
       clues: { top: [], bottom: [], left: [], right: [] },

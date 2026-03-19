@@ -1,9 +1,10 @@
 /**
  * スカイスクレイパーパズルエンジン（サーバー専用）
  * クライアントには一切エクスポートしない
+ * ScopedPRNG により Math.random を一切使用せず、100% 決定論的
  */
 
-import { createSeededRandom, generateRandomSeed } from "@/lib/prng";
+import { ScopedPRNG, generateRandomSeed } from "@/lib/prng";
 
 export type Difficulty = "easy" | "normal" | "hard";
 
@@ -19,10 +20,20 @@ export interface Puzzle {
   clues: Clues;
 }
 
-function shuffle<T>(a: T[], random: () => number): T[] {
+/** グリッド数字のみの簡易ハッシュ（ヒント除く・再現性デバッグ用） */
+export function hashCoreGrid(grid: number[][]): string {
+  const s = grid.map((r) => r.join(",")).join("|");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
+}
+
+function shuffle<T>(a: T[], rng: ScopedPRNG): T[] {
   const b = [...a];
   for (let i = b.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
+    const j = Math.floor(rng.next() * (i + 1));
     [b[i], b[j]] = [b[j], b[i]];
   }
   return b;
@@ -34,23 +45,23 @@ function latinBase(n: number): number[][] {
   );
 }
 
-function permuteGrid(grid: number[][], random: () => number): number[][] {
+function permuteGrid(grid: number[][], rng: ScopedPRNG): number[][] {
   const n = grid.length;
   let g = grid.map((r) => [...r]);
 
   for (let k = 0; k < n * 2; k++) {
-    const r1 = Math.floor(random() * n);
-    const r2 = Math.floor(random() * n);
+    const r1 = Math.floor(rng.next() * n);
+    const r2 = Math.floor(rng.next() * n);
     [g[r1], g[r2]] = [g[r2], g[r1]];
   }
   for (let k = 0; k < n * 2; k++) {
-    const c1 = Math.floor(random() * n);
-    const c2 = Math.floor(random() * n);
+    const c1 = Math.floor(rng.next() * n);
+    const c2 = Math.floor(rng.next() * n);
     for (let r = 0; r < n; r++) {
       [g[r][c1], g[r][c2]] = [g[r][c2], g[r][c1]];
     }
   }
-  const map = shuffle(Array.from({ length: n }, (_, i) => i + 1), random);
+  const map = shuffle(Array.from({ length: n }, (_, i) => i + 1), rng);
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       g[r][c] = map[g[r][c] - 1];
@@ -196,10 +207,11 @@ export function generateUniquePuzzle(
   difficulty: Difficulty = "normal",
   maxTries = 40,
   seed?: string
-): Puzzle & { seed?: string } {
-  const random = createSeededRandom(seed);
+): Puzzle & { seed?: string; randomSequenceId?: number; coreGridHash?: string } {
+  const usedSeed = seed ?? generateRandomSeed();
+  const rng = new ScopedPRNG(usedSeed);
 
-  let solution = permuteGrid(latinBase(n), random);
+  let solution = permuteGrid(latinBase(n), rng);
   let full = computeClues(solution);
   const sideCount = 4 * n;
   const keepRatio =
@@ -219,7 +231,7 @@ export function generateUniquePuzzle(
     ).length;
   }
 
-  let order = shuffle(pos, random);
+  let order = shuffle(pos, rng);
   let tries = 0;
 
   while (tries < maxTries) {
@@ -238,15 +250,20 @@ export function generateUniquePuzzle(
     if (seed) {
       throw new Error("指定されたシードでは有効なパズルを生成できませんでした。");
     }
-    solution = permuteGrid(latinBase(n), random);
+    solution = permuteGrid(latinBase(n), rng);
     full = computeClues(solution);
     best = cloneClues(full);
-    order = shuffle(pos, random);
+    order = shuffle(pos, rng);
     tries++;
   }
 
-  const usedSeed = seed ?? generateRandomSeed();
-  return { solution, clues: best, seed: usedSeed };
+  return {
+    solution,
+    clues: best,
+    seed: usedSeed,
+    randomSequenceId: rng.getCallCount(),
+    coreGridHash: hashCoreGrid(solution),
+  };
 }
 
 /** ルールベースの途中判定（手がかりとの整合性、重複チェック） */

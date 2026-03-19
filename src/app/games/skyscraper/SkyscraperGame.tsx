@@ -46,6 +46,8 @@ export default function SkyscraperGame() {
   const [timeSeconds, setTimeSeconds] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [currentSeed, setCurrentSeed] = useState<string | null>(null);
+  const [randomSequenceId, setRandomSequenceId] = useState<number | null>(null);
+  const [coreGridHash, setCoreGridHash] = useState<string | null>(null);
   const [hashInput, setHashInput] = useState("");
   const searchParams = useSearchParams();
   const isDevTj = searchParams.get("devtj") === "true";
@@ -80,6 +82,8 @@ export default function SkyscraperGame() {
       setGrid(emptyGrid(result.n));
       setStatus("");
       setCurrentSeed(result.seed ?? null);
+      setRandomSequenceId(result.randomSequenceId ?? null);
+      setCoreGridHash(result.coreGridHash ?? null);
       setLoading(false);
       setTimerActive(true);
     },
@@ -339,7 +343,15 @@ export default function SkyscraperGame() {
                 コピー
               </button>
             </div>
-            <div className="flex items-center gap-1 flex-wrap">
+            <div>
+              <span className="shrink-0 text-slate-500">Random Sequence ID:</span>{" "}
+              <span className="tabular-nums">{randomSequenceId ?? "—"}</span>
+            </div>
+            <div>
+              <span className="shrink-0 text-slate-500">Core Grid Hash:</span>{" "}
+              <code className="text-[9px] truncate max-w-[120px] block">{coreGridHash ?? "—"}</code>
+            </div>
+            <div className="flex items-center gap-1 flex-wrap pt-1 border-t border-white/10">
               <span className="shrink-0">Input Hash:</span>
               <input
                 type="text"
