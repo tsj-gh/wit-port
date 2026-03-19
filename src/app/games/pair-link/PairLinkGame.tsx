@@ -6,7 +6,7 @@ import Link from "next/link";
 import confetti from "canvas-confetti";
 import { validatePathsAction } from "./actions";
 import { usePuzzleStock } from "@/hooks/usePuzzleStock";
-import { refreshAds } from "@/lib/ads";
+import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT } from "@/lib/ads";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import type { Pair } from "@/lib/puzzle-engine/pair-link";
 
@@ -47,6 +47,38 @@ export default function PairLinkGame() {
   const [activeVal, setActiveVal] = useState<string | null>(null);
   const [activePathIdx, setActivePathIdx] = useState<number | null>(null);
   const [puzzleKey, setPuzzleKey] = useState(0);
+  const [isDebugMode, setIsDebugMode] = useState(false);
+  const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
+  const [forcedWidth, setForcedWidth] = useState<number | null>(null);
+  const [adsRefreshState, setAdsRefreshState] = useState(() => getAdsRefreshState());
+  const [windowWidth, setWindowWidth] = useState(
+    () => (typeof window !== "undefined" ? window.innerWidth : 500)
+  );
+
+  const searchParams = useSearchParams();
+  const isDevTj = searchParams.get("devtj") === "true";
+
+  useEffect(() => {
+    if (isDevTj) setIsDebugMode(true);
+  }, [isDevTj]);
+
+  useEffect(() => {
+    if (!isDevTj) return;
+    const onRefresh = () => setAdsRefreshState(getAdsRefreshState());
+    window.addEventListener(AD_REFRESH_EVENT, onRefresh);
+    return () => window.removeEventListener(AD_REFRESH_EVENT, onRefresh);
+  }, [isDevTj]);
+
+  useEffect(() => {
+    if (forcedWidth != null) return;
+    const update = () => setWindowWidth(window.innerWidth);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [forcedWidth]);
+
+  const effectiveViewportWidth = forcedWidth ?? windowWidth - 40;
+  const canvasPixelSize = Math.min(500, Math.max(300, effectiveViewportWidth));
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeSecondsRef = useRef(0);
@@ -64,17 +96,6 @@ export default function PairLinkGame() {
     activeValRef.current = activeVal;
     activePathIdxRef.current = activePathIdx;
   }, [isDrawing, activeVal, activePathIdx]);
-
-  const [canvasPixelSize, setCanvasPixelSize] = useState(420);
-  useEffect(() => {
-    const update = () => {
-      const w = typeof window !== "undefined" ? window.innerWidth - 40 : 500;
-      setCanvasPixelSize(Math.min(500, Math.max(300, w)));
-    };
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
 
   const spacing =
     gridSize > 1 ? (canvasPixelSize - PADDING * 2) / (gridSize - 1) : 0;
@@ -262,9 +283,6 @@ export default function PairLinkGame() {
       isCheckingClearRef.current = false;
     }
   }, [paths, pairs, gridSize, solved, loading]);
-
-  const searchParams = useSearchParams();
-  const isDebugMode = searchParams.get("devtj") === "true";
 
   // トリガーA: クリア判定され正解演出開始時に広告リフレッシュ
   useEffect(() => {
@@ -638,7 +656,86 @@ export default function PairLinkGame() {
 
   return (
     <div className="mx-auto max-w-[1080px] w-full px-4 py-6">
-      <header className="flex justify-between items-center mb-6">
+      {isDevTj && !isDebugMode && (
+        <div className="fixed right-4 top-4 z-50">
+          <button
+            onClick={() => setIsDebugMode(true)}
+            className="px-2 py-1 rounded border border-white/20 text-xs font-mono"
+            style={{ background: "#334155" }}
+          >
+            DEBUG OFF
+          </button>
+        </div>
+      )}
+      {isDebugMode && (
+        <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono">
+          <div className="flex items-center justify-between gap-2">
+            {isDebugPanelExpanded && (
+              <span className="font-bold text-emerald-400 shrink-0">デバッグパネル</span>
+            )}
+            <div className="flex items-center gap-1 shrink-0 ml-auto">
+              <button
+                onClick={() => setIsDebugMode(false)}
+                className="px-2 py-1 rounded border border-white/20"
+                style={{ background: "#10b981" }}
+              >
+                DEBUG ON
+              </button>
+              <button
+                onClick={() => setIsDebugPanelExpanded((v) => !v)}
+                className="p-1 rounded border border-white/20 hover:bg-white/10 text-white/80"
+                title={isDebugPanelExpanded ? "パネルを閉じる" : "パネルを開く"}
+              >
+                {isDebugPanelExpanded ? "▲" : "▼"}
+              </button>
+            </div>
+          </div>
+          {isDebugPanelExpanded && (
+            <>
+              <div className="mt-2 space-y-0.5 text-slate-400/90 text-[10px]">
+                <div>
+                  広告リフレッシュ: 最終{" "}
+                  {adsRefreshState.lastRefreshAt
+                    ? new Date(adsRefreshState.lastRefreshAt).toLocaleTimeString("ja-JP")
+                    : "未実行"}
+                </div>
+                <div>リフレッシュ回数: {adsRefreshState.refreshCount}</div>
+              </div>
+              <div className="mt-2 flex gap-1">
+                {([{ label: "PC", value: null }, { label: "Mobile", value: 375 }, { label: "Tablet", value: 768 }] as const).map(
+                  ({ label, value }) => (
+                    <button
+                      key={label}
+                      onClick={() => setForcedWidth(value)}
+                      className={`px-2 py-0.5 rounded text-[10px] border border-white/20 transition-colors ${
+                        forcedWidth === value ? "bg-emerald-600/80 border-emerald-400" : "bg-black/60 hover:bg-white/10"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  )
+                )}
+              </div>
+              <div className="mt-2">
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent(AD_REFRESH_EVENT))}
+                  className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                >
+                  フラッシュテスト
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      <div
+        style={
+          forcedWidth != null && isDevTj
+            ? { width: `${forcedWidth}px`, margin: "0 auto", maxWidth: "100%" }
+            : undefined
+        }
+      >
+        <header className="flex justify-between items-center mb-6">
         <Link
           href="/"
           className="flex items-center gap-3 text-xl sm:text-2xl font-black tracking-wider text-wit-text no-underline hover:opacity-90"
@@ -759,6 +856,7 @@ export default function PairLinkGame() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

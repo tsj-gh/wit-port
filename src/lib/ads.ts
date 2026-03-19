@@ -5,6 +5,22 @@
 
 const AD_REFRESH_COOLDOWN_MS = 30 * 1000;
 let lastRefreshAt = 0;
+let refreshCount = 0;
+
+/** リフレッシュ時のカスタムイベント名（デバッグ用プレースホルダーフラッシュ等） */
+export const AD_REFRESH_EVENT = "pairlink:ad-refresh";
+
+export type AdsRefreshState = {
+  lastRefreshAt: number;
+  refreshCount: number;
+};
+
+/**
+ * 広告リフレッシュ状態を取得（デバッグパネル用）
+ */
+export function getAdsRefreshState(): AdsRefreshState {
+  return { lastRefreshAt, refreshCount };
+}
 
 /**
  * GPT (Google Publisher Tag) を用いて広告をリフレッシュする共通関数。
@@ -22,10 +38,12 @@ export function refreshAds(): void {
   if (!googletag?.pubads) return;
 
   lastRefreshAt = now;
+  refreshCount += 1;
 
   const doRefresh = () => {
     try {
       googletag.pubads().refresh();
+      window.dispatchEvent(new CustomEvent(AD_REFRESH_EVENT));
     } catch {
       // AdBlock 等でタグが読み込まれない場合: ゲームの進行を妨げない
     }

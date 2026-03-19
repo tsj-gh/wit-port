@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { AD_REFRESH_EVENT } from "@/lib/ads";
 
 const ADSENSE_CLIENT = "ca-pub-5383262801288621";
 const SLOT_1 = process.env.NEXT_PUBLIC_ADSENSE_SLOT_PAIRLINK_1 || "";
@@ -22,14 +23,18 @@ type PairLinkAdSlotProps = {
   isDebugMode: boolean;
 };
 
-function AdPlaceholder({ slotIndex }: { slotIndex: number }) {
+const AD_LABELS: Record<number, string> = { 1: "[AD-UNIT-A]", 2: "[AD-UNIT-B]" };
+
+function AdPlaceholder({ slotIndex, isFlashing }: { slotIndex: number; isFlashing: boolean }) {
   return (
     <div
-      className="flex items-center justify-center rounded-lg border border-dashed border-white/20 bg-white/5 text-wit-muted text-sm"
+      className={`flex items-center justify-center rounded-lg border border-dashed border-white/30 bg-slate-700/40 text-wit-muted text-xs font-mono transition-opacity duration-150 ${
+        isFlashing ? "opacity-100 ring-2 ring-emerald-400/80" : "opacity-90"
+      }`}
       style={{ minHeight: AD_MIN_HEIGHT_PX }}
       aria-label={`広告スペース ${slotIndex}（デバッグ表示）`}
     >
-      広告プレースホルダー {slotIndex}
+      {AD_LABELS[slotIndex] ?? `[AD-UNIT-${slotIndex}]`}
     </div>
   );
 }
@@ -40,9 +45,30 @@ function AdPlaceholder({ slotIndex }: { slotIndex: number }) {
  */
 export function PairLinkAdSlot({ slotIndex, isDebugMode }: PairLinkAdSlotProps) {
   const initializedRef = useRef(false);
+  const [isFlashing, setIsFlashing] = useState(false);
 
   const slotId = slotIndex === 1 ? SLOT_1 : SLOT_2;
   const divId = `ad-pairlink-${slotIndex}`;
+  const showPlaceholder = isDebugMode || !slotId;
+
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!showPlaceholder) return;
+    const onRefresh = () => {
+      setIsFlashing(true);
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+      flashTimeoutRef.current = setTimeout(() => {
+        setIsFlashing(false);
+        flashTimeoutRef.current = null;
+      }, 200);
+    };
+    window.addEventListener(AD_REFRESH_EVENT, onRefresh);
+    return () => {
+      window.removeEventListener(AD_REFRESH_EVENT, onRefresh);
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    };
+  }, [showPlaceholder]);
 
   useEffect(() => {
     if (isDebugMode || !SLOT_1 || !SLOT_2) return;
@@ -73,10 +99,10 @@ export function PairLinkAdSlot({ slotIndex, isDebugMode }: PairLinkAdSlotProps) 
     });
   }, [isDebugMode, slotIndex]);
 
-  if (isDebugMode) {
+  if (showPlaceholder) {
     return (
       <div className="my-4">
-        <AdPlaceholder slotIndex={slotIndex} />
+        <AdPlaceholder slotIndex={slotIndex} isFlashing={isFlashing} />
       </div>
     );
   }
