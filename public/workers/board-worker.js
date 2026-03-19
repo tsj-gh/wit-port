@@ -560,7 +560,7 @@ self.onmessage = function (e) {
   const { type, gridSize, requestId } = e.data || {};
   if (type !== 'GENERATE') return;
 
-  self.postMessage({ type: 'STATUS', status: 'RUNNING' });
+  self.postMessage({ type: 'STATUS', status: 'RUNNING', requestId });
 
   try {
     const result = generatePairLinkPuzzle(gridSize ?? 8);

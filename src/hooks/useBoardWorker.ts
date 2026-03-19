@@ -13,8 +13,9 @@ export type GenerateResult = {
   totalMs?: number;
 };
 
+/** Worker との通信メッセージ（全タイプで requestId を任意に持てる） */
 type WorkerMessage =
-  | { type: "STATUS"; status: string }
+  | { type: "STATUS"; status: string; requestId?: string }
   | {
       type: "SUCCESS";
       board: Omit<GenerateResult, "profile" | "attempts" | "totalMs" | "error">;
@@ -75,7 +76,9 @@ export function useBoardWorker(): {
 
     const onMessage = (e: MessageEvent<WorkerMessage>) => {
       const data = e.data;
-      if (!data || data.requestId !== item.requestId) return;
+      if (!data) return;
+      if (data.type === "STATUS") return;
+      if ("requestId" in data && data.requestId !== item.requestId) return;
 
       worker.removeEventListener("message", onMessage);
       worker.removeEventListener("error", onError);
