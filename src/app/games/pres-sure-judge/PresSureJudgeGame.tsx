@@ -4,6 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
+import { PresSureJudgeAdSlot } from "@/components/PresSureJudgeAdSlots";
 
 const BALANCE_LIMIT = 100;
 const NPC_WEIGHT_MIN = 10;
@@ -607,6 +609,28 @@ export default function PresSureJudgeGame() {
     }
   }, [searchParams]);
 
+  const isDevTj = searchParams.get("devtj") === "true";
+  useEffect(() => {
+    if (!isDevTj) return;
+    const onStateChanged = () => setAdsRefreshState(getAdsRefreshState());
+    const onRefreshSuccess = () => {
+      setAdsRefreshState(getAdsRefreshState());
+      setCountFlashing(true);
+      if (countFlashTimeoutRef.current) clearTimeout(countFlashTimeoutRef.current);
+      countFlashTimeoutRef.current = setTimeout(() => {
+        setCountFlashing(false);
+        countFlashTimeoutRef.current = null;
+      }, 450);
+    };
+    window.addEventListener(AD_REFRESH_STATE_CHANGED, onStateChanged);
+    window.addEventListener(AD_REFRESH_EVENT, onRefreshSuccess);
+    return () => {
+      window.removeEventListener(AD_REFRESH_STATE_CHANGED, onStateChanged);
+      window.removeEventListener(AD_REFRESH_EVENT, onRefreshSuccess);
+      if (countFlashTimeoutRef.current) clearTimeout(countFlashTimeoutRef.current);
+    };
+  }, [isDevTj]);
+
   useEffect(() => {
     if (!isDebugMode) {
       setDebugFlyingItem(null);
@@ -669,6 +693,9 @@ export default function PresSureJudgeGame() {
   const inventoryContainerRef = useRef<HTMLDivElement>(null);
   const dragConstraintRef = useRef<HTMLDivElement>(null);
   const [dragResetKey, setDragResetKey] = useState(0);
+  const [adsRefreshState, setAdsRefreshState] = useState(() => getAdsRefreshState());
+  const [countFlashing, setCountFlashing] = useState(false);
+  const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sinkTargetRef = useRef<{ itemId: string; targetY: number } | null>(null);
 
   const inventorySlideRef = useRef<{ startX: number; startScroll: number } | null>(null);
@@ -840,6 +867,7 @@ export default function PresSureJudgeGame() {
   const isCollapsed = phase === "gameover" && collapseAnimDone;
 
   const startGame = useCallback(() => {
+    refreshAds();
     setTotalBalance(0);
     setHistory([]);
     setPlacedWeights([]);
@@ -857,6 +885,7 @@ export default function PresSureJudgeGame() {
   }, []);
 
   const performResolution = useCallback(() => {
+    refreshAds();
     const balance = totalBalanceRef.current;
     const rightItems = rightPanWeightsRef.current;
     const leftItems = leftPanWeightsRef.current;
@@ -1244,8 +1273,6 @@ export default function PresSureJudgeGame() {
   const leftDisplay = applySinkIfNeeded(leftDisplayRaw);
   const rightDisplay = applySinkIfNeeded(rightDisplayRaw);
 
-  const isDevTj = searchParams.get("devtj") === "true";
-
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text isolate">
       {isDevTj && !isDebugMode && (
@@ -1414,6 +1441,35 @@ export default function PresSureJudgeGame() {
                   className="w-14 px-2 py-1 rounded bg-black/60 border border-white/20 text-amber-300"
                 />
               </label>
+            </div>
+            <div className="mt-2 border-t border-white/10 pt-2 space-y-0.5 text-slate-400/90 text-[10px]">
+              <div>
+                広告リフレッシュ: 最終{" "}
+                {adsRefreshState.lastRefreshAt
+                  ? new Date(adsRefreshState.lastRefreshAt).toLocaleTimeString("ja-JP")
+                  : "未実行"}
+                {adsRefreshState.lastAttemptSkipped && (
+                  <span className="ml-1 text-amber-400">(Wait...)</span>
+                )}
+              </div>
+              <div>
+                リフレッシュ回数:{" "}
+                <span
+                  className={`tabular-nums transition-colors duration-200 ${
+                    countFlashing ? "text-amber-400 font-bold" : ""
+                  }`}
+                >
+                  {adsRefreshState.refreshCount}
+                </span>
+              </div>
+              <div className="mt-2">
+                <button
+                  onClick={() => refreshAds()}
+                  className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                >
+                  フラッシュテスト
+                </button>
+              </div>
             </div>
             <div className="mt-2 border-t border-white/10 pt-2 space-y-0.5 text-slate-400/90 text-[10px]">
               <div>Build: {typeof window !== "undefined" && window.location.hostname === "localhost" ? "LOCAL" : process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "-"}</div>
@@ -1954,6 +2010,10 @@ export default function PresSureJudgeGame() {
                   >
                     Judge（確定）
                   </button>
+                  {/* Judgeボタン直下に広告（モバイル優先・PCはサイドパネル内） */}
+                  <div className="mt-4" style={{ minHeight: 100 }}>
+                    <PresSureJudgeAdSlot isDebugMode={isDebugMode} />
+                  </div>
                 </div>
               )}
 
