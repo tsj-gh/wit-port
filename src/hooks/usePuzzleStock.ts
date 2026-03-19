@@ -46,9 +46,14 @@ export function usePuzzleStock(
   getPuzzle: (requestedSize?: number) => Promise<GenerateResult>;
   stockCount: number;
   prefetch: () => void;
+  manualPrefetch: () => void;
+  isPrefetching: boolean;
+  lastGenerationTimeMs: number | null;
 } {
   const { gridSize = 6, persist = true } = options;
   const [stockCount, setStockCount] = useState(0);
+  const [isPrefetching, setIsPrefetching] = useState(false);
+  const [lastGenerationTimeMs, setLastGenerationTimeMs] = useState<number | null>(null);
   const stockRef = useRef<GenerateResult[]>([]);
   const isFetchingRef = useRef(false);
 
@@ -70,8 +75,15 @@ export function usePuzzleStock(
     if (isFetchingRef.current) return;
     if (stockRef.current.length >= STOCK_MAX) return;
     isFetchingRef.current = true;
+    setIsPrefetching(true);
+    const t0 = performance.now();
     try {
       const puzzle = await fetchOne();
+      const t1 = performance.now();
+      setLastGenerationTimeMs(Math.round(t1 - t0));
+      if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
+        console.log(`[Prefetch] 盤面生成 ${Math.round(t1 - t0)}ms`);
+      }
       if (puzzle) {
         stockRef.current = [...stockRef.current, puzzle];
         if (persist) saveToStorage(gridSize, stockRef.current);
@@ -79,6 +91,31 @@ export function usePuzzleStock(
       }
     } finally {
       isFetchingRef.current = false;
+      setIsPrefetching(false);
+    }
+  }, [fetchOne, gridSize, persist, flushCount]);
+
+  const manualPrefetch = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    setIsPrefetching(true);
+    const t0 = performance.now();
+    try {
+      const puzzle = await fetchOne();
+      const t1 = performance.now();
+      const elapsed = Math.round(t1 - t0);
+      setLastGenerationTimeMs(elapsed);
+      if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
+        console.log(`[Prefetch] 手動実行 ${elapsed}ms`);
+      }
+      if (puzzle && stockRef.current.length < STOCK_MAX) {
+        stockRef.current = [...stockRef.current, puzzle];
+        if (persist) saveToStorage(gridSize, stockRef.current);
+        flushCount();
+      }
+    } finally {
+      isFetchingRef.current = false;
+      setIsPrefetching(false);
     }
   }, [fetchOne, gridSize, persist, flushCount]);
 
@@ -131,5 +168,8 @@ export function usePuzzleStock(
     getPuzzle: getPuzzle as (requestedSize?: number) => Promise<GenerateResult>,
     stockCount,
     prefetch,
+    manualPrefetch,
+    isPrefetching,
+    lastGenerationTimeMs,
   };
 }

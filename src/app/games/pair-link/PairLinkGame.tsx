@@ -119,7 +119,7 @@ export default function PairLinkGame() {
     gridSize > 1 ? (canvasPixelSize - PADDING * 2) / (gridSize - 1) : 0;
   const canvasSize = Math.round(PADDING * 2 + (gridSize - 1) * spacing) || 420;
 
-  const { getPuzzle, stockCount } = usePuzzleStock({ gridSize, persist: true });
+  const { getPuzzle, stockCount, prefetch, manualPrefetch, isPrefetching, lastGenerationTimeMs } = usePuzzleStock({ gridSize, persist: true });
 
   const initGame = useCallback(
     async (size: number) => {
@@ -712,6 +712,20 @@ export default function PairLinkGame() {
             <>
               <div className="mt-2 space-y-0.5 text-slate-400/90 text-[10px]">
                 <div>
+                  プリフェッチ状態:{" "}
+                  <span className={isPrefetching ? "text-amber-400" : ""}>
+                    {isPrefetching ? "生成中...（Running）" : "待機中（Idle）"}
+                  </span>
+                </div>
+                <div>
+                  プリフェッチ済みストック数:{" "}
+                  <span className="tabular-nums">{stockCount}</span>
+                </div>
+                <div>
+                  最終生成時間:{" "}
+                  <span className="tabular-nums">{lastGenerationTimeMs != null ? `${lastGenerationTimeMs}ms` : "—"}</span>
+                </div>
+                <div>
                   広告リフレッシュ: 最終{" "}
                   {adsRefreshState.lastRefreshAt
                     ? new Date(adsRefreshState.lastRefreshAt).toLocaleTimeString("ja-JP")
@@ -746,7 +760,14 @@ export default function PairLinkGame() {
                   )
                 )}
               </div>
-              <div className="mt-2">
+              <div className="mt-2 flex flex-wrap gap-1">
+                <button
+                  onClick={() => manualPrefetch()}
+                  disabled={isPrefetching}
+                  className="px-2 py-0.5 rounded text-[10px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  手動プリフェッチ実行
+                </button>
                 <button
                   onClick={() => refreshAds()}
                   className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
