@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import PairLinkGame from "./PairLinkGame";
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
@@ -43,7 +44,9 @@ export default function PairLinkPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(pairLinkJsonLd) }}
       />
-      <PairLinkGame />
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-wit-bg text-wit-muted">読み込み中…</div>}>
+        <PairLinkGame />
+      </Suspense>
       <section className="mx-auto max-w-[1080px] w-full px-4 py-6 pb-12" aria-label="このパズルの知育効果">
         <details className="group rounded-2xl border border-white/10 bg-white/5 backdrop-blur overflow-hidden">
           <summary className="cursor-pointer list-none px-6 py-4 text-wit-muted text-sm hover:text-wit-text transition-colors select-none">

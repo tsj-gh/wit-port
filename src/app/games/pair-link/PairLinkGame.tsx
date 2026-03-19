@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import { validatePathsAction } from "./actions";
 import { usePuzzleStock } from "@/hooks/usePuzzleStock";
+import { refreshAds } from "@/lib/ads";
+import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import type { Pair } from "@/lib/puzzle-engine/pair-link";
 
 type NumberCell = { x: number; y: number; val: number; color: string };
@@ -260,6 +262,15 @@ export default function PairLinkGame() {
       isCheckingClearRef.current = false;
     }
   }, [paths, pairs, gridSize, solved, loading]);
+
+  const searchParams = useSearchParams();
+  const isDebugMode = searchParams.get("devtj") === "true";
+
+  // トリガーA: クリア判定され正解演出開始時に広告リフレッシュ
+  useEffect(() => {
+    if (!showClearOverlay) return;
+    refreshAds();
+  }, [showClearOverlay]);
 
   // クリア画面ポップアップ時のみ紙吹雪を1回発火（showClearOverlay の遷移で確実に1回に限定）
   useEffect(() => {
@@ -641,6 +652,11 @@ export default function PairLinkGame() {
         </div>
       </header>
 
+      {/* 広告枠1: ヘッダーとパズルエリアの間 */}
+      <div className="mb-4">
+        <PairLinkAdSlot slotIndex={1} isDebugMode={isDebugMode} />
+      </div>
+
       <section className="rounded-2xl p-4 sm:p-6 mb-4 border border-white/10 bg-white/5 backdrop-blur">
         <h2 className="text-lg font-bold mb-4 text-wit-text">
           ペアリンク（ナンバーリンク）
@@ -650,7 +666,10 @@ export default function PairLinkGame() {
             <label className="block text-xs text-wit-muted mb-1">サイズ</label>
             <select
               value={gridSize}
-              onChange={(e) => initGame(Number(e.target.value))}
+              onChange={(e) => {
+                refreshAds();
+                initGame(Number(e.target.value));
+              }}
               className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
             >
               <option value={4}>4×4（ペア3）</option>
@@ -660,7 +679,10 @@ export default function PairLinkGame() {
             </select>
           </div>
           <button
-            onClick={() => initGame(gridSize)}
+            onClick={() => {
+              refreshAds();
+              initGame(gridSize);
+            }}
             disabled={loading}
             className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
           >
@@ -688,6 +710,10 @@ export default function PairLinkGame() {
               onPointerLeave={handlePointerUp}
               onPointerCancel={handlePointerUp}
             />
+          </div>
+          {/* 広告枠2: キャンバス直下（パズル視認性を損なわない位置） */}
+          <div className="mt-4 w-full max-w-[520px] mx-auto">
+            <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
           </div>
         </div>
         <p className="text-xs text-wit-muted mt-3">
@@ -721,6 +747,7 @@ export default function PairLinkGame() {
               </button>
               <button
                 onClick={() => {
+                  refreshAds();
                   setShowClearOverlay(false);
                   initGame(gridSize);
                 }}

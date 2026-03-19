@@ -3,15 +3,18 @@
 ## 概要
 
 - **プロジェクト**: Wit-Spot（wispo）
-- **状態**: スクリプト読み込みと ads.txt による発行者検証まで完了。広告ユニット（ins 要素）の明示的な配置は未実装。
+- **状態**: スクリプト読み込み・ads.txt・ペアリンク用広告2箇所配置・動的リフレッシュまで完了。
 
 ---
 
 ## ファイル構成
 
 ```
-src/app/layout.tsx   # AdSense スクリプト読み込み（head 内）
-public/ads.txt       # 発行者検証（ルート直下）
+src/app/layout.tsx              # AdSense + GPT スクリプト読み込み（head 内）
+src/lib/ads.ts                   # refreshAds() 共通関数（30秒Cooldown付き）
+src/components/PairLinkAdSlots.tsx  # ペアリンク用広告ユニット（GPT 版）
+src/app/games/pair-link/PairLinkGame.tsx  # 広告配置・トリガー呼び出し
+public/ads.txt                   # 発行者検証（ルート直下）
 ```
 
 ---
