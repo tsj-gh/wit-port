@@ -785,37 +785,6 @@ export default function PairLinkGame() {
       </div>
 
       <section className="rounded-2xl p-4 sm:p-6 mb-4 border border-white/10 bg-white/5 backdrop-blur">
-        <h2 className="text-lg font-bold mb-4 text-wit-text">
-          ペアリンク（ナンバーリンク）
-        </h2>
-        <div className="flex flex-wrap gap-4 items-end mb-4">
-          <div>
-            <label className="block text-xs text-wit-muted mb-1">サイズ</label>
-            <select
-              value={gridSize}
-              onChange={(e) => {
-                refreshAds();
-                initGame(Number(e.target.value));
-              }}
-              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
-            >
-              <option value={4}>4×4（ペア3）</option>
-              <option value={6}>6×6（ペア5）</option>
-              <option value={8}>8×8（ペア7）</option>
-              <option value={10}>10×10（ペア9）</option>
-            </select>
-          </div>
-          <button
-            onClick={() => {
-              refreshAds();
-              initGame(gridSize);
-            }}
-            disabled={loading}
-            className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
-          >
-            新規生成
-          </button>
-        </div>
         <div className="flex flex-col items-center">
           <div className="flex justify-between w-full max-w-[520px] mb-2 font-semibold text-wit-text text-sm">
             <span>{status}</span>
@@ -848,6 +817,34 @@ export default function PairLinkGame() {
           <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
             <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
           </div>
+        </div>
+        <div className="flex flex-wrap gap-4 items-end mt-4">
+          <div>
+            <label className="block text-xs text-wit-muted mb-1">サイズ</label>
+            <select
+              value={gridSize}
+              onChange={(e) => {
+                refreshAds();
+                initGame(Number(e.target.value));
+              }}
+              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
+            >
+              <option value={4}>4×4（ペア3）</option>
+              <option value={6}>6×6（ペア5）</option>
+              <option value={8}>8×8（ペア7）</option>
+              <option value={10}>10×10（ペア9）</option>
+            </select>
+          </div>
+          <button
+            onClick={() => {
+              refreshAds();
+              initGame(gridSize);
+            }}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
+          >
+            新規生成
+          </button>
         </div>
         <p className="text-xs text-wit-muted mt-3">
           同じ数字をドラッグで線で繋ぎ、全マスを埋めましょう。サイズが大きいと生成に数秒かかることがあります。

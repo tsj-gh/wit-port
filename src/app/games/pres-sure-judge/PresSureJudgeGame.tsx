@@ -1548,7 +1548,7 @@ export default function PresSureJudgeGame() {
           className="flex items-center gap-3 text-xl font-black tracking-wider text-wit-text no-underline hover:opacity-90"
         >
           <span className="block w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-[0_0_12px_rgba(245,158,11,0.4)]" />
-          Pres-Sure Judge
+          Wispo
         </Link>
         {phase !== "ready" && phase !== "result" && (
           <span className="text-wit-muted text-sm tabular-nums font-medium">Round {round}</span>
