@@ -65,7 +65,7 @@ export default function PairLinkGame() {
   }, [isDevTj]);
 
   useEffect(() => {
-    if (!isDevTj) return;
+    if (!isDebugMode) return;
     const onStateChanged = () => setAdsRefreshState(getAdsRefreshState());
     const onRefreshSuccess = () => {
       setAdsRefreshState(getAdsRefreshState());
@@ -83,7 +83,7 @@ export default function PairLinkGame() {
       window.removeEventListener(AD_REFRESH_EVENT, onRefreshSuccess);
       if (countFlashTimeoutRef.current) clearTimeout(countFlashTimeoutRef.current);
     };
-  }, [isDevTj]);
+  }, [isDebugMode]);
 
   useEffect(() => {
     if (forcedWidth != null) return;

@@ -54,7 +54,7 @@ export function PairLinkAdSlot({ slotIndex, isDebugMode }: PairLinkAdSlotProps) 
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!showPlaceholder) return;
+    if (!isDebugMode) return;
     const onRefresh = () => {
       setIsFlashing(true);
       if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
@@ -68,7 +68,7 @@ export function PairLinkAdSlot({ slotIndex, isDebugMode }: PairLinkAdSlotProps) 
       window.removeEventListener(AD_REFRESH_EVENT, onRefresh);
       if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     };
-  }, [showPlaceholder]);
+  }, [isDebugMode]);
 
   useEffect(() => {
     if (isDebugMode || !SLOT_1 || !SLOT_2) return;

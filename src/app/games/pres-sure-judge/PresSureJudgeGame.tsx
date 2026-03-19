@@ -611,7 +611,7 @@ export default function PresSureJudgeGame() {
 
   const isDevTj = searchParams.get("devtj") === "true";
   useEffect(() => {
-    if (!isDevTj) return;
+    if (!isDebugMode) return;
     const onStateChanged = () => setAdsRefreshState(getAdsRefreshState());
     const onRefreshSuccess = () => {
       setAdsRefreshState(getAdsRefreshState());
@@ -629,7 +629,7 @@ export default function PresSureJudgeGame() {
       window.removeEventListener(AD_REFRESH_EVENT, onRefreshSuccess);
       if (countFlashTimeoutRef.current) clearTimeout(countFlashTimeoutRef.current);
     };
-  }, [isDevTj]);
+  }, [isDebugMode]);
 
   useEffect(() => {
     if (!isDebugMode) {
