@@ -94,36 +94,7 @@ export default function PairLinkGame() {
   }, [forcedWidth]);
 
   const effectiveViewportWidth = forcedWidth ?? windowWidth - 40;
-  const isMobile =
-    forcedWidth === 375 || (forcedWidth == null && effectiveViewportWidth < 768);
-
-  const [canvasAreaSize, setCanvasAreaSize] = useState({ width: 0, height: 0 });
-  const canvasAreaRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = canvasAreaRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) {
-        const { clientWidth, clientHeight } = e.target;
-        setCanvasAreaSize({ width: clientWidth, height: clientHeight });
-      }
-    });
-    ro.observe(el);
-    setCanvasAreaSize({ width: el.clientWidth, height: el.clientHeight });
-    return () => ro.disconnect();
-  }, [isMobile, loading]);
-
-  const canvasPixelSize = (() => {
-    if (isMobile && canvasAreaSize.width > 0 && canvasAreaSize.height > 0) {
-      const reserved = 200; // ステータス行・広告2枠・マージン分
-      const availH = Math.max(0, canvasAreaSize.height - reserved);
-      const avail = Math.min(canvasAreaSize.width, availH);
-      return Math.min(500, Math.max(240, avail));
-    }
-    const w = Math.min(500, Math.max(300, effectiveViewportWidth));
-    return w;
-  })();
+  const canvasPixelSize = Math.min(500, Math.max(300, effectiveViewportWidth));
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeSecondsRef = useRef(0);
@@ -700,9 +671,7 @@ export default function PairLinkGame() {
   }
 
   return (
-    <div
-      className={`mx-auto max-w-[1080px] w-full px-4 py-6 max-md:h-[100dvh] max-md:overflow-hidden max-md:flex max-md:flex-col max-md:py-3`}
-    >
+    <div className="mx-auto max-w-[1080px] w-full px-4 py-6">
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-4 z-50">
           <button
@@ -788,14 +757,13 @@ export default function PairLinkGame() {
         </div>
       )}
       <div
-        className="max-md:flex-1 max-md:min-h-0 max-md:flex max-md:flex-col max-md:overflow-hidden"
         style={
           forcedWidth != null && isDevTj
             ? { width: `${forcedWidth}px`, margin: "0 auto", maxWidth: "100%" }
             : undefined
         }
       >
-        <header className="flex justify-between items-center mb-6 max-md:mb-3 max-md:shrink-0">
+        <header className="flex justify-between items-center mb-6">
         <Link
           href="/"
           className="flex items-center gap-3 text-xl sm:text-2xl font-black tracking-wider text-wit-text no-underline hover:opacity-90"
@@ -809,16 +777,16 @@ export default function PairLinkGame() {
         </div>
       </header>
 
-      {/* 広告枠1: PCのみ上部に表示、モバイルでは盤面下へ */}
-      <div className="mb-4 max-md:hidden">
+      {/* 広告枠1: ヘッダーとパズルエリアの間 */}
+      <div className="mb-4">
         <PairLinkAdSlot slotIndex={1} isDebugMode={isDebugMode} />
       </div>
 
-      <section className="rounded-2xl p-4 sm:p-6 mb-4 border border-white/10 bg-white/5 backdrop-blur max-md:flex-1 max-md:min-h-0 max-md:flex max-md:flex-col max-md:overflow-hidden max-md:mb-3">
-        <h2 className="text-lg font-bold mb-4 text-wit-text max-md:shrink-0 max-md:mb-2">
+      <section className="rounded-2xl p-4 sm:p-6 mb-4 border border-white/10 bg-white/5 backdrop-blur">
+        <h2 className="text-lg font-bold mb-4 text-wit-text">
           ペアリンク（ナンバーリンク）
         </h2>
-        <div className="flex flex-wrap gap-4 items-end mb-4 max-md:shrink-0 max-md:mb-2">
+        <div className="flex flex-wrap gap-4 items-end mb-4">
           <div>
             <label className="block text-xs text-wit-muted mb-1">サイズ</label>
             <select
@@ -846,8 +814,8 @@ export default function PairLinkGame() {
             新規生成
           </button>
         </div>
-        <div ref={canvasAreaRef} className="flex flex-col items-center max-md:flex-1 max-md:min-h-0 max-md:flex max-md:justify-center">
-          <div className="flex justify-between w-full max-w-[520px] mb-2 font-semibold text-wit-text text-sm max-md:shrink-0">
+        <div className="flex flex-col items-center">
+          <div className="flex justify-between w-full max-w-[520px] mb-2 font-semibold text-wit-text text-sm">
             <span>{status}</span>
             <span className="tabular-nums">{formatTime(timeSeconds)}</span>
           </div>
@@ -868,18 +836,12 @@ export default function PairLinkGame() {
               onPointerCancel={handlePointerUp}
             />
           </div>
-          {/* モバイル: 広告枠1を盤面直下に表示（上部の圧迫を避ける） */}
-          {isMobile && (
-            <div className="mt-4 w-full max-w-[520px] mx-auto max-md:shrink-0">
-              <PairLinkAdSlot slotIndex={1} isDebugMode={isDebugMode} />
-            </div>
-          )}
           {/* 広告枠2: キャンバス直下（パズル視認性を損なわない位置） */}
-          <div className="mt-4 w-full max-w-[520px] mx-auto max-md:shrink-0">
+          <div className="mt-4 w-full max-w-[520px] mx-auto">
             <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
           </div>
         </div>
-        <p className="text-xs text-wit-muted mt-3 max-md:shrink-0">
+        <p className="text-xs text-wit-muted mt-3">
           同じ数字をドラッグで線で繋ぎ、全マスを埋めましょう。サイズが大きいと生成に数秒かかることがあります。
         </p>
       </section>
