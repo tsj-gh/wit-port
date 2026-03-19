@@ -28,8 +28,8 @@ const AD_LABELS: Record<number, string> = { 1: "[AD-UNIT-A]", 2: "[AD-UNIT-B]" }
 function AdPlaceholder({ slotIndex, isFlashing }: { slotIndex: number; isFlashing: boolean }) {
   return (
     <div
-      className={`flex items-center justify-center rounded-lg border border-dashed border-white/30 bg-slate-700/40 text-wit-muted text-xs font-mono transition-opacity duration-150 ${
-        isFlashing ? "opacity-100 ring-2 ring-emerald-400/80" : "opacity-90"
+      className={`flex items-center justify-center rounded-lg border border-dashed border-white/30 bg-slate-700/40 text-wit-muted text-xs font-mono transition-all duration-200 ${
+        isFlashing ? "opacity-100 ring-2 ring-emerald-400/80 scale-[1.01]" : "opacity-70"
       }`}
       style={{ minHeight: AD_MIN_HEIGHT_PX }}
       aria-label={`広告スペース ${slotIndex}（デバッグ表示）`}

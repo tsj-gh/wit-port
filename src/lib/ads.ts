@@ -6,20 +6,30 @@
 const AD_REFRESH_COOLDOWN_MS = 30 * 1000;
 let lastRefreshAt = 0;
 let refreshCount = 0;
+let lastAttemptSkipped = false;
 
-/** リフレッシュ時のカスタムイベント名（デバッグ用プレースホルダーフラッシュ等） */
+/** リフレッシュ成功時のカスタムイベント（プレースホルダーフラッシュ等） */
 export const AD_REFRESH_EVENT = "pairlink:ad-refresh";
+/** リフレッシュ試行後（成功/スキップ両方）の状態変更イベント（デバッグパネル用） */
+export const AD_REFRESH_STATE_CHANGED = "pairlink:ad-refresh-state-changed";
 
 export type AdsRefreshState = {
   lastRefreshAt: number;
   refreshCount: number;
+  lastAttemptSkipped: boolean;
 };
 
 /**
  * 広告リフレッシュ状態を取得（デバッグパネル用）
  */
 export function getAdsRefreshState(): AdsRefreshState {
-  return { lastRefreshAt, refreshCount };
+  return { lastRefreshAt, refreshCount, lastAttemptSkipped };
+}
+
+function dispatchStateChanged(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(AD_REFRESH_STATE_CHANGED));
+  }
 }
 
 /**
@@ -32,18 +42,26 @@ export function refreshAds(): void {
   if (typeof window === "undefined") return;
 
   const now = Date.now();
-  if (now - lastRefreshAt < AD_REFRESH_COOLDOWN_MS) return;
+  if (now - lastRefreshAt < AD_REFRESH_COOLDOWN_MS) {
+    lastAttemptSkipped = true;
+    dispatchStateChanged();
+    // eslint-disable-next-line no-console
+    console.log("Refresh skipped: Cool-down active");
+    return;
+  }
 
   const googletag = window.googletag;
   if (!googletag?.pubads) return;
 
   lastRefreshAt = now;
+  lastAttemptSkipped = false;
   refreshCount += 1;
 
   const doRefresh = () => {
     try {
       googletag.pubads().refresh();
       window.dispatchEvent(new CustomEvent(AD_REFRESH_EVENT));
+      dispatchStateChanged();
     } catch {
       // AdBlock 等でタグが読み込まれない場合: ゲームの進行を妨げない
     }

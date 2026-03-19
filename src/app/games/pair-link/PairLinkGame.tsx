@@ -6,7 +6,7 @@ import Link from "next/link";
 import confetti from "canvas-confetti";
 import { validatePathsAction } from "./actions";
 import { usePuzzleStock } from "@/hooks/usePuzzleStock";
-import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT } from "@/lib/ads";
+import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import type { Pair } from "@/lib/puzzle-engine/pair-link";
 
@@ -51,6 +51,8 @@ export default function PairLinkGame() {
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
   const [forcedWidth, setForcedWidth] = useState<number | null>(null);
   const [adsRefreshState, setAdsRefreshState] = useState(() => getAdsRefreshState());
+  const [countFlashing, setCountFlashing] = useState(false);
+  const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : 500)
   );
@@ -64,9 +66,23 @@ export default function PairLinkGame() {
 
   useEffect(() => {
     if (!isDevTj) return;
-    const onRefresh = () => setAdsRefreshState(getAdsRefreshState());
-    window.addEventListener(AD_REFRESH_EVENT, onRefresh);
-    return () => window.removeEventListener(AD_REFRESH_EVENT, onRefresh);
+    const onStateChanged = () => setAdsRefreshState(getAdsRefreshState());
+    const onRefreshSuccess = () => {
+      setAdsRefreshState(getAdsRefreshState());
+      setCountFlashing(true);
+      if (countFlashTimeoutRef.current) clearTimeout(countFlashTimeoutRef.current);
+      countFlashTimeoutRef.current = setTimeout(() => {
+        setCountFlashing(false);
+        countFlashTimeoutRef.current = null;
+      }, 450);
+    };
+    window.addEventListener(AD_REFRESH_STATE_CHANGED, onStateChanged);
+    window.addEventListener(AD_REFRESH_EVENT, onRefreshSuccess);
+    return () => {
+      window.removeEventListener(AD_REFRESH_STATE_CHANGED, onStateChanged);
+      window.removeEventListener(AD_REFRESH_EVENT, onRefreshSuccess);
+      if (countFlashTimeoutRef.current) clearTimeout(countFlashTimeoutRef.current);
+    };
   }, [isDevTj]);
 
   useEffect(() => {
@@ -698,8 +714,20 @@ export default function PairLinkGame() {
                   {adsRefreshState.lastRefreshAt
                     ? new Date(adsRefreshState.lastRefreshAt).toLocaleTimeString("ja-JP")
                     : "未実行"}
+                  {adsRefreshState.lastAttemptSkipped && (
+                    <span className="ml-1 text-amber-400">(Wait...)</span>
+                  )}
                 </div>
-                <div>リフレッシュ回数: {adsRefreshState.refreshCount}</div>
+                <div>
+                  リフレッシュ回数:{" "}
+                  <span
+                    className={`tabular-nums transition-colors duration-200 ${
+                      countFlashing ? "text-amber-400 font-bold" : ""
+                    }`}
+                  >
+                    {adsRefreshState.refreshCount}
+                  </span>
+                </div>
               </div>
               <div className="mt-2 flex gap-1">
                 {([{ label: "PC", value: null }, { label: "Mobile", value: 375 }, { label: "Tablet", value: 768 }] as const).map(
@@ -718,7 +746,7 @@ export default function PairLinkGame() {
               </div>
               <div className="mt-2">
                 <button
-                  onClick={() => window.dispatchEvent(new CustomEvent(AD_REFRESH_EVENT))}
+                  onClick={() => refreshAds()}
                   className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
                 >
                   フラッシュテスト
