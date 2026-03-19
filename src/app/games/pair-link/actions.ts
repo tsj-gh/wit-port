@@ -14,6 +14,10 @@ export type GenerateResult = {
   pairCount: number;
   error?: string;
   profile?: GenerationProfile;
+  /** 完成までに要した試行回数（再試行ループ） */
+  attempts?: number;
+  /** 生成開始から終了までの全体所要時間（ms） */
+  totalMs?: number;
 };
 
 /** プリフェッチ等で複数リクエストが同時に来ても問題なし（純粋関数・共有状態なし） */
@@ -36,6 +40,8 @@ export async function generatePuzzleAction(
     gridSize: result.gridSize,
     pairCount: result.pairCount,
     profile: result.profile,
+    attempts: result.attempts,
+    totalMs: result.totalMs,
   };
 }
 

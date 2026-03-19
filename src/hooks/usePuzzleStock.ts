@@ -50,12 +50,16 @@ export function usePuzzleStock(
   isPrefetching: boolean;
   lastGenerationTimeMs: number | null;
   lastProfile: Record<string, number> | null;
+  lastAttempts: number | null;
+  lastTotalMs: number | null;
 } {
   const { gridSize = 6, persist = true } = options;
   const [stockCount, setStockCount] = useState(0);
   const [isPrefetching, setIsPrefetching] = useState(false);
   const [lastGenerationTimeMs, setLastGenerationTimeMs] = useState<number | null>(null);
   const [lastProfile, setLastProfile] = useState<Record<string, number> | null>(null);
+  const [lastAttempts, setLastAttempts] = useState<number | null>(null);
+  const [lastTotalMs, setLastTotalMs] = useState<number | null>(null);
   const stockRef = useRef<GenerateResult[]>([]);
   const isFetchingRef = useRef(false);
 
@@ -87,11 +91,15 @@ export function usePuzzleStock(
       if (puzzle) {
         if (puzzle.profile) {
           setLastProfile(puzzle.profile);
+          if (puzzle.attempts != null) setLastAttempts(puzzle.attempts);
+          if (puzzle.totalMs != null) setLastTotalMs(puzzle.totalMs);
           if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
             const total = Object.values(puzzle.profile).reduce((a, b) => a + b, 0);
             console.group("Board Generation Profile");
-            Object.entries(puzzle.profile).forEach(([k, v]) => console.log(`${k}: ${v}ms`));
-            console.log(`合計: ${total}ms (往復含む: ${elapsed}ms)`);
+            if (puzzle.attempts != null) console.log(`Attempts: ${puzzle.attempts} 回`);
+            if (puzzle.totalMs != null) console.log(`全体: ${puzzle.totalMs}ms`);
+            Object.entries(puzzle.profile).forEach(([k, v]) => console.log(`${k}: ${v}ms (累計)`));
+            console.log(`内訳合計: ${total}ms / 往復含む: ${elapsed}ms`);
             console.groupEnd();
           }
         }
@@ -117,11 +125,15 @@ export function usePuzzleStock(
       setLastGenerationTimeMs(elapsed);
       if (puzzle?.profile) {
         setLastProfile(puzzle.profile);
+        if (puzzle.attempts != null) setLastAttempts(puzzle.attempts);
+        if (puzzle.totalMs != null) setLastTotalMs(puzzle.totalMs);
         if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
           const total = Object.values(puzzle.profile).reduce((a, b) => a + b, 0);
           console.group("Board Generation Profile");
-          Object.entries(puzzle.profile).forEach(([k, v]) => console.log(`${k}: ${v}ms`));
-          console.log(`合計: ${total}ms (往復含む: ${elapsed}ms)`);
+          if (puzzle.attempts != null) console.log(`Attempts: ${puzzle.attempts} 回`);
+          if (puzzle.totalMs != null) console.log(`全体: ${puzzle.totalMs}ms`);
+          Object.entries(puzzle.profile).forEach(([k, v]) => console.log(`${k}: ${v}ms (累計)`));
+          console.log(`内訳合計: ${total}ms / 往復含む: ${elapsed}ms`);
           console.groupEnd();
         }
       }
@@ -189,5 +201,7 @@ export function usePuzzleStock(
     isPrefetching,
     lastGenerationTimeMs,
     lastProfile,
+    lastAttempts,
+    lastTotalMs,
   };
 }

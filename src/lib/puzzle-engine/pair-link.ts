@@ -13,6 +13,10 @@ export type PuzzleResult = {
   gridSize: number;
   pairCount: number;
   profile?: GenerationProfile;
+  /** 完成までに要した試行回数（再試行ループ） */
+  attempts?: number;
+  /** 生成開始から終了までの全体所要時間（ms） */
+  totalMs?: number;
 };
 
 /** 工程別の所要時間（ms）デバッグ用 */
@@ -546,6 +550,12 @@ function generateCandidate(gridSize: number, profile?: GenerationProfile): {
   return generateCandidate8x8(gridSize, pairCount, profile);
 }
 
+function addToCumulative(cumulative: GenerationProfile, delta: GenerationProfile): void {
+  for (const [k, v] of Object.entries(delta)) {
+    cumulative[k] = (cumulative[k] ?? 0) + v;
+  }
+}
+
 /**
  * パズルを生成（サーバー専用）
  */
@@ -553,17 +563,23 @@ export function generatePairLinkPuzzle(gridSize: number): PuzzleResult | null {
   const pairCount = getPairCount(gridSize);
   const baseThreshold = gridSize * pairCount * 10;
   const timeLimitMs = 50000;
-  const start = performance.now();
-  const profile: GenerationProfile = {};
+  const totalStart = performance.now();
+  const cumulativeProfile: GenerationProfile = {};
+  let attempts = 0;
 
   for (;;) {
-    if (performance.now() - start > timeLimitMs) return null;
+    if (performance.now() - totalStart > timeLimitMs) return null;
+    attempts += 1;
 
-    Object.keys(profile).forEach((k) => delete profile[k]);
-    const candidate = generateCandidate(gridSize, profile);
-    if (!candidate) continue;
+    const attemptProfile: GenerationProfile = {};
+    const candidate = generateCandidate(gridSize, attemptProfile);
+    if (!candidate) {
+      addToCumulative(cumulativeProfile, attemptProfile);
+      continue;
+    }
 
     if (gridSize <= 6 && candidate.difficultyScore != null && candidate.difficultyScore < baseThreshold) {
+      addToCumulative(cumulativeProfile, attemptProfile);
       continue;
     }
 
@@ -576,14 +592,18 @@ export function generatePairLinkPuzzle(gridSize: number): PuzzleResult | null {
       numbers.push({ x: c1, y: r1, val: p.id, color });
       numbers.push({ x: c2, y: r2, val: p.id, color });
     });
-    profile.Format = Math.round(performance.now() - t0);
+    attemptProfile.Format = Math.round(performance.now() - t0);
+    addToCumulative(cumulativeProfile, attemptProfile);
 
+    const totalMs = Math.round(performance.now() - totalStart);
     return {
       numbers,
       pairs: candidate.pairs,
       gridSize,
       pairCount,
-      profile,
+      profile: cumulativeProfile,
+      attempts,
+      totalMs,
     };
   }
 }
