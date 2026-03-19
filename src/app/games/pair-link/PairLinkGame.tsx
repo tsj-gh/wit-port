@@ -814,7 +814,7 @@ export default function PairLinkGame() {
             </div>
           )}
         </div>
-        <div className="flex flex-wrap gap-4 items-end mt-4">
+        <div className="flex flex-wrap gap-4 items-end justify-center mt-4">
           <div>
             <label className="block text-xs text-wit-muted mb-1">サイズ</label>
             <select
