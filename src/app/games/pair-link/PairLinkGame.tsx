@@ -813,10 +813,6 @@ export default function PairLinkGame() {
               <PairLinkAdSlot slotIndex={1} isDebugMode={isDebugMode} />
             </div>
           )}
-          {/* 広告枠2: キャンバス直下（パズル視認性を損なわない位置） */}
-          <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
-            <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
-          </div>
         </div>
         <div className="flex flex-wrap gap-4 items-end mt-4">
           <div>
@@ -845,6 +841,10 @@ export default function PairLinkGame() {
           >
             新規生成
           </button>
+        </div>
+        {/* 広告枠2（AD-UNIT-B）: サイズ/新規作成の直下 */}
+        <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
+          <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
         </div>
         <p className="text-xs text-wit-muted mt-3">
           同じ数字をドラッグで線で繋ぎ、全マスを埋めましょう。サイズが大きいと生成に数秒かかることがあります。
