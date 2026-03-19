@@ -5,6 +5,7 @@ import { AD_REFRESH_EVENT } from "@/lib/ads";
 
 const ADSENSE_CLIENT = "ca-pub-5383262801288621";
 const SLOT_1 = process.env.NEXT_PUBLIC_ADSENSE_SLOT_PRESSURE_1 || "";
+const SLOT_2 = process.env.NEXT_PUBLIC_ADSENSE_SLOT_PRESSURE_2 || "";
 
 /** Layout Shift 防止のための最小高さ（px） */
 const AD_MIN_HEIGHT_PX = 100;
@@ -18,33 +19,37 @@ const AD_SIZES: [number, number][] = [
 ];
 
 type PresSureJudgeAdSlotProps = {
+  slotIndex: 1 | 2;
   isDebugMode: boolean;
 };
 
-function AdPlaceholder({ isFlashing }: { isFlashing: boolean }) {
+const AD_LABELS: Record<number, string> = { 1: "[AD-UNIT-A]", 2: "[AD-UNIT-B]" };
+
+function AdPlaceholder({ slotIndex, isFlashing }: { slotIndex: number; isFlashing: boolean }) {
   return (
     <div
       className={`flex items-center justify-center rounded-lg border border-dashed border-white/30 bg-slate-700/40 text-wit-muted text-xs font-mono transition-all duration-200 ${
         isFlashing ? "opacity-100 ring-2 ring-emerald-400/80 scale-[1.01]" : "opacity-70"
       }`}
       style={{ minHeight: AD_MIN_HEIGHT_PX }}
-      aria-label="広告スペース（Pres-Sure Judge・デバッグ表示）"
+      aria-label={`広告スペース ${slotIndex}（Pres-Sure Judge・デバッグ表示）`}
     >
-      [AD-UNIT]
+      {AD_LABELS[slotIndex] ?? `[AD-UNIT-${slotIndex}]`}
     </div>
   );
 }
 
 /**
  * Pres-Sure Judge 用広告ユニット
- * devtj 時はプレースホルダー表示、本番では AdSense GPT スロット
+ * slotIndex=2 が両スロットの GPT 初期化を担当（Pair-link と同様）
  */
-export function PresSureJudgeAdSlot({ isDebugMode }: PresSureJudgeAdSlotProps) {
+export function PresSureJudgeAdSlot({ slotIndex, isDebugMode }: PresSureJudgeAdSlotProps) {
   const initializedRef = useRef(false);
   const [isFlashing, setIsFlashing] = useState(false);
 
-  const divId = "ad-pressure-1";
-  const showPlaceholder = isDebugMode || !SLOT_1;
+  const slotId = slotIndex === 1 ? SLOT_1 : SLOT_2;
+  const divId = `ad-pressure-${slotIndex}`;
+  const showPlaceholder = isDebugMode || !slotId;
 
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -66,7 +71,8 @@ export function PresSureJudgeAdSlot({ isDebugMode }: PresSureJudgeAdSlotProps) {
   }, [showPlaceholder]);
 
   useEffect(() => {
-    if (isDebugMode || !SLOT_1) return;
+    if (isDebugMode || !SLOT_1 || !SLOT_2) return;
+    if (slotIndex !== 2) return;
 
     const googletag = window.googletag;
     if (!googletag || initializedRef.current) return;
@@ -76,27 +82,30 @@ export function PresSureJudgeAdSlot({ isDebugMode }: PresSureJudgeAdSlotProps) {
     googletag.cmd = googletag.cmd || [];
     googletag.cmd.push(() => {
       try {
-        const path = `/${ADSENSE_CLIENT}/${SLOT_1}`;
-        const slot = googletag.defineSlot(path, AD_SIZES, divId);
-        if (slot) {
+        const path1 = `/${ADSENSE_CLIENT}/${SLOT_1}`;
+        const path2 = `/${ADSENSE_CLIENT}/${SLOT_2}`;
+        const s1 = googletag.defineSlot(path1, AD_SIZES, "ad-pressure-1");
+        const s2 = googletag.defineSlot(path2, AD_SIZES, "ad-pressure-2");
+        if (s1 && s2) {
           googletag.enableServices();
-          googletag.display(divId);
+          googletag.display("ad-pressure-1");
+          googletag.display("ad-pressure-2");
         }
       } catch {
         // AdBlock 等: ゲームの進行を妨げない
       }
     });
-  }, [isDebugMode]);
+  }, [isDebugMode, slotIndex]);
 
   if (showPlaceholder) {
     return (
       <div className="my-4" style={{ minHeight: AD_MIN_HEIGHT_PX }}>
-        <AdPlaceholder isFlashing={isFlashing} />
+        <AdPlaceholder slotIndex={slotIndex} isFlashing={isFlashing} />
       </div>
     );
   }
 
-  if (!SLOT_1) {
+  if (!slotId) {
     return (
       <div
         className="my-4"
@@ -107,7 +116,7 @@ export function PresSureJudgeAdSlot({ isDebugMode }: PresSureJudgeAdSlotProps) {
   }
 
   return (
-    <div className="my-4" aria-label="広告スペース（Pres-Sure Judge）" style={{ minHeight: AD_MIN_HEIGHT_PX }}>
+    <div className="my-4" aria-label={`広告スペース ${slotIndex}（Pres-Sure Judge）`} style={{ minHeight: AD_MIN_HEIGHT_PX }}>
       <div
         id={divId}
         style={{ minHeight: AD_MIN_HEIGHT_PX }}

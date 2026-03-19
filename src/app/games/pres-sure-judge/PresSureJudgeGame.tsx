@@ -1272,6 +1272,7 @@ export default function PresSureJudgeGame() {
   };
   const leftDisplay = applySinkIfNeeded(leftDisplayRaw);
   const rightDisplay = applySinkIfNeeded(rightDisplayRaw);
+  const isMobile = forcedWidth === 375 || (forcedWidth == null && viewportWidth < 768);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text isolate">
@@ -1553,6 +1554,13 @@ export default function PresSureJudgeGame() {
           <span className="text-wit-muted text-sm tabular-nums font-medium">Round {round}</span>
         )}
       </header>
+
+      {/* 広告枠A: PCはヘッダー下、モバイルでは非表示（Pair-linkと同様） */}
+      {!isMobile && (
+        <div className="px-4 pb-3 md:px-6" style={{ minHeight: 100 }}>
+          <PresSureJudgeAdSlot slotIndex={1} isDebugMode={isDebugMode} />
+        </div>
+      )}
 
       <main
         className="relative z-0 flex-1 min-h-0 mx-auto w-full max-w-[640px] px-4 py-2 md:py-4 flex flex-col overflow-hidden"
@@ -1929,6 +1937,7 @@ export default function PresSureJudgeGame() {
               </div>
 
               {(phase === "user" || phase === "transition") && (
+                <>
                 <div className="relative z-10 mt-2 mb-2 space-y-3 p-3 rounded-2xl border border-white/10 bg-gradient-to-br from-[#0a0e18] to-[#0f172a] overflow-visible shrink-0">
                   <div ref={dragConstraintRef} className="relative min-w-0">
                     <div
@@ -2010,11 +2019,12 @@ export default function PresSureJudgeGame() {
                   >
                     Judge（確定）
                   </button>
-                  {/* Judgeボタン直下に広告（モバイル優先・PCはサイドパネル内） */}
-                  <div className="mt-4" style={{ minHeight: 100 }}>
-                    <PresSureJudgeAdSlot isDebugMode={isDebugMode} />
-                  </div>
                 </div>
+                {/* 広告枠B: 在庫/Judgeパネルの外・直下に配置（誤タップ防止の余白） */}
+                <div className="mt-6 shrink-0" style={{ minHeight: 100 }}>
+                  <PresSureJudgeAdSlot slotIndex={2} isDebugMode={isDebugMode} />
+                </div>
+                </>
               )}
 
               {phase === "gameover" && collapseAnimDone && (
