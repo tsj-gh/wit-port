@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description:
     "同じ数字を線で繋ぎ、盤面の全マスを埋める無料知育ロジックパズル。ドラッグでスムーズに線を引き、論理的思考力を育みます。",
   keywords: ["知育", "パズル", "無料", "ナンバーリンク", "ペアリンク", "ロジックパズル", "算数", "幼児"],
-  applicationName: "Wit-Spot",
+  applicationName: "Wispo",
   other: {
     "application:category": "EducationalGame",
     "application:operating-system": "Windows, macOS, Android, iOS",
@@ -32,7 +32,7 @@ const pairLinkJsonLd = {
   },
   author: {
     "@type": "Organization",
-    name: "Wit-Spot",
+    name: "Wispo",
   },
   featureList: ["知育", "論理的思考", "無料", "幼児向け", "算数", "ロジックパズル"],
 };

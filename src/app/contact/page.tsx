@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "お問い合わせ",
   description:
-    "Wit-Spotへのお問い合わせは、こちらのフォームよりお送りください。",
+    "Wispoへのお問い合わせは、こちらのフォームよりお送りください。",
   keywords: ["知育", "パズル", "無料", "お問い合わせ"],
 };
 
@@ -17,7 +17,7 @@ export default function ContactPage() {
           className="flex items-center gap-3 text-[28px] font-black tracking-[2px] text-wit-text no-underline hover:opacity-90"
         >
           <span className="block w-8 h-8 rounded-lg bg-gradient-to-br from-wit-accent to-purple-500 shadow-[0_0_15px_var(--wit-accent-glow)]" />
-          Wit-Spot
+          Wispo
         </Link>
         <Link
           href="/"

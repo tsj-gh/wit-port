@@ -32,7 +32,7 @@ export default function Footer() {
         </Link>
       </nav>
       <p className="text-center text-sm text-wit-muted">
-        &copy; 2026 Wit-Spot. All rights reserved.
+        &copy; 2026 Wispo. All rights reserved.
       </p>
     </footer>
   );
