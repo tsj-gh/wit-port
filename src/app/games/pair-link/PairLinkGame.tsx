@@ -813,10 +813,10 @@ export default function PairLinkGame() {
               <PairLinkAdSlot slotIndex={1} isDebugMode={isDebugMode} />
             </div>
           )}
-        </div>
-        {/* 広告枠2（AD-UNIT-B）: サイズ/新規作成の上に配置 */}
-        <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
-          <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
+          {/* 広告枠2: キャンバス直下（パズル視認性を損なわない位置） */}
+          <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
+            <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
+          </div>
         </div>
         <div className="flex flex-wrap gap-4 items-end mt-4">
           <div>
