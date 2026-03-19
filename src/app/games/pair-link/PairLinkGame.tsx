@@ -52,6 +52,7 @@ export default function PairLinkGame() {
   const [forcedWidth, setForcedWidth] = useState<number | null>(null);
   const [adsRefreshState, setAdsRefreshState] = useState(() => getAdsRefreshState());
   const [countFlashing, setCountFlashing] = useState(false);
+  const [tick, setTick] = useState(0);
   const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : 500)
@@ -63,6 +64,12 @@ export default function PairLinkGame() {
   useEffect(() => {
     if (isDevTj) setIsDebugMode(true);
   }, [isDevTj]);
+
+  useEffect(() => {
+    if (!isDebugMode) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [isDebugMode]);
 
   useEffect(() => {
     if (!isDebugMode) return;
@@ -752,13 +759,40 @@ export default function PairLinkGame() {
                   </div>
                 )}
                 <div>
-                  広告リフレッシュ: 最終{" "}
+                  リフレッシュ試行:{" "}
+                  最終トライ{" "}
+                  {adsRefreshState.lastTryTime
+                    ? new Date(adsRefreshState.lastTryTime).toLocaleTimeString("ja-JP")
+                    : "—"}
+                  {adsRefreshState.lastTryTime ? (
+                    <span
+                      className={`tabular-nums ml-1 ${
+                        Math.floor((Date.now() - adsRefreshState.lastRefreshAt) / 1000) >= 30
+                          ? "text-emerald-400"
+                          : ""
+                      }`}
+                    >
+                      ({Math.floor((Date.now() - adsRefreshState.lastTryTime) / 1000)}秒前)
+                    </span>
+                  ) : null}
+                </div>
+                <div>
+                  リフレッシュ成功:{" "}
+                  最終更新{" "}
                   {adsRefreshState.lastRefreshAt
                     ? new Date(adsRefreshState.lastRefreshAt).toLocaleTimeString("ja-JP")
-                    : "未実行"}
-                  {adsRefreshState.lastAttemptSkipped && (
-                    <span className="ml-1 text-amber-400">(Wait...)</span>
-                  )}
+                    : "—"}
+                  {adsRefreshState.lastRefreshAt ? (
+                    <span
+                      className={`tabular-nums ml-1 ${
+                        Math.floor((Date.now() - adsRefreshState.lastRefreshAt) / 1000) >= 30
+                          ? "text-emerald-400"
+                          : ""
+                      }`}
+                    >
+                      ({Math.floor((Date.now() - adsRefreshState.lastRefreshAt) / 1000)}秒前)
+                    </span>
+                  ) : null}
                 </div>
                 <div>
                   リフレッシュ回数:{" "}

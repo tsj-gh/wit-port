@@ -5,6 +5,7 @@
 
 const AD_REFRESH_COOLDOWN_MS = 30 * 1000;
 let lastRefreshAt = 0;
+let lastTryTime = 0;
 let refreshCount = 0;
 let lastAttemptSkipped = false;
 
@@ -15,6 +16,7 @@ export const AD_REFRESH_STATE_CHANGED = "pairlink:ad-refresh-state-changed";
 
 export type AdsRefreshState = {
   lastRefreshAt: number;
+  lastTryTime: number;
   refreshCount: number;
   lastAttemptSkipped: boolean;
 };
@@ -23,7 +25,7 @@ export type AdsRefreshState = {
  * 広告リフレッシュ状態を取得（デバッグパネル用）
  */
 export function getAdsRefreshState(): AdsRefreshState {
-  return { lastRefreshAt, refreshCount, lastAttemptSkipped };
+  return { lastRefreshAt, lastTryTime, refreshCount, lastAttemptSkipped };
 }
 
 function dispatchStateChanged(): void {
@@ -42,6 +44,8 @@ export function refreshAds(): void {
   if (typeof window === "undefined") return;
 
   const now = Date.now();
+  lastTryTime = now;
+
   if (now - lastRefreshAt < AD_REFRESH_COOLDOWN_MS) {
     lastAttemptSkipped = true;
     dispatchStateChanged();
@@ -51,7 +55,10 @@ export function refreshAds(): void {
   }
 
   const googletag = window.googletag;
-  if (!googletag?.pubads) return;
+  if (!googletag?.pubads) {
+    dispatchStateChanged();
+    return;
+  }
 
   lastRefreshAt = now;
   lastAttemptSkipped = false;
