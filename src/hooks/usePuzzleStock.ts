@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { generatePuzzleAction } from "@/app/games/pair-link/actions";
-import type { GenerateResult } from "@/app/games/pair-link/actions";
+import { useBoardWorker, type GenerateResult } from "@/hooks/useBoardWorker";
 
 const STOCK_MAX = 3;
 const STOCK_REFILL_THRESHOLD = 2;
@@ -54,6 +53,7 @@ export function usePuzzleStock(
   lastTotalMs: number | null;
 } {
   const { gridSize = 6, persist = true } = options;
+  const { generate: workerGenerate } = useBoardWorker();
   const [stockCount, setStockCount] = useState(0);
   const [isPrefetching, setIsPrefetching] = useState(false);
   const [lastGenerationTimeMs, setLastGenerationTimeMs] = useState<number | null>(null);
@@ -70,11 +70,14 @@ export function usePuzzleStock(
   const fetchOne = useCallback(
     async (size?: number): Promise<GenerateResult | null> => {
       const sz = size ?? gridSize;
-      const result = await generatePuzzleAction(sz);
-      if (result.error) return null;
-      return result;
+      try {
+        const result = await workerGenerate(sz);
+        return result;
+      } catch {
+        return null;
+      }
     },
-    [gridSize]
+    [gridSize, workerGenerate]
   );
 
   const refill = useCallback(async () => {

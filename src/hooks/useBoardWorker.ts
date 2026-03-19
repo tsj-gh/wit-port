@@ -1,0 +1,155 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+
+export type GenerateResult = {
+  numbers: { x: number; y: number; val: number; color: string }[];
+  pairs: { id: number; start: [number, number]; end: [number, number] }[];
+  gridSize: number;
+  pairCount: number;
+  error?: string;
+  profile?: Record<string, number>;
+  attempts?: number;
+  totalMs?: number;
+};
+
+type WorkerMessage =
+  | { type: "STATUS"; status: string }
+  | {
+      type: "SUCCESS";
+      board: Omit<GenerateResult, "profile" | "attempts" | "totalMs" | "error">;
+      metrics: { profile?: Record<string, number>; attempts?: number; totalMs?: number };
+      requestId: string;
+    }
+  | { type: "ERROR"; error: string; requestId: string };
+
+let workerInstance: Worker | null = null;
+let workerRefCount = 0;
+
+function getWorker(): Worker {
+  if (!workerInstance) {
+    workerInstance = new Worker("/workers/board-worker.js");
+  }
+  return workerInstance;
+}
+
+function releaseWorker(): void {
+  workerRefCount--;
+  if (workerRefCount <= 0 && workerInstance) {
+    workerInstance.terminate();
+    workerInstance = null;
+    workerRefCount = 0;
+  }
+}
+
+type QueueItem = {
+  gridSize: number;
+  resolve: (r: GenerateResult) => void;
+  reject: (e: Error) => void;
+  requestId: string;
+};
+
+/**
+ * Pair-link 盤面生成を Web Worker で実行する共通フック
+ * Pair-link ページ・トップページの両方で利用可能
+ */
+export function useBoardWorker(): {
+  generate: (gridSize: number) => Promise<GenerateResult>;
+  isGenerating: boolean;
+} {
+  const [isGenerating, setIsGenerating] = useState(false);
+  const queueRef = useRef<QueueItem[]>([]);
+  const isProcessingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  const processNext = useCallback(() => {
+    if (isProcessingRef.current || queueRef.current.length === 0) {
+      return;
+    }
+    const item = queueRef.current.shift()!;
+    isProcessingRef.current = true;
+    setIsGenerating(true);
+
+    const worker = getWorker();
+    workerRefCount = Math.max(workerRefCount, 1);
+
+    const onMessage = (e: MessageEvent<WorkerMessage>) => {
+      const data = e.data;
+      if (!data || data.requestId !== item.requestId) return;
+
+      worker.removeEventListener("message", onMessage);
+      worker.removeEventListener("error", onError);
+
+      if (data.type === "SUCCESS") {
+        const { board, metrics } = data;
+        item.resolve({
+          ...board,
+          profile: metrics?.profile,
+          attempts: metrics?.attempts,
+          totalMs: metrics?.totalMs,
+        });
+      } else if (data.type === "ERROR") {
+        item.reject(new Error(data.error));
+      }
+
+      isProcessingRef.current = false;
+      setIsGenerating(false);
+      if (mountedRef.current) {
+        processNext();
+      }
+    };
+
+    const onError = () => {
+      worker.removeEventListener("message", onMessage);
+      worker.removeEventListener("error", onError);
+      item.reject(new Error("Worker error"));
+      isProcessingRef.current = false;
+      setIsGenerating(false);
+      if (mountedRef.current) {
+        processNext();
+      }
+    };
+
+    worker.addEventListener("message", onMessage);
+    worker.addEventListener("error", onError);
+    worker.postMessage({ type: "GENERATE", gridSize: item.gridSize, requestId: item.requestId });
+  }, []);
+
+  const generate = useCallback(
+    (gridSize: number): Promise<GenerateResult> => {
+      return new Promise((resolve, reject) => {
+        if (!mountedRef.current) {
+          reject(new Error("Unmounted"));
+          return;
+        }
+
+        const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        queueRef.current.push({
+          gridSize,
+          resolve,
+          reject,
+          requestId,
+        });
+
+        processNext();
+      });
+    },
+    [processNext]
+  );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    workerRefCount++;
+
+    return () => {
+      mountedRef.current = false;
+      releaseWorker();
+      queueRef.current.forEach((item) => {
+        item.reject(new Error("Unmounted"));
+      });
+      queueRef.current = [];
+    };
+  }, []);
+
+  return { generate, isGenerating };
+}
