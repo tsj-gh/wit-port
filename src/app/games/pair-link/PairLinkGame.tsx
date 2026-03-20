@@ -9,6 +9,8 @@ import { usePuzzleStock } from "@/hooks/usePuzzleStock";
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { useUserSyncContext } from "@/components/UserSyncProvider";
+import { DevDebugUserStats } from "@/components/DevDebugUserStats";
+import { recordPuzzleClear } from "@/lib/wispo-user-data";
 import type { Pair } from "@/lib/puzzle-engine/pair-link";
 
 type NumberCell = { x: number; y: number; val: number; color: string };
@@ -16,7 +18,6 @@ type PathPoint = { x: number; y: number };
 
 const PADDING = 50;
 const HIT_RADIUS_FACTOR = 0.55; // 数字・端点の当たり判定半径（spacing に対する倍率）
-const STORAGE_KEY = "pair-link_completed";
 
 type HitTarget =
   | { type: "endpoint"; val: string; pathIdx: number; point: PathPoint; isFirst: boolean }
@@ -297,20 +298,10 @@ export default function PairLinkGame() {
         setSolved(true);
         setTimerActive(false);
         setShowClearOverlay(true);
-        const saveProgress = () => {
-          const prev = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-          prev.push({
-            gridSize,
-            timeSeconds: timeSecondsRef.current,
-            completedAt: new Date().toISOString(),
-          });
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(prev));
-        };
         try {
+          recordPuzzleClear("pairLink");
           if (userSync?.saveProgressAndSync) {
-            userSync.saveProgressAndSync(saveProgress).catch(() => {});
-          } else {
-            saveProgress();
+            userSync.saveProgressAndSync(() => {}).catch(() => {});
           }
         } catch {
           /* ignore */
@@ -807,6 +798,8 @@ export default function PairLinkGame() {
                   ) : null}
                 </div>
                 {isDevTj && (
+                  <>
+                  <DevDebugUserStats />
                   <div className="mt-1 pt-1 border-t border-white/10 space-y-1">
                     <div className="font-semibold text-slate-300">進捗同期</div>
                     <div className="flex items-center gap-1">
@@ -860,6 +853,7 @@ export default function PairLinkGame() {
                       </button>
                     </div>
                   </div>
+                  </>
                 )}
                 <div>
                   リフレッシュ回数:{" "}

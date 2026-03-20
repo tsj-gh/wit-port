@@ -6,6 +6,9 @@ import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PresSureJudgeAdSlot } from "@/components/PresSureJudgeAdSlots";
+import { useUserSyncContext } from "@/components/UserSyncProvider";
+import { DevDebugUserStats } from "@/components/DevDebugUserStats";
+import { recordPuzzleClear } from "@/lib/wispo-user-data";
 
 const BALANCE_LIMIT = 100;
 const NPC_WEIGHT_MIN = 10;
@@ -600,6 +603,7 @@ export default function PresSureJudgeGame() {
   const [timer, setTimer] = useState(INITIAL_TIMER);
   const [collapseAnimDone, setCollapseAnimDone] = useState(false);
   const searchParams = useSearchParams();
+  const userSync = useUserSyncContext();
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
 
@@ -1136,6 +1140,22 @@ export default function PresSureJudgeGame() {
 
   const showResult = () => setPhase("result");
 
+  const hasRecordedResultRef = useRef(false);
+  useEffect(() => {
+    if (phase === "result" && !hasRecordedResultRef.current) {
+      hasRecordedResultRef.current = true;
+      try {
+        recordPuzzleClear("pressureJudge");
+        if (userSync?.saveProgressAndSync) {
+          userSync.saveProgressAndSync(() => {}).catch(() => {});
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    if (phase !== "result") hasRecordedResultRef.current = false;
+  }, [phase, userSync]);
+
   useEffect(() => {
     if (phase === "gameover") {
       const id = setTimeout(() => setCollapseAnimDone(true), 1200);
@@ -1317,6 +1337,7 @@ export default function PresSureJudgeGame() {
           </div>
           {isDebugPanelExpanded && (
           <>
+          <DevDebugUserStats />
           <div className="mt-2 space-y-1.5">
             <label className="flex items-center justify-between gap-2">
               <span className="text-amber-300/90">scaleWrapperTopOffset:</span>

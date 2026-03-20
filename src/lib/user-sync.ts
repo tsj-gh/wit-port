@@ -1,17 +1,12 @@
 /**
  * 匿名進捗保存システム
- * LocalStorage を主軸、Vercel KV をバックアップ
+ * LocalStorage (wispo_user_data) を主軸、Vercel KV をバックアップ
  */
 
-const ANON_ID_KEY = "wispo_anon_id";
-const PAIR_LINK_KEY = "pair-link_completed";
-const SKYSCRAPER_KEY = "skyscraper_completed";
+import type { WispoUserData } from "./wispo-user-data";
+import { getOrInitWispoUserData } from "./wispo-user-data";
 
-export type UserData = {
-  pairLink: { gridSize: number; timeSeconds: number; completedAt: string }[];
-  skyscraper: { n: number; difficulty: string; timeSeconds: number; completedAt: string }[];
-  updatedAt: string;
-};
+const ANON_ID_KEY = "wispo_anon_id";
 
 function generateUUID(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -35,36 +30,22 @@ export function getOrCreateAnonId(): string {
   return id;
 }
 
-/** localStorage から進捗を集約して UserData を構築 */
-export function collectUserData(): UserData {
+/** localStorage から wispo_user_data を取得して返す */
+export function collectUserData(): WispoUserData {
   if (typeof window === "undefined") {
-    return { pairLink: [], skyscraper: [], updatedAt: new Date().toISOString() };
+    return {
+      firstLaunchDate: new Date().toISOString().slice(0, 10),
+      lastActivityDate: new Date().toISOString().slice(0, 10),
+      totalActiveDays: 0,
+      achievements: { pairLink: 0, skyscraper: 0, pressureJudge: 0 },
+      dailyTraverse: { date: new Date().toISOString().slice(0, 10), completedIds: [] },
+    };
   }
-  const pairLink = (() => {
-    try {
-      const raw = localStorage.getItem(PAIR_LINK_KEY);
-      return raw ? (JSON.parse(raw) as UserData["pairLink"]) : [];
-    } catch {
-      return [];
-    }
-  })();
-  const skyscraper = (() => {
-    try {
-      const raw = localStorage.getItem(SKYSCRAPER_KEY);
-      return raw ? (JSON.parse(raw) as UserData["skyscraper"]) : [];
-    } catch {
-      return [];
-    }
-  })();
-  return {
-    pairLink,
-    skyscraper,
-    updatedAt: new Date().toISOString(),
-  };
+  return getOrInitWispoUserData();
 }
 
 /** API に同期（ネットワークエラー時は localStorage のみで継続） */
-export async function syncToApi(anonId: string, userData: UserData): Promise<boolean> {
+export async function syncToApi(anonId: string, userData: WispoUserData): Promise<boolean> {
   try {
     const res = await fetch("/api/sync", {
       method: "POST",

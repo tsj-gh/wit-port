@@ -12,6 +12,8 @@ import {
   checkProgressAction,
 } from "./actions";
 import { useUserSyncContext } from "@/components/UserSyncProvider";
+import { DevDebugUserStats } from "@/components/DevDebugUserStats";
+import { recordPuzzleClear } from "@/lib/wispo-user-data";
 
 type Clues = {
   top: (number | null)[];
@@ -129,17 +131,10 @@ export default function SkyscraperGame() {
     if (result.ok) {
       setSolved(true);
       setShowClearOverlay(true);
-      const saveProgress = () => {
-        const key = "skyscraper_completed";
-        const prev = JSON.parse(localStorage.getItem(key) || "[]");
-        prev.push({ n, difficulty, timeSeconds: timeSecondsRef.current, completedAt: new Date().toISOString() });
-        localStorage.setItem(key, JSON.stringify(prev));
-      };
       try {
+        recordPuzzleClear("skyscraper");
         if (userSync?.saveProgressAndSync) {
-          userSync.saveProgressAndSync(saveProgress).catch(() => {});
-        } else {
-          saveProgress();
+          userSync.saveProgressAndSync(() => {}).catch(() => {});
         }
       } catch {
         /* ignore */
@@ -339,6 +334,7 @@ export default function SkyscraperGame() {
         <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono">
           <div className="font-bold text-emerald-400 mb-2">デバッグパネル</div>
           <div className="space-y-2 text-slate-400/90 text-[10px]">
+            <DevDebugUserStats />
             <div className="flex items-center gap-1">
               <span className="shrink-0">anon_id:</span>
               <code className="text-[9px] truncate max-w-[120px] bg-black/40 px-1 rounded" title={userSync?.anonId ?? ""}>
