@@ -95,7 +95,11 @@ export function recordPuzzleClear(gameId: PuzzleGameId): WispoUserData {
 
   let nextTotalActiveDays = data.totalActiveDays;
   let nextLastActivityDate = data.lastActivityDate;
-  if (data.lastActivityDate !== today) {
+  // 初回クリア時（totalActiveDays=0）は 1 にする。それ以外は lastActivityDate が今日でなければ +1
+  if (data.totalActiveDays === 0) {
+    nextTotalActiveDays = 1;
+    nextLastActivityDate = today;
+  } else if (data.lastActivityDate !== today) {
     nextTotalActiveDays++;
     nextLastActivityDate = today;
   }
@@ -132,4 +136,11 @@ export function resetDailyTraverse(): WispoUserData {
   };
   saveWispoUserData(next);
   return next;
+}
+
+/** 全データを初期化（デバッグ用：累計・活動日数・今日の進捗を 0 にリセットし KV にも反映） */
+export function resetAllUserData(): WispoUserData {
+  const initial = createInitialData();
+  saveWispoUserData(initial);
+  return initial;
 }

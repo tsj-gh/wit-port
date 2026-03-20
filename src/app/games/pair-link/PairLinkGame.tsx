@@ -290,11 +290,12 @@ export default function PairLinkGame() {
     // ローディング中（次へ押下後の探索中など）は前パズルの paths が残っており誤検知するためスキップ
     if (loading || solved || pairs.length === 0 || hasTriggeredClearRef.current)
       return;
+    // pointerup/pointercancel の両発火や StrictMode による二重実行を防ぐため、処理開始直後にフラグを立てる
+    hasTriggeredClearRef.current = true;
     isCheckingClearRef.current = true;
     try {
       const result = await validatePathsAction(paths, pairs, gridSize);
       if (result.ok) {
-        hasTriggeredClearRef.current = true;
         setSolved(true);
         setTimerActive(false);
         setShowClearOverlay(true);
@@ -306,7 +307,11 @@ export default function PairLinkGame() {
         } catch {
           /* ignore */
         }
+      } else {
+        hasTriggeredClearRef.current = false;
       }
+    } catch {
+      hasTriggeredClearRef.current = false;
     } finally {
       isCheckingClearRef.current = false;
     }

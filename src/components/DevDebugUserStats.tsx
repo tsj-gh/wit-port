@@ -1,22 +1,25 @@
 "use client";
 
-import { getOrInitWispoUserData, resetDailyTraverse } from "@/lib/wispo-user-data";
+import { useState } from "react";
+import { getOrInitWispoUserData, resetAllUserData } from "@/lib/wispo-user-data";
 import { useUserSyncContext } from "@/components/UserSyncProvider";
 
 /**
- * デバッグパネル用: 累計クリア数・活動日数・今日の進捗リセット
+ * デバッグパネル用: 累計クリア数・活動日数・全データリセット
  */
 export function DevDebugUserStats() {
   const userSync = useUserSyncContext();
+  const [refreshKey, setRefreshKey] = useState(0);
   const data = getOrInitWispoUserData();
   const totalClears =
     data.achievements.pairLink + data.achievements.skyscraper + data.achievements.pressureJudge;
 
-  const handleReset = () => {
-    resetDailyTraverse();
+  const handleReset = async () => {
+    resetAllUserData();
     if (userSync?.saveProgressAndSync) {
-      userSync.saveProgressAndSync(() => {}).catch(() => {});
+      await userSync.saveProgressAndSync(() => {});
     }
+    setRefreshKey((k) => k + 1);
   };
 
   return (
