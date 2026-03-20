@@ -6,6 +6,8 @@ import { DevLink } from "@/components/DevLink";
 import confetti from "canvas-confetti";
 import { validatePathsAction, solvePathsAction } from "./actions";
 import { usePuzzleStock } from "@/hooks/usePuzzleStock";
+import { useBoardWorker } from "@/hooks/useBoardWorker";
+import { computeABCScore, computeStats, type ABCScore } from "@/lib/pair-link-abc-score";
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { useUserSyncContext } from "@/components/UserSyncProvider";
@@ -57,6 +59,9 @@ export default function PairLinkGame() {
   const [tick, setTick] = useState(0);
   const [currentSeed, setCurrentSeed] = useState<string | null>(null);
   const [hashInput, setHashInput] = useState("");
+  const [abcScore, setAbcScore] = useState<ABCScore | null>(null);
+  const [batch100Running, setBatch100Running] = useState(false);
+  const [batch100Result, setBatch100Result] = useState<string | null>(null);
   const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : 500)
@@ -133,6 +138,7 @@ export default function PairLinkGame() {
   const canvasSize = Math.round(PADDING * 2 + (gridSize - 1) * spacing) || 420;
 
   const { getPuzzle, stockCount, prefetch, manualPrefetch, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs } = usePuzzleStock({ gridSize, persist: true });
+  const { generate: workerGenerate } = useBoardWorker();
 
   const initGame = useCallback(
     async (size: number, seed?: string) => {
@@ -178,6 +184,50 @@ export default function PairLinkGame() {
   useEffect(() => {
     initGame(6);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ABC スコアを盤面ロード時に計算
+  useEffect(() => {
+    const sol = currentSolutionPathsRef.current;
+    if (!pairs.length || !sol) {
+      setAbcScore(null);
+      return;
+    }
+    const score = computeABCScore(pairs, sol, gridSize);
+    setAbcScore(score);
+  }, [pairs, puzzleKey, gridSize]);
+
+  const runBatch100 = useCallback(async () => {
+    setBatch100Running(true);
+    setBatch100Result(null);
+    const aVals: number[] = [];
+    const bVals: number[] = [];
+    const cVals: number[] = [];
+    try {
+      for (let i = 0; i < 100; i++) {
+        const result = await workerGenerate(gridSize);
+        if (result.error || !result.solutionPaths || !result.pairs) continue;
+        const score = computeABCScore(result.pairs, result.solutionPaths, result.gridSize);
+        if (score) {
+          aVals.push(score.detourScore);
+          bVals.push(score.enclosureScore);
+          cVals.push(score.junctionComplexity);
+        }
+      }
+      const aStat = computeStats(aVals);
+      const bStat = computeStats(bVals);
+      const cStat = computeStats(cVals);
+      const report = [
+        `[ABC 100回計測] gridSize=${gridSize}`,
+        `A. Detour Score: min=${aStat.min.toFixed(3)} max=${aStat.max.toFixed(3)} avg=${aStat.avg.toFixed(3)} std=${aStat.std.toFixed(3)}`,
+        `B. Enclosure Score: min=${bStat.min} max=${bStat.max} avg=${bStat.avg.toFixed(2)} std=${bStat.std.toFixed(2)}`,
+        `C. Junction Complexity: min=${cStat.min.toFixed(3)} max=${cStat.max.toFixed(3)} avg=${cStat.avg.toFixed(3)} std=${cStat.std.toFixed(3)}`,
+      ].join("\n");
+      console.log(report);
+      setBatch100Result(report);
+    } finally {
+      setBatch100Running(false);
+    }
+  }, [gridSize, workerGenerate]);
 
   useEffect(() => {
     if (timerActive && !solved) {
@@ -861,6 +911,26 @@ export default function PairLinkGame() {
                 </div>
                 {isDevTj && (
                   <>
+                  <div className="mt-1 pt-1 border-t border-white/10">
+                    <div className="font-semibold text-slate-300">ABC スコア</div>
+                    <div className="space-y-0.5 text-slate-400/90">
+                      <div>A. 迂回率: <span className="tabular-nums text-amber-400">{abcScore ? abcScore.detourScore.toFixed(3) : "—"}</span></div>
+                      <div>B. エンクロージャ: <span className="tabular-nums text-amber-400">{abcScore != null ? abcScore.enclosureScore : "—"}</span></div>
+                      <div>C. 分岐複雑性: <span className="tabular-nums text-amber-400">{abcScore ? abcScore.junctionComplexity.toFixed(3) : "—"}</span></div>
+                    </div>
+                    <button
+                      onClick={runBatch100}
+                      disabled={batch100Running}
+                      className="mt-1 px-2 py-0.5 rounded text-[10px] border border-violet-500/50 bg-violet-500/20 text-violet-400 hover:bg-violet-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {batch100Running ? "計測中..." : "100回生成 & 計測"}
+                    </button>
+                    {batch100Result && (
+                      <pre className="mt-1 p-1 rounded bg-black/40 text-[9px] text-slate-300 whitespace-pre-wrap max-h-24 overflow-y-auto">
+                        {batch100Result}
+                      </pre>
+                    )}
+                  </div>
                   <DevDebugUserStats />
                   <div className="mt-1 pt-1 border-t border-white/10 space-y-1">
                     <div className="font-semibold text-slate-300">進捗同期</div>
