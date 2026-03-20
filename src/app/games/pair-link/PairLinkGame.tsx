@@ -66,6 +66,8 @@ export default function PairLinkGame() {
   const [debugNumPairs, setDebugNumPairs] = useState(5);
   const [test10Running, setTest10Running] = useState(false);
   const [test10Result, setTest10Result] = useState<{ success: number; avgMs: number; lastAbc: ABCScore | null } | null>(null);
+  const [settingsGridSize, setSettingsGridSize] = useState(6);
+  const [settingsNumPairs, setSettingsNumPairs] = useState(5);
   const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : 500)
@@ -141,11 +143,11 @@ export default function PairLinkGame() {
     gridSize > 1 ? (canvasPixelSize - PADDING * 2) / (gridSize - 1) : 0;
   const canvasSize = Math.round(PADDING * 2 + (gridSize - 1) * spacing) || 420;
 
-  const { getPuzzle, stockCount, prefetch, manualPrefetch, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs } = usePuzzleStock({ gridSize, persist: true });
+  const { getPuzzle, prefetch, manualPrefetch, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs, stockStatus } = usePuzzleStock({});
   const { generate: workerGenerate } = useBoardWorker();
 
   const initGame = useCallback(
-    async (size: number, seed?: string) => {
+    async (gs: number, np: number, seed?: string) => {
       hasTriggeredClearRef.current = false;
       isCheckingClearRef.current = false;
       setSolved(false);
@@ -153,14 +155,15 @@ export default function PairLinkGame() {
       setTimeSeconds(0);
       setTimerActive(false);
 
-      const hasStock = size === gridSize && stockCount > 0 && !seed;
+      const key = `${gs}x${np}`;
+      const hasStock = (stockStatus[key] ?? 0) > 0 && !seed;
       if (!hasStock) {
         setLoading(true);
         setStatus(seed ? "ハッシュから生成中" : "探索中");
       }
 
       try {
-        const result = await getPuzzle(size, seed);
+        const result = await getPuzzle(gs, np, seed);
         if (result.error) {
           setStatus(result.error ?? "生成に失敗しました");
           return;
@@ -182,11 +185,11 @@ export default function PairLinkGame() {
         setLoading(false);
       }
     },
-    [getPuzzle, gridSize, stockCount]
+    [getPuzzle, stockStatus]
   );
 
   useEffect(() => {
-    initGame(6);
+    initGame(6, 5);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ABC スコアを盤面ロード時に計算
@@ -235,7 +238,7 @@ export default function PairLinkGame() {
     const cVals: number[] = [];
     try {
       for (let i = 0; i < 100; i++) {
-        const result = await workerGenerate(gridSize);
+        const result = await workerGenerate(settingsGridSize, undefined, settingsNumPairs);
         if (result.error || !result.solutionPaths || !result.pairs) continue;
         const score = computeABCScore(result.pairs, result.solutionPaths, result.gridSize);
         if (score) {
@@ -248,7 +251,7 @@ export default function PairLinkGame() {
       const bStat = computeStats(bVals);
       const cStat = computeStats(cVals);
       const report = [
-        `[ABC 100回計測] gridSize=${gridSize}`,
+        `[ABC 100回計測] ${settingsGridSize}x${settingsNumPairs}`,
         `A. Detour Score: min=${aStat.min.toFixed(3)} max=${aStat.max.toFixed(3)} avg=${aStat.avg.toFixed(3)} std=${aStat.std.toFixed(3)}`,
         `B. Enclosure Score: min=${bStat.min} max=${bStat.max} avg=${bStat.avg.toFixed(2)} std=${bStat.std.toFixed(2)}`,
         `C. Junction Complexity: min=${cStat.min.toFixed(3)} max=${cStat.max.toFixed(3)} avg=${cStat.avg.toFixed(3)} std=${cStat.std.toFixed(3)}`,
@@ -258,7 +261,7 @@ export default function PairLinkGame() {
     } finally {
       setBatch100Running(false);
     }
-  }, [gridSize, workerGenerate]);
+  }, [settingsGridSize, settingsNumPairs, workerGenerate]);
 
   useEffect(() => {
     if (timerActive && !solved) {
@@ -871,8 +874,13 @@ export default function PairLinkGame() {
                   </span>
                 </div>
                 <div>
-                  プリフェッチ済みストック数:{" "}
-                  <span className="tabular-nums">{stockCount}</span>
+                  ストック状況:{" "}
+                  <span className="tabular-nums text-amber-400">
+                    {Object.entries(stockStatus)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([k, v]) => `${k}: ${v}個`)
+                      .join(", ") || "なし"}
+                  </span>
                 </div>
                 <div>
                   最終生成時間:{" "}
@@ -1052,7 +1060,7 @@ export default function PairLinkGame() {
                       <button
                         onClick={() => {
                           const s = hashInput.trim();
-                          if (s) initGame(gridSize, s);
+                          if (s) initGame(settingsGridSize, settingsNumPairs, s);
                         }}
                         disabled={!hashInput.trim() || loading}
                         className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1098,7 +1106,7 @@ export default function PairLinkGame() {
                   強制クリア (Solve & Sync)
                 </button>
                 <button
-                  onClick={() => manualPrefetch()}
+                  onClick={() => manualPrefetch(settingsGridSize, settingsNumPairs)}
                   disabled={isPrefetching}
                   className="px-2 py-0.5 rounded text-[10px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1173,30 +1181,42 @@ export default function PairLinkGame() {
         </div>
         <div className="flex flex-wrap gap-4 items-end justify-center mt-4">
           <div>
-            <label className="block text-xs text-wit-muted mb-1">サイズ</label>
+            <label className="block text-xs text-wit-muted mb-1">Grid Size</label>
             <select
-              value={gridSize}
+              value={settingsGridSize}
               onChange={(e) => {
-                refreshAds();
-                initGame(Number(e.target.value));
+                const v = Number(e.target.value);
+                setSettingsGridSize(v);
+                setSettingsNumPairs((p) => Math.min(p, v));
               }}
               className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
             >
-              <option value={4}>4×4（ペア3）</option>
-              <option value={6}>6×6（ペア5）</option>
-              <option value={8}>8×8（ペア7）</option>
-              <option value={10}>10×10（ペア9）</option>
+              {[4, 5, 6, 7, 8].map((n) => (
+                <option key={n} value={n}>{n}×{n}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-wit-muted mb-1">Number of Pairs</label>
+            <select
+              value={settingsNumPairs}
+              onChange={(e) => setSettingsNumPairs(Number(e.target.value))}
+              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
+            >
+              {Array.from({ length: settingsGridSize - Math.max(2, settingsGridSize - 2) + 1 }, (_, i) => Math.max(2, settingsGridSize - 2) + i).map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
             </select>
           </div>
           <button
             onClick={() => {
               refreshAds();
-              initGame(gridSize);
+              initGame(settingsGridSize, settingsNumPairs);
             }}
             disabled={loading}
             className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
           >
-            新規生成
+            新規作成
           </button>
         </div>
         {/* 広告枠2（AD-UNIT-B）: サイズ/新規作成の直下 */}
@@ -1236,7 +1256,7 @@ export default function PairLinkGame() {
                 onClick={() => {
                   refreshAds();
                   setShowClearOverlay(false);
-                  initGame(gridSize);
+                  initGame(settingsGridSize, settingsNumPairs);
                 }}
                 className="px-6 py-3 rounded-lg bg-wit-emerald text-white font-medium hover:bg-emerald-600"
               >

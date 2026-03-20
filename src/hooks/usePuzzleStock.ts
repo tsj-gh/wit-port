@@ -5,94 +5,156 @@ import { useBoardWorker, type GenerateResult } from "@/hooks/useBoardWorker";
 
 const STOCK_MAX = 3;
 const STOCK_REFILL_THRESHOLD = 2;
-const STORAGE_KEY_PREFIX = "pair-link-stock";
+const MAX_KEYS = 5;
 
-function getStorageKey(gridSize: number): string {
-  return `${STORAGE_KEY_PREFIX}-${gridSize}`;
+function makeKey(gridSize: number, numPairs: number): string {
+  return `${gridSize}x${numPairs}`;
 }
 
-function loadFromStorage(gridSize: number): GenerateResult[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = sessionStorage.getItem(getStorageKey(gridSize));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as GenerateResult[];
-    return Array.isArray(parsed) ? parsed.filter((p) => !p.error) : [];
-  } catch {
-    return [];
+/** モジュールレベルのストック（LRU、最大5キー） */
+const stockMap = new Map<string, GenerateResult[]>();
+const keyAccessOrder: string[] = [];
+
+function evictIfNeeded(newKey: string): void {
+  if (stockMap.has(newKey)) return;
+  while (keyAccessOrder.length >= MAX_KEYS) {
+    const oldest = keyAccessOrder.shift();
+    if (oldest) stockMap.delete(oldest);
   }
 }
 
-function saveToStorage(gridSize: number, stock: GenerateResult[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    sessionStorage.setItem(getStorageKey(gridSize), JSON.stringify(stock));
-  } catch {
-    /* ignore */
-  }
+function touchKey(key: string): void {
+  const idx = keyAccessOrder.indexOf(key);
+  if (idx >= 0) keyAccessOrder.splice(idx, 1);
+  keyAccessOrder.push(key);
+}
+
+function getFromStock(key: string): GenerateResult | null {
+  const arr = stockMap.get(key);
+  if (!arr || arr.length === 0) return null;
+  const head = arr[0];
+  stockMap.set(key, arr.slice(1));
+  touchKey(key);
+  return head;
+}
+
+function addToStock(key: string, puzzle: GenerateResult): void {
+  evictIfNeeded(key);
+  const arr = stockMap.get(key) ?? [];
+  arr.push(puzzle);
+  stockMap.set(key, arr);
+  touchKey(key);
+}
+
+export function getStockStatus(): Record<string, number> {
+  const out: Record<string, number> = {};
+  stockMap.forEach((arr, k) => {
+    out[k] = arr.length;
+  });
+  return out;
 }
 
 export type UsePuzzleStockOptions = {
-  /** パズルサイズ（4, 6, 8, 10） */
-  gridSize?: number;
-  /** sessionStorage で永続化するか */
+  /** 永続化は行わず、メモリ内 Map のみ使用 */
   persist?: boolean;
 };
 
 export function usePuzzleStock(
-  options: UsePuzzleStockOptions = {}
+  _options: UsePuzzleStockOptions = {}
 ): {
-  getPuzzle: (requestedSize?: number, seed?: string) => Promise<GenerateResult>;
-  stockCount: number;
-  prefetch: () => void;
-  manualPrefetch: () => void;
+  getPuzzle: (gridSize: number, numPairs: number, seed?: string) => Promise<GenerateResult>;
+  prefetch: (gridSize: number, numPairs: number) => void;
+  manualPrefetch: (gridSize: number, numPairs: number) => void;
   isPrefetching: boolean;
   lastGenerationTimeMs: number | null;
   lastProfile: Record<string, number> | null;
   lastAttempts: number | null;
   lastTotalMs: number | null;
+  stockStatus: Record<string, number>;
 } {
-  const { gridSize = 6, persist = true } = options;
   const { generate: workerGenerate } = useBoardWorker();
-  const [stockCount, setStockCount] = useState(0);
   const [isPrefetching, setIsPrefetching] = useState(false);
   const [lastGenerationTimeMs, setLastGenerationTimeMs] = useState<number | null>(null);
   const [lastProfile, setLastProfile] = useState<Record<string, number> | null>(null);
   const [lastAttempts, setLastAttempts] = useState<number | null>(null);
   const [lastTotalMs, setLastTotalMs] = useState<number | null>(null);
-  const stockRef = useRef<GenerateResult[]>([]);
+  const [stockStatus, setStockStatus] = useState<Record<string, number>>(() => getStockStatus());
   const isFetchingRef = useRef(false);
 
-  const flushCount = useCallback(() => {
-    setStockCount(stockRef.current.length);
+  const flushStatus = useCallback(() => {
+    setStockStatus(getStockStatus());
   }, []);
 
   const fetchOne = useCallback(
-    async (size?: number, seed?: string): Promise<GenerateResult | null> => {
-      const sz = size ?? gridSize;
+    async (gs: number, np: number, seed?: string): Promise<GenerateResult | null> => {
       try {
-        const result = await workerGenerate(sz, seed);
+        const result = await workerGenerate(gs, seed, np);
         return result;
       } catch {
         return null;
       }
     },
-    [gridSize, workerGenerate]
+    [workerGenerate]
   );
 
-  const refill = useCallback(async () => {
-    if (isFetchingRef.current) return;
-    if (stockRef.current.length >= STOCK_MAX) return;
-    isFetchingRef.current = true;
-    setIsPrefetching(true);
-    const t0 = performance.now();
-    try {
-      const puzzle = await fetchOne();
-      const t1 = performance.now();
-      const elapsed = Math.round(t1 - t0);
-      setLastGenerationTimeMs(elapsed);
-      if (puzzle) {
-        if (puzzle.profile) {
+  const refill = useCallback(
+    async (gs: number, np: number) => {
+      if (isFetchingRef.current) return;
+      const key = makeKey(gs, np);
+      const arr = stockMap.get(key) ?? [];
+      if (arr.length >= STOCK_MAX) return;
+
+      isFetchingRef.current = true;
+      setIsPrefetching(true);
+      const t0 = performance.now();
+      try {
+        const puzzle = await fetchOne(gs, np);
+        const elapsed = Math.round(performance.now() - t0);
+        setLastGenerationTimeMs(elapsed);
+        if (puzzle && !puzzle.error) {
+          if (puzzle.profile) {
+            setLastProfile(puzzle.profile);
+            if (puzzle.attempts != null) setLastAttempts(puzzle.attempts);
+            if (puzzle.totalMs != null) setLastTotalMs(puzzle.totalMs);
+            if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
+              const total = Object.values(puzzle.profile).reduce((a, b) => a + b, 0);
+              console.group("Board Generation Profile");
+              if (puzzle.attempts != null) console.log(`Attempts: ${puzzle.attempts} 回`);
+              if (puzzle.totalMs != null) console.log(`全体: ${puzzle.totalMs}ms`);
+              Object.entries(puzzle.profile).forEach(([k, v]) => console.log(`${k}: ${v}ms (累計)`));
+              console.log(`内訳合計: ${total}ms / 往復含む: ${elapsed}ms`);
+              console.groupEnd();
+            }
+          }
+          addToStock(key, puzzle);
+          flushStatus();
+        }
+      } finally {
+        isFetchingRef.current = false;
+        setIsPrefetching(false);
+      }
+    },
+    [fetchOne, flushStatus]
+  );
+
+  const prefetch = useCallback(
+    (gs: number, np: number) => {
+      refill(gs, np);
+    },
+    [refill]
+  );
+
+  const manualPrefetch = useCallback(
+    async (gs: number, np: number) => {
+      if (isFetchingRef.current) return;
+      isFetchingRef.current = true;
+      setIsPrefetching(true);
+      const t0 = performance.now();
+      try {
+        const puzzle = await fetchOne(gs, np);
+        const elapsed = Math.round(performance.now() - t0);
+        setLastGenerationTimeMs(elapsed);
+        if (puzzle?.profile) {
           setLastProfile(puzzle.profile);
           if (puzzle.attempts != null) setLastAttempts(puzzle.attempts);
           if (puzzle.totalMs != null) setLastTotalMs(puzzle.totalMs);
@@ -106,104 +168,52 @@ export function usePuzzleStock(
             console.groupEnd();
           }
         }
-        stockRef.current = [...stockRef.current, puzzle];
-        if (persist) saveToStorage(gridSize, stockRef.current);
-        flushCount();
-      }
-    } finally {
-      isFetchingRef.current = false;
-      setIsPrefetching(false);
-    }
-  }, [fetchOne, gridSize, persist, flushCount]);
-
-  const manualPrefetch = useCallback(async () => {
-    if (isFetchingRef.current) return;
-    isFetchingRef.current = true;
-    setIsPrefetching(true);
-    const t0 = performance.now();
-    try {
-      const puzzle = await fetchOne();
-      const t1 = performance.now();
-      const elapsed = Math.round(t1 - t0);
-      setLastGenerationTimeMs(elapsed);
-      if (puzzle?.profile) {
-        setLastProfile(puzzle.profile);
-        if (puzzle.attempts != null) setLastAttempts(puzzle.attempts);
-        if (puzzle.totalMs != null) setLastTotalMs(puzzle.totalMs);
-        if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
-          const total = Object.values(puzzle.profile).reduce((a, b) => a + b, 0);
-          console.group("Board Generation Profile");
-          if (puzzle.attempts != null) console.log(`Attempts: ${puzzle.attempts} 回`);
-          if (puzzle.totalMs != null) console.log(`全体: ${puzzle.totalMs}ms`);
-          Object.entries(puzzle.profile).forEach(([k, v]) => console.log(`${k}: ${v}ms (累計)`));
-          console.log(`内訳合計: ${total}ms / 往復含む: ${elapsed}ms`);
-          console.groupEnd();
+        if (puzzle && !puzzle.error) {
+          addToStock(makeKey(gs, np), puzzle);
+          flushStatus();
         }
+      } finally {
+        isFetchingRef.current = false;
+        setIsPrefetching(false);
       }
-      if (puzzle && stockRef.current.length < STOCK_MAX) {
-        stockRef.current = [...stockRef.current, puzzle];
-        if (persist) saveToStorage(gridSize, stockRef.current);
-        flushCount();
-      }
-    } finally {
-      isFetchingRef.current = false;
-      setIsPrefetching(false);
-    }
-  }, [fetchOne, gridSize, persist, flushCount]);
+    },
+    [fetchOne, flushStatus]
+  );
 
   const getPuzzle = useCallback(
-    async (requestedSize?: number, seed?: string): Promise<GenerateResult> => {
-      const size = requestedSize ?? gridSize;
+    async (gs: number, np: number, seed?: string): Promise<GenerateResult> => {
+      const minNp = Math.max(2, gs - 2);
+      const clampedNp = Math.max(minNp, Math.min(gs, np));
+      const key = makeKey(gs, clampedNp);
+
       if (seed != null && seed.trim() !== "") {
-        const puzzle = await fetchOne(size, seed);
+        const puzzle = await fetchOne(gs, clampedNp, seed);
         if (puzzle) return puzzle;
         throw new Error("指定されたハッシュでの生成に失敗しました。");
       }
-      if (size === gridSize) {
-        const head = stockRef.current[0];
-        if (head) {
-          stockRef.current = stockRef.current.slice(1);
-          if (persist) saveToStorage(gridSize, stockRef.current);
-          flushCount();
-          refill();
-          return head;
-        }
+
+      const head = getFromStock(key);
+      if (head) {
+        flushStatus();
+        refill(gs, clampedNp);
+        return head;
       }
-      const puzzle = await fetchOne(size);
+
+      const puzzle = await fetchOne(gs, clampedNp);
       if (puzzle) return puzzle;
-      const retry = await fetchOne(size);
+      const retry = await fetchOne(gs, clampedNp);
       if (retry) return retry;
       throw new Error("パズルの生成に失敗しました。もう一度お試しください。");
     },
-    [gridSize, persist, refill, flushCount, fetchOne]
+    [fetchOne, refill, flushStatus]
   );
 
-  const prefetch = useCallback(() => {
-    refill();
-  }, [refill]);
-
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const loaded = loadFromStorage(gridSize);
-    if (persist && loaded.length > 0) {
-      stockRef.current = loaded;
-      flushCount();
-    }
-    refill();
-  }, [gridSize, persist, refill, flushCount]);
-
-  useEffect(() => {
-    if (
-      stockRef.current.length <= STOCK_REFILL_THRESHOLD &&
-      !isFetchingRef.current
-    ) {
-      refill();
-    }
-  }, [stockCount, refill]);
+    flushStatus();
+  }, [flushStatus]);
 
   return {
-    getPuzzle: getPuzzle as (requestedSize?: number) => Promise<GenerateResult>,
-    stockCount,
+    getPuzzle,
     prefetch,
     manualPrefetch,
     isPrefetching,
@@ -211,5 +221,6 @@ export function usePuzzleStock(
     lastProfile,
     lastAttempts,
     lastTotalMs,
+    stockStatus,
   };
 }
