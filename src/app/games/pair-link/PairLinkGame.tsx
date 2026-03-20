@@ -62,6 +62,10 @@ export default function PairLinkGame() {
   const [abcScore, setAbcScore] = useState<ABCScore | null>(null);
   const [batch100Running, setBatch100Running] = useState(false);
   const [batch100Result, setBatch100Result] = useState<string | null>(null);
+  const [debugGridSize, setDebugGridSize] = useState(6);
+  const [debugNumPairs, setDebugNumPairs] = useState(5);
+  const [test10Running, setTest10Running] = useState(false);
+  const [test10Result, setTest10Result] = useState<{ success: number; avgMs: number; lastAbc: ABCScore | null } | null>(null);
   const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : 500)
@@ -195,6 +199,33 @@ export default function PairLinkGame() {
     const score = computeABCScore(pairs, sol, gridSize);
     setAbcScore(score);
   }, [pairs, puzzleKey, gridSize]);
+
+  const runTest10 = useCallback(async () => {
+    setTest10Running(true);
+    setTest10Result(null);
+    const gs = Math.max(4, Math.min(8, debugGridSize));
+    const np = Math.max(2, Math.min(gs, debugNumPairs));
+    const times: number[] = [];
+    let lastAbc: ABCScore | null = null;
+    let success = 0;
+    try {
+      for (let i = 0; i < 10; i++) {
+        const t0 = performance.now();
+        const result = await workerGenerate(gs, undefined, np);
+        const elapsed = Math.round(performance.now() - t0);
+        if (!result.error && result.solutionPaths && result.pairs) {
+          success++;
+          times.push(elapsed);
+          const score = computeABCScore(result.pairs, result.solutionPaths, result.gridSize);
+          if (score) lastAbc = score;
+        }
+      }
+      const avgMs = times.length > 0 ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : 0;
+      setTest10Result({ success, avgMs, lastAbc });
+    } finally {
+      setTest10Running(false);
+    }
+  }, [debugGridSize, debugNumPairs, workerGenerate]);
 
   const runBatch100 = useCallback(async () => {
     setBatch100Running(true);
@@ -911,6 +942,51 @@ export default function PairLinkGame() {
                 </div>
                 {isDevTj && (
                   <>
+                  <div className="mt-1 pt-1 border-t border-white/10">
+                    <div className="font-semibold text-slate-300">一意解限界調査</div>
+                    <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                      <label className="text-slate-400 text-[10px] shrink-0">Grid:</label>
+                      <input
+                        type="number"
+                        min={4}
+                        max={8}
+                        value={debugGridSize}
+                        onChange={(e) => {
+                          const v = Math.max(4, Math.min(8, Number(e.target.value) || 6));
+                          setDebugGridSize(v);
+                          setDebugNumPairs((p) => Math.min(p, v));
+                        }}
+                        className="w-12 px-1 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+                      />
+                      <label className="text-slate-400 text-[10px] shrink-0">Pairs:</label>
+                      <input
+                        type="number"
+                        min={2}
+                        max={debugGridSize}
+                        value={debugNumPairs}
+                        onChange={(e) => setDebugNumPairs(Math.max(2, Math.min(debugGridSize, Number(e.target.value) || 5)))}
+                        className="w-12 px-1 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+                      />
+                      <button
+                        onClick={runTest10}
+                        disabled={test10Running}
+                        className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {test10Running ? "実行中..." : "Test 10 Runs"}
+                      </button>
+                    </div>
+                    {test10Result && (
+                      <div className="mt-0.5 text-[10px] text-slate-400">
+                        <span>成功: {test10Result.success}/10</span>
+                        <span className="ml-2">平均: {test10Result.avgMs}ms</span>
+                        {test10Result.lastAbc && (
+                          <div className="mt-0.5 text-amber-400/90">
+                            ABC: A={test10Result.lastAbc.detourScore.toFixed(2)} B={test10Result.lastAbc.enclosureScore} C={test10Result.lastAbc.junctionComplexity.toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <div className="mt-1 pt-1 border-t border-white/10">
                     <div className="font-semibold text-slate-300">ABC スコア</div>
                     <div className="space-y-0.5 text-slate-400/90">

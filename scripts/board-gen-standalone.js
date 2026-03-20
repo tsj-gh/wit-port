@@ -1,8 +1,12 @@
 /**
- * Board Worker: Pair-link puzzle generation
- * Plain JS port of src/lib/puzzle-engine/pair-link.ts
- * シード値指定可能な PRNG（Mulberry32）で再現性を確保
+ * 調査用: board-worker のロジックを Node で直接実行可能な形で提供
+ * 本番の board-worker.js と同一ロジック
  */
+
+// Node 用: performance が無い場合の polyfill
+if (typeof performance === "undefined") {
+  global.performance = { now: () => Date.now() };
+}
 
 function hashString(str) {
   let h = 0;
@@ -321,7 +325,7 @@ function generateCandidate6x6(gridSize, pairCount, profile, random, logFailure) 
   const forestGrid = generateFullCoverByBeam(n, pairCount, random);
   if (profile) profile.BeamSearch = Math.round(performance.now() - t0);
   if (!forestGrid) {
-    if (logFailure && typeof console !== "undefined") console.log("[Pair-link] No Full Cover");
+    if (logFailure) console.log("[Pair-link] No Full Cover");
     return null;
   }
 
@@ -365,7 +369,7 @@ function generateCandidate6x6(gridSize, pairCount, profile, random, logFailure) 
   const solCount = countSolutions(solveGrid, pairs, 0, 2, stats, random);
   if (profile) profile.UniqueCheck = Math.round(performance.now() - t0);
   if (solCount !== 1) {
-    if (logFailure && typeof console !== "undefined") console.log("[Pair-link] Not Unique");
+    if (logFailure) console.log("[Pair-link] Not Unique");
     return null;
   }
 
@@ -538,7 +542,6 @@ function addToCumulative(cumulative, delta) {
   }
 }
 
-/** 解の grid を paths 形式に変換（x=列, y=行） */
 function solutionGridToPaths(grid, pairs) {
   const n = grid.length;
   const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
@@ -642,44 +645,4 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs) {
   }
 }
 
-self.onmessage = function (e) {
-  const { type, gridSize, seed, numPairs, requestId } = e.data || {};
-  if (type !== 'GENERATE') return;
-
-  self.postMessage({ type: 'STATUS', status: 'RUNNING', requestId });
-
-  try {
-    const result = generatePairLinkPuzzle(gridSize ?? 8, seed, numPairs);
-    if (result) {
-      self.postMessage({
-        type: 'SUCCESS',
-        board: {
-          numbers: result.numbers,
-          pairs: result.pairs,
-          gridSize: result.gridSize,
-          pairCount: result.pairCount,
-          seed: result.seed,
-          solutionPaths: result.solutionPaths || null,
-        },
-        metrics: {
-          profile: result.profile,
-          attempts: result.attempts,
-          totalMs: result.totalMs,
-        },
-        requestId,
-      });
-    } else {
-      self.postMessage({
-        type: 'ERROR',
-        error: '生成に失敗しました',
-        requestId,
-      });
-    }
-  } catch (err) {
-    self.postMessage({
-      type: 'ERROR',
-      error: err && err.message ? err.message : '生成に失敗しました',
-      requestId,
-    });
-  }
-};
+module.exports = { generatePairLinkPuzzle, solutionGridToPaths };
