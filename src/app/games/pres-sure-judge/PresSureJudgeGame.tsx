@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { DevLink } from "@/components/DevLink";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
@@ -1575,13 +1575,13 @@ export default function PresSureJudgeGame() {
         </div>
       )}
       <header className="relative z-20 shrink-0 flex justify-between items-center px-4 py-4 md:px-6 md:py-6 border-b border-white/10">
-        <Link
+        <DevLink
           href="/"
           className="flex items-center gap-3 text-xl font-black tracking-wider text-wit-text no-underline hover:opacity-90"
         >
           <span className="block w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-[0_0_12px_rgba(245,158,11,0.4)]" />
           Wispo
-        </Link>
+        </DevLink>
         {phase !== "ready" && phase !== "result" && (
           <span className="text-wit-muted text-sm tabular-nums font-medium">Round {round}</span>
         )}
@@ -2106,9 +2106,9 @@ export default function PresSureJudgeGame() {
                 >
                   もう一度
                 </button>
-                <Link href="/" className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 font-medium transition-colors no-underline inline-block">
+                <DevLink href="/" className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 font-medium transition-colors no-underline inline-block">
                   トップへ
-                </Link>
+                </DevLink>
               </div>
             </motion.div>
           )}

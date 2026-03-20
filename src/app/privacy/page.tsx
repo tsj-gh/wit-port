@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { Suspense } from "react";
+import { PageHeaderWithDevLinks } from "@/components/PageHeaderWithDevLinks";
+import { ContactLink } from "@/components/ContactLink";
 
 export const metadata: Metadata = {
   title: "プライバシーポリシー",
@@ -11,21 +13,9 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <div className="mx-auto max-w-[720px] w-full px-6">
-      <header className="flex justify-between items-center py-8">
-        <Link
-          href="/"
-          className="flex items-center gap-3 text-[28px] font-black tracking-[2px] text-wit-text no-underline hover:opacity-90"
-        >
-          <span className="block w-8 h-8 rounded-lg bg-gradient-to-br from-wit-accent to-purple-500 shadow-[0_0_15px_var(--wit-accent-glow)]" />
-          Wispo
-        </Link>
-        <Link
-          href="/"
-          className="text-wit-muted text-sm no-underline hover:text-wit-text transition-colors"
-        >
-          ← トップへ戻る
-        </Link>
-      </header>
+      <Suspense fallback={<header className="flex justify-between items-center py-8"><a href="/" className="text-wit-text font-black">Wispo</a><a href="/" className="text-wit-muted text-sm">← トップへ戻る</a></header>}>
+        <PageHeaderWithDevLinks />
+      </Suspense>
 
       <main className="pb-20">
         <h1 className="text-2xl sm:text-3xl font-bold mb-8 text-wit-text">
@@ -76,9 +66,11 @@ export default function PrivacyPage() {
           </h2>
           <p className="text-wit-muted leading-relaxed">
             プライバシーポリシーに関するご質問は、
-            <Link href="/contact" className="text-wit-accent hover:underline ml-1">
-              お問い合わせフォーム
-            </Link>
+            <Suspense fallback={<a href="/contact" className="text-wit-accent hover:underline ml-1">お問い合わせフォーム</a>}>
+              <ContactLink className="text-wit-accent hover:underline ml-1">
+                お問い合わせフォーム
+              </ContactLink>
+            </Suspense>
             よりご連絡ください。
           </p>
         </article>

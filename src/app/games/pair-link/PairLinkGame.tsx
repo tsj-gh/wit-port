@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { DevLink } from "@/components/DevLink";
 import confetti from "canvas-confetti";
 import { validatePathsAction } from "./actions";
 import { usePuzzleStock } from "@/hooks/usePuzzleStock";
@@ -914,13 +914,13 @@ export default function PairLinkGame() {
         }
       >
         <header className="flex justify-between items-center mb-6">
-        <Link
+        <DevLink
           href="/"
           className="flex items-center gap-3 text-xl sm:text-2xl font-black tracking-wider text-wit-text no-underline hover:opacity-90"
         >
           <span className="block w-8 h-8 rounded-lg bg-gradient-to-br from-wit-emerald to-teal-600" />
           Wispo
-        </Link>
+        </DevLink>
         <div className="flex items-center gap-2 text-wit-muted text-sm">
           <span className="tabular-nums">{formatTime(timeSeconds)}</span>
           {solved && <span className="text-wit-emerald">クリア</span>}
