@@ -68,6 +68,9 @@ export default function PairLinkGame() {
   const [test10Result, setTest10Result] = useState<{ success: number; avgMs: number; lastAbc: ABCScore | null } | null>(null);
   const [settingsGridSize, setSettingsGridSize] = useState(6);
   const [settingsNumPairs, setSettingsNumPairs] = useState(5);
+  const [configEmptyIsolatedPenalty, setConfigEmptyIsolatedPenalty] = useState(5);
+  const [configDetourWeight, setConfigDetourWeight] = useState(0);
+  const [configBaseThreshold, setConfigBaseThreshold] = useState(0);
   const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : 500)
@@ -143,7 +146,12 @@ export default function PairLinkGame() {
     gridSize > 1 ? (canvasPixelSize - PADDING * 2) / (gridSize - 1) : 0;
   const canvasSize = Math.round(PADDING * 2 + (gridSize - 1) * spacing) || 420;
 
-  const { getPuzzle, prefetch, manualPrefetch, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs, stockStatus } = usePuzzleStock({});
+  const evalConfig = {
+    emptyIsolatedPenalty: configEmptyIsolatedPenalty,
+    detourWeight: configDetourWeight,
+    baseThreshold: configBaseThreshold > 0 ? configBaseThreshold : undefined,
+  };
+  const { getPuzzle, prefetch, manualPrefetch, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs, stockStatus } = usePuzzleStock({ config: evalConfig });
   const { generate: workerGenerate } = useBoardWorker();
 
   const initGame = useCallback(
@@ -214,7 +222,7 @@ export default function PairLinkGame() {
     try {
       for (let i = 0; i < 10; i++) {
         const t0 = performance.now();
-        const result = await workerGenerate(gs, undefined, np);
+        const result = await workerGenerate(gs, undefined, np, evalConfig);
         const elapsed = Math.round(performance.now() - t0);
         if (!result.error && result.solutionPaths && result.pairs) {
           success++;
@@ -228,7 +236,7 @@ export default function PairLinkGame() {
     } finally {
       setTest10Running(false);
     }
-  }, [debugGridSize, debugNumPairs, workerGenerate]);
+  }, [debugGridSize, debugNumPairs, workerGenerate, configEmptyIsolatedPenalty, configDetourWeight, configBaseThreshold]);
 
   const runBatch100 = useCallback(async () => {
     setBatch100Running(true);
@@ -238,7 +246,7 @@ export default function PairLinkGame() {
     const cVals: number[] = [];
     try {
       for (let i = 0; i < 100; i++) {
-        const result = await workerGenerate(settingsGridSize, undefined, settingsNumPairs);
+        const result = await workerGenerate(settingsGridSize, undefined, settingsNumPairs, evalConfig);
         if (result.error || !result.solutionPaths || !result.pairs) continue;
         const score = computeABCScore(result.pairs, result.solutionPaths, result.gridSize);
         if (score) {
@@ -261,7 +269,7 @@ export default function PairLinkGame() {
     } finally {
       setBatch100Running(false);
     }
-  }, [settingsGridSize, settingsNumPairs, workerGenerate]);
+  }, [settingsGridSize, settingsNumPairs, workerGenerate, configEmptyIsolatedPenalty, configDetourWeight, configBaseThreshold]);
 
   useEffect(() => {
     if (timerActive && !solved) {
@@ -950,6 +958,50 @@ export default function PairLinkGame() {
                 </div>
                 {isDevTj && (
                   <>
+                  <div className="mt-1 pt-1 border-t border-white/10">
+                    <div className="font-semibold text-slate-300">評価関数パラメータ</div>
+                    <div className="space-y-1 mt-0.5 text-[10px]">
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-400 shrink-0 w-32">Empty Isolated:</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={20}
+                          step={1}
+                          value={configEmptyIsolatedPenalty}
+                          onChange={(e) => setConfigEmptyIsolatedPenalty(Number(e.target.value))}
+                          className="flex-1"
+                        />
+                        <span className="tabular-nums w-6">{configEmptyIsolatedPenalty}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-400 shrink-0 w-32">Detour Weight:</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={5}
+                          step={0.1}
+                          value={configDetourWeight}
+                          onChange={(e) => setConfigDetourWeight(Number(e.target.value))}
+                          className="flex-1"
+                        />
+                        <span className="tabular-nums w-8">{configDetourWeight.toFixed(1)}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-400 shrink-0 w-32">Base Threshold:</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1000}
+                          step={10}
+                          value={configBaseThreshold}
+                          onChange={(e) => setConfigBaseThreshold(Number(e.target.value))}
+                          className="flex-1"
+                        />
+                        <span className="tabular-nums w-10">{configBaseThreshold === 0 ? "自動" : configBaseThreshold}</span>
+                      </div>
+                    </div>
+                  </div>
                   <div className="mt-1 pt-1 border-t border-white/10">
                     <div className="font-semibold text-slate-300">一意解限界調査</div>
                     <div className="flex flex-wrap items-center gap-1 mt-0.5">

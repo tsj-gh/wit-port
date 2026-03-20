@@ -47,10 +47,17 @@ function releaseWorker(): void {
   }
 }
 
+export type WorkerConfig = {
+  emptyIsolatedPenalty?: number;
+  detourWeight?: number;
+  baseThreshold?: number;
+};
+
 type QueueItem = {
   gridSize: number;
   seed?: string;
   numPairs?: number;
+  config?: WorkerConfig;
   resolve: (r: GenerateResult) => void;
   reject: (e: Error) => void;
   requestId: string;
@@ -61,7 +68,7 @@ type QueueItem = {
  * Pair-link ページ・トップページの両方で利用可能
  */
 export function useBoardWorker(): {
-  generate: (gridSize: number, seed?: string, numPairs?: number) => Promise<GenerateResult>;
+  generate: (gridSize: number, seed?: string, numPairs?: number, config?: WorkerConfig) => Promise<GenerateResult>;
   isGenerating: boolean;
 } {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -126,12 +133,13 @@ export function useBoardWorker(): {
       gridSize: item.gridSize,
       seed: item.seed,
       numPairs: item.numPairs,
+      config: item.config,
       requestId: item.requestId,
     });
   }, []);
 
   const generate = useCallback(
-    (gridSize: number, seed?: string, numPairs?: number): Promise<GenerateResult> => {
+    (gridSize: number, seed?: string, numPairs?: number, config?: WorkerConfig): Promise<GenerateResult> => {
       return new Promise((resolve, reject) => {
         if (!mountedRef.current) {
           reject(new Error("Unmounted"));
@@ -143,6 +151,7 @@ export function useBoardWorker(): {
           gridSize,
           seed,
           numPairs,
+          config,
           resolve,
           reject,
           requestId,

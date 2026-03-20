@@ -216,11 +216,15 @@ function computeDegreesAndEndpoints(grid) {
   return { deg, endpointsPerId, filled };
 }
 
-function evaluateForestGrid(grid) {
+function evaluateForestGrid(grid, pairCount, config) {
   const n = grid.length;
+  const cfg = config || {};
+  const emptyIsolatedPenaltyVal = cfg.emptyIsolatedPenalty != null ? cfg.emptyIsolatedPenalty : 5;
+  const detourWeightVal = cfg.detourWeight != null ? cfg.detourWeight : 0;
+
   let score = 0;
   let filled = 0;
-  let emptyIsolatedPenalty = 0;
+  let emptyIsolatedPenaltyCount = 0;
   const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 
   for (let r = 0; r < n; r++) {
@@ -234,17 +238,35 @@ function evaluateForestGrid(grid) {
           if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
           if (!grid[nr][nc]) emptyNeighbors++;
         }
-        if (emptyNeighbors <= 1) emptyIsolatedPenalty += 5;
+        if (emptyNeighbors <= 1) emptyIsolatedPenaltyCount++;
       }
     }
   }
 
   score += filled * 10;
-  score -= emptyIsolatedPenalty;
+  score -= emptyIsolatedPenaltyCount * emptyIsolatedPenaltyVal;
+
+  if (detourWeightVal > 0 && pairCount > 0) {
+    const { endpointsPerId } = computeDegreesAndEndpoints(grid);
+    let totalDetourSteps = 0;
+    for (let id = 1; id <= pairCount; id++) {
+      const eps = endpointsPerId.get(id) || [];
+      if (eps.length < 2) continue;
+      let cellCount = 0;
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++)
+          if (grid[r][c] === id) cellCount++;
+      const manhattan = Math.abs(eps[0].r - eps[1].r) + Math.abs(eps[0].c - eps[1].c);
+      const excess = Math.max(0, (cellCount - 1) - manhattan);
+      totalDetourSteps += excess;
+    }
+    score -= totalDetourSteps * detourWeightVal;
+  }
+
   return score;
 }
 
-function generateFullCoverByBeam(gridSize, pairCount, random) {
+function generateFullCoverByBeam(gridSize, pairCount, random, config) {
   const n = gridSize;
   const beamWidth = 20;
   const maxSteps = n * n * 8;
@@ -263,7 +285,7 @@ function generateFullCoverByBeam(gridSize, pairCount, random) {
   }
 
   let beam = [
-    { grid: initGrid, score: evaluateForestGrid(initGrid) },
+    { grid: initGrid, score: evaluateForestGrid(initGrid, pairCount, config) },
   ];
   const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 
@@ -300,7 +322,7 @@ function generateFullCoverByBeam(gridSize, pairCount, random) {
             const newGrid = state.grid.map(row => row.slice());
             newGrid[nr][nc] = id;
 
-            nextStates.push({ grid: newGrid, score: evaluateForestGrid(newGrid) });
+            nextStates.push({ grid: newGrid, score: evaluateForestGrid(newGrid, pairCount, config) });
           }
         }
       }
@@ -315,10 +337,10 @@ function generateFullCoverByBeam(gridSize, pairCount, random) {
   return null;
 }
 
-function generateCandidate6x6(gridSize, pairCount, profile, random, logFailure) {
+function generateCandidate6x6(gridSize, pairCount, profile, random, logFailure, config) {
   const n = gridSize;
   let t0 = performance.now();
-  const forestGrid = generateFullCoverByBeam(n, pairCount, random);
+  const forestGrid = generateFullCoverByBeam(n, pairCount, random, config);
   if (profile) profile.BeamSearch = Math.round(performance.now() - t0);
   if (!forestGrid) {
     if (logFailure && typeof console !== "undefined") console.log("[Pair-link] No Full Cover");
@@ -578,11 +600,14 @@ function solutionGridToPaths(grid, pairs) {
   return result;
 }
 
-function generatePairLinkPuzzle(gridSize, seed, numPairs) {
+function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
   const pairCount = numPairs != null
     ? Math.max(2, Math.min(gridSize, numPairs))
     : getPairCount(gridSize);
-  const baseThreshold = gridSize * pairCount * 10;
+  const cfg = config || {};
+  const baseThreshold = (cfg.baseThreshold != null && cfg.baseThreshold > 0)
+    ? cfg.baseThreshold
+    : gridSize * pairCount * 10;
   const timeLimitMs = 50000;
   const totalStart = performance.now();
   const cumulativeProfile = {};
@@ -599,7 +624,7 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs) {
     const random = createRandom(attemptSeed);
 
     const attemptProfile = {};
-    const candidate = generateCandidate(gridSize, pairCount, attemptProfile, random, logFailure);
+    const candidate = generateCandidate(gridSize, pairCount, attemptProfile, random, logFailure, config);
     if (!candidate) {
       addToCumulative(cumulativeProfile, attemptProfile);
       if (hasSeed) return null;
@@ -643,13 +668,13 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs) {
 }
 
 self.onmessage = function (e) {
-  const { type, gridSize, seed, numPairs, requestId } = e.data || {};
+  const { type, gridSize, seed, numPairs, config, requestId } = e.data || {};
   if (type !== 'GENERATE') return;
 
   self.postMessage({ type: 'STATUS', status: 'RUNNING', requestId });
 
   try {
-    const result = generatePairLinkPuzzle(gridSize ?? 8, seed, numPairs);
+    const result = generatePairLinkPuzzle(gridSize ?? 8, seed, numPairs, config);
     if (result) {
       self.postMessage({
         type: 'SUCCESS',

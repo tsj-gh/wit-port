@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useBoardWorker, type GenerateResult } from "@/hooks/useBoardWorker";
+import { useBoardWorker, type GenerateResult, type WorkerConfig } from "@/hooks/useBoardWorker";
 
 const STOCK_MAX = 3;
 const STOCK_REFILL_THRESHOLD = 2;
@@ -57,6 +57,8 @@ export function getStockStatus(): Record<string, number> {
 export type UsePuzzleStockOptions = {
   /** 永続化は行わず、メモリ内 Map のみ使用 */
   persist?: boolean;
+  /** 評価関数・フィルタ用パラメータ（デバッグ用） */
+  config?: WorkerConfig;
 };
 
 export function usePuzzleStock(
@@ -73,6 +75,7 @@ export function usePuzzleStock(
   stockStatus: Record<string, number>;
 } {
   const { generate: workerGenerate } = useBoardWorker();
+  const { config } = _options;
   const [isPrefetching, setIsPrefetching] = useState(false);
   const [lastGenerationTimeMs, setLastGenerationTimeMs] = useState<number | null>(null);
   const [lastProfile, setLastProfile] = useState<Record<string, number> | null>(null);
@@ -88,13 +91,13 @@ export function usePuzzleStock(
   const fetchOne = useCallback(
     async (gs: number, np: number, seed?: string): Promise<GenerateResult | null> => {
       try {
-        const result = await workerGenerate(gs, seed, np);
+        const result = await workerGenerate(gs, seed, np, config);
         return result;
       } catch {
         return null;
       }
     },
-    [workerGenerate]
+    [workerGenerate, config]
   );
 
   const refill = useCallback(
