@@ -325,14 +325,27 @@ export default function PairLinkGame() {
     try {
       let solvedPaths: Record<string, { x: number; y: number }[][]> | null =
         currentSolutionPathsRef.current;
+      if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
+        console.log("[強制クリア] currentSolutionPathsRef:", solvedPaths ? `${Object.keys(solvedPaths).length} keys` : "null");
+      }
       if (!solvedPaths || Object.keys(solvedPaths).length === 0) {
+        if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
+          console.log("[強制クリア] solvePathsAction を呼び出し");
+        }
         const result = await solvePathsAction(pairs, gridSize);
         if (result.error || !result.paths || Object.keys(result.paths).length === 0) {
-          setStatus(result.error ?? "解の取得に失敗しました");
+          const msg = result.error ?? "解の取得に失敗しました";
+          setStatus(msg);
+          if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
+            console.warn("[強制クリア] solvePathsAction 失敗:", msg);
+          }
           hasTriggeredClearRef.current = false;
           return;
         }
         solvedPaths = result.paths;
+      }
+      if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
+        console.log("[強制クリア] setPaths 実行, keys:", Object.keys(solvedPaths).length);
       }
       setPaths(solvedPaths);
       setSolved(true);
@@ -342,7 +355,12 @@ export default function PairLinkGame() {
       if (userSync?.saveProgressAndSync) {
         userSync.saveProgressAndSync(() => {}).catch(() => {});
       }
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "強制クリアに失敗しました";
+      setStatus(msg);
+      if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
+        console.error("[強制クリア] 例外:", err);
+      }
       hasTriggeredClearRef.current = false;
     }
   }, [pairs, gridSize, loading, solved, userSync]);
