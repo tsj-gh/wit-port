@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getOrInitWispoUserData, resetAllUserData } from "@/lib/wispo-user-data";
 import { useUserSyncContext } from "@/components/UserSyncProvider";
+
+const USER_DATA_UPDATED_EVENT = "wispo:userDataUpdated";
 
 /**
  * デバッグパネル用: 累計クリア数・活動日数・全データリセット
@@ -11,6 +13,12 @@ export function DevDebugUserStats() {
   const userSync = useUserSyncContext();
   const [refreshKey, setRefreshKey] = useState(0);
   const data = getOrInitWispoUserData();
+
+  useEffect(() => {
+    const onUpdated = () => setRefreshKey((k) => k + 1);
+    window.addEventListener(USER_DATA_UPDATED_EVENT, onUpdated);
+    return () => window.removeEventListener(USER_DATA_UPDATED_EVENT, onUpdated);
+  }, []);
   const totalClears =
     data.achievements.pairLink + data.achievements.skyscraper + data.achievements.pressureJudge;
 

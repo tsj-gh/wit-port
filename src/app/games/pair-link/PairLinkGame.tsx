@@ -118,6 +118,7 @@ export default function PairLinkGame() {
   const activePathIdxRef = useRef<number | null>(null);
   const hasTriggeredClearRef = useRef(false);
   const isCheckingClearRef = useRef(false);
+  const currentSolutionPathsRef = useRef<Record<string, { x: number; y: number }[][]> | null>(null);
   const mergeIndexRef = useRef<number | null>(null);
   const mergeJustHappenedRef = useRef(false);
 
@@ -162,6 +163,7 @@ export default function PairLinkGame() {
         setTimerActive(true);
         setPuzzleKey((k) => k + 1);
         setCurrentSeed(result.seed ?? null);
+        currentSolutionPathsRef.current = result.solutionPaths ?? null;
       } catch (err) {
         setStatus(
           err instanceof Error ? err.message : "生成に失敗しました。もう一度お試しください。"
@@ -321,13 +323,18 @@ export default function PairLinkGame() {
     if (loading || solved || pairs.length === 0 || hasTriggeredClearRef.current) return;
     hasTriggeredClearRef.current = true;
     try {
-      const result = await solvePathsAction(pairs, gridSize);
-      if (result.error || !result.paths || Object.keys(result.paths).length === 0) {
-        setStatus(result.error ?? "解の取得に失敗しました");
-        hasTriggeredClearRef.current = false;
-        return;
+      let solvedPaths: Record<string, { x: number; y: number }[][]> | null =
+        currentSolutionPathsRef.current;
+      if (!solvedPaths || Object.keys(solvedPaths).length === 0) {
+        const result = await solvePathsAction(pairs, gridSize);
+        if (result.error || !result.paths || Object.keys(result.paths).length === 0) {
+          setStatus(result.error ?? "解の取得に失敗しました");
+          hasTriggeredClearRef.current = false;
+          return;
+        }
+        solvedPaths = result.paths;
       }
-      setPaths(result.paths);
+      setPaths(solvedPaths);
       setSolved(true);
       setTimerActive(false);
       setShowClearOverlay(true);

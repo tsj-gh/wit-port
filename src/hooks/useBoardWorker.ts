@@ -13,6 +13,8 @@ export type GenerateResult = {
   totalMs?: number;
   /** 盤面生成に使用したシード値（再現用） */
   seed?: string;
+  /** デバッグ用：正解の paths（6x6 等で生成時に取得可能） */
+  solutionPaths?: Record<string, { x: number; y: number }[][]> | null;
 };
 
 /** Worker との通信メッセージ（全タイプで requestId を任意に持てる） */

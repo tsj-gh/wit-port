@@ -532,6 +532,46 @@ function addToCumulative(cumulative, delta) {
   }
 }
 
+/** 解の grid を paths 形式に変換（x=列, y=行） */
+function solutionGridToPaths(grid, pairs) {
+  const n = grid.length;
+  const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+  const result = {};
+
+  for (const p of pairs) {
+    const id = p.id;
+    const [sr, sc] = p.start;
+    const [tr, tc] = p.end;
+
+    const path = [];
+    const visited = Array.from({ length: n }, () => Array(n).fill(false));
+
+    const dfs = (r, c) => {
+      path.push({ x: c, y: r });
+      if (r === tr && c === tc) return true;
+
+      for (const [dr, dc] of dirs) {
+        const nr = r + dr;
+        const nc = c + dc;
+        if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+        if (grid[nr][nc] !== id || visited[nr][nc]) continue;
+
+        visited[nr][nc] = true;
+        if (dfs(nr, nc)) return true;
+        visited[nr][nc] = false;
+      }
+      path.pop();
+      return false;
+    };
+
+    visited[sr][sc] = true;
+    dfs(sr, sc);
+    result[String(id)] = [path];
+  }
+
+  return result;
+}
+
 function generatePairLinkPuzzle(gridSize, seed) {
   const pairCount = getPairCount(gridSize);
   const baseThreshold = gridSize * pairCount * 10;
@@ -576,6 +616,9 @@ function generatePairLinkPuzzle(gridSize, seed) {
     addToCumulative(cumulativeProfile, attemptProfile);
 
     const totalMs = Math.round(performance.now() - totalStart);
+    const solutionPaths = candidate.grid
+      ? solutionGridToPaths(candidate.grid, candidate.pairs)
+      : null;
     return {
       numbers,
       pairs: candidate.pairs,
@@ -585,6 +628,7 @@ function generatePairLinkPuzzle(gridSize, seed) {
       attempts,
       totalMs,
       seed: attemptSeed,
+      solutionPaths,
     };
   }
 }
@@ -606,6 +650,7 @@ self.onmessage = function (e) {
           gridSize: result.gridSize,
           pairCount: result.pairCount,
           seed: result.seed,
+          solutionPaths: result.solutionPaths || null,
         },
         metrics: {
           profile: result.profile,

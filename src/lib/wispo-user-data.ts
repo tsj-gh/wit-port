@@ -123,6 +123,9 @@ export function recordPuzzleClear(gameId: PuzzleGameId): WispoUserData {
   };
 
   saveWispoUserData(next);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("wispo:userDataUpdated"));
+  }
   return next;
 }
 
@@ -142,5 +145,8 @@ export function resetDailyTraverse(): WispoUserData {
 export function resetAllUserData(): WispoUserData {
   const initial = createInitialData();
   saveWispoUserData(initial);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("wispo:userDataUpdated"));
+  }
   return initial;
 }

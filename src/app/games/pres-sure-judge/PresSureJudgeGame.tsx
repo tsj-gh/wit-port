@@ -1140,8 +1140,8 @@ export default function PresSureJudgeGame() {
 
   const showResult = () => setPhase("result");
 
-  const triggerDebugSolve = useCallback(() => {
-    setHistory([{ round: 1, left: 0, right: 0, diff: 0 }]);
+  const triggerDebugFinishSession = useCallback(() => {
+    setHistory((h) => (h.length > 0 ? h : [{ round: 1, left: 0, right: 0, diff: 0 }]));
     setPhase("result");
   }, []);
 
@@ -1345,11 +1345,11 @@ export default function PresSureJudgeGame() {
           <DevDebugUserStats />
           <div className="flex flex-wrap gap-1 mt-1">
             <button
-              onClick={() => triggerDebugSolve()}
+              onClick={() => triggerDebugFinishSession()}
               disabled={phase === "result"}
               className="px-2 py-0.5 rounded text-[9px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              強制クリア (Solve & Sync)
+              強制終了 (Finish Session)
             </button>
           </div>
           <div className="mt-2 space-y-1.5">
