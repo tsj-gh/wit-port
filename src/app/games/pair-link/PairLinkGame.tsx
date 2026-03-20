@@ -320,6 +320,14 @@ export default function PairLinkGame() {
   }, [paths, pairs, gridSize, solved, loading, userSync]);
 
   const triggerDebugSolve = useCallback(async () => {
+    if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
+      console.log("[強制クリア] 呼び出し", {
+        loading,
+        solved,
+        pairsLen: pairs.length,
+        hasTriggered: hasTriggeredClearRef.current,
+      });
+    }
     if (loading || solved || pairs.length === 0 || hasTriggeredClearRef.current) return;
     hasTriggeredClearRef.current = true;
     try {
