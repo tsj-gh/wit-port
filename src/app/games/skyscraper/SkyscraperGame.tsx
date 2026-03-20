@@ -255,6 +255,28 @@ export default function SkyscraperGame() {
     setStatus("解答を表示しました。");
   };
 
+  const triggerDebugSolve = useCallback(async () => {
+    if (solved || !clues) return;
+    const result = await solveAction(n);
+    if (result.error) {
+      setStatus(result.error);
+      return;
+    }
+    setGrid(result.solution.map((r) => [...r]));
+    setSolved(true);
+    setTimerActive(false);
+    setShowClearOverlay(true);
+    setStatus("強制クリア（デバッグ）");
+    try {
+      recordPuzzleClear("skyscraper");
+      if (userSync?.saveProgressAndSync) {
+        userSync.saveProgressAndSync(() => {}).catch(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [n, clues, solved, userSync]);
+
   const handleMaybeEnter = () => {
     const snapshot = cloneGrid(grid);
     setMaybeMode(true);
@@ -335,6 +357,15 @@ export default function SkyscraperGame() {
           <div className="font-bold text-emerald-400 mb-2">デバッグパネル</div>
           <div className="space-y-2 text-slate-400/90 text-[10px]">
             <DevDebugUserStats />
+            <div className="flex flex-wrap gap-1">
+              <button
+                onClick={() => triggerDebugSolve()}
+                disabled={solved || !clues}
+                className="px-2 py-0.5 rounded text-[9px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                強制クリア (Solve & Sync)
+              </button>
+            </div>
             <div className="flex items-center gap-1">
               <span className="shrink-0">anon_id:</span>
               <code className="text-[9px] truncate max-w-[120px] bg-black/40 px-1 rounded" title={userSync?.anonId ?? ""}>

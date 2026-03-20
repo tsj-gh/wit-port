@@ -110,6 +110,69 @@ function countSolutions(
   return solutions;
 }
 
+/** 1つの解を求める（デバッグ用）。解があれば grid のコピーを返し、なければ null */
+function getOneSolutionGrid(
+  grid: number[][],
+  pairs: Pair[],
+  pairIndex: number,
+  random: () => number
+): number[][] | null {
+  const n = grid.length;
+  if (pairIndex === pairs.length) {
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (grid[r][c] === 0) return null;
+      }
+    }
+    return grid.map((row) => row.slice());
+  }
+
+  const pair = pairs[pairIndex];
+  const id = pair.id;
+  const [sr, sc] = pair.start;
+  const [tr, tc] = pair.end;
+
+  const dirs: [number, number][] = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+  for (let i = dirs.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+  }
+
+  const visited = Array.from({ length: n }, () => Array(n).fill(false));
+
+  const dfs = (r: number, c: number): number[][] | null => {
+    if (r === tr && c === tc) {
+      return getOneSolutionGrid(grid, pairs, pairIndex + 1, random);
+    }
+
+    for (const [dr, dc] of dirs) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+      const cell = grid[nr][nc];
+      if (!((nr === tr && nc === tc) || cell === 0)) continue;
+      if (visited[nr][nc]) continue;
+
+      visited[nr][nc] = true;
+      const prev = grid[nr][nc];
+      if (!(nr === tr && nc === tc)) grid[nr][nc] = id;
+
+      const res = dfs(nr, nc);
+      if (res) return res;
+
+      grid[nr][nc] = prev;
+      visited[nr][nc] = false;
+    }
+    return null;
+  };
+
+  visited[sr][sc] = true;
+  const res = dfs(sr, sc);
+  visited[sr][sc] = false;
+
+  return res;
+}
+
 function solveSat(
   numVars: number,
   clauses: number[][],
@@ -675,4 +738,67 @@ export function validatePaths(
   }
 
   return { ok: true, msg: "正解です！" };
+}
+
+/** 解の grid を paths 形式に変換（x=列, y=行） */
+function solutionGridToPaths(
+  grid: number[][],
+  pairs: Pair[]
+): Record<string, { x: number; y: number }[][]> {
+  const n = grid.length;
+  const dirs: [number, number][] = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+  const result: Record<string, { x: number; y: number }[][]> = {};
+
+  for (const p of pairs) {
+    const id = p.id;
+    const [sr, sc] = p.start;
+    const [tr, tc] = p.end;
+
+    const path: { x: number; y: number }[] = [];
+    const visited = Array.from({ length: n }, () => Array(n).fill(false));
+
+    const dfs = (r: number, c: number): boolean => {
+      path.push({ x: c, y: r });
+      if (r === tr && c === tc) return true;
+
+      for (const [dr, dc] of dirs) {
+        const nr = r + dr;
+        const nc = c + dc;
+        if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+        if (grid[nr][nc] !== id || visited[nr][nc]) continue;
+
+        visited[nr][nc] = true;
+        if (dfs(nr, nc)) return true;
+        visited[nr][nc] = false;
+      }
+      path.pop();
+      return false;
+    };
+
+    visited[sr][sc] = true;
+    dfs(sr, sc);
+    result[String(id)] = [path];
+  }
+
+  return result;
+}
+
+/** ペアとグリッドサイズから解の paths を取得（デバッグ用） */
+export function solvePathsForPairs(
+  pairs: Pair[],
+  gridSize: number,
+  random?: () => number
+): Record<string, { x: number; y: number }[][]> | null {
+  const n = gridSize;
+  const rng = random ?? Math.random;
+  const solveGrid = Array.from({ length: n }, () => Array(n).fill(0));
+  pairs.forEach((p) => {
+    solveGrid[p.start[0]][p.start[1]] = p.id;
+    solveGrid[p.end[0]][p.end[1]] = p.id;
+  });
+
+  const solutionGrid = getOneSolutionGrid(solveGrid, pairs, 0, rng);
+  if (!solutionGrid) return null;
+
+  return solutionGridToPaths(solutionGrid, pairs);
 }

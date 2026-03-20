@@ -1140,6 +1140,11 @@ export default function PresSureJudgeGame() {
 
   const showResult = () => setPhase("result");
 
+  const triggerDebugSolve = useCallback(() => {
+    setHistory([{ round: 1, left: 0, right: 0, diff: 0 }]);
+    setPhase("result");
+  }, []);
+
   const hasRecordedResultRef = useRef(false);
   useEffect(() => {
     if (phase === "result" && !hasRecordedResultRef.current) {
@@ -1338,6 +1343,15 @@ export default function PresSureJudgeGame() {
           {isDebugPanelExpanded && (
           <>
           <DevDebugUserStats />
+          <div className="flex flex-wrap gap-1 mt-1">
+            <button
+              onClick={() => triggerDebugSolve()}
+              disabled={phase === "result"}
+              className="px-2 py-0.5 rounded text-[9px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              強制クリア (Solve & Sync)
+            </button>
+          </div>
           <div className="mt-2 space-y-1.5">
             <label className="flex items-center justify-between gap-2">
               <span className="text-amber-300/90">scaleWrapperTopOffset:</span>

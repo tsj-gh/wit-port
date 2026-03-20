@@ -3,6 +3,7 @@
 import {
   generatePairLinkPuzzle,
   validatePaths,
+  solvePathsForPairs,
   type Pair,
   type GenerationProfile,
 } from "@/lib/puzzle-engine/pair-link";
@@ -57,4 +58,21 @@ export async function validatePathsAction(
   gridSize: number
 ): Promise<ValidateResult> {
   return validatePaths(paths, pairs, gridSize);
+}
+
+export type SolvePathsResult = {
+  paths: Record<string, { x: number; y: number }[][]>;
+  error?: string;
+};
+
+/** デバッグ用：ペアから解の paths を取得 */
+export async function solvePathsAction(
+  pairs: Pair[],
+  gridSize: number
+): Promise<SolvePathsResult> {
+  const paths = solvePathsForPairs(pairs, gridSize);
+  if (!paths) {
+    return { paths: {}, error: "解が見つかりませんでした。" };
+  }
+  return { paths };
 }

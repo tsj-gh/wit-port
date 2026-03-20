@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { DevLink } from "@/components/DevLink";
 import confetti from "canvas-confetti";
-import { validatePathsAction } from "./actions";
+import { validatePathsAction, solvePathsAction } from "./actions";
 import { usePuzzleStock } from "@/hooks/usePuzzleStock";
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
@@ -316,6 +316,29 @@ export default function PairLinkGame() {
       isCheckingClearRef.current = false;
     }
   }, [paths, pairs, gridSize, solved, loading, userSync]);
+
+  const triggerDebugSolve = useCallback(async () => {
+    if (loading || solved || pairs.length === 0 || hasTriggeredClearRef.current) return;
+    hasTriggeredClearRef.current = true;
+    try {
+      const result = await solvePathsAction(pairs, gridSize);
+      if (result.error || !result.paths || Object.keys(result.paths).length === 0) {
+        setStatus(result.error ?? "解の取得に失敗しました");
+        hasTriggeredClearRef.current = false;
+        return;
+      }
+      setPaths(result.paths);
+      setSolved(true);
+      setTimerActive(false);
+      setShowClearOverlay(true);
+      recordPuzzleClear("pairLink");
+      if (userSync?.saveProgressAndSync) {
+        userSync.saveProgressAndSync(() => {}).catch(() => {});
+      }
+    } catch {
+      hasTriggeredClearRef.current = false;
+    }
+  }, [pairs, gridSize, loading, solved, userSync]);
 
   // トリガーA: クリア判定され正解演出開始時に広告リフレッシュ
   useEffect(() => {
@@ -887,6 +910,13 @@ export default function PairLinkGame() {
                 )}
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
+                <button
+                  onClick={() => triggerDebugSolve()}
+                  disabled={solved || loading || pairs.length === 0}
+                  className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  強制クリア (Solve & Sync)
+                </button>
                 <button
                   onClick={() => manualPrefetch()}
                   disabled={isPrefetching}
