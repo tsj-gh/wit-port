@@ -8,6 +8,7 @@ import { validatePathsAction } from "./actions";
 import { usePuzzleStock } from "@/hooks/usePuzzleStock";
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
+import { useUserSyncContext } from "@/components/UserSyncProvider";
 import type { Pair } from "@/lib/puzzle-engine/pair-link";
 
 type NumberCell = { x: number; y: number; val: number; color: string };
@@ -62,6 +63,7 @@ export default function PairLinkGame() {
 
   const searchParams = useSearchParams();
   const isDevTj = searchParams.get("devtj") === "true";
+  const userSync = useUserSyncContext();
 
   useEffect(() => {
     if (isDevTj) setIsDebugMode(true);
@@ -295,7 +297,7 @@ export default function PairLinkGame() {
         setSolved(true);
         setTimerActive(false);
         setShowClearOverlay(true);
-        try {
+        const saveProgress = () => {
           const prev = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
           prev.push({
             gridSize,
@@ -303,6 +305,13 @@ export default function PairLinkGame() {
             completedAt: new Date().toISOString(),
           });
           localStorage.setItem(STORAGE_KEY, JSON.stringify(prev));
+        };
+        try {
+          if (userSync?.saveProgressAndSync) {
+            userSync.saveProgressAndSync(saveProgress).catch(() => {});
+          } else {
+            saveProgress();
+          }
         } catch {
           /* ignore */
         }
@@ -310,7 +319,7 @@ export default function PairLinkGame() {
     } finally {
       isCheckingClearRef.current = false;
     }
-  }, [paths, pairs, gridSize, solved, loading]);
+  }, [paths, pairs, gridSize, solved, loading, userSync]);
 
   // トリガーA: クリア判定され正解演出開始時に広告リフレッシュ
   useEffect(() => {
@@ -799,7 +808,20 @@ export default function PairLinkGame() {
                 </div>
                 {isDevTj && (
                   <div className="mt-1 pt-1 border-t border-white/10 space-y-1">
-                    <div className="font-semibold text-slate-300">シード（再現用）</div>
+                    <div className="font-semibold text-slate-300">進捗同期</div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-400 shrink-0">anon_id:</span>
+                      <code className="text-[9px] truncate max-w-[120px] bg-black/40 px-1 rounded" title={userSync?.anonId ?? ""}>
+                        {userSync?.anonId ?? "—"}
+                      </code>
+                      <button
+                        onClick={() => userSync?.syncNow()}
+                        className="px-1 py-0.5 rounded text-[9px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30"
+                      >
+                        同期
+                      </button>
+                    </div>
+                    <div className="font-semibold text-slate-300 mt-1">シード（再現用）</div>
                     <div className="flex items-center gap-1">
                       <span className="text-slate-400 shrink-0">Current Hash:</span>
                       <code className="text-[9px] truncate max-w-[140px] bg-black/40 px-1 rounded" title={currentSeed ?? ""}>

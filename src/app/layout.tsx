@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
 import Footer from "@/components/Footer";
+import { UserSyncProvider } from "@/components/UserSyncProvider";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app"),
@@ -37,8 +38,10 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen flex flex-col overflow-x-hidden bg-gradient-to-br from-wit-bg to-wit-bg-2 text-wit-text font-sans antialiased">
-        {children}
-        <Footer />
+        <UserSyncProvider>
+          {children}
+          <Footer />
+        </UserSyncProvider>
       </body>
     </html>
   );

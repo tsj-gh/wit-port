@@ -11,6 +11,7 @@ import {
   solveAction,
   checkProgressAction,
 } from "./actions";
+import { useUserSyncContext } from "@/components/UserSyncProvider";
 
 type Clues = {
   top: (number | null)[];
@@ -51,6 +52,7 @@ export default function SkyscraperGame() {
   const [hashInput, setHashInput] = useState("");
   const searchParams = useSearchParams();
   const isDevTj = searchParams.get("devtj") === "true";
+  const userSync = useUserSyncContext();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeSecondsRef = useRef(0);
   const selectedCellRef = useRef<{ r: number; c: number } | null>(null);
@@ -127,18 +129,25 @@ export default function SkyscraperGame() {
     if (result.ok) {
       setSolved(true);
       setShowClearOverlay(true);
-      try {
+      const saveProgress = () => {
         const key = "skyscraper_completed";
         const prev = JSON.parse(localStorage.getItem(key) || "[]");
         prev.push({ n, difficulty, timeSeconds: timeSecondsRef.current, completedAt: new Date().toISOString() });
         localStorage.setItem(key, JSON.stringify(prev));
+      };
+      try {
+        if (userSync?.saveProgressAndSync) {
+          userSync.saveProgressAndSync(saveProgress).catch(() => {});
+        } else {
+          saveProgress();
+        }
       } catch {
         /* ignore */
       }
     } else {
       setStatus(result.msg);
     }
-  }, [grid, n, difficulty, clues, solved]);
+  }, [grid, n, difficulty, clues, solved, userSync]);
 
   useEffect(() => {
     checkWin();
@@ -328,8 +337,20 @@ export default function SkyscraperGame() {
     <div className="mx-auto max-w-[1080px] w-full px-4 py-6">
       {isDevTj && (
         <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono">
-          <div className="font-bold text-emerald-400 mb-2">デバッグパネル（シード）</div>
+          <div className="font-bold text-emerald-400 mb-2">デバッグパネル</div>
           <div className="space-y-2 text-slate-400/90 text-[10px]">
+            <div className="flex items-center gap-1">
+              <span className="shrink-0">anon_id:</span>
+              <code className="text-[9px] truncate max-w-[120px] bg-black/40 px-1 rounded" title={userSync?.anonId ?? ""}>
+                {userSync?.anonId ?? "—"}
+              </code>
+              <button
+                onClick={() => userSync?.syncNow()}
+                className="px-1 py-0.5 rounded text-[9px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30"
+              >
+                同期
+              </button>
+            </div>
             <div className="flex items-center gap-1">
               <span className="shrink-0">Current Hash:</span>
               <code className="text-[9px] truncate max-w-[140px] bg-black/40 px-1 rounded" title={currentSeed ?? ""}>
