@@ -328,7 +328,8 @@ export default function PairLinkGame() {
         hasTriggered: hasTriggeredClearRef.current,
       });
     }
-    if (loading || solved || pairs.length === 0 || hasTriggeredClearRef.current) return;
+    // hasTriggeredClearRef はボタンクリックの pointerup で checkClear が先に発火し true になるため除外
+    if (loading || solved || pairs.length === 0) return;
     hasTriggeredClearRef.current = true;
     try {
       let solvedPaths: Record<string, { x: number; y: number }[][]> | null =
