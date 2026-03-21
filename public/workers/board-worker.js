@@ -787,7 +787,45 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     });
   }
 
-  const solutionPaths = solutionGridToPaths(outGrid, pairs);
+  function buildSolutionPathsFromAdj() {
+    const result = {};
+    for (let i = 0; i < pathList.length; i++) {
+      const [sr, sc] = pairs[i].start;
+      const [tr, tc] = pairs[i].end;
+      const path = [];
+      let r = sr, c = sc;
+      let pr = -1, pc = -1;
+      for (;;) {
+        path.push({ x: c, y: r });
+        if (r === tr && c === tc) break;
+        const nexts = adj[r][c].filter((nk) => {
+          const nr = Math.floor(nk / n), nc = nk % n;
+          return !(nr === pr && nc === pc);
+        });
+        if (nexts.length === 0) break;
+        const nk = nexts[0];
+        pr = r; pc = c;
+        r = Math.floor(nk / n); c = nk % n;
+      }
+      result[String(pairs[i].id)] = [path];
+    }
+    return result;
+  }
+
+  const solutionPaths = buildSolutionPathsFromAdj();
+
+  let totalCount = 0;
+  for (const k of Object.keys(solutionPaths)) {
+    const segs = solutionPaths[k];
+    if (Array.isArray(segs)) for (const seg of segs) totalCount += (seg && seg.length) | 0;
+  }
+  if (typeof console !== "undefined") {
+    console.log("Debug - solutionPaths total cells: " + totalCount);
+    if (totalCount !== 64) {
+      console.warn("Notice: Paths do not cover all 64 cells.");
+    }
+  }
+
   return { grid: outGrid, pairs, solutionPaths, difficultyScore: 0 };
 }
 
