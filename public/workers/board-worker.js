@@ -546,226 +546,60 @@ function generateCandidate8x8(gridSize, pairCount, profile, random) {
 }
 
 /**
- * Greedy Path Growth (with Pacing): 7x7以上の全埋め生成
- * 蛇行優先・孤立マス吸収・難易度バランスを考慮
+ * generateByEdgeSwap: 8x8専用エンジン
+ * Phase 1: 完全タイリング（32個の1x2ドミノで全64マスを埋める）
  */
-function generateByGreedyGrowth(gridSize, pairCount, random, profile) {
-  const n = gridSize;
-  const targetPairs = pairCount;
+function generateByEdgeSwap(gridSize, random) {
+  if (gridSize !== 8) return null;
+  const n = 8;
   const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-  const totalCells = n * n;
 
-  function atEdge(r, c) {
-    return r === 0 || r === n - 1 || c === 0 || c === n - 1;
-  }
-  function hasPathNeighbor(r, c, grid) {
-    for (const [dr, dc] of dirs) {
-      const nr = r + dr, nc = c + dc;
-      if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] !== 0) return true;
-    }
-    return false;
-  }
+  const solutionGrid = Array.from({ length: n }, () => Array(n).fill(0));
+  let pairId = 1;
 
-  const maxRetries = 80;
-  for (let retry = 0; retry < maxRetries; retry++) {
-    const grid = Array.from({ length: n }, () => Array(n).fill(0));
-    const prev = Array.from({ length: n }, () => Array(n).fill(null));
-    const next = Array.from({ length: n }, () => Array(n).fill(null));
-    const pathHeads = [];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (solutionGrid[r][c] !== 0) continue;
 
-    for (let pid = 1; pid <= targetPairs; pid++) {
-      const emptyCells = [];
-      for (let r = 0; r < n; r++) {
-        for (let c = 0; c < n; c++) {
-          if (grid[r][c] === 0) emptyCells.push({ r, c });
-        }
-      }
-      if (emptyCells.length === 0) break;
-      const startIdx = Math.floor(random() * emptyCells.length);
-      const start = emptyCells[startIdx];
-      grid[start.r][start.c] = pid;
       const neighbors = [];
       for (const [dr, dc] of dirs) {
-        const nr = start.r + dr, nc = start.c + dc;
-        if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] === 0) neighbors.push({ r: nr, c: nc });
-      }
-      const head = { r: start.r, c: start.c, pid };
-      if (neighbors.length > 0) {
-        const ext = neighbors[Math.floor(random() * neighbors.length)];
-        grid[ext.r][ext.c] = pid;
-        next[start.r][start.c] = { r: ext.r, c: ext.c };
-        prev[ext.r][ext.c] = { r: start.r, c: start.c };
-        head.r = ext.r;
-        head.c = ext.c;
-      }
-      pathHeads.push(head);
-    }
-
-    while (true) {
-      const emptyCells = [];
-      for (let r = 0; r < n; r++) {
-        for (let c = 0; c < n; c++) {
-          if (grid[r][c] === 0) emptyCells.push({ r, c });
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < n && nc >= 0 && nc < n && solutionGrid[nr][nc] === 0) {
+          neighbors.push({ r: nr, c: nc });
         }
       }
-      if (emptyCells.length === 0) break;
+      if (neighbors.length === 0) continue;
 
-      const extendable = [];
-      for (const h of pathHeads) {
-        for (const [dr, dc] of dirs) {
-          const nr = h.r + dr, nc = h.c + dc;
-          if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] === 0) {
-            extendable.push({ head: h, r: nr, c: nc });
-            break;
-          }
-        }
-      }
-      if (extendable.length === 0) break;
-
-      if (random() < 0.6) {
-        const pref = extendable.filter((e) => atEdge(e.r, e.c) || hasPathNeighbor(e.r, e.c, grid));
-        if (pref.length > 0) {
-          const pick = pref[Math.floor(random() * pref.length)];
-          const { head, r: nr, c: nc } = pick;
-          grid[nr][nc] = head.pid;
-          next[head.r][head.c] = { r: nr, c: nc };
-          prev[nr][nc] = { r: head.r, c: head.c };
-          head.r = nr;
-          head.c = nc;
-        } else {
-          const pick = extendable[Math.floor(random() * extendable.length)];
-          const { head, r: nr, c: nc } = pick;
-          grid[nr][nc] = head.pid;
-          next[head.r][head.c] = { r: nr, c: nc };
-          prev[nr][nc] = { r: head.r, c: head.c };
-          head.r = nr;
-          head.c = nc;
-        }
-      } else {
-        const pick = extendable[Math.floor(random() * extendable.length)];
-        const { head, r: nr, c: nc } = pick;
-        grid[nr][nc] = head.pid;
-        next[head.r][head.c] = { r: nr, c: nc };
-        prev[nr][nc] = { r: head.r, c: head.c };
-        head.r = nr;
-        head.c = nc;
-      }
+      const pick = neighbors[Math.floor(random() * neighbors.length)];
+      solutionGrid[r][c] = pairId;
+      solutionGrid[pick.r][pick.c] = pairId;
+      pairId++;
     }
-
-    while (true) {
-      let changed = false;
-      for (let r = 0; r < n; r++) {
-        for (let c = 0; c < n; c++) {
-          if (grid[r][c] !== 0) continue;
-          const neighbors = [];
-          for (const [dr, dc] of dirs) {
-            const nr = r + dr, nc = c + dc;
-            if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] !== 0)
-              neighbors.push({ r: nr, c: nc });
-          }
-          if (neighbors.length === 0) continue;
-          const donor = neighbors[Math.floor(random() * neighbors.length)];
-          const pid = grid[donor.r][donor.c];
-          grid[r][c] = pid;
-          const donorNext = next[donor.r][donor.c];
-          next[donor.r][donor.c] = { r, c };
-          prev[r][c] = { r: donor.r, c: donor.c };
-          next[r][c] = donorNext;
-          if (donorNext) prev[donorNext.r][donorNext.c] = { r, c };
-          changed = true;
-        }
-      }
-      if (!changed) break;
-    }
-
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        if (grid[r][c] === 0) continue;
-        if (prev[r][c] !== null || next[r][c] !== null) continue;
-        const neighbors = [];
-        for (const [dr, dc] of dirs) {
-          const nr = r + dr, nc = c + dc;
-          if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] !== 0 && grid[nr][nc] !== grid[r][c])
-            neighbors.push({ r: nr, c: nc });
-        }
-        if (neighbors.length === 0) continue;
-        const donor = neighbors[Math.floor(random() * neighbors.length)];
-        const pid = grid[donor.r][donor.c];
-        grid[r][c] = pid;
-        const donorNext = next[donor.r][donor.c];
-        next[donor.r][donor.c] = { r, c };
-        prev[r][c] = { r: donor.r, c: donor.c };
-        next[r][c] = donorNext;
-        if (donorNext) prev[donorNext.r][donorNext.c] = { r, c };
-      }
-    }
-
-    const pathCells = new Map();
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        const p = grid[r][c];
-        if (!p) continue;
-        if (!pathCells.has(p)) pathCells.set(p, []);
-        pathCells.get(p).push({ r, c });
-      }
-    }
-
-    const paths = Array.from(pathCells.entries())
-      .filter(([, cells]) => cells.length >= 2)
-      .sort((a, b) => a[0] - b[0]);
-
-    if (paths.length !== targetPairs) continue;
-    const pairs = [];
-    const pathToId = new Map();
-    paths.forEach(([p], i) => pathToId.set(p, i + 1));
-
-    const outGrid = Array.from({ length: n }, () => Array(n).fill(0));
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        outGrid[r][c] = pathToId.get(grid[r][c]) || 0;
-      }
-    }
-
-    for (let i = 0; i < paths.length; i++) {
-      const [, cells] = paths[i];
-      let bestD = -1;
-      let bestA = null;
-      let bestB = null;
-      for (let j = 0; j < cells.length; j++) {
-        for (let k = j + 1; k < cells.length; k++) {
-          const d = Math.abs(cells[j].r - cells[k].r) + Math.abs(cells[j].c - cells[k].c);
-          if (d > bestD) {
-            bestD = d;
-            bestA = cells[j];
-            bestB = cells[k];
-          }
-        }
-      }
-      pairs.push({
-        id: i + 1,
-        start: [bestA.r, bestA.c],
-        end: [bestB.r, bestB.c],
-      });
-    }
-
-    const length2Count = paths.filter(([, cells]) => cells.length === 2).length;
-    if (length2Count > targetPairs * 0.4) continue;
-
-    const solutionPaths = solutionGridToPaths(outGrid, pairs);
-    let allFilled = true;
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        if (outGrid[r][c] === 0) allFilled = false;
-      }
-    }
-    if (!allFilled || Object.keys(solutionPaths).length !== pairs.length) continue;
-
-    if (typeof console !== "undefined") {
-      console.log("[GreedyGrowth] 完成: " + n + "x" + n + " " + pairs.length + "ペア, 長さ2=" + length2Count);
-    }
-    return { grid: outGrid, pairs, solutionPaths, difficultyScore: 0 };
   }
-  return null;
+
+  const pairs = [];
+  for (let id = 1; id <= 32; id++) {
+    const cells = [];
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (solutionGrid[r][c] === id) cells.push({ r, c });
+      }
+    }
+    if (cells.length !== 2) return null;
+    pairs.push({
+      id,
+      start: [cells[0].r, cells[0].c],
+      end: [cells[1].r, cells[1].c],
+    });
+  }
+
+  const solutionPaths = solutionGridToPaths(solutionGrid, pairs);
+
+  if (typeof console !== "undefined") {
+    console.log("Phase 1: Perfect Tiling Complete. Paths: 32");
+  }
+
+  return { grid: solutionGrid, pairs, solutionPaths, difficultyScore: 0 };
 }
 
 function generateCandidate(gridSize, pairCount, profile, random, logFailure, config) {
@@ -826,27 +660,22 @@ function solutionGridToPaths(grid, pairs) {
 
 function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
   const maxPairs = gridSize >= 7 ? 10 : gridSize;
-  const pairCount = numPairs != null
+  let pairCount = numPairs != null
     ? Math.max(2, Math.min(maxPairs, numPairs))
     : getPairCount(gridSize);
   const cfg = config || {};
-  const generationMode = cfg.generationMode || "default";
 
-  if (generationMode === "territory" && gridSize >= 7) {
+  if (gridSize === 8) {
     const t0 = performance.now();
     const hasSeed = seed != null && String(seed).trim() !== "";
     const attemptSeed = hasSeed ? String(seed) : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
     const random = createRandom(attemptSeed);
-    const profile = {};
-    const candidate = generateByEdgeMutation(gridSize, pairCount, random, profile);
+    const candidate = generateByEdgeSwap(8, random);
     const elapsed = Math.round(performance.now() - t0);
-
-    if (typeof console !== "undefined") {
-      console.log(`[Pair-link GreedyGrowth] 生成完了: ${gridSize}x${gridSize} ${pairCount}ペア, ${elapsed}ms`);
-    }
 
     if (!candidate) return null;
 
+    pairCount = 32;
     const numbers = [];
     candidate.pairs.forEach((p, idx) => {
       const color = COLORS[idx % COLORS.length];
@@ -859,9 +688,9 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
     return {
       numbers,
       pairs: candidate.pairs,
-      gridSize,
+      gridSize: 8,
       pairCount,
-      profile: { GreedyGrowth: elapsed },
+      profile: { EdgeSwap: elapsed },
       attempts: 1,
       totalMs: elapsed,
       seed: attemptSeed,
