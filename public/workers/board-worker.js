@@ -885,9 +885,23 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
   if (typeof console !== "undefined" && console.time) {
     console.time("Crawling Phase");
   }
+  /** (r,c) に他ペアの数字、または同一ペアの反対端があれば true（中間点への数字埋没防止） */
+  function digitConflictAt(r, c, pairIndex, movingStart) {
+    for (let j = 0; j < pairs.length; j++) {
+      const pj = pairs[j];
+      if (j === pairIndex) {
+        const other = movingStart ? pj.end : pj.start;
+        if (other[0] === r && other[1] === c) return true;
+        continue;
+      }
+      if (pj.start[0] === r && pj.start[1] === c) return true;
+      if (pj.end[0] === r && pj.end[1] === c) return true;
+    }
+    return false;
+  }
+
   for (let it = 0; it < CRAWL_EXCHANGE_ITERS; it++) {
-    // 端点移動: pairs の数字だけ隣の中間点へ進める。adj は不変のため旧端点は線上に残り、
-    // solutionPaths は後段で「グラフの葉↔葉」の全セル列として再構築される（マス消失防止）。
+    // 端点移動: 隣の中間点へ 1 マス。移動先に他数字があれば拒否。最終的に path[0]/path[last] と pairs を一致させる。
     if (random() < 0.5) {
       const i = Math.floor(random() * pathList.length);
       const useStart = random() < 0.5;
@@ -897,6 +911,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
       const nk = adj[er][ec][0];
       const nr = Math.floor(nk / n), nc = nk % n;
       if (adj[nr][nc].length !== 2) continue;
+      if (digitConflictAt(nr, nc, i, useStart)) continue;
       const initEp = useStart ? initialEndpoints[i].start : initialEndpoints[i].end;
       const distFromInitOld = Math.abs(er - initEp[0]) + Math.abs(ec - initEp[1]);
       const distFromInitNew = Math.abs(nr - initEp[0]) + Math.abs(nc - initEp[1]);
@@ -1013,59 +1028,16 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
   }
 
   /**
-   * パス id 成分のグラフ上で、(sr,sc) からの距離（BFS）
-   */
-  function bfsDistOnPid(sr, sc, pid) {
-    const dist = new Map();
-    const sk = key(sr, sc);
-    if (solutionGrid[sr][sc] !== pid) return dist;
-    const q = [sk];
-    dist.set(sk, 0);
-    for (let qi = 0; qi < q.length; qi++) {
-      const k = q[qi];
-      const kr = Math.floor(k / n), kc = k % n;
-      const base = dist.get(k);
-      for (const nk of adj[kr][kc]) {
-        if (solutionGrid[Math.floor(nk / n)][nk % n] !== pid) continue;
-        if (dist.has(nk)) continue;
-        dist.set(nk, base + 1);
-        q.push(nk);
-      }
-    }
-    return dist;
-  }
-
-  /**
-   * solutionPaths: 数字の座標が端点でなくても、グラフの葉↔葉の全セルを1本の線として列挙する。
-   * （Crawling で端点を内側に動かしても、旧端点は中間点として列に含まれる → セル数が減らない）
+   * solutionPaths[id]: index 0 = pairs.start（数字）、最後 = pairs.end（数字）。
+   * 経路は両端点間の pid 部分グラフ上の一意な単純道。
    */
   function buildSolutionPathsFromAdj() {
     const result = {};
     for (let i = 0; i < pathList.length; i++) {
       const pid = pathList[i][0];
-      const [, cells] = pathList[i];
       const [sr, sc] = pairs[i].start;
       const [tr, tc] = pairs[i].end;
-
-      const leaves = (cells || []).filter(({ r, c }) => adj[r][c].length === 1);
-      let path = null;
-      if (leaves.length === 2) {
-        const leafA = leaves[0];
-        const leafB = leaves[1];
-        const distFromStart = bfsDistOnPid(sr, sc, pid);
-        const kA = key(leafA.r, leafA.c);
-        const kB = key(leafB.r, leafB.c);
-        const dA = distFromStart.has(kA) ? distFromStart.get(kA) : 9999;
-        const dB = distFromStart.has(kB) ? distFromStart.get(kB) : 9999;
-        if (dA <= dB) {
-          path = buildSolutionPathDirected(leafA.r, leafA.c, leafB.r, leafB.c, pid);
-        } else {
-          path = buildSolutionPathDirected(leafB.r, leafB.c, leafA.r, leafA.c, pid);
-        }
-      }
-      if (!path || path.length === 0) {
-        path = buildSolutionPathDirected(sr, sc, tr, tc, pid);
-      }
+      const path = buildSolutionPathDirected(sr, sc, tr, tc, pid);
       if (!path || path.length === 0) {
         if (typeof console !== "undefined") {
           console.error("[Edge-Swap] buildSolutionPathsFromAdj failed for pair id", pairs[i].id);
@@ -1073,6 +1045,11 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
         result[String(pairs[i].id)] = [[]];
         continue;
       }
+      const last = path.length - 1;
+      pairs[i].start[0] = path[0].y;
+      pairs[i].start[1] = path[0].x;
+      pairs[i].end[0] = path[last].y;
+      pairs[i].end[1] = path[last].x;
       result[String(pairs[i].id)] = [path];
     }
     return result;
@@ -1086,6 +1063,19 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     if (Array.isArray(segs)) for (const seg of segs) totalCount += (seg && seg.length) | 0;
   }
   if (typeof console !== "undefined") {
+    for (let i = 0; i < pairs.length; i++) {
+      const id = pairs[i].id;
+      const segs = solutionPaths[String(id)];
+      const path = segs && segs[0];
+      const isMatch =
+        !!path &&
+        path.length > 0 &&
+        path[0].y === pairs[i].start[0] &&
+        path[0].x === pairs[i].start[1] &&
+        path[path.length - 1].y === pairs[i].end[0] &&
+        path[path.length - 1].x === pairs[i].end[1];
+      console.log(`Path ${id}: Array edges match digit positions: ${isMatch}`);
+    }
     console.log("Final Validation - Pairs: " + pairs.length);
     console.log("Final Validation - Cells: " + totalCount);
     console.log("Debug - solutionPaths total cells: " + totalCount);
