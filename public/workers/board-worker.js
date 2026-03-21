@@ -768,6 +768,48 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     const ib = adj[rb][cb].indexOf(ka); if (ib >= 0) adj[rb][cb].splice(ib, 1);
   }
 
+  /**
+   * 良問スコア: 各内部パスについてグラフ端点（次数1）同士のマンハッタン距離の最大ペアを取り、全パスで合計。
+   */
+  function computeTotalDistEndPoints() {
+    const byPid = new Map();
+    for (let rr = 0; rr < n; rr++) {
+      for (let cc = 0; cc < n; cc++) {
+        const p = solutionGrid[rr][cc];
+        if (!p) continue;
+        if (!byPid.has(p)) byPid.set(p, []);
+        byPid.get(p).push({ r: rr, c: cc });
+      }
+    }
+    let totalDist = 0;
+    for (const [, cells] of byPid) {
+      if (cells.length < 2) continue;
+      const endpoints = cells.filter(({ r: rr, c: cc }) => adj[rr][cc].length === 1);
+      if (endpoints.length < 2) continue;
+      let best = 0;
+      for (let j = 0; j < endpoints.length; j++) {
+        for (let k = j + 1; k < endpoints.length; k++) {
+          const d =
+            Math.abs(endpoints[j].r - endpoints[k].r) +
+            Math.abs(endpoints[j].c - endpoints[k].c);
+          if (d > best) best = d;
+        }
+      }
+      totalDist += best;
+    }
+    return totalDist;
+  }
+
+  function revertPattern(pattern, tl, tr, bl, br) {
+    if (pattern === "A") {
+      remEdge(tl.r, tl.c, tr.r, tr.c); remEdge(bl.r, bl.c, br.r, br.c);
+      addEdge(tl.r, tl.c, bl.r, bl.c); addEdge(tr.r, tr.c, br.r, br.c);
+    } else {
+      remEdge(tl.r, tl.c, bl.r, bl.c); remEdge(tr.r, tr.c, br.r, br.c);
+      addEdge(tl.r, tl.c, tr.r, tr.c); addEdge(bl.r, bl.c, br.r, br.c);
+    }
+  }
+
   let swapCount = 0;
   const MUTATION_ATTEMPTS = 1000;
   for (let attempt = 0; attempt < MUTATION_ATTEMPTS; attempt++) {
@@ -781,6 +823,8 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     if (hasEdge(tl.r, tl.c, bl.r, bl.c) && hasEdge(tr.r, tr.c, br.r, br.c)) pattern = "A";
     else if (hasEdge(tl.r, tl.c, tr.r, tr.c) && hasEdge(bl.r, bl.c, br.r, br.c)) pattern = "B";
     if (!pattern) continue;
+
+    const distBefore = computeTotalDistEndPoints();
 
     if (pattern === "A") {
       remEdge(tl.r, tl.c, bl.r, bl.c);
@@ -796,20 +840,23 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
 
     const expectedSize = pidCellCount.get(pid);
     if (expectedSize == null || !checkPidAfterSwap(pid, tl.r, tl.c, expectedSize)) {
-      if (pattern === "A") {
-        remEdge(tl.r, tl.c, tr.r, tr.c); remEdge(bl.r, bl.c, br.r, br.c);
-        addEdge(tl.r, tl.c, bl.r, bl.c); addEdge(tr.r, tr.c, br.r, br.c);
-      } else {
-        remEdge(tl.r, tl.c, bl.r, bl.c); remEdge(tr.r, tr.c, br.r, br.c);
-        addEdge(tl.r, tl.c, tr.r, tr.c); addEdge(bl.r, bl.c, br.r, br.c);
-      }
+      revertPattern(pattern, tl, tr, bl, br);
       continue;
     }
+
+    const distAfter = computeTotalDistEndPoints();
+    if (distAfter < distBefore && random() < 0.5) {
+      revertPattern(pattern, tl, tr, bl, br);
+      continue;
+    }
+
     swapCount++;
   }
 
+  const mutationFinalTotalDist = computeTotalDistEndPoints();
   if (typeof console !== "undefined") {
     console.log("Mutation Complete - Successful Swaps: " + swapCount);
+    console.log("Mutation — final totalDist (endpoint Manhattan sum): " + mutationFinalTotalDist);
   }
 
   if (!validateGrid()) {
