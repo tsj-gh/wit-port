@@ -835,21 +835,6 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
   const pathToOutId = new Map();
   pathList.forEach(([pid], i) => pathToOutId.set(pid, i + 1));
 
-  const outGrid = Array.from({ length: n }, () => Array(n).fill(0));
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      const pid = solutionGrid[r][c];
-      const outId = pathToOutId.get(pid);
-      if (outId == null || outId === 0) {
-        if (typeof console !== "undefined") {
-          console.error("[Edge-Swap] Cell", r, c, "has unmapped pid", pid, "Regenerating...");
-        }
-        return generateByEdgeSwap(gridSize, targetPairCount, random);
-      }
-      outGrid[r][c] = outId;
-    }
-  }
-
   for (let i = 0; i < pathList.length; i++) {
     const [, cells] = pathList[i];
     const endpoints = cells.filter(({ r, c }) => adj[r][c].length === 1);
@@ -886,6 +871,81 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     });
   }
 
+  const CRAWL_EXCHANGE_ITERS = 300 + Math.floor(random() * 201);
+  const initialEndpoints = pairs.map((p) => ({ start: [...p.start], end: [...p.end] }));
+  for (let it = 0; it < CRAWL_EXCHANGE_ITERS; it++) {
+    if (random() < 0.5) {
+      const i = Math.floor(random() * pathList.length);
+      const [, cells] = pathList[i];
+      const useStart = random() < 0.5;
+      const ep = useStart ? pairs[i].start : pairs[i].end;
+      const er = ep[0], ec = ep[1];
+      if (adj[er][ec].length !== 1) continue;
+      const nk = adj[er][ec][0];
+      const nr = Math.floor(nk / n), nc = nk % n;
+      if (adj[nr][nc].length !== 2) continue;
+      const initEp = useStart ? initialEndpoints[i].start : initialEndpoints[i].end;
+      const distFromInitOld = Math.abs(er - initEp[0]) + Math.abs(ec - initEp[1]);
+      const distFromInitNew = Math.abs(nr - initEp[0]) + Math.abs(nc - initEp[1]);
+      if (distFromInitNew > distFromInitOld || (distFromInitNew === distFromInitOld && random() < 0.5)) {
+        if (useStart) { pairs[i].start[0] = nr; pairs[i].start[1] = nc; }
+        else { pairs[i].end[0] = nr; pairs[i].end[1] = nc; }
+      }
+    } else {
+      const adjEndpoints = [];
+      for (let i = 0; i < pathList.length; i++) {
+        for (let j = i + 1; j < pathList.length; j++) {
+          const sa = pairs[i].start, ea = pairs[i].end, sb = pairs[j].start, eb = pairs[j].end;
+          const check = (a, b) => {
+            const dr = Math.abs(a[0] - b[0]);
+            const dc = Math.abs(a[1] - b[1]);
+            return (dr === 1 && dc === 0) || (dr === 0 && dc === 1);
+          };
+          if (check(sa, sb) || check(sa, eb) || check(ea, sb) || check(ea, eb)) adjEndpoints.push({ i, j });
+        }
+      }
+      if (adjEndpoints.length === 0) continue;
+      const pick = adjEndpoints[Math.floor(random() * adjEndpoints.length)];
+      const { i, j } = pick;
+      const pidA = pathList[i][0], pidB = pathList[j][0];
+      for (let rr = 0; rr < n; rr++) for (let cc = 0; cc < n; cc++) {
+        if (solutionGrid[rr][cc] === pidA) solutionGrid[rr][cc] = pidB;
+        else if (solutionGrid[rr][cc] === pidB) solutionGrid[rr][cc] = pidA;
+      }
+      const tmp = { start: [...pairs[i].start], end: [...pairs[i].end] };
+      pairs[i].start = [...pairs[j].start];
+      pairs[i].end = [...pairs[j].end];
+      pairs[j].start = tmp.start;
+      pairs[j].end = tmp.end;
+      pathCells.clear();
+      for (let rr = 0; rr < n; rr++) for (let cc = 0; cc < n; cc++) {
+        const p = solutionGrid[rr][cc];
+        if (!pathCells.has(p)) pathCells.set(p, []);
+        pathCells.get(p).push({ r: rr, c: cc });
+      }
+      pathList.length = 0;
+      pathList.push(...Array.from(pathCells.entries()).filter(([, c]) => c.length >= 2).sort((x, y) => x[0] - y[0]));
+    }
+  }
+
+  pathToOutId.clear();
+  pathList.forEach(([pid], i) => pathToOutId.set(pid, i + 1));
+
+  const outGrid = Array.from({ length: n }, () => Array(n).fill(0));
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const pid = solutionGrid[r][c];
+      const outId = pathToOutId.get(pid);
+      if (outId == null || outId === 0) {
+        if (typeof console !== "undefined") {
+          console.error("[Edge-Swap] Cell", r, c, "has unmapped pid", pid, "Regenerating...");
+        }
+        return generateByEdgeSwap(gridSize, targetPairCount, random);
+      }
+      outGrid[r][c] = outId;
+    }
+  }
+
   function buildSolutionPathsFromAdj() {
     const result = {};
     for (let i = 0; i < pathList.length; i++) {
@@ -920,7 +980,8 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
   }
   if (typeof console !== "undefined") {
     console.log("Debug - solutionPaths total cells: " + totalCount);
-    console.log("Validation - Final total cells: " + totalCount);
+    console.log("Final Validation - Cells: " + totalCount);
+    console.log("Final Validation - Pairs: " + pairs.length);
     if (totalCount !== 64) {
       console.warn("Notice: Paths do not cover all 64 cells.");
     }
