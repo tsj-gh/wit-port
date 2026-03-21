@@ -46,6 +46,11 @@ function addToStock(key: string, puzzle: GenerateResult): void {
   touchKey(key);
 }
 
+function removeKeyFromAccessOrder(key: string): void {
+  const idx = keyAccessOrder.indexOf(key);
+  if (idx >= 0) keyAccessOrder.splice(idx, 1);
+}
+
 export function getStockStatus(): Record<string, number> {
   const out: Record<string, number> = {};
   stockMap.forEach((arr, k) => {
@@ -67,6 +72,7 @@ export function usePuzzleStock(
   getPuzzle: (gridSize: number, numPairs: number, seed?: string) => Promise<GenerateResult>;
   prefetch: (gridSize: number, numPairs: number) => void;
   manualPrefetch: (gridSize: number, numPairs: number) => void;
+  clearStockForKey: (gridSize: number, numPairs: number) => void;
   isPrefetching: boolean;
   lastGenerationTimeMs: number | null;
   lastProfile: Record<string, number> | null;
@@ -83,6 +89,7 @@ export function usePuzzleStock(
   const [lastTotalMs, setLastTotalMs] = useState<number | null>(null);
   const [stockStatus, setStockStatus] = useState<Record<string, number>>(() => getStockStatus());
   const isFetchingRef = useRef(false);
+  const clearRequestedKeysRef = useRef<Set<string>>(new Set());
 
   const flushStatus = useCallback(() => {
     setStockStatus(getStockStatus());
@@ -114,7 +121,7 @@ export function usePuzzleStock(
         const puzzle = await fetchOne(gs, np);
         const elapsed = Math.round(performance.now() - t0);
         setLastGenerationTimeMs(elapsed);
-        if (puzzle && !puzzle.error) {
+        if (puzzle && !puzzle.error && !clearRequestedKeysRef.current.has(key)) {
           if (puzzle.profile) {
             setLastProfile(puzzle.profile);
             if (puzzle.attempts != null) setLastAttempts(puzzle.attempts);
@@ -131,6 +138,8 @@ export function usePuzzleStock(
           }
           addToStock(key, puzzle);
           flushStatus();
+        } else if (puzzle && !puzzle.error && clearRequestedKeysRef.current.has(key)) {
+          clearRequestedKeysRef.current.delete(key);
         }
       } finally {
         isFetchingRef.current = false;
@@ -152,6 +161,7 @@ export function usePuzzleStock(
       if (isFetchingRef.current) return;
       isFetchingRef.current = true;
       setIsPrefetching(true);
+      const key = makeKey(gs, np);
       const t0 = performance.now();
       try {
         const puzzle = await fetchOne(gs, np);
@@ -171,9 +181,11 @@ export function usePuzzleStock(
             console.groupEnd();
           }
         }
-        if (puzzle && !puzzle.error) {
-          addToStock(makeKey(gs, np), puzzle);
+        if (puzzle && !puzzle.error && !clearRequestedKeysRef.current.has(key)) {
+          addToStock(key, puzzle);
           flushStatus();
+        } else if (puzzle && !puzzle.error && clearRequestedKeysRef.current.has(key)) {
+          clearRequestedKeysRef.current.delete(key);
         }
       } finally {
         isFetchingRef.current = false;
@@ -182,6 +194,14 @@ export function usePuzzleStock(
     },
     [fetchOne, flushStatus]
   );
+
+  const clearStockForKey = useCallback((gs: number, np: number) => {
+    const key = makeKey(gs, np);
+    stockMap.delete(key);
+    removeKeyFromAccessOrder(key);
+    clearRequestedKeysRef.current.add(key);
+    flushStatus();
+  }, [flushStatus]);
 
   const getPuzzle = useCallback(
     async (gs: number, np: number, seed?: string): Promise<GenerateResult> => {
@@ -220,6 +240,7 @@ export function usePuzzleStock(
     getPuzzle,
     prefetch,
     manualPrefetch,
+    clearStockForKey,
     isPrefetching,
     lastGenerationTimeMs,
     lastProfile,

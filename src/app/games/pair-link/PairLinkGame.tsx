@@ -151,7 +151,7 @@ export default function PairLinkGame() {
     detourWeight: configDetourWeight,
     baseThreshold: configBaseThreshold > 0 ? configBaseThreshold : undefined,
   };
-  const { getPuzzle, prefetch, manualPrefetch, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs, stockStatus } = usePuzzleStock({ config: evalConfig });
+  const { getPuzzle, prefetch, manualPrefetch, clearStockForKey, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs, stockStatus } = usePuzzleStock({ config: evalConfig });
   const { generate: workerGenerate } = useBoardWorker();
 
   const initGame = useCallback(
@@ -1276,6 +1276,15 @@ export default function PairLinkGame() {
           >
             新規作成
           </button>
+          {isDebugMode && (
+            <button
+              onClick={() => clearStockForKey(settingsGridSize, settingsNumPairs)}
+              className="px-4 py-2 rounded-lg bg-slate-600 text-slate-200 text-sm font-medium hover:bg-slate-500"
+              title={`${settingsGridSize}×${settingsNumPairs} のストックを削除（プリフェッチ中もキャンセル）`}
+            >
+              選択したサイズのストックを削除
+            </button>
+          )}
         </div>
         {/* 広告枠2（AD-UNIT-B）: サイズ/新規作成の直下 */}
         <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
