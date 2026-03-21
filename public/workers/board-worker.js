@@ -546,216 +546,226 @@ function generateCandidate8x8(gridSize, pairCount, profile, random) {
 }
 
 /**
- * Edge-Swap Mutation 方式: 7x7以上の高速・全埋め生成
- * 不変条件: 全セル次数2（端点は1）、空きマスなし
+ * Greedy Path Growth (with Pacing): 7x7以上の全埋め生成
+ * 蛇行優先・孤立マス吸収・難易度バランスを考慮
  */
-function generateByEdgeMutation(gridSize, pairCount, random, profile) {
+function generateByGreedyGrowth(gridSize, pairCount, random, profile) {
   const n = gridSize;
-  const targetPaths = pairCount;
+  const targetPairs = pairCount;
   const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
   const totalCells = n * n;
-  const initPaths = Math.floor(totalCells / 2);
 
-  function key(r, c) {
-    return r * n + c;
+  function atEdge(r, c) {
+    return r === 0 || r === n - 1 || c === 0 || c === n - 1;
   }
-
-  // pathId[r][c], adj[r][c] = [key1, key2] (max 2)
-  const pathId = Array.from({ length: n }, () => Array(n).fill(0));
-  const adj = Array.from({ length: n }, () => Array.from({ length: n }, () => []));
-
-  // 1. Initialize: 1x2 または 2x1 の微小パスで全マス埋め
-  let pid = 1;
-  let prev = null;
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      if (prev === null) {
-        prev = { r, c };
-      } else {
-        pathId[prev.r][prev.c] = pid;
-        pathId[r][c] = pid;
-        adj[prev.r][prev.c].push(key(r, c));
-        adj[r][c].push(key(prev.r, prev.c));
-        pid++;
-        prev = null;
-      }
-    }
-  }
-  if (prev !== null) {
-    const last = prev;
+  function hasPathNeighbor(r, c, grid) {
     for (const [dr, dc] of dirs) {
-      const nr = last.r + dr, nc = last.c + dc;
-      if (nr >= 0 && nr < n && nc >= 0 && nc < n && pathId[nr][nc] !== 0) {
-        pathId[last.r][last.c] = pathId[nr][nc];
-        adj[last.r][last.c].push(key(nr, nc));
-        adj[nr][nc].push(key(last.r, last.c));
-        break;
-      }
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] !== 0) return true;
     }
+    return false;
   }
 
-  let pathCount = pid - 1;
+  const maxRetries = 80;
+  for (let retry = 0; retry < maxRetries; retry++) {
+    const grid = Array.from({ length: n }, () => Array(n).fill(0));
+    const prev = Array.from({ length: n }, () => Array(n).fill(null));
+    const next = Array.from({ length: n }, () => Array(n).fill(null));
+    const pathHeads = [];
 
-  // 2. Merge Phase: 隣接する異なるパスをランダムに結合（目標 pairCount まで）
-  const mergeAttempts = Math.max(200, (pathCount - targetPaths) * 50);
-  for (let t = 0; t < mergeAttempts && pathCount > targetPaths; t++) {
-    const endpoints = [];
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        if (adj[r][c].length === 1) endpoints.push({ r, c, pid: pathId[r][c] });
-      }
-    }
-    const cands = [];
-    for (let i = 0; i < endpoints.length; i++) {
-      const a = endpoints[i];
-      for (const [dr, dc] of dirs) {
-        const nr = a.r + dr, nc = a.c + dc;
-        if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
-        const bPid = pathId[nr][nc];
-        if (bPid !== a.pid && adj[nr][nc].length === 1)
-          cands.push({ a: { r: a.r, c: a.c }, b: { r: nr, c: nc }, pidA: a.pid, pidB: bPid });
-      }
-    }
-    if (cands.length === 0) continue;
-    const pick = cands[Math.floor(random() * cands.length)];
-    const { a, b, pidA, pidB } = pick;
-    adj[a.r][a.c].push(key(b.r, b.c));
-    adj[b.r][b.c].push(key(a.r, a.c));
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        if (pathId[r][c] === pidB) pathId[r][c] = pidA;
-      }
-    }
-    pathCount--;
-  }
-
-  // 3. Mutation Phase: 2x2 エリアの繋ぎ変え (500〜1000回)
-  const mutations = 500 + Math.floor(random() * 501);
-  for (let m = 0; m < mutations; m++) {
-    const r = Math.floor(random() * (n - 1));
-    const c = Math.floor(random() * (n - 1));
-    const A1 = { r, c };
-    const A2 = { r, c: c + 1 };
-    const B1 = { r: r + 1, c };
-    const B2 = { r: r + 1, c: c + 1 };
-    const pA = pathId[A1.r][A1.c];
-    const pA2 = pathId[A2.r][A2.c];
-    const pB1 = pathId[B1.r][B1.c];
-    const pB2 = pathId[B2.r][B2.c];
-    const a1a2 = adj[A1.r][A1.c].includes(key(A2.r, A2.c));
-    const b1b2 = adj[B1.r][B1.c].includes(key(B2.r, B2.c));
-    const a1b1 = adj[A1.r][A1.c].includes(key(B1.r, B1.c));
-    const a2b2 = adj[A2.r][A2.c].includes(key(B2.r, B2.c));
-
-    if (a1a2 && b1b2 && pA === pA2 && pB1 === pB2 && pA !== pB1) {
-      const rem = (arr, k) => { const i = arr.indexOf(k); if (i >= 0) arr.splice(i, 1); };
-      rem(adj[A1.r][A1.c], key(A2.r, A2.c));
-      rem(adj[A2.r][A2.c], key(A1.r, A1.c));
-      rem(adj[B1.r][B1.c], key(B2.r, B2.c));
-      rem(adj[B2.r][B2.c], key(B1.r, B1.c));
-      adj[A1.r][A1.c].push(key(B1.r, B1.c));
-      adj[B1.r][B1.c].push(key(A1.r, A1.c));
-      adj[A2.r][A2.c].push(key(B2.r, B2.c));
-      adj[B2.r][B2.c].push(key(A2.r, A2.c));
-    } else if (a1b1 && a2b2 && pA === pathId[B1.r][B1.c] && pA2 === pB2 && pA !== pA2) {
-      const rem = (arr, k) => { const i = arr.indexOf(k); if (i >= 0) arr.splice(i, 1); };
-      rem(adj[A1.r][A1.c], key(B1.r, B1.c));
-      rem(adj[B1.r][B1.c], key(A1.r, A1.c));
-      rem(adj[A2.r][A2.c], key(B2.r, B2.c));
-      rem(adj[B2.r][B2.c], key(A2.r, A2.c));
-      adj[A1.r][A1.c].push(key(A2.r, A2.c));
-      adj[A2.r][A2.c].push(key(A1.r, A1.c));
-      adj[B1.r][B1.c].push(key(B2.r, B2.c));
-      adj[B2.r][B2.c].push(key(B1.r, B1.c));
-    }
-  }
-
-  // 4. Endpoint Selection: 各パスでマンハッタン距離最大の2点を端点に
-  const pathCells = new Map();
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      const p = pathId[r][c];
-      if (!pathCells.has(p)) pathCells.set(p, []);
-      pathCells.get(p).push({ r, c });
-    }
-  }
-
-  const pathList = Array.from(pathCells.entries())
-    .filter(([, cells]) => cells.length >= 2)
-    .sort((a, b) => b[1].length - a[1].length);
-
-  if (pathList.length < targetPaths) {
-    if (typeof console !== "undefined") console.log("[Edge-Swap] 失敗: パス数不足 " + pathList.length + "/" + targetPaths);
-    return null;
-  }
-  if (pathList.length > targetPaths) {
-    if (typeof console !== "undefined") console.log("[Edge-Swap] 失敗: マージ不足 " + pathList.length + ">" + targetPaths);
-    return null;
-  }
-
-  const pairs = [];
-  for (let i = 0; i < targetPaths; i++) {
-    const [, cells] = pathList[i];
-    let bestD = -1;
-    let bestA = null;
-    let bestB = null;
-    for (let j = 0; j < cells.length; j++) {
-      for (let k = j + 1; k < cells.length; k++) {
-        const d = Math.abs(cells[j].r - cells[k].r) + Math.abs(cells[j].c - cells[k].c);
-        if (d > bestD) {
-          bestD = d;
-          bestA = cells[j];
-          bestB = cells[k];
+    for (let pid = 1; pid <= targetPairs; pid++) {
+      const emptyCells = [];
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          if (grid[r][c] === 0) emptyCells.push({ r, c });
         }
       }
+      if (emptyCells.length === 0) break;
+      const startIdx = Math.floor(random() * emptyCells.length);
+      const start = emptyCells[startIdx];
+      grid[start.r][start.c] = pid;
+      const neighbors = [];
+      for (const [dr, dc] of dirs) {
+        const nr = start.r + dr, nc = start.c + dc;
+        if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] === 0) neighbors.push({ r: nr, c: nc });
+      }
+      const head = { r: start.r, c: start.c, pid };
+      if (neighbors.length > 0) {
+        const ext = neighbors[Math.floor(random() * neighbors.length)];
+        grid[ext.r][ext.c] = pid;
+        next[start.r][start.c] = { r: ext.r, c: ext.c };
+        prev[ext.r][ext.c] = { r: start.r, c: start.c };
+        head.r = ext.r;
+        head.c = ext.c;
+      }
+      pathHeads.push(head);
     }
-    pairs.push({
-      id: i + 1,
-      start: [bestA.r, bestA.c],
-      end: [bestB.r, bestB.c],
-    });
-  }
 
-  // grid 構築: pathId → pair id (1..targetPaths)
-  const pathToPairId = new Map();
-  pathList.forEach(([pathIdVal], idx) => {
-    pathToPairId.set(pathIdVal, idx + 1);
-  });
-  const grid = Array.from({ length: n }, () => Array(n).fill(0));
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      grid[r][c] = pathToPairId.get(pathId[r][c]) || 0;
+    while (true) {
+      const emptyCells = [];
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          if (grid[r][c] === 0) emptyCells.push({ r, c });
+        }
+      }
+      if (emptyCells.length === 0) break;
+
+      const extendable = [];
+      for (const h of pathHeads) {
+        for (const [dr, dc] of dirs) {
+          const nr = h.r + dr, nc = h.c + dc;
+          if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] === 0) {
+            extendable.push({ head: h, r: nr, c: nc });
+            break;
+          }
+        }
+      }
+      if (extendable.length === 0) break;
+
+      if (random() < 0.6) {
+        const pref = extendable.filter((e) => atEdge(e.r, e.c) || hasPathNeighbor(e.r, e.c, grid));
+        if (pref.length > 0) {
+          const pick = pref[Math.floor(random() * pref.length)];
+          const { head, r: nr, c: nc } = pick;
+          grid[nr][nc] = head.pid;
+          next[head.r][head.c] = { r: nr, c: nc };
+          prev[nr][nc] = { r: head.r, c: head.c };
+          head.r = nr;
+          head.c = nc;
+        } else {
+          const pick = extendable[Math.floor(random() * extendable.length)];
+          const { head, r: nr, c: nc } = pick;
+          grid[nr][nc] = head.pid;
+          next[head.r][head.c] = { r: nr, c: nc };
+          prev[nr][nc] = { r: head.r, c: head.c };
+          head.r = nr;
+          head.c = nc;
+        }
+      } else {
+        const pick = extendable[Math.floor(random() * extendable.length)];
+        const { head, r: nr, c: nc } = pick;
+        grid[nr][nc] = head.pid;
+        next[head.r][head.c] = { r: nr, c: nc };
+        prev[nr][nc] = { r: head.r, c: head.c };
+        head.r = nr;
+        head.c = nc;
+      }
     }
-  }
 
-  const solutionPaths = solutionGridToPaths(grid, pairs);
-
-  // Validator & ねじれ度ログ
-  let allFilled = true;
-  let allConnected = true;
-  const twistFactors = [];
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      if (grid[r][c] === 0) allFilled = false;
-      if (adj[r][c].length !== 1 && adj[r][c].length !== 2) allConnected = false;
+    while (true) {
+      let changed = false;
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          if (grid[r][c] !== 0) continue;
+          const neighbors = [];
+          for (const [dr, dc] of dirs) {
+            const nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] !== 0)
+              neighbors.push({ r: nr, c: nc });
+          }
+          if (neighbors.length === 0) continue;
+          const donor = neighbors[Math.floor(random() * neighbors.length)];
+          const pid = grid[donor.r][donor.c];
+          grid[r][c] = pid;
+          const donorNext = next[donor.r][donor.c];
+          next[donor.r][donor.c] = { r, c };
+          prev[r][c] = { r: donor.r, c: donor.c };
+          next[r][c] = donorNext;
+          if (donorNext) prev[donorNext.r][donorNext.c] = { r, c };
+          changed = true;
+        }
+      }
+      if (!changed) break;
     }
-  }
-  for (const pr of pairs) {
-    const path = solutionPaths[String(pr.id)]?.[0];
-    if (path) {
-      const len = path.length;
-      const md = Math.abs(pr.start[0] - pr.end[0]) + Math.abs(pr.start[1] - pr.end[1]);
-      twistFactors.push(len / Math.max(1, md));
+
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (grid[r][c] === 0) continue;
+        if (prev[r][c] !== null || next[r][c] !== null) continue;
+        const neighbors = [];
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] !== 0 && grid[nr][nc] !== grid[r][c])
+            neighbors.push({ r: nr, c: nc });
+        }
+        if (neighbors.length === 0) continue;
+        const donor = neighbors[Math.floor(random() * neighbors.length)];
+        const pid = grid[donor.r][donor.c];
+        grid[r][c] = pid;
+        const donorNext = next[donor.r][donor.c];
+        next[donor.r][donor.c] = { r, c };
+        prev[r][c] = { r: donor.r, c: donor.c };
+        next[r][c] = donorNext;
+        if (donorNext) prev[donorNext.r][donorNext.c] = { r, c };
+      }
     }
-  }
-  const avgTwist = twistFactors.length > 0 ? twistFactors.reduce((a, b) => a + b, 0) / twistFactors.length : 0;
-  if (typeof console !== "undefined") {
-    console.log("[Edge-Swap] 検証: 全埋め=" + allFilled + " 全接続=" + allConnected + " ねじれ度(avg)=" + avgTwist.toFixed(2));
-  }
 
-  if (!allFilled || !allConnected || Object.keys(solutionPaths).length !== pairs.length) return null;
+    const pathCells = new Map();
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const p = grid[r][c];
+        if (!p) continue;
+        if (!pathCells.has(p)) pathCells.set(p, []);
+        pathCells.get(p).push({ r, c });
+      }
+    }
 
-  return { grid, pairs, solutionPaths, difficultyScore: 0 };
+    const paths = Array.from(pathCells.entries())
+      .filter(([, cells]) => cells.length >= 2)
+      .sort((a, b) => a[0] - b[0]);
+
+    if (paths.length !== targetPairs) continue;
+    const pairs = [];
+    const pathToId = new Map();
+    paths.forEach(([p], i) => pathToId.set(p, i + 1));
+
+    const outGrid = Array.from({ length: n }, () => Array(n).fill(0));
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        outGrid[r][c] = pathToId.get(grid[r][c]) || 0;
+      }
+    }
+
+    for (let i = 0; i < paths.length; i++) {
+      const [, cells] = paths[i];
+      let bestD = -1;
+      let bestA = null;
+      let bestB = null;
+      for (let j = 0; j < cells.length; j++) {
+        for (let k = j + 1; k < cells.length; k++) {
+          const d = Math.abs(cells[j].r - cells[k].r) + Math.abs(cells[j].c - cells[k].c);
+          if (d > bestD) {
+            bestD = d;
+            bestA = cells[j];
+            bestB = cells[k];
+          }
+        }
+      }
+      pairs.push({
+        id: i + 1,
+        start: [bestA.r, bestA.c],
+        end: [bestB.r, bestB.c],
+      });
+    }
+
+    const length2Count = paths.filter(([, cells]) => cells.length === 2).length;
+    if (length2Count > targetPairs * 0.4) continue;
+
+    const solutionPaths = solutionGridToPaths(outGrid, pairs);
+    let allFilled = true;
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (outGrid[r][c] === 0) allFilled = false;
+      }
+    }
+    if (!allFilled || Object.keys(solutionPaths).length !== pairs.length) continue;
+
+    if (typeof console !== "undefined") {
+      console.log("[GreedyGrowth] 完成: " + n + "x" + n + " " + pairs.length + "ペア, 長さ2=" + length2Count);
+    }
+    return { grid: outGrid, pairs, solutionPaths, difficultyScore: 0 };
+  }
+  return null;
 }
 
 function generateCandidate(gridSize, pairCount, profile, random, logFailure, config) {
@@ -832,7 +842,7 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
     const elapsed = Math.round(performance.now() - t0);
 
     if (typeof console !== "undefined") {
-      console.log(`[Pair-link Edge-Swap] 生成完了: ${gridSize}x${gridSize} ${pairCount}ペア, ${elapsed}ms`);
+      console.log(`[Pair-link GreedyGrowth] 生成完了: ${gridSize}x${gridSize} ${pairCount}ペア, ${elapsed}ms`);
     }
 
     if (!candidate) return null;
@@ -851,7 +861,7 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
       pairs: candidate.pairs,
       gridSize,
       pairCount,
-      profile: { EdgeSwap: elapsed },
+      profile: { GreedyGrowth: elapsed },
       attempts: 1,
       totalMs: elapsed,
       seed: attemptSeed,

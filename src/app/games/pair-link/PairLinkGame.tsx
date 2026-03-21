@@ -972,7 +972,7 @@ export default function PairLinkGame() {
                             : "border-white/20 bg-black/40 text-slate-400 hover:bg-white/10"
                         }`}
                       >
-                        {m === "default" ? "Default" : "[Edge-Swap]"}
+                        {m === "default" ? "Default" : "[Greedy Growth]"}
                       </button>
                     ))}
                   </div>
