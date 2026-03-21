@@ -547,7 +547,7 @@ function generateCandidate8x8(gridSize, pairCount, profile, random) {
 
 /**
  * Territory Expansion 方式: 8x8以上の大型盤面向け
- * Step A: 種散布 → Step B: BFS領土拡大 → Step C: 領域内パス生成
+ * Step A: 種散布 → Step B: BFS領土拡大 → Step C: 領域内パス生成（最短パス）
  */
 function generateByTerritoryExpansion(gridSize, pairCount, random, profile) {
   const n = gridSize;
@@ -564,11 +564,11 @@ function generateByTerritoryExpansion(gridSize, pairCount, random, profile) {
     return isCorner + isEdge;
   }
 
-  function canPlace(used, r, c) {
-    return used.every(([ur, uc]) => manhattan(r, c, ur, uc) >= 3);
+  function canPlace(used, r, c, minDist) {
+    return used.every(([ur, uc]) => manhattan(r, c, ur, uc) >= minDist);
   }
 
-  // Step A: 戦略的な種の散布（四隅・辺を優先）
+  // Step A: 戦略的な種の散布（距離制約を 3→2→1 で緩和、必ず配置）
   const cells = [];
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) cells.push({ r, c, score: cornerScore(r, c) });
   cells.sort((a, b) => b.score - a.score);
@@ -580,28 +580,31 @@ function generateByTerritoryExpansion(gridSize, pairCount, random, profile) {
     let bestStart = null;
     let bestEnd = null;
     let bestScore = -1;
-    let tries = 0;
-    const maxTries = 200;
 
-    for (let i = 0; i < cells.length && tries < maxTries; i++) {
-      const s = cells[i];
-      if (!canPlace(used, s.r, s.c)) continue;
-      for (let j = 0; j < cells.length && tries < maxTries; j++) {
-        if (i === j) continue;
-        const e = cells[j];
-        if (!canPlace(used, e.r, e.c)) continue;
-        if (manhattan(s.r, s.c, e.r, e.c) < 3) continue;
-        tries++;
-        const score = s.score + e.score + manhattan(s.r, s.c, e.r, e.c);
-        if (score > bestScore) {
-          bestScore = score;
-          bestStart = s;
-          bestEnd = e;
+    for (const minDist of [3, 2, 1]) {
+      for (let i = 0; i < cells.length; i++) {
+        const s = cells[i];
+        if (!canPlace(used, s.r, s.c, minDist)) continue;
+        for (let j = 0; j < cells.length; j++) {
+          if (i === j) continue;
+          const e = cells[j];
+          if (!canPlace(used, e.r, e.c, minDist)) continue;
+          if (manhattan(s.r, s.c, e.r, e.c) < minDist) continue;
+          const score = s.score + e.score + manhattan(s.r, s.c, e.r, e.c);
+          if (score > bestScore) {
+            bestScore = score;
+            bestStart = s;
+            bestEnd = e;
+          }
         }
       }
+      if (bestStart && bestEnd) break;
     }
 
-    if (!bestStart || !bestEnd) return null;
+    if (!bestStart || !bestEnd) {
+      if (typeof console !== "undefined") console.log("[Territory] Step A 失敗: id=" + id + ", used=" + used.length);
+      return null;
+    }
     used.push([bestStart.r, bestStart.c], [bestEnd.r, bestEnd.c]);
     pairs.push({
       id,
@@ -610,14 +613,13 @@ function generateByTerritoryExpansion(gridSize, pairCount, random, profile) {
     });
   }
 
+  if (typeof console !== "undefined") console.log("[Territory] Step A 完了: ペア数=" + pairs.length);
+
   // Step B: 領土拡大（BFS、ランダム成長順でジグザグ境界を生成）
   const grid = Array.from({ length: n }, () => Array(n).fill(0));
-  const frontier = [];
   for (const p of pairs) {
     grid[p.start[0]][p.start[1]] = p.id;
     grid[p.end[0]][p.end[1]] = p.id;
-    frontier.push({ r: p.start[0], c: p.start[1], id: p.id });
-    frontier.push({ r: p.end[0], c: p.end[1], id: p.id });
   }
 
   const emptyNeighbors = (r, c) => {
@@ -650,114 +652,21 @@ function generateByTerritoryExpansion(gridSize, pairCount, random, profile) {
     filled++;
   }
 
-  if (filled < totalCells) return null;
-
-  // Step C: 領域内パス生成（各IDの連結成分内で一筆書き）
-  const getRegion = (id) => {
-    const cells = [];
-    for (let r = 0; r < n; r++)
-      for (let c = 0; c < n; c++)
-        if (grid[r][c] === id) cells.push({ r, c });
-    return cells;
-  };
-
-  const findHamiltonianPath = (cells, start, end) => {
-    const set = new Set(cells.map(({ r, c }) => `${r},${c}`));
-    const path = [];
-    const visited = new Set();
-    const nodeLimit = 50000;
-    let nodes = 0;
-
-    function dfs(r, c) {
-      nodes++;
-      if (nodes > nodeLimit) return false;
-      path.push({ r, c });
-      if (path.length === cells.length && r === end[0] && c === end[1]) return true;
-      visited.add(`${r},${c}`);
-
-      const order = [...dirs];
-      for (let i = order.length - 1; i > 0; i--) {
-        const j = Math.floor(random() * (i + 1));
-        [order[i], order[j]] = [order[j], order[i]];
-      }
-
-      for (const [dr, dc] of order) {
-        const nr = r + dr, nc = c + dc;
-        const key = `${nr},${nc}`;
-        if (!set.has(key) || visited.has(key)) continue;
-        if (path.length === cells.length - 1 && (nr !== end[0] || nc !== end[1])) continue;
-        if (dfs(nr, nc)) return true;
-      }
-      path.pop();
-      visited.delete(`${r},${c}`);
-      return false;
-    }
-
-    if (!dfs(start[0], start[1])) return null;
-    return path;
-  };
-
-  const findCellToTransfer = (region, pair) => {
-    const id = pair.id;
-    let leaf = null;
-    let anyNonEndpoint = null;
-    for (const { r, c } of region) {
-      if ((r === pair.start[0] && c === pair.start[1]) || (r === pair.end[0] && c === pair.end[1])) continue;
-      anyNonEndpoint = { r, c };
-      let neighbors = 0;
-      for (const [dr, dc] of dirs) {
-        const nr = r + dr, nc = c + dc;
-        if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] === id) neighbors++;
-      }
-      if (neighbors === 1) {
-        leaf = { r, c };
-        break;
-      }
-    }
-    return leaf || anyNonEndpoint;
-  };
-
-  const transferToNeighbor = (r, c, fromId) => {
-    for (const [dr, dc] of dirs) {
-      const nr = r + dr, nc = c + dc;
-      if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
-      const nghId = grid[nr][nc];
-      if (nghId && nghId !== fromId) return nghId;
-    }
+  if (filled < totalCells) {
+    if (typeof console !== "undefined") console.log("[Territory] Step B 失敗: filled=" + filled + "/" + totalCells);
     return null;
-  };
-
-  let changed = true;
-  let iterations = 0;
-  const maxIter = 50;
-
-  while (changed && iterations < maxIter) {
-    changed = false;
-    iterations++;
-
-    for (const p of pairs) {
-      let region = getRegion(p.id);
-      let path = findHamiltonianPath(region, p.start, p.end);
-
-      if (!path) {
-        const cell = findCellToTransfer(region, p);
-        if (!cell) continue;
-        const newOwner = transferToNeighbor(cell.r, cell.c, p.id);
-        if (newOwner) {
-          grid[cell.r][cell.c] = newOwner;
-          changed = true;
-        }
-      }
-    }
   }
 
-  const solutionPaths = {};
-  for (const p of pairs) {
-    const region = getRegion(p.id);
-    const path = findHamiltonianPath(region, p.start, p.end);
-    if (!path) return null;
-    solutionPaths[String(p.id)] = [path.map(({ r, c }) => ({ x: c, y: r }))];
+  if (typeof console !== "undefined") console.log("[Territory] Step B 完了: 全" + totalCells + "マス塗り完了");
+
+  // Step C: 各領域で Start→End の最短パスを生成（solutionGridToPaths を利用）
+  const solutionPaths = solutionGridToPaths(grid, pairs);
+  if (!solutionPaths || Object.keys(solutionPaths).length !== pc) {
+    if (typeof console !== "undefined") console.log("[Territory] Step C 失敗: solutionPaths=" + (solutionPaths ? Object.keys(solutionPaths).length : "null"));
+    return null;
   }
+
+  if (typeof console !== "undefined") console.log("[Territory] Step C 完了: パス数=" + Object.keys(solutionPaths).length);
 
   return { grid, pairs, solutionPaths, difficultyScore: 0 };
 }
