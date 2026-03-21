@@ -31,13 +31,15 @@ function createRandom(seed) {
 const COLORS = [
   "#ff4757", "#2e86de", "#2ed573", "#ffa502", "#a29bfe",
   "#e17055", "#00cec9", "#6c5ce7", "#fdcb6e",
+  "#fab1a0", "#dfe6e9",
 ];
 
 function getPairCount(gridSize) {
   switch (gridSize) {
     case 4: return 3;
     case 6: return 5;
-    case 8: return 7;
+    case 7: return 8;
+    case 8: return 9;
     case 10:
     default: return 9;
   }
@@ -546,13 +548,14 @@ function generateCandidate8x8(gridSize, pairCount, profile, random) {
 }
 
 /**
- * generateByEdgeSwap: 8x8専用エンジン
- * Phase 1: 完全タイリング（32個の1x2ドミノ）
- * Phase 2: パス統合（目標ペア数まで隣接パスを結合）
+ * generateByEdgeSwap: 動的グリッド（主に 7〜8）用エンジン
+ * Phase 1: 行優先で空きマスにドミノ／既存パス端への接続を一般化（全セル埋め）
+ * Phase 2: パス統合（目標ペア数まで隣接端同士を結合）
  */
 function generateByEdgeSwap(gridSize, targetPairCount, random) {
-  if (gridSize !== 8) return null;
-  const n = 8;
+  const n = gridSize | 0;
+  if (n < 4 || n > 12) return null;
+  const nn = n * n;
   const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 
   function key(r, c) {
@@ -594,11 +597,39 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     }
   }
 
-  if (typeof console !== "undefined") {
-    console.log("Phase 1: Perfect Tiling Complete. Paths: 32");
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (solutionGrid[r][c] === 0) {
+        if (typeof console !== "undefined") {
+          console.warn("[Edge-Swap] Phase 1: unfilled cell at", r, c, "regenerating...");
+        }
+        return generateByEdgeSwap(gridSize, targetPairCount, random);
+      }
+    }
   }
 
-  let pathCount = 32;
+  const initialPathIds = new Set();
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      initialPathIds.add(solutionGrid[r][c]);
+    }
+  }
+  let pathCount = initialPathIds.size;
+
+  if (pathCount < targetPairCount) {
+    if (typeof console !== "undefined") {
+      console.warn(
+        "[Edge-Swap] Phase 1 path count " + pathCount + " < target " + targetPairCount + ", regenerating..."
+      );
+    }
+    return generateByEdgeSwap(gridSize, targetPairCount, random);
+  }
+
+  if (typeof console !== "undefined") {
+    console.log(
+      "Phase 1: Tiling complete. Cells: " + nn + ", initial paths: " + pathCount
+    );
+  }
 
   while (pathCount > targetPairCount) {
     const endpointPairs = [];
@@ -668,6 +699,8 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
   }
 
   function validateGrid() {
+    const expectDeg1 = 2 * targetPairCount;
+    const expectDeg2 = nn - expectDeg1;
     let deg1Count = 0;
     let deg2Count = 0;
     for (let r = 0; r < n; r++) {
@@ -690,14 +723,26 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
         }
       }
     }
-    if (deg1Count !== 16 || deg2Count !== 48) {
+    if (deg1Count !== expectDeg1 || deg2Count !== expectDeg2) {
       if (typeof console !== "undefined") {
-        console.error("[Edge-Swap] Validation failed: deg1=" + deg1Count + " deg2=" + deg2Count + " (expected 16, 48)");
+        console.error(
+          "[Edge-Swap] Validation failed: deg1=" +
+            deg1Count +
+            " deg2=" +
+            deg2Count +
+            " (expected " +
+            expectDeg1 +
+            ", " +
+            expectDeg2 +
+            ")"
+        );
       }
       return false;
     }
     if (typeof console !== "undefined") {
-      console.log("[Edge-Swap] Degree validation: deg1=16 deg2=48 OK");
+      console.log(
+        "[Edge-Swap] Degree validation: deg1=" + expectDeg1 + " deg2=" + expectDeg2 + " OK"
+      );
     }
     return true;
   }
@@ -1272,8 +1317,8 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     console.log("Debug - solutionPaths total cells: " + totalCount);
 
     const totalCells = totalCount;
-    console.log("Final Grid Check: " + (totalCells === 64 ? "PERFECT" : "FAILED"));
-    if (totalCells !== 64) {
+    console.log("Final Grid Check: " + (totalCells === nn ? "PERFECT" : "FAILED"));
+    if (totalCells !== nn) {
       const emptyCoords = [];
       for (let gr = 0; gr < n; gr++) {
         for (let gc = 0; gc < n; gc++) {
@@ -1285,6 +1330,25 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
           (emptyCoords.length ? emptyCoords.join(", ") : "(none — check path sums / overlaps)")
       );
     }
+
+    let manhattanPairs = 0;
+    for (let pi = 0; pi < pairs.length; pi++) {
+      manhattanPairs +=
+        Math.abs(pairs[pi].start[0] - pairs[pi].end[0]) +
+        Math.abs(pairs[pi].start[1] - pairs[pi].end[1]);
+    }
+    console.log(
+      "Grid: " +
+        n +
+        "x" +
+        n +
+        ", Pairs: " +
+        pairs.length +
+        ", TotalCells: " +
+        totalCells +
+        ", Manhattan: " +
+        manhattanPairs
+    );
   }
 
   return { grid: outGrid, pairs, solutionPaths, difficultyScore: 0 };
@@ -1354,13 +1418,15 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
   const cfg = config || {};
   const generationMode = cfg.generationMode || "default";
 
-  if (gridSize === 8 && generationMode === "edgeSwap") {
+  if ((gridSize === 7 || gridSize === 8) && generationMode === "edgeSwap") {
+    const minPairs = gridSize === 7 ? 7 : 8;
+    const maxPairsEdge = 10;
     const t0 = performance.now();
     const hasSeed = seed != null && String(seed).trim() !== "";
     const attemptSeed = hasSeed ? String(seed) : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
     const random = createRandom(attemptSeed);
-    const targetPairCount = Math.max(2, Math.min(10, pairCount));
-    const candidate = generateByEdgeSwap(8, targetPairCount, random);
+    const targetPairCount = Math.max(minPairs, Math.min(maxPairsEdge, pairCount));
+    const candidate = generateByEdgeSwap(gridSize, targetPairCount, random);
     const elapsed = Math.round(performance.now() - t0);
 
     if (!candidate) return null;
@@ -1378,7 +1444,7 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
     return {
       numbers,
       pairs: candidate.pairs,
-      gridSize: 8,
+      gridSize,
       pairCount,
       profile: { EdgeSwap: elapsed },
       attempts: 1,

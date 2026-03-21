@@ -21,6 +21,32 @@ type PathPoint = { x: number; y: number };
 const PADDING = 50;
 const HIT_RADIUS_FACTOR = 0.55; // 数字・端点の当たり判定半径（spacing に対する倍率）
 
+/** Edge-Swap テスト: 7×7 は 7〜10 ペア、8×8 は 8〜10 ペア（board-worker と一致） */
+export const EDGE_SWAP_PAIR_BOUNDS: Record<number, { min: number; max: number }> = {
+  7: { min: 7, max: 10 },
+  8: { min: 8, max: 10 },
+};
+
+function pairCountOptions(gridSize: number, generationMode: "default" | "edgeSwap"): number[] {
+  const b = EDGE_SWAP_PAIR_BOUNDS[gridSize];
+  if (generationMode === "edgeSwap" && b) {
+    return Array.from({ length: b.max - b.min + 1 }, (_, i) => b.min + i);
+  }
+  const lo = Math.max(2, gridSize - 2);
+  const hi = gridSize >= 7 ? 10 : gridSize;
+  return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+}
+
+function clampPairCount(
+  gridSize: number,
+  numPairs: number,
+  generationMode: "default" | "edgeSwap"
+): number {
+  const opts = pairCountOptions(gridSize, generationMode);
+  if (opts.length === 0) return numPairs;
+  return Math.max(opts[0], Math.min(opts[opts.length - 1], numPairs));
+}
+
 type HitTarget =
   | { type: "endpoint"; val: string; pathIdx: number; point: PathPoint; isFirst: boolean }
   | { type: "number"; x: number; y: number; val: number };
@@ -84,6 +110,10 @@ export default function PairLinkGame() {
   useEffect(() => {
     if (isDevTj) setIsDebugMode(true);
   }, [isDevTj]);
+
+  useEffect(() => {
+    setSettingsNumPairs((p) => clampPairCount(settingsGridSize, p, debugGenerationMode));
+  }, [settingsGridSize, debugGenerationMode]);
 
   useEffect(() => {
     if (!isDebugMode) return;
@@ -165,7 +195,8 @@ export default function PairLinkGame() {
       setTimeSeconds(0);
       setTimerActive(false);
 
-      const key = `${gs}x${np}`;
+      const npClamped = clampPairCount(gs, np, debugGenerationMode);
+      const key = `${gs}x${npClamped}`;
       const hasStock = (stockStatus[key] ?? 0) > 0 && !seed;
       if (!hasStock) {
         setLoading(true);
@@ -173,7 +204,7 @@ export default function PairLinkGame() {
       }
 
       try {
-        const result = await getPuzzle(gs, np, seed);
+        const result = await getPuzzle(gs, npClamped, seed);
         if (result.error) {
           setStatus(result.error ?? "生成に失敗しました");
           return;
@@ -195,7 +226,7 @@ export default function PairLinkGame() {
         setLoading(false);
       }
     },
-    [getPuzzle, stockStatus]
+    [getPuzzle, stockStatus, debugGenerationMode]
   );
 
   useEffect(() => {
@@ -218,7 +249,11 @@ export default function PairLinkGame() {
     setTest10Result(null);
     const gs = Math.max(4, Math.min(8, debugGridSize));
     const maxP = gs >= 7 ? 10 : gs;
-    const np = Math.max(2, Math.min(maxP, debugNumPairs));
+    const np = clampPairCount(
+      gs,
+      Math.max(2, Math.min(maxP, debugNumPairs)),
+      debugGenerationMode
+    );
     const times: number[] = [];
     let lastAbc: ABCScore | null = null;
     let success = 0;
@@ -239,7 +274,15 @@ export default function PairLinkGame() {
     } finally {
       setTest10Running(false);
     }
-  }, [debugGridSize, debugNumPairs, workerGenerate, configEmptyIsolatedPenalty, configDetourWeight, configBaseThreshold]);
+  }, [
+    debugGridSize,
+    debugNumPairs,
+    debugGenerationMode,
+    workerGenerate,
+    configEmptyIsolatedPenalty,
+    configDetourWeight,
+    configBaseThreshold,
+  ]);
 
   const runBatch100 = useCallback(async () => {
     setBatch100Running(true);
@@ -247,9 +290,10 @@ export default function PairLinkGame() {
     const aVals: number[] = [];
     const bVals: number[] = [];
     const cVals: number[] = [];
+    const npEff = clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode);
     try {
       for (let i = 0; i < 100; i++) {
-        const result = await workerGenerate(settingsGridSize, undefined, settingsNumPairs, evalConfig);
+        const result = await workerGenerate(settingsGridSize, undefined, npEff, evalConfig);
         if (result.error || !result.solutionPaths || !result.pairs) continue;
         const score = computeABCScore(result.pairs, result.solutionPaths, result.gridSize);
         if (score) {
@@ -262,7 +306,7 @@ export default function PairLinkGame() {
       const bStat = computeStats(bVals);
       const cStat = computeStats(cVals);
       const report = [
-        `[ABC 100回計測] ${settingsGridSize}x${settingsNumPairs}`,
+        `[ABC 100回計測] ${settingsGridSize}x${npEff}`,
         `A. Detour Score: min=${aStat.min.toFixed(3)} max=${aStat.max.toFixed(3)} avg=${aStat.avg.toFixed(3)} std=${aStat.std.toFixed(3)}`,
         `B. Enclosure Score: min=${bStat.min} max=${bStat.max} avg=${bStat.avg.toFixed(2)} std=${bStat.std.toFixed(2)}`,
         `C. Junction Complexity: min=${cStat.min.toFixed(3)} max=${cStat.max.toFixed(3)} avg=${cStat.avg.toFixed(3)} std=${cStat.std.toFixed(3)}`,
@@ -272,7 +316,15 @@ export default function PairLinkGame() {
     } finally {
       setBatch100Running(false);
     }
-  }, [settingsGridSize, settingsNumPairs, workerGenerate, configEmptyIsolatedPenalty, configDetourWeight, configBaseThreshold]);
+  }, [
+    settingsGridSize,
+    settingsNumPairs,
+    debugGenerationMode,
+    workerGenerate,
+    configEmptyIsolatedPenalty,
+    configDetourWeight,
+    configBaseThreshold,
+  ]);
 
   useEffect(() => {
     if (timerActive && !solved) {
@@ -1180,7 +1232,12 @@ export default function PairLinkGame() {
                   強制クリア (Solve & Sync)
                 </button>
                 <button
-                  onClick={() => manualPrefetch(settingsGridSize, settingsNumPairs)}
+                  onClick={() =>
+                    manualPrefetch(
+                      settingsGridSize,
+                      clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)
+                    )
+                  }
                   disabled={isPrefetching}
                   className="px-2 py-0.5 rounded text-[10px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1262,7 +1319,14 @@ export default function PairLinkGame() {
                 const v = Number(e.target.value);
                 setSettingsGridSize(v);
                 const maxP = v >= 7 ? 10 : v;
-                setSettingsNumPairs((p) => Math.min(p, maxP));
+                const b = EDGE_SWAP_PAIR_BOUNDS[v];
+                const minP =
+                  debugGenerationMode === "edgeSwap" && b
+                    ? b.min
+                    : Math.max(2, v - 2);
+                setSettingsNumPairs((p) =>
+                  Math.min(maxP, Math.max(minP, Math.min(p, maxP)))
+                );
               }}
               className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
             >
@@ -1274,14 +1338,11 @@ export default function PairLinkGame() {
           <div>
             <label className="block text-xs text-wit-muted mb-1">Number of Pairs</label>
             <select
-              value={settingsNumPairs}
+              value={clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)}
               onChange={(e) => setSettingsNumPairs(Number(e.target.value))}
               className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
             >
-              {Array.from(
-                { length: (settingsGridSize >= 7 ? 10 : settingsGridSize) - Math.max(2, settingsGridSize - 2) + 1 },
-                (_, i) => Math.max(2, settingsGridSize - 2) + i
-              ).map((n) => (
+              {pairCountOptions(settingsGridSize, debugGenerationMode).map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>
@@ -1298,9 +1359,14 @@ export default function PairLinkGame() {
           </button>
           {isDebugMode && (
             <button
-              onClick={() => clearStockForKey(settingsGridSize, settingsNumPairs)}
+              onClick={() =>
+                clearStockForKey(
+                  settingsGridSize,
+                  clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)
+                )
+              }
               className="px-4 py-2 rounded-lg bg-slate-600 text-slate-200 text-sm font-medium hover:bg-slate-500"
-              title={`${settingsGridSize}×${settingsNumPairs} のストックを削除（プリフェッチ中もキャンセル）`}
+              title={`${settingsGridSize}×${clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)} のストックを削除（プリフェッチ中もキャンセル）`}
             >
               （debug）ストックを削除
             </button>
