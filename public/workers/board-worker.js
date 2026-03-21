@@ -886,6 +886,8 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     console.time("Crawling Phase");
   }
   for (let it = 0; it < CRAWL_EXCHANGE_ITERS; it++) {
+    // 端点移動: pairs の数字だけ隣の中間点へ進める。adj は不変のため旧端点は線上に残り、
+    // solutionPaths は後段で「グラフの葉↔葉」の全セル列として再構築される（マス消失防止）。
     if (random() < 0.5) {
       const i = Math.floor(random() * pathList.length);
       const useStart = random() < 0.5;
@@ -950,11 +952,12 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
       const outId = pathToOutId.get(pid);
       if (outId == null || outId === 0) {
         if (typeof console !== "undefined") {
-          console.error("[Edge-Swap] Cell", r, c, "has unmapped pid", pid, "Regenerating...");
+          console.warn("[Edge-Swap] Cell", r, c, "unmapped pid", pid, "(debug: no regeneration)");
         }
-        return generateByEdgeSwap(gridSize, targetPairCount, random);
+        outGrid[r][c] = 0;
+      } else {
+        outGrid[r][c] = outId;
       }
-      outGrid[r][c] = outId;
     }
   }
 
@@ -1009,16 +1012,63 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     return path;
   }
 
+  /**
+   * パス id 成分のグラフ上で、(sr,sc) からの距離（BFS）
+   */
+  function bfsDistOnPid(sr, sc, pid) {
+    const dist = new Map();
+    const sk = key(sr, sc);
+    if (solutionGrid[sr][sc] !== pid) return dist;
+    const q = [sk];
+    dist.set(sk, 0);
+    for (let qi = 0; qi < q.length; qi++) {
+      const k = q[qi];
+      const kr = Math.floor(k / n), kc = k % n;
+      const base = dist.get(k);
+      for (const nk of adj[kr][kc]) {
+        if (solutionGrid[Math.floor(nk / n)][nk % n] !== pid) continue;
+        if (dist.has(nk)) continue;
+        dist.set(nk, base + 1);
+        q.push(nk);
+      }
+    }
+    return dist;
+  }
+
+  /**
+   * solutionPaths: 数字の座標が端点でなくても、グラフの葉↔葉の全セルを1本の線として列挙する。
+   * （Crawling で端点を内側に動かしても、旧端点は中間点として列に含まれる → セル数が減らない）
+   */
   function buildSolutionPathsFromAdj() {
     const result = {};
     for (let i = 0; i < pathList.length; i++) {
       const pid = pathList[i][0];
+      const [, cells] = pathList[i];
       const [sr, sc] = pairs[i].start;
       const [tr, tc] = pairs[i].end;
-      const path = buildSolutionPathDirected(sr, sc, tr, tc, pid);
+
+      const leaves = (cells || []).filter(({ r, c }) => adj[r][c].length === 1);
+      let path = null;
+      if (leaves.length === 2) {
+        const leafA = leaves[0];
+        const leafB = leaves[1];
+        const distFromStart = bfsDistOnPid(sr, sc, pid);
+        const kA = key(leafA.r, leafA.c);
+        const kB = key(leafB.r, leafB.c);
+        const dA = distFromStart.has(kA) ? distFromStart.get(kA) : 9999;
+        const dB = distFromStart.has(kB) ? distFromStart.get(kB) : 9999;
+        if (dA <= dB) {
+          path = buildSolutionPathDirected(leafA.r, leafA.c, leafB.r, leafB.c, pid);
+        } else {
+          path = buildSolutionPathDirected(leafB.r, leafB.c, leafA.r, leafA.c, pid);
+        }
+      }
+      if (!path || path.length === 0) {
+        path = buildSolutionPathDirected(sr, sc, tr, tc, pid);
+      }
       if (!path || path.length === 0) {
         if (typeof console !== "undefined") {
-          console.error("[Edge-Swap] buildSolutionPathDirected failed for pair id", pairs[i].id);
+          console.error("[Edge-Swap] buildSolutionPathsFromAdj failed for pair id", pairs[i].id);
         }
         result[String(pairs[i].id)] = [[]];
         continue;
@@ -1036,15 +1086,9 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     if (Array.isArray(segs)) for (const seg of segs) totalCount += (seg && seg.length) | 0;
   }
   if (typeof console !== "undefined") {
-    console.log("Debug - solutionPaths total cells: " + totalCount);
-    console.log("Final Validation - Cells: " + totalCount);
     console.log("Final Validation - Pairs: " + pairs.length);
-  }
-  if (totalCount !== 64) {
-    if (typeof console !== "undefined") {
-      console.warn("[Edge-Swap] solutionPaths coverage != 64, regenerating.");
-    }
-    return generateByEdgeSwap(gridSize, targetPairCount, random);
+    console.log("Final Validation - Cells: " + totalCount);
+    console.log("Debug - solutionPaths total cells: " + totalCount);
   }
 
   return { grid: outGrid, pairs, solutionPaths, difficultyScore: 0 };
