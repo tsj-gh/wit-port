@@ -566,20 +566,31 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       if (solutionGrid[r][c] !== 0) continue;
-      const neighbors = [];
+      const emptyNeighbors = [];
+      const filledNeighbors = [];
       for (const [dr, dc] of dirs) {
         const nr = r + dr, nc = c + dc;
-        if (nr >= 0 && nr < n && nc >= 0 && nc < n && solutionGrid[nr][nc] === 0) {
-          neighbors.push({ r: nr, c: nc });
-        }
+        if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+        if (solutionGrid[nr][nc] === 0) emptyNeighbors.push({ r: nr, c: nc });
+        else filledNeighbors.push({ r: nr, c: nc });
       }
-      if (neighbors.length === 0) continue;
-      const pick = neighbors[Math.floor(random() * neighbors.length)];
-      solutionGrid[r][c] = pathId;
-      solutionGrid[pick.r][pick.c] = pathId;
-      adj[r][c].push(key(pick.r, pick.c));
-      adj[pick.r][pick.c].push(key(r, c));
-      pathId++;
+      if (emptyNeighbors.length > 0) {
+        const pick = emptyNeighbors[Math.floor(random() * emptyNeighbors.length)];
+        solutionGrid[r][c] = pathId;
+        solutionGrid[pick.r][pick.c] = pathId;
+        adj[r][c].push(key(pick.r, pick.c));
+        adj[pick.r][pick.c].push(key(r, c));
+        pathId++;
+      } else if (filledNeighbors.length > 0) {
+        const endpoints = filledNeighbors.filter(({ r: nr, c: nc }) => adj[nr][nc].length === 1);
+        const donor = (endpoints.length > 0 ? endpoints : filledNeighbors)[
+          Math.floor(random() * (endpoints.length || filledNeighbors.length))
+        ];
+        const pid = solutionGrid[donor.r][donor.c];
+        solutionGrid[r][c] = pid;
+        adj[r][c].push(key(donor.r, donor.c));
+        adj[donor.r][donor.c].push(key(r, c));
+      }
     }
   }
 
@@ -647,6 +658,35 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     console.log("Phase 2: Merging Complete. Total Paths: " + pathCount);
   }
 
+  function validateGrid() {
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const pid = solutionGrid[r][c];
+        if (pid == null || pid === 0) {
+          if (typeof console !== "undefined") {
+            console.error("[Edge-Swap] Validation failed: isolated empty cell at", r, c);
+          }
+          return false;
+        }
+        const deg = adj[r][c].length;
+        if (deg !== 1 && deg !== 2) {
+          if (typeof console !== "undefined") {
+            console.error("[Edge-Swap] Validation failed: cell", r, c, "has degree", deg);
+          }
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  if (!validateGrid()) {
+    if (typeof console !== "undefined") {
+      console.error("[Edge-Swap] Grid validation failed. Regenerating...");
+    }
+    return generateByEdgeSwap(gridSize, targetPairCount, random);
+  }
+
   const pathCells = new Map();
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
@@ -660,6 +700,16 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     .filter(([, cells]) => cells.length >= 2)
     .sort((x, y) => x[0] - y[0]);
 
+  const orphanPids = Array.from(pathCells.entries())
+    .filter(([, cells]) => cells.length < 2)
+    .map(([pid]) => pid);
+  if (orphanPids.length > 0) {
+    if (typeof console !== "undefined") {
+      console.error("[Edge-Swap] Orphan paths (len<2):", orphanPids, "Regenerating...");
+    }
+    return generateByEdgeSwap(gridSize, targetPairCount, random);
+  }
+
   const pairs = [];
   const pathToOutId = new Map();
   pathList.forEach(([pid], i) => pathToOutId.set(pid, i + 1));
@@ -667,7 +717,15 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
   const outGrid = Array.from({ length: n }, () => Array(n).fill(0));
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
-      outGrid[r][c] = pathToOutId.get(solutionGrid[r][c]) || 0;
+      const pid = solutionGrid[r][c];
+      const outId = pathToOutId.get(pid);
+      if (outId == null || outId === 0) {
+        if (typeof console !== "undefined") {
+          console.error("[Edge-Swap] Cell", r, c, "has unmapped pid", pid, "Regenerating...");
+        }
+        return generateByEdgeSwap(gridSize, targetPairCount, random);
+      }
+      outGrid[r][c] = outId;
     }
   }
 
