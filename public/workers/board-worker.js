@@ -601,25 +601,31 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
   let pathCount = 32;
 
   while (pathCount > targetPairCount) {
-    const adjPairs = [];
+    const endpointPairs = [];
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
         const pid = solutionGrid[r][c];
         if (!pid) continue;
+        if (adj[r][c].length !== 1) continue;
         for (const [dr, dc] of dirs) {
           const nr = r + dr, nc = c + dc;
           if (nr >= 0 && nr < n && nc >= 0 && nc < n) {
             const npid = solutionGrid[nr][nc];
-            if (npid && npid !== pid) {
-              adjPairs.push({ a: { r, c, pid }, b: { r: nr, c: nc, pid: npid } });
+            if (npid && npid !== pid && adj[nr][nc].length === 1) {
+              endpointPairs.push({ a: { r, c, pid }, b: { r: nr, c: nc, pid: npid } });
             }
           }
         }
       }
     }
-    if (adjPairs.length === 0) break;
+    if (endpointPairs.length === 0) {
+      if (typeof console !== "undefined") {
+        console.warn("[Edge-Swap] No endpoint-endpoint adjacencies. Regenerating...");
+      }
+      return generateByEdgeSwap(gridSize, targetPairCount, random);
+    }
 
-    const pick = adjPairs[Math.floor(random() * adjPairs.length)];
+    const pick = endpointPairs[Math.floor(random() * endpointPairs.length)];
     const { a, b } = pick;
     if (a.pid === b.pid) continue;
 
@@ -652,6 +658,9 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
       }
     }
     pathCount--;
+    if (typeof console !== "undefined") {
+      console.log("[Edge-Swap] Merge:", "A-endpoint", a.r, a.c, "<-> B-endpoint", b.r, b.c, "| Paths:", pathCount);
+    }
   }
 
   if (typeof console !== "undefined") {
@@ -659,6 +668,8 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
   }
 
   function validateGrid() {
+    let deg1Count = 0;
+    let deg2Count = 0;
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
         const pid = solutionGrid[r][c];
@@ -669,13 +680,24 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
           return false;
         }
         const deg = adj[r][c].length;
-        if (deg !== 1 && deg !== 2) {
+        if (deg === 1) deg1Count++;
+        else if (deg === 2) deg2Count++;
+        else {
           if (typeof console !== "undefined") {
             console.error("[Edge-Swap] Validation failed: cell", r, c, "has degree", deg);
           }
           return false;
         }
       }
+    }
+    if (deg1Count !== 16 || deg2Count !== 48) {
+      if (typeof console !== "undefined") {
+        console.error("[Edge-Swap] Validation failed: deg1=" + deg1Count + " deg2=" + deg2Count + " (expected 16, 48)");
+      }
+      return false;
+    }
+    if (typeof console !== "undefined") {
+      console.log("[Edge-Swap] Degree validation: deg1=16 deg2=48 OK");
     }
     return true;
   }
