@@ -12,6 +12,7 @@ function makeKey(gridSize: number, numPairs: number, config?: WorkerConfig): str
   if (config?.generationMode === "edgeSwap") {
     const te = config.targetEnclosureCount;
     k += te != null && te >= 0 ? `:e${Math.round(te)}` : `:e_off`;
+    k += config.debugEnclosureViz ? ":dv1" : ":dv0";
   }
   return k;
 }

@@ -6,7 +6,7 @@ import { DevLink } from "@/components/DevLink";
 import confetti from "canvas-confetti";
 import { validatePathsAction, solvePathsAction } from "./actions";
 import { usePuzzleStock } from "@/hooks/usePuzzleStock";
-import { useBoardWorker } from "@/hooks/useBoardWorker";
+import { useBoardWorker, type EnclosureDebugItem } from "@/hooks/useBoardWorker";
 import { computeABCScore, computeStats, type ABCScore } from "@/lib/pair-link-abc-score";
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
@@ -101,6 +101,7 @@ export default function PairLinkGame() {
   /** Edge-Swap: 囲い込み目標を worker に渡す（オフ時は従来どおり距離ベースのみ） */
   const [debugEnclosureTargetOn, setDebugEnclosureTargetOn] = useState(false);
   const [debugTargetEnclosureCount, setDebugTargetEnclosureCount] = useState(6);
+  const [debugEnclosures, setDebugEnclosures] = useState<EnclosureDebugItem[] | null>(null);
   const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : 500)
@@ -117,6 +118,14 @@ export default function PairLinkGame() {
   useEffect(() => {
     setSettingsNumPairs((p) => clampPairCount(settingsGridSize, p, debugGenerationMode));
   }, [settingsGridSize, debugGenerationMode]);
+
+  useEffect(() => {
+    if (!isDebugMode) setDebugEnclosures(null);
+  }, [isDebugMode]);
+
+  useEffect(() => {
+    if (debugGenerationMode !== "edgeSwap") setDebugEnclosures(null);
+  }, [debugGenerationMode]);
 
   useEffect(() => {
     if (!isDebugMode) return;
@@ -185,6 +194,12 @@ export default function PairLinkGame() {
     detourWeight: configDetourWeight,
     baseThreshold: configBaseThreshold > 0 ? configBaseThreshold : undefined,
     generationMode: debugGenerationMode,
+    ...(debugGenerationMode === "edgeSwap" && debugEnclosureTargetOn
+      ? { targetEnclosureCount: debugTargetEnclosureCount }
+      : {}),
+    ...(isDebugMode && debugGenerationMode === "edgeSwap"
+      ? { debugEnclosureViz: true }
+      : {}),
   };
   const { getPuzzle, prefetch, manualPrefetch, clearStockForKey, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs, stockStatus } = usePuzzleStock({ config: evalConfig });
   const { generate: workerGenerate } = useBoardWorker();
@@ -197,6 +212,7 @@ export default function PairLinkGame() {
       setShowClearOverlay(false);
       setTimeSeconds(0);
       setTimerActive(false);
+      setDebugEnclosures(null);
 
       const npClamped = clampPairCount(gs, np, debugGenerationMode);
       const key = `${gs}x${npClamped}`;
@@ -221,6 +237,7 @@ export default function PairLinkGame() {
         setPuzzleKey((k) => k + 1);
         setCurrentSeed(result.seed ?? null);
         currentSolutionPathsRef.current = result.solutionPaths ?? null;
+        setDebugEnclosures(result.debugEnclosures ?? null);
       } catch (err) {
         setStatus(
           err instanceof Error ? err.message : "生成に失敗しました。もう一度お試しください。"
@@ -229,7 +246,7 @@ export default function PairLinkGame() {
         setLoading(false);
       }
     },
-    [getPuzzle, stockStatus, debugGenerationMode]
+    [getPuzzle, stockStatus, debugGenerationMode, isDebugMode]
   );
 
   useEffect(() => {
@@ -283,6 +300,7 @@ export default function PairLinkGame() {
     debugGenerationMode,
     debugEnclosureTargetOn,
     debugTargetEnclosureCount,
+    isDebugMode,
     workerGenerate,
     configEmptyIsolatedPenalty,
     configDetourWeight,
@@ -327,6 +345,7 @@ export default function PairLinkGame() {
     debugGenerationMode,
     debugEnclosureTargetOn,
     debugTargetEnclosureCount,
+    isDebugMode,
     workerGenerate,
     configEmptyIsolatedPenalty,
     configDetourWeight,
@@ -573,6 +592,41 @@ export default function PairLinkGame() {
       }
     }
 
+    if (isDebugMode && debugEnclosures && debugEnclosures.length > 0) {
+      ctx.save();
+      ctx.setLineDash([5, 5]);
+      ctx.lineWidth = Math.max(1.5, spacing * 0.08);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      for (const e of debugEnclosures) {
+        if (e.kind === "vertical") {
+          const px = PADDING + e.col * spacing;
+          const py1 = PADDING + e.y1 * spacing;
+          const py2 = PADDING + e.y2 * spacing;
+          ctx.strokeStyle = "rgba(251, 191, 36, 0.9)";
+          ctx.beginPath();
+          ctx.moveTo(px, py1);
+          ctx.lineTo(px, py2);
+          ctx.stroke();
+        } else {
+          const py = PADDING + e.row * spacing;
+          const px1 = PADDING + e.x1 * spacing;
+          const px2 = PADDING + e.x2 * spacing;
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.9)";
+          ctx.beginPath();
+          ctx.moveTo(px1, py);
+          ctx.lineTo(px2, py);
+          ctx.stroke();
+        }
+        const mx = PADDING + e.nCol * spacing;
+        const my = PADDING + e.nRow * spacing;
+        ctx.font = `bold ${Math.max(10, spacing * 0.38)}px Arial`;
+        ctx.fillStyle = "rgba(248, 113, 113, 0.95)";
+        ctx.fillText(e.kind === "vertical" ? "▼" : "×", mx, my);
+      }
+      ctx.restore();
+    }
+
     Object.entries(paths).forEach(([v, pathList]) => {
       const color = numbers.find((n) => String(n.val) === v)?.color ?? "#10b981";
       pathList.forEach((path, idx) => {
@@ -624,7 +678,17 @@ export default function PairLinkGame() {
       ctx.fillStyle = "white";
       ctx.fillText(String(n.val), x, y);
     });
-  }, [paths, numbers, gridSize, spacing, isDrawing, activeVal, activePathIdx]);
+  }, [
+    paths,
+    numbers,
+    gridSize,
+    spacing,
+    isDrawing,
+    activeVal,
+    activePathIdx,
+    isDebugMode,
+    debugEnclosures,
+  ]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {

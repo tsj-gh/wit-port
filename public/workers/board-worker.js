@@ -608,6 +608,157 @@ function countPairLinkEnclosures(solutionGrid, adj, n) {
 }
 
 /**
+ * 囲い込みを列挙し、重複キーで採用されたものは debugEnclosures に、スキップはコンソールへ。
+ * @param {Map<number,number>|null} pidToPairId 内部 pid → 表示用ペア ID（1..N）
+ * @returns {{ count: number, debugEnclosures: object[] }}
+ */
+function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logToConsole) {
+  const pidSet = new Set();
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const v = solutionGrid[r][c];
+      if (v) pidSet.add(v);
+    }
+  }
+  const pids = Array.from(pidSet).sort((a, b) => a - b);
+  const seen = new Set();
+  const debugEnclosures = [];
+  let count = 0;
+
+  function pairLabel(pid) {
+    if (pidToPairId && pidToPairId.has(pid)) return pidToPairId.get(pid);
+    return pid;
+  }
+
+  for (let nr = 0; nr < n; nr++) {
+    for (let nc = 0; nc < n; nc++) {
+      if (adj[nr][nc].length !== 1) continue;
+      const qPid = solutionGrid[nr][nc];
+      const pairN = pairLabel(qPid);
+
+      for (let pi = 0; pi < pids.length; pi++) {
+        const pPid = pids[pi];
+        if (pPid === qPid) continue;
+        const pairP = pairLabel(pPid);
+
+        let rmin = n;
+        let rmax = -1;
+        for (let r = 0; r < n; r++) {
+          if (solutionGrid[r][nc] === pPid) {
+            if (r < rmin) rmin = r;
+            if (r > rmax) rmax = r;
+          }
+        }
+        if (rmax > rmin && rmin < nr && nr < rmax) {
+          const kv = "V|" + nr + "|" + nc;
+          if (!seen.has(kv)) {
+            seen.add(kv);
+            count++;
+            debugEnclosures.push({
+              kind: "vertical",
+              col: nc,
+              y1: rmin,
+              y2: rmax,
+              nRow: nr,
+              nCol: nc,
+              pathIdP: pairP,
+              pathIdN: pairN,
+            });
+            if (logToConsole) {
+              console.log(
+                "[Enclosure Found] TargetPair: " +
+                  pairN +
+                  ", Line: X=" +
+                  nc +
+                  " (Y:" +
+                  rmin +
+                  "-" +
+                  rmax +
+                  "), OccupiedBy: PathID=" +
+                  pairP
+              );
+            }
+          } else if (logToConsole) {
+            console.log(
+              "[Enclosure Skipped] TargetPair: " +
+                pairN +
+                ", Line: X=" +
+                nc +
+                " (Y:" +
+                rmin +
+                "-" +
+                rmax +
+                "), OccupiedBy: PathID=" +
+                pairP +
+                " — reason: duplicate vertical key " +
+                kv +
+                " (already counted)"
+            );
+          }
+        }
+
+        let cmin = n;
+        let cmax = -1;
+        for (let c = 0; c < n; c++) {
+          if (solutionGrid[nr][c] === pPid) {
+            if (c < cmin) cmin = c;
+            if (c > cmax) cmax = c;
+          }
+        }
+        if (cmax > cmin && cmin < nc && nc < cmax) {
+          const kh = "H|" + nr + "|" + nc;
+          if (!seen.has(kh)) {
+            seen.add(kh);
+            count++;
+            debugEnclosures.push({
+              kind: "horizontal",
+              row: nr,
+              x1: cmin,
+              x2: cmax,
+              nRow: nr,
+              nCol: nc,
+              pathIdP: pairP,
+              pathIdN: pairN,
+            });
+            if (logToConsole) {
+              console.log(
+                "[Enclosure Found] TargetPair: " +
+                  pairN +
+                  ", Line: Y=" +
+                  nr +
+                  " (X:" +
+                  cmin +
+                  "-" +
+                  cmax +
+                  "), OccupiedBy: PathID=" +
+                  pairP
+              );
+            }
+          } else if (logToConsole) {
+            console.log(
+              "[Enclosure Skipped] TargetPair: " +
+                pairN +
+                ", Line: Y=" +
+                nr +
+                " (X:" +
+                cmin +
+                "-" +
+                cmax +
+                "), OccupiedBy: PathID=" +
+                pairP +
+                " — reason: duplicate horizontal key " +
+                kh +
+                " (already counted)"
+            );
+          }
+        }
+      }
+    }
+  }
+  return { count, debugEnclosures };
+}
+
+/**
  * generateByEdgeSwap: 動的グリッド（主に 7〜8）用エンジン
  * Phase 1: 行優先で空きマスにドミノ／既存パス端への接続を一般化（全セル埋め）
  * Phase 2: パス統合（目標ペア数まで隣接端同士を結合）
@@ -619,6 +770,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     typeof mOpts.targetEnclosureCount === "number" && mOpts.targetEnclosureCount >= 0
       ? mOpts.targetEnclosureCount
       : null;
+  const debugEnclosureViz = !!mOpts.debugEnclosureViz;
   const n = gridSize | 0;
   if (n < 4 || n > 12) return null;
   const nn = n * n;
@@ -1403,6 +1555,22 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     const segs = solutionPaths[k];
     if (Array.isArray(segs)) for (const seg of segs) totalCount += (seg && seg.length) | 0;
   }
+
+  /** デバッグ可視化時のみ詳細列挙（ログ + クライアントへ返す座標） */
+  let encAnalysis = null;
+  if (debugEnclosureViz) {
+    if (typeof console !== "undefined") {
+      console.log("[Enclosure Debug] Final enumeration (Found / Skipped) —");
+    }
+    encAnalysis = analyzePairLinkEnclosuresDebug(
+      solutionGrid,
+      adj,
+      n,
+      pathToOutId,
+      typeof console !== "undefined"
+    );
+  }
+
   if (typeof console !== "undefined") {
     for (let i = 0; i < pairs.length; i++) {
       const id = pairs[i].id;
@@ -1442,7 +1610,8 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
         Math.abs(pairs[pi].start[0] - pairs[pi].end[0]) +
         Math.abs(pairs[pi].start[1] - pairs[pi].end[1]);
     }
-    const finalEncCount = countPairLinkEnclosures(solutionGrid, adj, n);
+    const finalEncCount =
+      encAnalysis != null ? encAnalysis.count : countPairLinkEnclosures(solutionGrid, adj, n);
     const encTargetLabel = targetEnc == null ? "-" : String(targetEnc);
     console.log(
       "Grid: " +
@@ -1460,7 +1629,13 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     );
   }
 
-  return { grid: outGrid, pairs, solutionPaths, difficultyScore: 0 };
+  return {
+    grid: outGrid,
+    pairs,
+    solutionPaths,
+    difficultyScore: 0,
+    debugEnclosures: encAnalysis != null ? encAnalysis.debugEnclosures : null,
+  };
 }
 
 function generateCandidate(gridSize, pairCount, profile, random, logFailure, config) {
@@ -1539,6 +1714,7 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
     if (typeof cfg.targetEnclosureCount === "number" && cfg.targetEnclosureCount >= 0) {
       edgeMutationOpts.targetEnclosureCount = cfg.targetEnclosureCount;
     }
+    if (cfg.debugEnclosureViz) edgeMutationOpts.debugEnclosureViz = true;
     const candidate = generateByEdgeSwap(gridSize, targetPairCount, random, edgeMutationOpts);
     const elapsed = Math.round(performance.now() - t0);
 
@@ -1564,6 +1740,7 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
       totalMs: elapsed,
       seed: attemptSeed,
       solutionPaths: candidate.solutionPaths || null,
+      debugEnclosures: candidate.debugEnclosures || null,
     };
   }
 
@@ -1645,6 +1822,7 @@ self.onmessage = function (e) {
           pairCount: result.pairCount,
           seed: result.seed,
           solutionPaths: result.solutionPaths || null,
+          debugEnclosures: result.debugEnclosures || null,
         },
         metrics: {
           profile: result.profile,

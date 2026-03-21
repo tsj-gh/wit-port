@@ -2,6 +2,29 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/** Worker（Edge-Swap 囲い込みデバッグ）から返る可視化用エントリ */
+export type EnclosureDebugItem =
+  | {
+      kind: "vertical";
+      col: number;
+      y1: number;
+      y2: number;
+      nRow: number;
+      nCol: number;
+      pathIdP: number;
+      pathIdN: number;
+    }
+  | {
+      kind: "horizontal";
+      row: number;
+      x1: number;
+      x2: number;
+      nRow: number;
+      nCol: number;
+      pathIdP: number;
+      pathIdN: number;
+    };
+
 export type GenerateResult = {
   numbers: { x: number; y: number; val: number; color: string }[];
   pairs: { id: number; start: [number, number]; end: [number, number] }[];
@@ -15,6 +38,8 @@ export type GenerateResult = {
   seed?: string;
   /** デバッグ用：正解の paths（6x6 等で生成時に取得可能） */
   solutionPaths?: Record<string, { x: number; y: number }[][]> | null;
+  /** Edge-Swap + debugEnclosureViz 時：囲い込みライン描画用 */
+  debugEnclosures?: EnclosureDebugItem[] | null;
 };
 
 /** Worker との通信メッセージ（全タイプで requestId を任意に持てる） */
@@ -55,6 +80,8 @@ export type WorkerConfig = {
   generationMode?: "default" | "edgeSwap";
   /** Edge-Swap 時: 囲い込みの目標件数（0 以上で有効。未指定は距離のみの従来挙動） */
   targetEnclosureCount?: number;
+  /** Edge-Swap 時: 囲い込み列挙ログと可視化データを返す */
+  debugEnclosureViz?: boolean;
 };
 
 type QueueItem = {
