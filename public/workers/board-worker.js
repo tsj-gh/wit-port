@@ -546,127 +546,214 @@ function generateCandidate8x8(gridSize, pairCount, profile, random) {
 }
 
 /**
- * Territory Expansion 方式: 8x8以上の大型盤面向け
- * Step A: 種散布 → Step B: BFS領土拡大 → Step C: 領域内パス生成（最短パス）
+ * Edge-Swap Mutation 方式: 7x7以上の高速・全埋め生成
+ * 不変条件: 全セル次数2（端点は1）、空きマスなし
  */
-function generateByTerritoryExpansion(gridSize, pairCount, random, profile) {
+function generateByEdgeMutation(gridSize, pairCount, random, profile) {
   const n = gridSize;
-  const pc = pairCount;
+  const targetPaths = pairCount;
   const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+  const totalCells = n * n;
+  const initPaths = Math.floor(totalCells / 2);
 
-  function manhattan(r1, c1, r2, c2) {
-    return Math.abs(r1 - r2) + Math.abs(c1 - c2);
+  function key(r, c) {
+    return r * n + c;
   }
 
-  function cornerScore(r, c) {
-    const isCorner = (r === 0 || r === n - 1) && (c === 0 || c === n - 1) ? 10 : 0;
-    const isEdge = (r === 0 || r === n - 1 || c === 0 || c === n - 1) ? 5 : 0;
-    return isCorner + isEdge;
+  // pathId[r][c], adj[r][c] = [key1, key2] (max 2)
+  const pathId = Array.from({ length: n }, () => Array(n).fill(0));
+  const adj = Array.from({ length: n }, () => Array.from({ length: n }, () => []));
+
+  // 1. Initialize: 1x2 または 2x1 の微小パスで全マス埋め
+  let pid = 1;
+  let prev = null;
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (prev === null) {
+        prev = { r, c };
+      } else {
+        pathId[prev.r][prev.c] = pid;
+        pathId[r][c] = pid;
+        adj[prev.r][prev.c].push(key(r, c));
+        adj[r][c].push(key(prev.r, prev.c));
+        pid++;
+        prev = null;
+      }
+    }
+  }
+  if (prev !== null) {
+    const last = prev;
+    for (const [dr, dc] of dirs) {
+      const nr = last.r + dr, nc = last.c + dc;
+      if (nr >= 0 && nr < n && nc >= 0 && nc < n && pathId[nr][nc] !== 0) {
+        pathId[last.r][last.c] = pathId[nr][nc];
+        adj[last.r][last.c].push(key(nr, nc));
+        adj[nr][nc].push(key(last.r, last.c));
+        break;
+      }
+    }
   }
 
-  function canPlace(used, r, c, minDist) {
-    return used.every(([ur, uc]) => manhattan(r, c, ur, uc) >= minDist);
+  let pathCount = pid - 1;
+
+  // 2. Merge Phase: 隣接する異なるパスをランダムに結合（目標 pairCount まで）
+  const mergeAttempts = Math.max(200, (pathCount - targetPaths) * 50);
+  for (let t = 0; t < mergeAttempts && pathCount > targetPaths; t++) {
+    const endpoints = [];
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (adj[r][c].length === 1) endpoints.push({ r, c, pid: pathId[r][c] });
+      }
+    }
+    const cands = [];
+    for (let i = 0; i < endpoints.length; i++) {
+      const a = endpoints[i];
+      for (const [dr, dc] of dirs) {
+        const nr = a.r + dr, nc = a.c + dc;
+        if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+        const bPid = pathId[nr][nc];
+        if (bPid !== a.pid && adj[nr][nc].length === 1)
+          cands.push({ a: { r: a.r, c: a.c }, b: { r: nr, c: nc }, pidA: a.pid, pidB: bPid });
+      }
+    }
+    if (cands.length === 0) continue;
+    const pick = cands[Math.floor(random() * cands.length)];
+    const { a, b, pidA, pidB } = pick;
+    adj[a.r][a.c].push(key(b.r, b.c));
+    adj[b.r][b.c].push(key(a.r, a.c));
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (pathId[r][c] === pidB) pathId[r][c] = pidA;
+      }
+    }
+    pathCount--;
   }
 
-  // Step A: 戦略的な種の散布（距離制約を 3→2→1 で緩和、必ず配置）
-  const cells = [];
-  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) cells.push({ r, c, score: cornerScore(r, c) });
-  cells.sort((a, b) => b.score - a.score);
+  // 3. Mutation Phase: 2x2 エリアの繋ぎ変え (500〜1000回)
+  const mutations = 500 + Math.floor(random() * 501);
+  for (let m = 0; m < mutations; m++) {
+    const r = Math.floor(random() * (n - 1));
+    const c = Math.floor(random() * (n - 1));
+    const A1 = { r, c };
+    const A2 = { r, c: c + 1 };
+    const B1 = { r: r + 1, c };
+    const B2 = { r: r + 1, c: c + 1 };
+    const pA = pathId[A1.r][A1.c];
+    const pA2 = pathId[A2.r][A2.c];
+    const pB1 = pathId[B1.r][B1.c];
+    const pB2 = pathId[B2.r][B2.c];
+    const a1a2 = adj[A1.r][A1.c].includes(key(A2.r, A2.c));
+    const b1b2 = adj[B1.r][B1.c].includes(key(B2.r, B2.c));
+    const a1b1 = adj[A1.r][A1.c].includes(key(B1.r, B1.c));
+    const a2b2 = adj[A2.r][A2.c].includes(key(B2.r, B2.c));
 
-  const used = [];
+    if (a1a2 && b1b2 && pA === pA2 && pB1 === pB2 && pA !== pB1) {
+      const rem = (arr, k) => { const i = arr.indexOf(k); if (i >= 0) arr.splice(i, 1); };
+      rem(adj[A1.r][A1.c], key(A2.r, A2.c));
+      rem(adj[A2.r][A2.c], key(A1.r, A1.c));
+      rem(adj[B1.r][B1.c], key(B2.r, B2.c));
+      rem(adj[B2.r][B2.c], key(B1.r, B1.c));
+      adj[A1.r][A1.c].push(key(B1.r, B1.c));
+      adj[B1.r][B1.c].push(key(A1.r, A1.c));
+      adj[A2.r][A2.c].push(key(B2.r, B2.c));
+      adj[B2.r][B2.c].push(key(A2.r, A2.c));
+    } else if (a1b1 && a2b2 && pA === pathId[B1.r][B1.c] && pA2 === pB2 && pA !== pA2) {
+      const rem = (arr, k) => { const i = arr.indexOf(k); if (i >= 0) arr.splice(i, 1); };
+      rem(adj[A1.r][A1.c], key(B1.r, B1.c));
+      rem(adj[B1.r][B1.c], key(A1.r, A1.c));
+      rem(adj[A2.r][A2.c], key(B2.r, B2.c));
+      rem(adj[B2.r][B2.c], key(A2.r, A2.c));
+      adj[A1.r][A1.c].push(key(A2.r, A2.c));
+      adj[A2.r][A2.c].push(key(A1.r, A1.c));
+      adj[B1.r][B1.c].push(key(B2.r, B2.c));
+      adj[B2.r][B2.c].push(key(B1.r, B1.c));
+    }
+  }
+
+  // 4. Endpoint Selection: 各パスでマンハッタン距離最大の2点を端点に
+  const pathCells = new Map();
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const p = pathId[r][c];
+      if (!pathCells.has(p)) pathCells.set(p, []);
+      pathCells.get(p).push({ r, c });
+    }
+  }
+
+  const pathList = Array.from(pathCells.entries())
+    .filter(([, cells]) => cells.length >= 2)
+    .sort((a, b) => b[1].length - a[1].length);
+
+  if (pathList.length < targetPaths) {
+    if (typeof console !== "undefined") console.log("[Edge-Swap] 失敗: パス数不足 " + pathList.length + "/" + targetPaths);
+    return null;
+  }
+  if (pathList.length > targetPaths) {
+    if (typeof console !== "undefined") console.log("[Edge-Swap] 失敗: マージ不足 " + pathList.length + ">" + targetPaths);
+    return null;
+  }
+
   const pairs = [];
-
-  for (let id = 1; id <= pc; id++) {
-    let bestStart = null;
-    let bestEnd = null;
-    let bestScore = -1;
-
-    for (const minDist of [3, 2, 1]) {
-      for (let i = 0; i < cells.length; i++) {
-        const s = cells[i];
-        if (!canPlace(used, s.r, s.c, minDist)) continue;
-        for (let j = 0; j < cells.length; j++) {
-          if (i === j) continue;
-          const e = cells[j];
-          if (!canPlace(used, e.r, e.c, minDist)) continue;
-          if (manhattan(s.r, s.c, e.r, e.c) < minDist) continue;
-          const score = s.score + e.score + manhattan(s.r, s.c, e.r, e.c);
-          if (score > bestScore) {
-            bestScore = score;
-            bestStart = s;
-            bestEnd = e;
-          }
+  for (let i = 0; i < targetPaths; i++) {
+    const [, cells] = pathList[i];
+    let bestD = -1;
+    let bestA = null;
+    let bestB = null;
+    for (let j = 0; j < cells.length; j++) {
+      for (let k = j + 1; k < cells.length; k++) {
+        const d = Math.abs(cells[j].r - cells[k].r) + Math.abs(cells[j].c - cells[k].c);
+        if (d > bestD) {
+          bestD = d;
+          bestA = cells[j];
+          bestB = cells[k];
         }
       }
-      if (bestStart && bestEnd) break;
     }
-
-    if (!bestStart || !bestEnd) {
-      if (typeof console !== "undefined") console.log("[Territory] Step A 失敗: id=" + id + ", used=" + used.length);
-      return null;
-    }
-    used.push([bestStart.r, bestStart.c], [bestEnd.r, bestEnd.c]);
     pairs.push({
-      id,
-      start: [bestStart.r, bestStart.c],
-      end: [bestEnd.r, bestEnd.c],
+      id: i + 1,
+      start: [bestA.r, bestA.c],
+      end: [bestB.r, bestB.c],
     });
   }
 
-  if (typeof console !== "undefined") console.log("[Territory] Step A 完了: ペア数=" + pairs.length);
-
-  // Step B: 領土拡大（BFS、ランダム成長順でジグザグ境界を生成）
+  // grid 構築: pathId → pair id (1..targetPaths)
+  const pathToPairId = new Map();
+  pathList.forEach(([pathIdVal], idx) => {
+    pathToPairId.set(pathIdVal, idx + 1);
+  });
   const grid = Array.from({ length: n }, () => Array(n).fill(0));
-  for (const p of pairs) {
-    grid[p.start[0]][p.start[1]] = p.id;
-    grid[p.end[0]][p.end[1]] = p.id;
-  }
-
-  const emptyNeighbors = (r, c) => {
-    const out = [];
-    for (const [dr, dc] of dirs) {
-      const nr = r + dr, nc = c + dc;
-      if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] === 0) out.push({ r: nr, c: nc });
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      grid[r][c] = pathToPairId.get(pathId[r][c]) || 0;
     }
-    return out;
-  };
-
-  let filled = 2 * pc;
-  const totalCells = n * n;
-
-  while (filled < totalCells) {
-    const growable = [];
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        const id = grid[r][c];
-        if (!id) continue;
-        const ngh = emptyNeighbors(r, c);
-        for (const cell of ngh) growable.push({ ...cell, id });
-      }
-    }
-    if (growable.length === 0) break;
-
-    const idx = Math.floor(random() * growable.length);
-    const { r, c, id } = growable[idx];
-    grid[r][c] = id;
-    filled++;
   }
 
-  if (filled < totalCells) {
-    if (typeof console !== "undefined") console.log("[Territory] Step B 失敗: filled=" + filled + "/" + totalCells);
-    return null;
-  }
-
-  if (typeof console !== "undefined") console.log("[Territory] Step B 完了: 全" + totalCells + "マス塗り完了");
-
-  // Step C: 各領域で Start→End の最短パスを生成（solutionGridToPaths を利用）
   const solutionPaths = solutionGridToPaths(grid, pairs);
-  if (!solutionPaths || Object.keys(solutionPaths).length !== pc) {
-    if (typeof console !== "undefined") console.log("[Territory] Step C 失敗: solutionPaths=" + (solutionPaths ? Object.keys(solutionPaths).length : "null"));
-    return null;
+
+  // Validator & ねじれ度ログ
+  let allFilled = true;
+  let allConnected = true;
+  const twistFactors = [];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (grid[r][c] === 0) allFilled = false;
+      if (adj[r][c].length !== 1 && adj[r][c].length !== 2) allConnected = false;
+    }
+  }
+  for (const pr of pairs) {
+    const path = solutionPaths[String(pr.id)]?.[0];
+    if (path) {
+      const len = path.length;
+      const md = Math.abs(pr.start[0] - pr.end[0]) + Math.abs(pr.start[1] - pr.end[1]);
+      twistFactors.push(len / Math.max(1, md));
+    }
+  }
+  const avgTwist = twistFactors.length > 0 ? twistFactors.reduce((a, b) => a + b, 0) / twistFactors.length : 0;
+  if (typeof console !== "undefined") {
+    console.log("[Edge-Swap] 検証: 全埋め=" + allFilled + " 全接続=" + allConnected + " ねじれ度(avg)=" + avgTwist.toFixed(2));
   }
 
-  if (typeof console !== "undefined") console.log("[Territory] Step C 完了: パス数=" + Object.keys(solutionPaths).length);
+  if (!allFilled || !allConnected || Object.keys(solutionPaths).length !== pairs.length) return null;
 
   return { grid, pairs, solutionPaths, difficultyScore: 0 };
 }
@@ -735,17 +822,17 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
   const cfg = config || {};
   const generationMode = cfg.generationMode || "default";
 
-  if (generationMode === "territory" && gridSize >= 8) {
+  if (generationMode === "territory" && gridSize >= 7) {
     const t0 = performance.now();
     const hasSeed = seed != null && String(seed).trim() !== "";
     const attemptSeed = hasSeed ? String(seed) : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
     const random = createRandom(attemptSeed);
     const profile = {};
-    const candidate = generateByTerritoryExpansion(gridSize, pairCount, random, profile);
+    const candidate = generateByEdgeMutation(gridSize, pairCount, random, profile);
     const elapsed = Math.round(performance.now() - t0);
 
     if (typeof console !== "undefined") {
-      console.log(`[Pair-link Territory] 生成完了: ${gridSize}x${gridSize} ${pairCount}ペア, ${elapsed}ms`);
+      console.log(`[Pair-link Edge-Swap] 生成完了: ${gridSize}x${gridSize} ${pairCount}ペア, ${elapsed}ms`);
     }
 
     if (!candidate) return null;
@@ -764,7 +851,7 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
       pairs: candidate.pairs,
       gridSize,
       pairCount,
-      profile: { TerritoryExpansion: elapsed },
+      profile: { EdgeSwap: elapsed },
       attempts: 1,
       totalMs: elapsed,
       seed: attemptSeed,
