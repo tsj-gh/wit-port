@@ -709,6 +709,51 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     return generateByEdgeSwap(gridSize, targetPairCount, random);
   }
 
+  /** 各内部パス id のセル数（Mutation はラベル入替えしないので一定） */
+  const pidCellCount = new Map();
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const p = solutionGrid[r][c];
+      pidCellCount.set(p, (pidCellCount.get(p) || 0) + 1);
+    }
+  }
+
+  /**
+   * 2x2 エッジ入替え直後の pid 成分を局所検証（全盤再走査しない）
+   * - tl を根に 1 回の DFS でサイクル検出
+   * - 到達セル数が期待と一致 → 連結
+   * - 次数 1 がちょうど 2 → 単一路グラフ
+   */
+  function checkPidAfterSwap(pid, sr, sc, expectedCount) {
+    const visited = new Set();
+    function dfs(u, parent) {
+      visited.add(u);
+      const ur = Math.floor(u / n);
+      const uc = u % n;
+      for (const nk of adj[ur][uc]) {
+        if (solutionGrid[Math.floor(nk / n)][nk % n] !== pid) continue;
+        if (nk === parent) continue;
+        if (visited.has(nk)) return true;
+        if (dfs(nk, u)) return true;
+      }
+      return false;
+    }
+    if (dfs(key(sr, sc), -1)) return false;
+    if (visited.size !== expectedCount) return false;
+    let deg1 = 0;
+    for (const u of visited) {
+      const ur = Math.floor(u / n);
+      const uc = u % n;
+      let samePidNeighbors = 0;
+      for (const nk of adj[ur][uc]) {
+        if (solutionGrid[Math.floor(nk / n)][nk % n] !== pid) continue;
+        samePidNeighbors++;
+      }
+      if (samePidNeighbors === 1) deg1++;
+    }
+    return deg1 === 2;
+  }
+
   let swapCount = 0;
   const MUTATION_ATTEMPTS = 500;
   for (let attempt = 0; attempt < MUTATION_ATTEMPTS; attempt++) {
@@ -746,45 +791,8 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
       addEdge(tr.r, tr.c, br.r, br.c);
     }
 
-    function hasCycle(pid) {
-      const visited = new Set();
-      function dfs(k, parent) {
-        visited.add(k);
-        const kr = Math.floor(k / n), kc = k % n;
-        for (const nk of adj[kr][kc]) {
-          if (solutionGrid[Math.floor(nk / n)][nk % n] !== pid) continue;
-          if (nk === parent) continue;
-          if (visited.has(nk)) return true;
-          if (dfs(nk, k)) return true;
-        }
-        return false;
-      }
-      for (let rr = 0; rr < n; rr++) for (let cc = 0; cc < n; cc++) {
-        if (solutionGrid[rr][cc] !== pid) continue;
-        const k = key(rr, cc);
-        if (!visited.has(k) && dfs(k, -1)) return true;
-      }
-      return false;
-    }
-    function countReachable(pid) {
-      let start = null;
-      for (let rr = 0; rr < n && !start; rr++) for (let cc = 0; cc < n; cc++) {
-        if (solutionGrid[rr][cc] === pid) { start = key(rr, cc); break; }
-      }
-      if (!start) return 0;
-      const v = new Set(); const s = [start]; v.add(start);
-      while (s.length) {
-        const k = s.pop(); const kr = Math.floor(k / n), kc = k % n;
-        for (const nk of adj[kr][kc]) {
-          if (solutionGrid[Math.floor(nk / n)][nk % n] !== pid) continue;
-          if (!v.has(nk)) { v.add(nk); s.push(nk); }
-        }
-      }
-      return v.size;
-    }
-    const pathSize = countReachable(pid);
-    const expectedSize = (() => { let c = 0; for (let rr = 0; rr < n; rr++) for (let cc = 0; cc < n; cc++) if (solutionGrid[rr][cc] === pid) c++; return c; })();
-    if (hasCycle(pid) || pathSize !== expectedSize) {
+    const expectedSize = pidCellCount.get(pid);
+    if (expectedSize == null || !checkPidAfterSwap(pid, tl.r, tl.c, expectedSize)) {
       if (pattern === "A") {
         remEdge(tl.r, tl.c, tr.r, tr.c); remEdge(bl.r, bl.c, br.r, br.c);
         addEdge(tl.r, tl.c, bl.r, bl.c); addEdge(tr.r, tr.c, br.r, br.c);
@@ -871,12 +879,15 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     });
   }
 
-  const CRAWL_EXCHANGE_ITERS = 300 + Math.floor(random() * 201);
+  const CRAWL_EXCHANGE_ITERS = 500;
   const initialEndpoints = pairs.map((p) => ({ start: [...p.start], end: [...p.end] }));
+
+  if (typeof console !== "undefined" && console.time) {
+    console.time("Crawling Phase");
+  }
   for (let it = 0; it < CRAWL_EXCHANGE_ITERS; it++) {
     if (random() < 0.5) {
       const i = Math.floor(random() * pathList.length);
-      const [, cells] = pathList[i];
       const useStart = random() < 0.5;
       const ep = useStart ? pairs[i].start : pairs[i].end;
       const er = ep[0], ec = ep[1];
@@ -908,24 +919,25 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
       const pick = adjEndpoints[Math.floor(random() * adjEndpoints.length)];
       const { i, j } = pick;
       const pidA = pathList[i][0], pidB = pathList[j][0];
-      for (let rr = 0; rr < n; rr++) for (let cc = 0; cc < n; cc++) {
-        if (solutionGrid[rr][cc] === pidA) solutionGrid[rr][cc] = pidB;
-        else if (solutionGrid[rr][cc] === pidB) solutionGrid[rr][cc] = pidA;
-      }
+      const arrA = pathCells.get(pidA);
+      const arrB = pathCells.get(pidB);
+      if (!arrA || !arrB) continue;
+      for (let k = 0; k < arrA.length; k++) solutionGrid[arrA[k].r][arrA[k].c] = pidB;
+      for (let k = 0; k < arrB.length; k++) solutionGrid[arrB[k].r][arrB[k].c] = pidA;
+      pathCells.set(pidA, arrB);
+      pathCells.set(pidB, arrA);
       const tmp = { start: [...pairs[i].start], end: [...pairs[i].end] };
       pairs[i].start = [...pairs[j].start];
       pairs[i].end = [...pairs[j].end];
       pairs[j].start = tmp.start;
       pairs[j].end = tmp.end;
-      pathCells.clear();
-      for (let rr = 0; rr < n; rr++) for (let cc = 0; cc < n; cc++) {
-        const p = solutionGrid[rr][cc];
-        if (!pathCells.has(p)) pathCells.set(p, []);
-        pathCells.get(p).push({ r: rr, c: cc });
+      for (let idx = 0; idx < pathList.length; idx++) {
+        pathList[idx][1] = pathCells.get(pathList[idx][0]);
       }
-      pathList.length = 0;
-      pathList.push(...Array.from(pathCells.entries()).filter(([, c]) => c.length >= 2).sort((x, y) => x[0] - y[0]));
     }
+  }
+  if (typeof console !== "undefined" && console.timeEnd) {
+    console.timeEnd("Crawling Phase");
   }
 
   pathToOutId.clear();
@@ -946,25 +958,70 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     }
   }
 
+  /**
+   * 終点からの BFS で距離を付与し、開始から「距離が 1 ずつ減る」隣のみを辿る。
+   * Set で座標の重複・短絡ループを O(1) で検出。
+   */
+  function buildSolutionPathDirected(sr, sc, tr, tc, pid) {
+    const dist = new Map();
+    const q = [];
+    const endK = key(tr, tc);
+    dist.set(endK, 0);
+    q.push(endK);
+    for (let qi = 0; qi < q.length; qi++) {
+      const k = q[qi];
+      const kr = Math.floor(k / n), kc = k % n;
+      const base = dist.get(k);
+      for (const nk of adj[kr][kc]) {
+        if (solutionGrid[Math.floor(nk / n)][nk % n] !== pid) continue;
+        if (dist.has(nk)) continue;
+        dist.set(nk, base + 1);
+        q.push(nk);
+      }
+    }
+    const startK = key(sr, sc);
+    if (!dist.has(startK)) return null;
+
+    const path = [];
+    const seenKeys = new Set();
+    let r = sr, c = sc;
+    for (;;) {
+      const k = key(r, c);
+      if (seenKeys.has(k)) return null;
+      seenKeys.add(k);
+      path.push({ x: c, y: r });
+      if (r === tr && c === tc) break;
+      const curD = dist.get(k);
+      if (curD == null || curD <= 0) return null;
+      const targetD = curD - 1;
+      let nextK = -1;
+      for (const nk of adj[r][c]) {
+        if (solutionGrid[Math.floor(nk / n)][nk % n] !== pid) continue;
+        if (dist.get(nk) === targetD) {
+          nextK = nk;
+          break;
+        }
+      }
+      if (nextK < 0) return null;
+      r = Math.floor(nextK / n);
+      c = nextK % n;
+    }
+    return path;
+  }
+
   function buildSolutionPathsFromAdj() {
     const result = {};
     for (let i = 0; i < pathList.length; i++) {
+      const pid = pathList[i][0];
       const [sr, sc] = pairs[i].start;
       const [tr, tc] = pairs[i].end;
-      const path = [];
-      let r = sr, c = sc;
-      let pr = -1, pc = -1;
-      for (;;) {
-        path.push({ x: c, y: r });
-        if (r === tr && c === tc) break;
-        const nexts = adj[r][c].filter((nk) => {
-          const nr = Math.floor(nk / n), nc = nk % n;
-          return !(nr === pr && nc === pc);
-        });
-        if (nexts.length === 0) break;
-        const nk = nexts[0];
-        pr = r; pc = c;
-        r = Math.floor(nk / n); c = nk % n;
+      const path = buildSolutionPathDirected(sr, sc, tr, tc, pid);
+      if (!path || path.length === 0) {
+        if (typeof console !== "undefined") {
+          console.error("[Edge-Swap] buildSolutionPathDirected failed for pair id", pairs[i].id);
+        }
+        result[String(pairs[i].id)] = [[]];
+        continue;
       }
       result[String(pairs[i].id)] = [path];
     }
@@ -982,9 +1039,12 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     console.log("Debug - solutionPaths total cells: " + totalCount);
     console.log("Final Validation - Cells: " + totalCount);
     console.log("Final Validation - Pairs: " + pairs.length);
-    if (totalCount !== 64) {
-      console.warn("Notice: Paths do not cover all 64 cells.");
+  }
+  if (totalCount !== 64) {
+    if (typeof console !== "undefined") {
+      console.warn("[Edge-Swap] solutionPaths coverage != 64, regenerating.");
     }
+    return generateByEdgeSwap(gridSize, targetPairCount, random);
   }
 
   return { grid: outGrid, pairs, solutionPaths, difficultyScore: 0 };
@@ -1153,8 +1213,6 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
 self.onmessage = function (e) {
   const { type, gridSize, seed, numPairs, config, requestId } = e.data || {};
   if (type !== 'GENERATE') return;
-
-  self.postMessage({ type: 'STATUS', status: 'RUNNING', requestId });
 
   try {
     const result = generatePairLinkPuzzle(gridSize ?? 8, seed, numPairs, config);
