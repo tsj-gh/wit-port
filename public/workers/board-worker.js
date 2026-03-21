@@ -709,6 +709,105 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     return generateByEdgeSwap(gridSize, targetPairCount, random);
   }
 
+  let swapCount = 0;
+  const MUTATION_ATTEMPTS = 500;
+  for (let attempt = 0; attempt < MUTATION_ATTEMPTS; attempt++) {
+    const r = Math.floor(random() * (n - 1));
+    const c = Math.floor(random() * (n - 1));
+    const tl = { r, c }, tr = { r: r, c: c + 1 }, bl = { r: r + 1, c }, br = { r: r + 1, c: c + 1 };
+    const pid = solutionGrid[tl.r][tl.c];
+    if (!pid || solutionGrid[tr.r][tr.c] !== pid || solutionGrid[bl.r][bl.c] !== pid || solutionGrid[br.r][br.c] !== pid) continue;
+
+    function hasEdge(ra, ca, rb, cb) {
+      const kb = key(rb, cb);
+      return adj[ra][ca].indexOf(kb) >= 0;
+    }
+    function addEdge(ra, ca, rb, cb) { adj[ra][ca].push(key(rb, cb)); adj[rb][cb].push(key(ra, ca)); }
+    function remEdge(ra, ca, rb, cb) {
+      const kb = key(rb, cb), ka = key(ra, ca);
+      const ia = adj[ra][ca].indexOf(kb); if (ia >= 0) adj[ra][ca].splice(ia, 1);
+      const ib = adj[rb][cb].indexOf(ka); if (ib >= 0) adj[rb][cb].splice(ib, 1);
+    }
+
+    let pattern = null;
+    if (hasEdge(tl.r, tl.c, bl.r, bl.c) && hasEdge(tr.r, tr.c, br.r, br.c)) pattern = "A";
+    else if (hasEdge(tl.r, tl.c, tr.r, tr.c) && hasEdge(bl.r, bl.c, br.r, br.c)) pattern = "B";
+    if (!pattern) continue;
+
+    if (pattern === "A") {
+      remEdge(tl.r, tl.c, bl.r, bl.c);
+      remEdge(tr.r, tr.c, br.r, br.c);
+      addEdge(tl.r, tl.c, tr.r, tr.c);
+      addEdge(bl.r, bl.c, br.r, br.c);
+    } else {
+      remEdge(tl.r, tl.c, tr.r, tr.c);
+      remEdge(bl.r, bl.c, br.r, br.c);
+      addEdge(tl.r, tl.c, bl.r, bl.c);
+      addEdge(tr.r, tr.c, br.r, br.c);
+    }
+
+    function hasCycle(pid) {
+      const visited = new Set();
+      function dfs(k, parent) {
+        visited.add(k);
+        const kr = Math.floor(k / n), kc = k % n;
+        for (const nk of adj[kr][kc]) {
+          if (solutionGrid[Math.floor(nk / n)][nk % n] !== pid) continue;
+          if (nk === parent) continue;
+          if (visited.has(nk)) return true;
+          if (dfs(nk, k)) return true;
+        }
+        return false;
+      }
+      for (let rr = 0; rr < n; rr++) for (let cc = 0; cc < n; cc++) {
+        if (solutionGrid[rr][cc] !== pid) continue;
+        const k = key(rr, cc);
+        if (!visited.has(k) && dfs(k, -1)) return true;
+      }
+      return false;
+    }
+    function countReachable(pid) {
+      let start = null;
+      for (let rr = 0; rr < n && !start; rr++) for (let cc = 0; cc < n; cc++) {
+        if (solutionGrid[rr][cc] === pid) { start = key(rr, cc); break; }
+      }
+      if (!start) return 0;
+      const v = new Set(); const s = [start]; v.add(start);
+      while (s.length) {
+        const k = s.pop(); const kr = Math.floor(k / n), kc = k % n;
+        for (const nk of adj[kr][kc]) {
+          if (solutionGrid[Math.floor(nk / n)][nk % n] !== pid) continue;
+          if (!v.has(nk)) { v.add(nk); s.push(nk); }
+        }
+      }
+      return v.size;
+    }
+    const pathSize = countReachable(pid);
+    const expectedSize = (() => { let c = 0; for (let rr = 0; rr < n; rr++) for (let cc = 0; cc < n; cc++) if (solutionGrid[rr][cc] === pid) c++; return c; })();
+    if (hasCycle(pid) || pathSize !== expectedSize) {
+      if (pattern === "A") {
+        remEdge(tl.r, tl.c, tr.r, tr.c); remEdge(bl.r, bl.c, br.r, br.c);
+        addEdge(tl.r, tl.c, bl.r, bl.c); addEdge(tr.r, tr.c, br.r, br.c);
+      } else {
+        remEdge(tl.r, tl.c, bl.r, bl.c); remEdge(tr.r, tr.c, br.r, br.c);
+        addEdge(tl.r, tl.c, tr.r, tr.c); addEdge(bl.r, bl.c, br.r, br.c);
+      }
+      continue;
+    }
+    swapCount++;
+  }
+
+  if (typeof console !== "undefined") {
+    console.log("Mutation Complete - Successful Swaps: " + swapCount);
+  }
+
+  if (!validateGrid()) {
+    if (typeof console !== "undefined") {
+      console.error("[Edge-Swap] Post-mutation validation failed. Regenerating...");
+    }
+    return generateByEdgeSwap(gridSize, targetPairCount, random);
+  }
+
   const pathCells = new Map();
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
@@ -821,6 +920,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
   }
   if (typeof console !== "undefined") {
     console.log("Debug - solutionPaths total cells: " + totalCount);
+    console.log("Validation - Final total cells: " + totalCount);
     if (totalCount !== 64) {
       console.warn("Notice: Paths do not cover all 64 cells.");
     }
