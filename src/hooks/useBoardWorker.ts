@@ -51,6 +51,8 @@ export type WorkerConfig = {
   emptyIsolatedPenalty?: number;
   detourWeight?: number;
   baseThreshold?: number;
+  /** デバッグ用: "territory" = Territory Expansion 方式 (8x8+) */
+  generationMode?: "default" | "territory";
 };
 
 type QueueItem = {

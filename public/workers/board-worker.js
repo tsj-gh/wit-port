@@ -545,6 +545,223 @@ function generateCandidate8x8(gridSize, pairCount, profile, random) {
   return { grid: null, pairs, difficultyScore };
 }
 
+/**
+ * Territory Expansion 方式: 8x8以上の大型盤面向け
+ * Step A: 種散布 → Step B: BFS領土拡大 → Step C: 領域内パス生成
+ */
+function generateByTerritoryExpansion(gridSize, pairCount, random, profile) {
+  const n = gridSize;
+  const pc = pairCount;
+  const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+
+  function manhattan(r1, c1, r2, c2) {
+    return Math.abs(r1 - r2) + Math.abs(c1 - c2);
+  }
+
+  function cornerScore(r, c) {
+    const isCorner = (r === 0 || r === n - 1) && (c === 0 || c === n - 1) ? 10 : 0;
+    const isEdge = (r === 0 || r === n - 1 || c === 0 || c === n - 1) ? 5 : 0;
+    return isCorner + isEdge;
+  }
+
+  function canPlace(used, r, c) {
+    return used.every(([ur, uc]) => manhattan(r, c, ur, uc) >= 3);
+  }
+
+  // Step A: 戦略的な種の散布（四隅・辺を優先）
+  const cells = [];
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) cells.push({ r, c, score: cornerScore(r, c) });
+  cells.sort((a, b) => b.score - a.score);
+
+  const used = [];
+  const pairs = [];
+
+  for (let id = 1; id <= pc; id++) {
+    let bestStart = null;
+    let bestEnd = null;
+    let bestScore = -1;
+    let tries = 0;
+    const maxTries = 200;
+
+    for (let i = 0; i < cells.length && tries < maxTries; i++) {
+      const s = cells[i];
+      if (!canPlace(used, s.r, s.c)) continue;
+      for (let j = 0; j < cells.length && tries < maxTries; j++) {
+        if (i === j) continue;
+        const e = cells[j];
+        if (!canPlace(used, e.r, e.c)) continue;
+        if (manhattan(s.r, s.c, e.r, e.c) < 3) continue;
+        tries++;
+        const score = s.score + e.score + manhattan(s.r, s.c, e.r, e.c);
+        if (score > bestScore) {
+          bestScore = score;
+          bestStart = s;
+          bestEnd = e;
+        }
+      }
+    }
+
+    if (!bestStart || !bestEnd) return null;
+    used.push([bestStart.r, bestStart.c], [bestEnd.r, bestEnd.c]);
+    pairs.push({
+      id,
+      start: [bestStart.r, bestStart.c],
+      end: [bestEnd.r, bestEnd.c],
+    });
+  }
+
+  // Step B: 領土拡大（BFS、ランダム成長順でジグザグ境界を生成）
+  const grid = Array.from({ length: n }, () => Array(n).fill(0));
+  const frontier = [];
+  for (const p of pairs) {
+    grid[p.start[0]][p.start[1]] = p.id;
+    grid[p.end[0]][p.end[1]] = p.id;
+    frontier.push({ r: p.start[0], c: p.start[1], id: p.id });
+    frontier.push({ r: p.end[0], c: p.end[1], id: p.id });
+  }
+
+  const emptyNeighbors = (r, c) => {
+    const out = [];
+    for (const [dr, dc] of dirs) {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] === 0) out.push({ r: nr, c: nc });
+    }
+    return out;
+  };
+
+  let filled = 2 * pc;
+  const totalCells = n * n;
+
+  while (filled < totalCells) {
+    const growable = [];
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const id = grid[r][c];
+        if (!id) continue;
+        const ngh = emptyNeighbors(r, c);
+        for (const cell of ngh) growable.push({ ...cell, id });
+      }
+    }
+    if (growable.length === 0) break;
+
+    const idx = Math.floor(random() * growable.length);
+    const { r, c, id } = growable[idx];
+    grid[r][c] = id;
+    filled++;
+  }
+
+  if (filled < totalCells) return null;
+
+  // Step C: 領域内パス生成（各IDの連結成分内で一筆書き）
+  const getRegion = (id) => {
+    const cells = [];
+    for (let r = 0; r < n; r++)
+      for (let c = 0; c < n; c++)
+        if (grid[r][c] === id) cells.push({ r, c });
+    return cells;
+  };
+
+  const findHamiltonianPath = (cells, start, end) => {
+    const set = new Set(cells.map(({ r, c }) => `${r},${c}`));
+    const path = [];
+    const visited = new Set();
+    const nodeLimit = 50000;
+    let nodes = 0;
+
+    function dfs(r, c) {
+      nodes++;
+      if (nodes > nodeLimit) return false;
+      path.push({ r, c });
+      if (path.length === cells.length && r === end[0] && c === end[1]) return true;
+      visited.add(`${r},${c}`);
+
+      const order = [...dirs];
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+
+      for (const [dr, dc] of order) {
+        const nr = r + dr, nc = c + dc;
+        const key = `${nr},${nc}`;
+        if (!set.has(key) || visited.has(key)) continue;
+        if (path.length === cells.length - 1 && (nr !== end[0] || nc !== end[1])) continue;
+        if (dfs(nr, nc)) return true;
+      }
+      path.pop();
+      visited.delete(`${r},${c}`);
+      return false;
+    }
+
+    if (!dfs(start[0], start[1])) return null;
+    return path;
+  };
+
+  const findCellToTransfer = (region, pair) => {
+    const id = pair.id;
+    let leaf = null;
+    let anyNonEndpoint = null;
+    for (const { r, c } of region) {
+      if ((r === pair.start[0] && c === pair.start[1]) || (r === pair.end[0] && c === pair.end[1])) continue;
+      anyNonEndpoint = { r, c };
+      let neighbors = 0;
+      for (const [dr, dc] of dirs) {
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < n && nc >= 0 && nc < n && grid[nr][nc] === id) neighbors++;
+      }
+      if (neighbors === 1) {
+        leaf = { r, c };
+        break;
+      }
+    }
+    return leaf || anyNonEndpoint;
+  };
+
+  const transferToNeighbor = (r, c, fromId) => {
+    for (const [dr, dc] of dirs) {
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+      const nghId = grid[nr][nc];
+      if (nghId && nghId !== fromId) return nghId;
+    }
+    return null;
+  };
+
+  let changed = true;
+  let iterations = 0;
+  const maxIter = 50;
+
+  while (changed && iterations < maxIter) {
+    changed = false;
+    iterations++;
+
+    for (const p of pairs) {
+      let region = getRegion(p.id);
+      let path = findHamiltonianPath(region, p.start, p.end);
+
+      if (!path) {
+        const cell = findCellToTransfer(region, p);
+        if (!cell) continue;
+        const newOwner = transferToNeighbor(cell.r, cell.c, p.id);
+        if (newOwner) {
+          grid[cell.r][cell.c] = newOwner;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  const solutionPaths = {};
+  for (const p of pairs) {
+    const region = getRegion(p.id);
+    const path = findHamiltonianPath(region, p.start, p.end);
+    if (!path) return null;
+    solutionPaths[String(p.id)] = [path.map(({ r, c }) => ({ x: c, y: r }))];
+  }
+
+  return { grid, pairs, solutionPaths, difficultyScore: 0 };
+}
+
 function generateCandidate(gridSize, pairCount, profile, random, logFailure, config) {
   const maxPairs = gridSize >= 7 ? 10 : gridSize;
   const pc = pairCount != null ? Math.max(2, Math.min(maxPairs, pairCount)) : getPairCount(gridSize);
@@ -607,6 +824,45 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
     ? Math.max(2, Math.min(maxPairs, numPairs))
     : getPairCount(gridSize);
   const cfg = config || {};
+  const generationMode = cfg.generationMode || "default";
+
+  if (generationMode === "territory" && gridSize >= 8) {
+    const t0 = performance.now();
+    const hasSeed = seed != null && String(seed).trim() !== "";
+    const attemptSeed = hasSeed ? String(seed) : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+    const random = createRandom(attemptSeed);
+    const profile = {};
+    const candidate = generateByTerritoryExpansion(gridSize, pairCount, random, profile);
+    const elapsed = Math.round(performance.now() - t0);
+
+    if (typeof console !== "undefined") {
+      console.log(`[Pair-link Territory] 生成完了: ${gridSize}x${gridSize} ${pairCount}ペア, ${elapsed}ms`);
+    }
+
+    if (!candidate) return null;
+
+    const numbers = [];
+    candidate.pairs.forEach((p, idx) => {
+      const color = COLORS[idx % COLORS.length];
+      const [r1, c1] = p.start;
+      const [r2, c2] = p.end;
+      numbers.push({ x: c1, y: r1, val: p.id, color });
+      numbers.push({ x: c2, y: r2, val: p.id, color });
+    });
+
+    return {
+      numbers,
+      pairs: candidate.pairs,
+      gridSize,
+      pairCount,
+      profile: { TerritoryExpansion: elapsed },
+      attempts: 1,
+      totalMs: elapsed,
+      seed: attemptSeed,
+      solutionPaths: candidate.solutionPaths || null,
+    };
+  }
+
   const baseThreshold = (cfg.baseThreshold != null && cfg.baseThreshold > 0)
     ? cfg.baseThreshold
     : gridSize * pairCount * 10;

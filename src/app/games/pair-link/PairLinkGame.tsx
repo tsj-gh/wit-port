@@ -71,6 +71,7 @@ export default function PairLinkGame() {
   const [configEmptyIsolatedPenalty, setConfigEmptyIsolatedPenalty] = useState(5);
   const [configDetourWeight, setConfigDetourWeight] = useState(0);
   const [configBaseThreshold, setConfigBaseThreshold] = useState(0);
+  const [debugGenerationMode, setDebugGenerationMode] = useState<"default" | "territory">("default");
   const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : 500)
@@ -150,6 +151,7 @@ export default function PairLinkGame() {
     emptyIsolatedPenalty: configEmptyIsolatedPenalty,
     detourWeight: configDetourWeight,
     baseThreshold: configBaseThreshold > 0 ? configBaseThreshold : undefined,
+    generationMode: debugGenerationMode,
   };
   const { getPuzzle, prefetch, manualPrefetch, clearStockForKey, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs, stockStatus } = usePuzzleStock({ config: evalConfig });
   const { generate: workerGenerate } = useBoardWorker();
@@ -956,6 +958,24 @@ export default function PairLinkGame() {
                       ({Math.floor((Date.now() - adsRefreshState.lastRefreshAt) / 1000)}秒前)
                     </span>
                   ) : null}
+                </div>
+                <div className="mt-1 pt-1 border-t border-white/10">
+                  <div className="font-semibold text-slate-300 mb-0.5">生成モード</div>
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {(["default", "territory"] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setDebugGenerationMode(m)}
+                        className={`px-2 py-0.5 rounded text-[10px] border ${
+                          debugGenerationMode === m
+                            ? "border-emerald-500 bg-emerald-500/30 text-emerald-400"
+                            : "border-white/20 bg-black/40 text-slate-400 hover:bg-white/10"
+                        }`}
+                      >
+                        {m === "default" ? "Default" : "[Territory Growth]"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 {isDevTj && (
                   <>
