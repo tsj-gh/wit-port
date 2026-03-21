@@ -51,6 +51,8 @@ export type WorkerConfig = {
   emptyIsolatedPenalty?: number;
   detourWeight?: number;
   baseThreshold?: number;
+  /** デバッグ用: "edgeSwap" = 8x8 Edge-Swap 方式 */
+  generationMode?: "default" | "edgeSwap";
 };
 
 type QueueItem = {

@@ -547,20 +547,25 @@ function generateCandidate8x8(gridSize, pairCount, profile, random) {
 
 /**
  * generateByEdgeSwap: 8x8専用エンジン
- * Phase 1: 完全タイリング（32個の1x2ドミノで全64マスを埋める）
+ * Phase 1: 完全タイリング（32個の1x2ドミノ）
+ * Phase 2: パス統合（目標ペア数まで隣接パスを結合）
  */
-function generateByEdgeSwap(gridSize, random) {
+function generateByEdgeSwap(gridSize, targetPairCount, random) {
   if (gridSize !== 8) return null;
   const n = 8;
   const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 
+  function key(r, c) {
+    return r * n + c;
+  }
+
   const solutionGrid = Array.from({ length: n }, () => Array(n).fill(0));
-  let pairId = 1;
+  const adj = Array.from({ length: n }, () => Array.from({ length: n }, () => []));
+  let pathId = 1;
 
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       if (solutionGrid[r][c] !== 0) continue;
-
       const neighbors = [];
       for (const [dr, dc] of dirs) {
         const nr = r + dr, nc = c + dc;
@@ -569,37 +574,141 @@ function generateByEdgeSwap(gridSize, random) {
         }
       }
       if (neighbors.length === 0) continue;
-
       const pick = neighbors[Math.floor(random() * neighbors.length)];
-      solutionGrid[r][c] = pairId;
-      solutionGrid[pick.r][pick.c] = pairId;
-      pairId++;
+      solutionGrid[r][c] = pathId;
+      solutionGrid[pick.r][pick.c] = pathId;
+      adj[r][c].push(key(pick.r, pick.c));
+      adj[pick.r][pick.c].push(key(r, c));
+      pathId++;
     }
   }
-
-  const pairs = [];
-  for (let id = 1; id <= 32; id++) {
-    const cells = [];
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        if (solutionGrid[r][c] === id) cells.push({ r, c });
-      }
-    }
-    if (cells.length !== 2) return null;
-    pairs.push({
-      id,
-      start: [cells[0].r, cells[0].c],
-      end: [cells[1].r, cells[1].c],
-    });
-  }
-
-  const solutionPaths = solutionGridToPaths(solutionGrid, pairs);
 
   if (typeof console !== "undefined") {
     console.log("Phase 1: Perfect Tiling Complete. Paths: 32");
   }
 
-  return { grid: solutionGrid, pairs, solutionPaths, difficultyScore: 0 };
+  let pathCount = 32;
+
+  while (pathCount > targetPairCount) {
+    const adjPairs = [];
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const pid = solutionGrid[r][c];
+        if (!pid) continue;
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < n && nc >= 0 && nc < n) {
+            const npid = solutionGrid[nr][nc];
+            if (npid && npid !== pid) {
+              adjPairs.push({ a: { r, c, pid }, b: { r: nr, c: nc, pid: npid } });
+            }
+          }
+        }
+      }
+    }
+    if (adjPairs.length === 0) break;
+
+    const pick = adjPairs[Math.floor(random() * adjPairs.length)];
+    const { a, b } = pick;
+    if (a.pid === b.pid) continue;
+
+    const visited = new Set();
+    const stack = [key(a.r, a.c)];
+    visited.add(key(a.r, a.c));
+    let reachable = false;
+    while (stack.length > 0) {
+      const k = stack.pop();
+      const kr = Math.floor(k / n), kc = k % n;
+      if (kr === b.r && kc === b.c) {
+        reachable = true;
+        break;
+      }
+      for (const nk of adj[kr][kc]) {
+        if (!visited.has(nk)) {
+          visited.add(nk);
+          stack.push(nk);
+        }
+      }
+    }
+    if (reachable) continue;
+
+    adj[a.r][a.c].push(key(b.r, b.c));
+    adj[b.r][b.c].push(key(a.r, a.c));
+
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (solutionGrid[r][c] === b.pid) solutionGrid[r][c] = a.pid;
+      }
+    }
+    pathCount--;
+  }
+
+  if (typeof console !== "undefined") {
+    console.log("Phase 2: Merging Complete. Total Paths: " + pathCount);
+  }
+
+  const pathCells = new Map();
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const p = solutionGrid[r][c];
+      if (!pathCells.has(p)) pathCells.set(p, []);
+      pathCells.get(p).push({ r, c });
+    }
+  }
+
+  const pathList = Array.from(pathCells.entries())
+    .filter(([, cells]) => cells.length >= 2)
+    .sort((x, y) => x[0] - y[0]);
+
+  const pairs = [];
+  const pathToOutId = new Map();
+  pathList.forEach(([pid], i) => pathToOutId.set(pid, i + 1));
+
+  const outGrid = Array.from({ length: n }, () => Array(n).fill(0));
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      outGrid[r][c] = pathToOutId.get(solutionGrid[r][c]) || 0;
+    }
+  }
+
+  for (let i = 0; i < pathList.length; i++) {
+    const [, cells] = pathList[i];
+    const endpoints = cells.filter(({ r, c }) => adj[r][c].length === 1);
+    let bestA = cells[0];
+    let bestB = cells[0];
+    let bestD = -1;
+    if (endpoints.length >= 2) {
+      for (let j = 0; j < endpoints.length; j++) {
+        for (let k = j + 1; k < endpoints.length; k++) {
+          const d = Math.abs(endpoints[j].r - endpoints[k].r) + Math.abs(endpoints[j].c - endpoints[k].c);
+          if (d > bestD) {
+            bestD = d;
+            bestA = endpoints[j];
+            bestB = endpoints[k];
+          }
+        }
+      }
+    } else {
+      for (let j = 0; j < cells.length; j++) {
+        for (let k = j + 1; k < cells.length; k++) {
+          const d = Math.abs(cells[j].r - cells[k].r) + Math.abs(cells[j].c - cells[k].c);
+          if (d > bestD) {
+            bestD = d;
+            bestA = cells[j];
+            bestB = cells[k];
+          }
+        }
+      }
+    }
+    pairs.push({
+      id: i + 1,
+      start: [bestA.r, bestA.c],
+      end: [bestB.r, bestB.c],
+    });
+  }
+
+  const solutionPaths = solutionGridToPaths(outGrid, pairs);
+  return { grid: outGrid, pairs, solutionPaths, difficultyScore: 0 };
 }
 
 function generateCandidate(gridSize, pairCount, profile, random, logFailure, config) {
@@ -664,18 +773,20 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
     ? Math.max(2, Math.min(maxPairs, numPairs))
     : getPairCount(gridSize);
   const cfg = config || {};
+  const generationMode = cfg.generationMode || "default";
 
-  if (gridSize === 8) {
+  if (gridSize === 8 && generationMode === "edgeSwap") {
     const t0 = performance.now();
     const hasSeed = seed != null && String(seed).trim() !== "";
     const attemptSeed = hasSeed ? String(seed) : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
     const random = createRandom(attemptSeed);
-    const candidate = generateByEdgeSwap(8, random);
+    const targetPairCount = Math.max(2, Math.min(10, pairCount));
+    const candidate = generateByEdgeSwap(8, targetPairCount, random);
     const elapsed = Math.round(performance.now() - t0);
 
     if (!candidate) return null;
 
-    pairCount = 32;
+    pairCount = candidate.pairs.length;
     const numbers = [];
     candidate.pairs.forEach((p, idx) => {
       const color = COLORS[idx % COLORS.length];

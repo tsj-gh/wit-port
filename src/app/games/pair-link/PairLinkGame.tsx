@@ -71,6 +71,7 @@ export default function PairLinkGame() {
   const [configEmptyIsolatedPenalty, setConfigEmptyIsolatedPenalty] = useState(5);
   const [configDetourWeight, setConfigDetourWeight] = useState(0);
   const [configBaseThreshold, setConfigBaseThreshold] = useState(0);
+  const [debugGenerationMode, setDebugGenerationMode] = useState<"default" | "edgeSwap">("default");
   const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : 500)
@@ -150,6 +151,7 @@ export default function PairLinkGame() {
     emptyIsolatedPenalty: configEmptyIsolatedPenalty,
     detourWeight: configDetourWeight,
     baseThreshold: configBaseThreshold > 0 ? configBaseThreshold : undefined,
+    generationMode: debugGenerationMode,
   };
   const { getPuzzle, prefetch, manualPrefetch, clearStockForKey, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs, stockStatus } = usePuzzleStock({ config: evalConfig });
   const { generate: workerGenerate } = useBoardWorker();
@@ -957,6 +959,24 @@ export default function PairLinkGame() {
                     </span>
                   ) : null}
                 </div>
+                <div className="mt-1 pt-1 border-t border-white/10">
+                  <div className="font-semibold text-slate-300 mb-0.5">生成モード</div>
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {(["default", "edgeSwap"] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setDebugGenerationMode(m)}
+                        className={`px-2 py-0.5 rounded text-[10px] border ${
+                          debugGenerationMode === m
+                            ? "border-emerald-500 bg-emerald-500/30 text-emerald-400"
+                            : "border-white/20 bg-black/40 text-slate-400 hover:bg-white/10"
+                        }`}
+                      >
+                        {m === "default" ? "[Default]" : "[Edge-Swap]"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {isDevTj && (
                   <>
                   <div className="mt-1 pt-1 border-t border-white/10">
@@ -1241,12 +1261,8 @@ export default function PairLinkGame() {
               onChange={(e) => {
                 const v = Number(e.target.value);
                 setSettingsGridSize(v);
-                if (v === 8) {
-                  setSettingsNumPairs(32);
-                } else {
-                  const maxP = v >= 7 ? 10 : v;
-                  setSettingsNumPairs((p) => Math.min(p, maxP));
-                }
+                const maxP = v >= 7 ? 10 : v;
+                setSettingsNumPairs((p) => Math.min(p, maxP));
               }}
               className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
             >
@@ -1263,8 +1279,8 @@ export default function PairLinkGame() {
               className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
             >
               {Array.from(
-                { length: settingsGridSize === 8 ? 1 : (settingsGridSize >= 7 ? 10 : settingsGridSize) - Math.max(2, settingsGridSize - 2) + 1 },
-                (_, i) => settingsGridSize === 8 ? 32 : Math.max(2, settingsGridSize - 2) + i
+                { length: (settingsGridSize >= 7 ? 10 : settingsGridSize) - Math.max(2, settingsGridSize - 2) + 1 },
+                (_, i) => Math.max(2, settingsGridSize - 2) + i
               ).map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
