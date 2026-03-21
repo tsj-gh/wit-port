@@ -215,7 +215,8 @@ export default function PairLinkGame() {
     setTest10Running(true);
     setTest10Result(null);
     const gs = Math.max(4, Math.min(8, debugGridSize));
-    const np = Math.max(2, Math.min(gs, debugNumPairs));
+    const maxP = gs >= 7 ? 10 : gs;
+    const np = Math.max(2, Math.min(maxP, debugNumPairs));
     const times: number[] = [];
     let lastAbc: ABCScore | null = null;
     let success = 0;
@@ -1014,7 +1015,8 @@ export default function PairLinkGame() {
                         onChange={(e) => {
                           const v = Math.max(4, Math.min(8, Number(e.target.value) || 6));
                           setDebugGridSize(v);
-                          setDebugNumPairs((p) => Math.min(p, v));
+                          const maxP = v >= 7 ? 10 : v;
+                          setDebugNumPairs((p) => Math.min(p, maxP));
                         }}
                         className="w-12 px-1 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
                       />
@@ -1022,9 +1024,9 @@ export default function PairLinkGame() {
                       <input
                         type="number"
                         min={2}
-                        max={debugGridSize}
+                        max={debugGridSize >= 7 ? 10 : debugGridSize}
                         value={debugNumPairs}
-                        onChange={(e) => setDebugNumPairs(Math.max(2, Math.min(debugGridSize, Number(e.target.value) || 5)))}
+                        onChange={(e) => setDebugNumPairs(Math.max(2, Math.min(debugGridSize >= 7 ? 10 : debugGridSize, Number(e.target.value) || 5)))}
                         className="w-12 px-1 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
                       />
                       <button
@@ -1239,7 +1241,8 @@ export default function PairLinkGame() {
               onChange={(e) => {
                 const v = Number(e.target.value);
                 setSettingsGridSize(v);
-                setSettingsNumPairs((p) => Math.min(p, v));
+                const maxP = v >= 7 ? 10 : v;
+                setSettingsNumPairs((p) => Math.min(p, maxP));
               }}
               className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
             >
@@ -1255,7 +1258,10 @@ export default function PairLinkGame() {
               onChange={(e) => setSettingsNumPairs(Number(e.target.value))}
               className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
             >
-              {Array.from({ length: settingsGridSize - Math.max(2, settingsGridSize - 2) + 1 }, (_, i) => Math.max(2, settingsGridSize - 2) + i).map((n) => (
+              {Array.from(
+                { length: (settingsGridSize >= 7 ? 10 : settingsGridSize) - Math.max(2, settingsGridSize - 2) + 1 },
+                (_, i) => Math.max(2, settingsGridSize - 2) + i
+              ).map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>

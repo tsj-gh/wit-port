@@ -545,11 +545,12 @@ function generateCandidate8x8(gridSize, pairCount, profile, random) {
   return { grid: null, pairs, difficultyScore };
 }
 
-function generateCandidate(gridSize, pairCount, profile, random, logFailure) {
-  const pc = pairCount != null ? Math.max(2, Math.min(gridSize, pairCount)) : getPairCount(gridSize);
+function generateCandidate(gridSize, pairCount, profile, random, logFailure, config) {
+  const maxPairs = gridSize >= 7 ? 10 : gridSize;
+  const pc = pairCount != null ? Math.max(2, Math.min(maxPairs, pairCount)) : getPairCount(gridSize);
 
   if (gridSize <= 6) {
-    return generateCandidate6x6(gridSize, pc, profile, random, logFailure);
+    return generateCandidate6x6(gridSize, pc, profile, random, logFailure, config);
   }
   return generateCandidate8x8(gridSize, pc, profile, random);
 }
@@ -601,8 +602,9 @@ function solutionGridToPaths(grid, pairs) {
 }
 
 function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
+  const maxPairs = gridSize >= 7 ? 10 : gridSize;
   const pairCount = numPairs != null
-    ? Math.max(2, Math.min(gridSize, numPairs))
+    ? Math.max(2, Math.min(maxPairs, numPairs))
     : getPairCount(gridSize);
   const cfg = config || {};
   const baseThreshold = (cfg.baseThreshold != null && cfg.baseThreshold > 0)

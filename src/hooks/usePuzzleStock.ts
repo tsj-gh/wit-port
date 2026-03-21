@@ -186,7 +186,8 @@ export function usePuzzleStock(
   const getPuzzle = useCallback(
     async (gs: number, np: number, seed?: string): Promise<GenerateResult> => {
       const minNp = Math.max(2, gs - 2);
-      const clampedNp = Math.max(minNp, Math.min(gs, np));
+      const maxNp = gs >= 7 ? 10 : gs;
+      const clampedNp = Math.max(minNp, Math.min(maxNp, np));
       const key = makeKey(gs, clampedNp);
 
       if (seed != null && seed.trim() !== "") {
