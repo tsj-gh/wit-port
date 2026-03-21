@@ -53,6 +53,8 @@ export type WorkerConfig = {
   baseThreshold?: number;
   /** デバッグ用: "edgeSwap" = 8x8 Edge-Swap 方式 */
   generationMode?: "default" | "edgeSwap";
+  /** Edge-Swap 時: 囲い込みの目標件数（0 以上で有効。未指定は距離のみの従来挙動） */
+  targetEnclosureCount?: number;
 };
 
 type QueueItem = {

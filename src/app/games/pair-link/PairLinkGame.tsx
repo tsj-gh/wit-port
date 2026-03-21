@@ -98,6 +98,9 @@ export default function PairLinkGame() {
   const [configDetourWeight, setConfigDetourWeight] = useState(0);
   const [configBaseThreshold, setConfigBaseThreshold] = useState(0);
   const [debugGenerationMode, setDebugGenerationMode] = useState<"default" | "edgeSwap">("default");
+  /** Edge-Swap: 囲い込み目標を worker に渡す（オフ時は従来どおり距離ベースのみ） */
+  const [debugEnclosureTargetOn, setDebugEnclosureTargetOn] = useState(false);
+  const [debugTargetEnclosureCount, setDebugTargetEnclosureCount] = useState(6);
   const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : 500)
@@ -278,6 +281,8 @@ export default function PairLinkGame() {
     debugGridSize,
     debugNumPairs,
     debugGenerationMode,
+    debugEnclosureTargetOn,
+    debugTargetEnclosureCount,
     workerGenerate,
     configEmptyIsolatedPenalty,
     configDetourWeight,
@@ -320,6 +325,8 @@ export default function PairLinkGame() {
     settingsGridSize,
     settingsNumPairs,
     debugGenerationMode,
+    debugEnclosureTargetOn,
+    debugTargetEnclosureCount,
     workerGenerate,
     configEmptyIsolatedPenalty,
     configDetourWeight,
@@ -1028,6 +1035,35 @@ export default function PairLinkGame() {
                       </button>
                     ))}
                   </div>
+                  {debugGenerationMode === "edgeSwap" && (
+                    <div className="mt-1 space-y-1 text-[10px] text-slate-400">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={debugEnclosureTargetOn}
+                          onChange={(e) => setDebugEnclosureTargetOn(e.target.checked)}
+                          className="rounded border-white/30"
+                        />
+                        <span>囲い込み目標（targetEnclosureCount）を有効化</span>
+                      </label>
+                      <div className="flex items-center gap-1 pl-5">
+                        <span className="shrink-0 w-24">目標件数</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={24}
+                          step={1}
+                          value={debugTargetEnclosureCount}
+                          onChange={(e) => setDebugTargetEnclosureCount(Number(e.target.value))}
+                          disabled={!debugEnclosureTargetOn}
+                          className="flex-1 disabled:opacity-40"
+                        />
+                        <span className="tabular-nums w-6 text-slate-300">
+                          {debugTargetEnclosureCount}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {isDevTj && (
                   <>

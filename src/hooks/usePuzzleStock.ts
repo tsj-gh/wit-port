@@ -7,8 +7,13 @@ const STOCK_MAX = 3;
 const STOCK_REFILL_THRESHOLD = 2;
 const MAX_KEYS = 5;
 
-function makeKey(gridSize: number, numPairs: number): string {
-  return `${gridSize}x${numPairs}`;
+function makeKey(gridSize: number, numPairs: number, config?: WorkerConfig): string {
+  let k = `${gridSize}x${numPairs}`;
+  if (config?.generationMode === "edgeSwap") {
+    const te = config.targetEnclosureCount;
+    k += te != null && te >= 0 ? `:e${Math.round(te)}` : `:e_off`;
+  }
+  return k;
 }
 
 /** モジュールレベルのストック（LRU、最大5キー） */
@@ -110,7 +115,7 @@ export function usePuzzleStock(
   const refill = useCallback(
     async (gs: number, np: number) => {
       if (isFetchingRef.current) return;
-      const key = makeKey(gs, np);
+      const key = makeKey(gs, np, config);
       const arr = stockMap.get(key) ?? [];
       if (arr.length >= STOCK_MAX) return;
 
@@ -146,7 +151,7 @@ export function usePuzzleStock(
         setIsPrefetching(false);
       }
     },
-    [fetchOne, flushStatus]
+    [fetchOne, flushStatus, config]
   );
 
   const prefetch = useCallback(
@@ -161,7 +166,7 @@ export function usePuzzleStock(
       if (isFetchingRef.current) return;
       isFetchingRef.current = true;
       setIsPrefetching(true);
-      const key = makeKey(gs, np);
+      const key = makeKey(gs, np, config);
       const t0 = performance.now();
       try {
         const puzzle = await fetchOne(gs, np);
@@ -192,23 +197,23 @@ export function usePuzzleStock(
         setIsPrefetching(false);
       }
     },
-    [fetchOne, flushStatus]
+    [fetchOne, flushStatus, config]
   );
 
   const clearStockForKey = useCallback((gs: number, np: number) => {
-    const key = makeKey(gs, np);
+    const key = makeKey(gs, np, config);
     stockMap.delete(key);
     removeKeyFromAccessOrder(key);
     clearRequestedKeysRef.current.add(key);
     flushStatus();
-  }, [flushStatus]);
+  }, [flushStatus, config]);
 
   const getPuzzle = useCallback(
     async (gs: number, np: number, seed?: string): Promise<GenerateResult> => {
       const minNp = Math.max(2, gs - 2);
       const maxNp = gs >= 7 ? 10 : gs;
       const clampedNp = Math.max(minNp, Math.min(maxNp, np));
-      const key = makeKey(gs, clampedNp);
+      const key = makeKey(gs, clampedNp, config);
 
       if (seed != null && seed.trim() !== "") {
         const puzzle = await fetchOne(gs, clampedNp, seed);
@@ -229,7 +234,7 @@ export function usePuzzleStock(
       if (retry) return retry;
       throw new Error("パズルの生成に失敗しました。もう一度お試しください。");
     },
-    [fetchOne, refill, flushStatus]
+    [fetchOne, refill, flushStatus, config]
   );
 
   useEffect(() => {

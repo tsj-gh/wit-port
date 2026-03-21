@@ -548,11 +548,77 @@ function generateCandidate8x8(gridSize, pairCount, profile, random) {
 }
 
 /**
+ * 囲い込み（Enclosure）の件数。
+ * 縦: あるパス P のセルが列 c に複数行にわたり存在し、他パス Q の端点 N=(nr,nc) が minR<nr<maxR（P その列上の行の最小・最大）に挟まれる。
+ * 横: 行 r 上で同様に端点が P の列範囲の厳密内部にある。
+ * 重複除去: 同一端点 N について、同一列での複数の (y1,y2) ペアは縦 1 回まで（キー V|nr|nc）。同一行は H|nr|nc。
+ */
+function countPairLinkEnclosures(solutionGrid, adj, n) {
+  const pids = new Set();
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const v = solutionGrid[r][c];
+      if (v) pids.add(v);
+    }
+  }
+  const seen = new Set();
+  let count = 0;
+  for (let nr = 0; nr < n; nr++) {
+    for (let nc = 0; nc < n; nc++) {
+      if (adj[nr][nc].length !== 1) continue;
+      const qPid = solutionGrid[nr][nc];
+      let vertEnc = false;
+      let horizEnc = false;
+      for (const pPid of pids) {
+        if (pPid === qPid) continue;
+        let rmin = n;
+        let rmax = -1;
+        for (let r = 0; r < n; r++) {
+          if (solutionGrid[r][nc] === pPid) {
+            if (r < rmin) rmin = r;
+            if (r > rmax) rmax = r;
+          }
+        }
+        if (rmax > rmin && rmin < nr && nr < rmax) vertEnc = true;
+
+        let cmin = n;
+        let cmax = -1;
+        for (let c = 0; c < n; c++) {
+          if (solutionGrid[nr][c] === pPid) {
+            if (c < cmin) cmin = c;
+            if (c > cmax) cmax = c;
+          }
+        }
+        if (cmax > cmin && cmin < nc && nc < cmax) horizEnc = true;
+        if (vertEnc && horizEnc) break;
+      }
+      const kv = "V|" + nr + "|" + nc;
+      const kh = "H|" + nr + "|" + nc;
+      if (vertEnc && !seen.has(kv)) {
+        seen.add(kv);
+        count++;
+      }
+      if (horizEnc && !seen.has(kh)) {
+        seen.add(kh);
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+/**
  * generateByEdgeSwap: 動的グリッド（主に 7〜8）用エンジン
  * Phase 1: 行優先で空きマスにドミノ／既存パス端への接続を一般化（全セル埋め）
  * Phase 2: パス統合（目標ペア数まで隣接端同士を結合）
+ * @param {{ targetEnclosureCount?: number }} [mutationOpts] targetEnclosureCount >= 0 で囲い込み目標＋焼きなまし（401〜1000 回目）
  */
-function generateByEdgeSwap(gridSize, targetPairCount, random) {
+function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
+  const mOpts = mutationOpts || {};
+  const targetEnc =
+    typeof mOpts.targetEnclosureCount === "number" && mOpts.targetEnclosureCount >= 0
+      ? mOpts.targetEnclosureCount
+      : null;
   const n = gridSize | 0;
   if (n < 4 || n > 12) return null;
   const nn = n * n;
@@ -603,7 +669,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
         if (typeof console !== "undefined") {
           console.warn("[Edge-Swap] Phase 1: unfilled cell at", r, c, "regenerating...");
         }
-        return generateByEdgeSwap(gridSize, targetPairCount, random);
+        return generateByEdgeSwap(gridSize, targetPairCount, random, mOpts);
       }
     }
   }
@@ -622,7 +688,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
         "[Edge-Swap] Phase 1 path count " + pathCount + " < target " + targetPairCount + ", regenerating..."
       );
     }
-    return generateByEdgeSwap(gridSize, targetPairCount, random);
+    return generateByEdgeSwap(gridSize, targetPairCount, random, mOpts);
   }
 
   if (typeof console !== "undefined") {
@@ -653,7 +719,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
       if (typeof console !== "undefined") {
         console.warn("[Edge-Swap] No endpoint-endpoint adjacencies. Regenerating...");
       }
-      return generateByEdgeSwap(gridSize, targetPairCount, random);
+      return generateByEdgeSwap(gridSize, targetPairCount, random, mOpts);
     }
 
     const pick = endpointPairs[Math.floor(random() * endpointPairs.length)];
@@ -751,7 +817,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     if (typeof console !== "undefined") {
       console.error("[Edge-Swap] Grid validation failed. Regenerating...");
     }
-    return generateByEdgeSwap(gridSize, targetPairCount, random);
+    return generateByEdgeSwap(gridSize, targetPairCount, random, mOpts);
   }
 
   /** 各内部パス id のセル数（Mutation はラベル入替えしないので一定） */
@@ -870,6 +936,8 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     if (!pattern) continue;
 
     const distBefore = computeTotalDistEndPoints();
+    const encBefore =
+      targetEnc != null ? countPairLinkEnclosures(solutionGrid, adj, n) : 0;
 
     if (pattern === "A") {
       remEdge(tl.r, tl.c, bl.r, bl.c);
@@ -890,7 +958,33 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     }
 
     const distAfter = computeTotalDistEndPoints();
-    if (distAfter < distBefore && random() < 0.5) {
+    const encAfter =
+      targetEnc != null ? countPairLinkEnclosures(solutionGrid, adj, n) : 0;
+
+    let accept = true;
+    if (targetEnc == null) {
+      if (distAfter < distBefore && random() < 0.5) accept = false;
+    } else {
+      let dE;
+      let T;
+      if (attempt < 400) {
+        const u = attempt / 399.0001;
+        T = 6 * (1 - u) + 1.2 * u;
+        dE = distBefore - distAfter;
+      } else {
+        const u = (attempt - 400) / 599.0001;
+        T = 1.8 * (1 - u) + 0.22 * u;
+        const kM = 0.35;
+        const kE = 1.0;
+        const energy = function (dist, enc) {
+          return -kM * dist + kE * (enc - targetEnc) * (enc - targetEnc);
+        };
+        dE = energy(distAfter, encAfter) - energy(distBefore, encBefore);
+      }
+      if (dE > 0 && random() >= Math.exp(-dE / T)) accept = false;
+    }
+
+    if (!accept) {
       revertPattern(pattern, tl, tr, bl, br);
       continue;
     }
@@ -899,16 +993,27 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
   }
 
   const mutationFinalTotalDist = computeTotalDistEndPoints();
+  const mutationEncCount =
+    targetEnc != null ? countPairLinkEnclosures(solutionGrid, adj, n) : null;
   if (typeof console !== "undefined") {
     console.log("Mutation Complete - Successful Swaps: " + swapCount);
     console.log("Mutation — final totalDist (endpoint Manhattan sum): " + mutationFinalTotalDist);
+    if (mutationEncCount != null) {
+      console.log(
+        "Mutation — enclosures after swap phase: " +
+          mutationEncCount +
+          " (target " +
+          targetEnc +
+          ")"
+      );
+    }
   }
 
   if (!validateGrid()) {
     if (typeof console !== "undefined") {
       console.error("[Edge-Swap] Post-mutation validation failed. Regenerating...");
     }
-    return generateByEdgeSwap(gridSize, targetPairCount, random);
+    return generateByEdgeSwap(gridSize, targetPairCount, random, mOpts);
   }
 
   const pathCells = new Map();
@@ -931,7 +1036,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
     if (typeof console !== "undefined") {
       console.error("[Edge-Swap] Orphan paths (len<2):", orphanPids, "Regenerating...");
     }
-    return generateByEdgeSwap(gridSize, targetPairCount, random);
+    return generateByEdgeSwap(gridSize, targetPairCount, random, mOpts);
   }
 
   const pairs = [];
@@ -1337,6 +1442,8 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
         Math.abs(pairs[pi].start[0] - pairs[pi].end[0]) +
         Math.abs(pairs[pi].start[1] - pairs[pi].end[1]);
     }
+    const finalEncCount = countPairLinkEnclosures(solutionGrid, adj, n);
+    const encTargetLabel = targetEnc == null ? "-" : String(targetEnc);
     console.log(
       "Grid: " +
         n +
@@ -1344,8 +1451,10 @@ function generateByEdgeSwap(gridSize, targetPairCount, random) {
         n +
         ", Pairs: " +
         pairs.length +
-        ", TotalCells: " +
-        totalCells +
+        ", Enclosures: " +
+        finalEncCount +
+        "/" +
+        encTargetLabel +
         ", Manhattan: " +
         manhattanPairs
     );
@@ -1426,7 +1535,11 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
     const attemptSeed = hasSeed ? String(seed) : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
     const random = createRandom(attemptSeed);
     const targetPairCount = Math.max(minPairs, Math.min(maxPairsEdge, pairCount));
-    const candidate = generateByEdgeSwap(gridSize, targetPairCount, random);
+    const edgeMutationOpts = {};
+    if (typeof cfg.targetEnclosureCount === "number" && cfg.targetEnclosureCount >= 0) {
+      edgeMutationOpts.targetEnclosureCount = cfg.targetEnclosureCount;
+    }
+    const candidate = generateByEdgeSwap(gridSize, targetPairCount, random, edgeMutationOpts);
     const elapsed = Math.round(performance.now() - t0);
 
     if (!candidate) return null;
