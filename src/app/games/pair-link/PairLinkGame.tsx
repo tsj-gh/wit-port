@@ -1282,7 +1282,7 @@ export default function PairLinkGame() {
               className="px-4 py-2 rounded-lg bg-slate-600 text-slate-200 text-sm font-medium hover:bg-slate-500"
               title={`${settingsGridSize}×${settingsNumPairs} のストックを削除（プリフェッチ中もキャンセル）`}
             >
-              選択したサイズのストックを削除
+              （debug）ストックを削除
             </button>
           )}
         </div>
