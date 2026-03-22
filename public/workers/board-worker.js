@@ -605,28 +605,53 @@ function getOrderedPathForPid(pid, solutionGrid, adj, n) {
 }
 
 /**
- * 頂点 idx に入る進行方向（直前→現在）。idx===0 は path[1]-path[0]。
+ * path[idx] は列 tx 上。パス上で x !== tx となる最初の点を、まず後方 (idx-1…) 、次に前方 (idx+1…) で探す。
+ * @returns {"L"|"R"|null} L: 見つかった点の x < tx（左側）、R: x > tx（右側）
  */
-function directionAtVertex(path, idx) {
-  if (!path || path.length < 2) return null;
-  if (idx === 0) {
-    return {
-      dx: path[1].x - path[0].x,
-      dy: path[1].y - path[0].y,
-    };
+function classifyColumnPassSide(path, idx, tx) {
+  if (!path || path.length < 2 || idx < 0 || idx >= path.length) return null;
+  const len = path.length;
+  const cap = len + 2;
+  for (let k = 1; k <= cap && idx - k >= 0; k++) {
+    const px = path[idx - k].x;
+    if (px < tx) return "L";
+    if (px > tx) return "R";
   }
-  return {
-    dx: path[idx].x - path[idx - 1].x,
-    dy: path[idx].y - path[idx - 1].y,
-  };
+  for (let k = 1; k <= cap && idx + k < len; k++) {
+    const px = path[idx + k].x;
+    if (px < tx) return "L";
+    if (px > tx) return "R";
+  }
+  return null;
 }
 
 /**
- * 列 nc 上で y1<ty<y2 にターゲットがあり、y1/y2 での進行方向の dx が逆符号（真の包囲）。
+ * path[idx] は行 ty 上。y !== ty となる最初の点を後方→前方で探す。
+ * @returns {"B"|"A"|null} B: y < ty（下側）、A: y > ty（上側）
+ */
+function classifyRowPassSide(path, idx, ty) {
+  if (!path || path.length < 2 || idx < 0 || idx >= path.length) return null;
+  const len = path.length;
+  const cap = len + 2;
+  for (let k = 1; k <= cap && idx - k >= 0; k++) {
+    const py = path[idx - k].y;
+    if (py < ty) return "B";
+    if (py > ty) return "A";
+  }
+  for (let k = 1; k <= cap && idx + k < len; k++) {
+    const py = path[idx + k].y;
+    if (py < ty) return "B";
+    if (py > ty) return "A";
+  }
+  return null;
+}
+
+/**
+ * 列 nc 上で y1<ty<y2 にターゲットがあり、(nc,y1) と (nc,y2) での「追い越し方向」（x≠nc 側の位置）が逆であること。
  */
 function checkVerticalWrapEnclosure(path, nc, tRow) {
-  let yMin = n + 1;
-  let yMax = -1;
+  let yMin = Infinity;
+  let yMax = -Infinity;
   let iMin = -1;
   let iMax = -1;
   for (let i = 0; i < path.length; i++) {
@@ -641,30 +666,32 @@ function checkVerticalWrapEnclosure(path, nc, tRow) {
       iMax = i;
     }
   }
-  if (iMin < 0 || yMin >= yMax) {
+  if (iMin < 0 || !(yMin < yMax)) {
     return { ok: false, reason: "no_column_span" };
   }
   if (!(yMin < tRow && tRow < yMax)) {
     return { ok: false, reason: "target_not_between_y" };
   }
-  const v1 = directionAtVertex(path, iMin);
-  const v2 = directionAtVertex(path, iMax);
-  if (!v1 || !v2) return { ok: false, reason: "no_direction", sandwich: true, y1: yMin, y2: yMax };
-  if (v1.dx === 0 || v2.dx === 0) {
-    return { ok: false, reason: "zero_dx_not_wrap", sandwich: true, y1: yMin, y2: yMax };
+  if (path[iMin].x !== nc || path[iMax].x !== nc) {
+    return { ok: false, reason: "invalid_bracket_column" };
   }
-  if (Math.sign(v1.dx) === Math.sign(v2.dx)) {
-    return { ok: false, reason: "same_dx_sign_not_wrap", sandwich: true, y1: yMin, y2: yMax };
+  const sLow = classifyColumnPassSide(path, iMin, nc);
+  const sHigh = classifyColumnPassSide(path, iMax, nc);
+  if (sLow == null || sHigh == null) {
+    return { ok: false, reason: "cannot_classify_x_pass", sandwich: true, y1: yMin, y2: yMax };
+  }
+  if (sLow === sHigh) {
+    return { ok: false, reason: "same_x_pass_direction", sandwich: true, y1: yMin, y2: yMax };
   }
   return { ok: true, y1: yMin, y2: yMax };
 }
 
 /**
- * 行 nr 上で x1<tx<x2 にターゲットがあり、x1/x2 での進行方向の dy が逆符号。
+ * 行 nr 上で x1<tx<x2 にターゲットがあり、(x1,nr) と (x2,nr) での y 方向追い越しが逆であること。
  */
 function checkHorizontalWrapEnclosure(path, nr, tCol) {
-  let xMin = n + 1;
-  let xMax = -1;
+  let xMin = Infinity;
+  let xMax = -Infinity;
   let iMin = -1;
   let iMax = -1;
   for (let i = 0; i < path.length; i++) {
@@ -679,26 +706,28 @@ function checkHorizontalWrapEnclosure(path, nr, tCol) {
       iMax = i;
     }
   }
-  if (iMin < 0 || xMin >= xMax) {
+  if (iMin < 0 || !(xMin < xMax)) {
     return { ok: false, reason: "no_row_span" };
   }
   if (!(xMin < tCol && tCol < xMax)) {
     return { ok: false, reason: "target_not_between_x" };
   }
-  const v1 = directionAtVertex(path, iMin);
-  const v2 = directionAtVertex(path, iMax);
-  if (!v1 || !v2) return { ok: false, reason: "no_direction", sandwich: true, x1: xMin, x2: xMax };
-  if (v1.dy === 0 || v2.dy === 0) {
-    return { ok: false, reason: "zero_dy_not_wrap", sandwich: true, x1: xMin, x2: xMax };
+  if (path[iMin].y !== nr || path[iMax].y !== nr) {
+    return { ok: false, reason: "invalid_bracket_row" };
   }
-  if (Math.sign(v1.dy) === Math.sign(v2.dy)) {
-    return { ok: false, reason: "same_dy_sign_not_wrap", sandwich: true, x1: xMin, x2: xMax };
+  const sLeft = classifyRowPassSide(path, iMin, nr);
+  const sRight = classifyRowPassSide(path, iMax, nr);
+  if (sLeft == null || sRight == null) {
+    return { ok: false, reason: "cannot_classify_y_pass", sandwich: true, x1: xMin, x2: xMax };
+  }
+  if (sLeft === sRight) {
+    return { ok: false, reason: "same_y_pass_direction", sandwich: true, x1: xMin, x2: xMax };
   }
   return { ok: true, x1: xMin, x2: xMax };
 }
 
 /**
- * 囲い込み（Enclosure）の件数 — 幾何的挟み＋**軸方向ベクトル反転**（真の包囲）を満たす場合のみ。
+ * 囲い込み（Enclosure）の件数 — 幾何的挟み＋**追い越し方向（変位）が逆**のときのみ。
  * 重複除去: キー V|nr|nc / H|nr|nc
  */
 function countPairLinkEnclosures(solutionGrid, adj, n) {
@@ -749,7 +778,7 @@ function countPairLinkEnclosures(solutionGrid, adj, n) {
 }
 
 /**
- * 囲い込みを列挙（ベクトル反転を満たすもののみ debug 出力・配列へ）。
+ * 囲い込みを列挙（変位ベースの追い越し方向が逆のときのみ debug 出力・配列へ）。
  * @param {Map<number,number>|null} pidToPairId 内部 pid → 表示用ペア ID（1..N）
  * @returns {{ count: number, debugEnclosures: object[] }}
  */
@@ -816,7 +845,7 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                   rv.y2 +
                   "), OccupiedBy: PathID=" +
                   pairP +
-                  " (opposite dx)"
+                  " (opposite X pass: L/R)"
               );
             }
           } else if (logToConsole) {
@@ -850,7 +879,7 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
               pairP +
               " — reason: " +
               rv.reason +
-              " (geometric sandwich but not opposite dx wrap)"
+              " (geometric sandwich but not opposite X-displacement pass)"
           );
         }
 
@@ -882,7 +911,7 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                   rh.x2 +
                   "), OccupiedBy: PathID=" +
                   pairP +
-                  " (opposite dy)"
+                  " (opposite Y pass: B/A)"
               );
             }
           } else if (logToConsole) {
@@ -916,7 +945,7 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
               pairP +
               " — reason: " +
               rh.reason +
-              " (geometric sandwich but not opposite dy wrap)"
+              " (geometric sandwich but not opposite Y-displacement pass)"
           );
         }
       }
