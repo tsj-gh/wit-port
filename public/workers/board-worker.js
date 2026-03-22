@@ -548,18 +548,171 @@ function generateCandidate8x8(gridSize, pairCount, profile, random) {
 }
 
 /**
- * 囲い込み（Enclosure）の件数。
- * 縦: あるパス P のセルが列 c に複数行にわたり存在し、他パス Q の端点 N=(nr,nc) が minR<nr<maxR（P その列上の行の最小・最大）に挟まれる。
- * 横: 行 r 上で同様に端点が P の列範囲の厳密内部にある。
- * 重複除去: 同一端点 N について、同一列での複数の (y1,y2) ペアは縦 1 回まで（キー V|nr|nc）。同一行は H|nr|nc。
+ * グラフ上の pid 成分を端点から一筆書き順に { x: 列, y: 行 } の配列で返す。
+ */
+function getOrderedPathForPid(pid, solutionGrid, adj, n) {
+  let sr = -1;
+  let sc = -1;
+  outer: for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (solutionGrid[r][c] !== pid) continue;
+      if (adj[r][c].length === 1) {
+        sr = r;
+        sc = c;
+        break outer;
+      }
+    }
+  }
+  if (sr < 0) {
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (solutionGrid[r][c] === pid) {
+          sr = r;
+          sc = c;
+          break;
+        }
+      }
+      if (sr >= 0) break;
+    }
+  }
+  if (sr < 0) return null;
+  const path = [];
+  let pr = -1;
+  let pc = -1;
+  let cr = sr;
+  let cc = sc;
+  const maxSteps = n * n + 5;
+  for (let step = 0; step < maxSteps; step++) {
+    path.push({ x: cc, y: cr });
+    let nr = -1;
+    let ncc = -1;
+    for (const nk of adj[cr][cc]) {
+      const tr = Math.floor(nk / n);
+      const tc = nk % n;
+      if (solutionGrid[tr][tc] !== pid) continue;
+      if (tr === pr && tc === pc) continue;
+      nr = tr;
+      ncc = tc;
+      break;
+    }
+    if (nr < 0) break;
+    pr = cr;
+    pc = cc;
+    cr = nr;
+    cc = ncc;
+  }
+  return path.length >= 2 ? path : null;
+}
+
+/**
+ * 頂点 idx に入る進行方向（直前→現在）。idx===0 は path[1]-path[0]。
+ */
+function directionAtVertex(path, idx) {
+  if (!path || path.length < 2) return null;
+  if (idx === 0) {
+    return {
+      dx: path[1].x - path[0].x,
+      dy: path[1].y - path[0].y,
+    };
+  }
+  return {
+    dx: path[idx].x - path[idx - 1].x,
+    dy: path[idx].y - path[idx - 1].y,
+  };
+}
+
+/**
+ * 列 nc 上で y1<ty<y2 にターゲットがあり、y1/y2 での進行方向の dx が逆符号（真の包囲）。
+ */
+function checkVerticalWrapEnclosure(path, nc, tRow) {
+  let yMin = n + 1;
+  let yMax = -1;
+  let iMin = -1;
+  let iMax = -1;
+  for (let i = 0; i < path.length; i++) {
+    if (path[i].x !== nc) continue;
+    const y = path[i].y;
+    if (y < yMin) {
+      yMin = y;
+      iMin = i;
+    }
+    if (y > yMax) {
+      yMax = y;
+      iMax = i;
+    }
+  }
+  if (iMin < 0 || yMin >= yMax) {
+    return { ok: false, reason: "no_column_span" };
+  }
+  if (!(yMin < tRow && tRow < yMax)) {
+    return { ok: false, reason: "target_not_between_y" };
+  }
+  const v1 = directionAtVertex(path, iMin);
+  const v2 = directionAtVertex(path, iMax);
+  if (!v1 || !v2) return { ok: false, reason: "no_direction", sandwich: true, y1: yMin, y2: yMax };
+  if (v1.dx === 0 || v2.dx === 0) {
+    return { ok: false, reason: "zero_dx_not_wrap", sandwich: true, y1: yMin, y2: yMax };
+  }
+  if (Math.sign(v1.dx) === Math.sign(v2.dx)) {
+    return { ok: false, reason: "same_dx_sign_not_wrap", sandwich: true, y1: yMin, y2: yMax };
+  }
+  return { ok: true, y1: yMin, y2: yMax };
+}
+
+/**
+ * 行 nr 上で x1<tx<x2 にターゲットがあり、x1/x2 での進行方向の dy が逆符号。
+ */
+function checkHorizontalWrapEnclosure(path, nr, tCol) {
+  let xMin = n + 1;
+  let xMax = -1;
+  let iMin = -1;
+  let iMax = -1;
+  for (let i = 0; i < path.length; i++) {
+    if (path[i].y !== nr) continue;
+    const x = path[i].x;
+    if (x < xMin) {
+      xMin = x;
+      iMin = i;
+    }
+    if (x > xMax) {
+      xMax = x;
+      iMax = i;
+    }
+  }
+  if (iMin < 0 || xMin >= xMax) {
+    return { ok: false, reason: "no_row_span" };
+  }
+  if (!(xMin < tCol && tCol < xMax)) {
+    return { ok: false, reason: "target_not_between_x" };
+  }
+  const v1 = directionAtVertex(path, iMin);
+  const v2 = directionAtVertex(path, iMax);
+  if (!v1 || !v2) return { ok: false, reason: "no_direction", sandwich: true, x1: xMin, x2: xMax };
+  if (v1.dy === 0 || v2.dy === 0) {
+    return { ok: false, reason: "zero_dy_not_wrap", sandwich: true, x1: xMin, x2: xMax };
+  }
+  if (Math.sign(v1.dy) === Math.sign(v2.dy)) {
+    return { ok: false, reason: "same_dy_sign_not_wrap", sandwich: true, x1: xMin, x2: xMax };
+  }
+  return { ok: true, x1: xMin, x2: xMax };
+}
+
+/**
+ * 囲い込み（Enclosure）の件数 — 幾何的挟み＋**軸方向ベクトル反転**（真の包囲）を満たす場合のみ。
+ * 重複除去: キー V|nr|nc / H|nr|nc
  */
 function countPairLinkEnclosures(solutionGrid, adj, n) {
-  const pids = new Set();
+  const pidSet = new Set();
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       const v = solutionGrid[r][c];
-      if (v) pids.add(v);
+      if (v) pidSet.add(v);
     }
+  }
+  const pids = Array.from(pidSet);
+  const pathCache = new Map();
+  for (let i = 0; i < pids.length; i++) {
+    pathCache.set(pids[i], getOrderedPathForPid(pids[i], solutionGrid, adj, n));
   }
   const seen = new Set();
   let count = 0;
@@ -569,27 +722,15 @@ function countPairLinkEnclosures(solutionGrid, adj, n) {
       const qPid = solutionGrid[nr][nc];
       let vertEnc = false;
       let horizEnc = false;
-      for (const pPid of pids) {
+      for (let pi = 0; pi < pids.length; pi++) {
+        const pPid = pids[pi];
         if (pPid === qPid) continue;
-        let rmin = n;
-        let rmax = -1;
-        for (let r = 0; r < n; r++) {
-          if (solutionGrid[r][nc] === pPid) {
-            if (r < rmin) rmin = r;
-            if (r > rmax) rmax = r;
-          }
-        }
-        if (rmax > rmin && rmin < nr && nr < rmax) vertEnc = true;
-
-        let cmin = n;
-        let cmax = -1;
-        for (let c = 0; c < n; c++) {
-          if (solutionGrid[nr][c] === pPid) {
-            if (c < cmin) cmin = c;
-            if (c > cmax) cmax = c;
-          }
-        }
-        if (cmax > cmin && cmin < nc && nc < cmax) horizEnc = true;
+        const path = pathCache.get(pPid);
+        if (!path) continue;
+        const rv = checkVerticalWrapEnclosure(path, nc, nr);
+        if (rv.ok) vertEnc = true;
+        const rh = checkHorizontalWrapEnclosure(path, nr, nc);
+        if (rh.ok) horizEnc = true;
         if (vertEnc && horizEnc) break;
       }
       const kv = "V|" + nr + "|" + nc;
@@ -608,7 +749,7 @@ function countPairLinkEnclosures(solutionGrid, adj, n) {
 }
 
 /**
- * 囲い込みを列挙し、重複キーで採用されたものは debugEnclosures に、スキップはコンソールへ。
+ * 囲い込みを列挙（ベクトル反転を満たすもののみ debug 出力・配列へ）。
  * @param {Map<number,number>|null} pidToPairId 内部 pid → 表示用ペア ID（1..N）
  * @returns {{ count: number, debugEnclosures: object[] }}
  */
@@ -621,6 +762,10 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
     }
   }
   const pids = Array.from(pidSet).sort((a, b) => a - b);
+  const pathCache = new Map();
+  for (let i = 0; i < pids.length; i++) {
+    pathCache.set(pids[i], getOrderedPathForPid(pids[i], solutionGrid, adj, n));
+  }
   const seen = new Set();
   const debugEnclosures = [];
   let count = 0;
@@ -640,25 +785,20 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
         const pPid = pids[pi];
         if (pPid === qPid) continue;
         const pairP = pairLabel(pPid);
+        const path = pathCache.get(pPid);
+        if (!path) continue;
 
-        let rmin = n;
-        let rmax = -1;
-        for (let r = 0; r < n; r++) {
-          if (solutionGrid[r][nc] === pPid) {
-            if (r < rmin) rmin = r;
-            if (r > rmax) rmax = r;
-          }
-        }
-        if (rmax > rmin && rmin < nr && nr < rmax) {
-          const kv = "V|" + nr + "|" + nc;
+        const rv = checkVerticalWrapEnclosure(path, nc, nr);
+        const kv = "V|" + nr + "|" + nc;
+        if (rv.ok) {
           if (!seen.has(kv)) {
             seen.add(kv);
             count++;
             debugEnclosures.push({
               kind: "vertical",
               col: nc,
-              y1: rmin,
-              y2: rmax,
+              y1: rv.y1,
+              y2: rv.y2,
               nRow: nr,
               nCol: nc,
               pathIdP: pairP,
@@ -671,11 +811,12 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                   ", Line: X=" +
                   nc +
                   " (Y:" +
-                  rmin +
+                  rv.y1 +
                   "-" +
-                  rmax +
+                  rv.y2 +
                   "), OccupiedBy: PathID=" +
-                  pairP
+                  pairP +
+                  " (opposite dx)"
               );
             }
           } else if (logToConsole) {
@@ -685,9 +826,9 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                 ", Line: X=" +
                 nc +
                 " (Y:" +
-                rmin +
+                rv.y1 +
                 "-" +
-                rmax +
+                rv.y2 +
                 "), OccupiedBy: PathID=" +
                 pairP +
                 " — reason: duplicate vertical key " +
@@ -695,26 +836,35 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                 " (already counted)"
             );
           }
+        } else if (logToConsole && rv.sandwich) {
+          console.log(
+            "[Enclosure Skipped] TargetPair: " +
+              pairN +
+              ", Line: X=" +
+              nc +
+              " (Y:" +
+              rv.y1 +
+              "-" +
+              rv.y2 +
+              "), OccupiedBy: PathID=" +
+              pairP +
+              " — reason: " +
+              rv.reason +
+              " (geometric sandwich but not opposite dx wrap)"
+          );
         }
 
-        let cmin = n;
-        let cmax = -1;
-        for (let c = 0; c < n; c++) {
-          if (solutionGrid[nr][c] === pPid) {
-            if (c < cmin) cmin = c;
-            if (c > cmax) cmax = c;
-          }
-        }
-        if (cmax > cmin && cmin < nc && nc < cmax) {
-          const kh = "H|" + nr + "|" + nc;
+        const rh = checkHorizontalWrapEnclosure(path, nr, nc);
+        const kh = "H|" + nr + "|" + nc;
+        if (rh.ok) {
           if (!seen.has(kh)) {
             seen.add(kh);
             count++;
             debugEnclosures.push({
               kind: "horizontal",
               row: nr,
-              x1: cmin,
-              x2: cmax,
+              x1: rh.x1,
+              x2: rh.x2,
               nRow: nr,
               nCol: nc,
               pathIdP: pairP,
@@ -727,11 +877,12 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                   ", Line: Y=" +
                   nr +
                   " (X:" +
-                  cmin +
+                  rh.x1 +
                   "-" +
-                  cmax +
+                  rh.x2 +
                   "), OccupiedBy: PathID=" +
-                  pairP
+                  pairP +
+                  " (opposite dy)"
               );
             }
           } else if (logToConsole) {
@@ -741,9 +892,9 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                 ", Line: Y=" +
                 nr +
                 " (X:" +
-                cmin +
+                rh.x1 +
                 "-" +
-                cmax +
+                rh.x2 +
                 "), OccupiedBy: PathID=" +
                 pairP +
                 " — reason: duplicate horizontal key " +
@@ -751,6 +902,22 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                 " (already counted)"
             );
           }
+        } else if (logToConsole && rh.sandwich) {
+          console.log(
+            "[Enclosure Skipped] TargetPair: " +
+              pairN +
+              ", Line: Y=" +
+              nr +
+              " (X:" +
+              rh.x1 +
+              "-" +
+              rh.x2 +
+              "), OccupiedBy: PathID=" +
+              pairP +
+              " — reason: " +
+              rh.reason +
+              " (geometric sandwich but not opposite dy wrap)"
+          );
         }
       }
     }
