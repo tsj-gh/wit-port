@@ -1,12 +1,13 @@
 /**
- * Pair-link 生成エンジン（board-worker.js）のスコア分布シミュレーション。
- * - 6 パターン × SIM_RUNS 回（既定 1000）を setImmediate でチャンク実行しイベントループを譲る
- * - 評価ロジックは board-worker 側のまま観測のみ（postMutationScoreBreakdown）
+ * Pair-link 生成統計（6 パターン × SIM_RUNS、既定 1000）。
+ * スコアは Final Board 時点（postMutationScoreBreakdown = クロール後再計算）。
+ *
+ * 出力: パターンごと simulation_results_{N}x{N}_p{M}_fixed.json（既定はリポジトリルート）
  *
  * 用法:
- *   node scripts/run-pairlink-score-simulation.mjs
- *   SIM_RUNS=50 node scripts/run-pairlink-score-simulation.mjs   # 短縮テスト
- *   SIM_OUT=./simulation_results.json node scripts/...
+ *   npm run sim:pairlink-scores
+ *   SIM_RUNS=50 node scripts/run-pairlink-score-simulation.mjs
+ *   SIM_OUT_DIR=./out node scripts/run-pairlink-score-simulation.mjs
  */
 
 import crypto from "crypto";
@@ -19,14 +20,16 @@ import { performance } from "perf_hooks";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
 const WORKER_PATH = path.join(ROOT, "public", "workers", "board-worker.js");
-const OUT_PATH = path.resolve(
-  process.env.SIM_OUT || path.join(ROOT, "simulation_results.json")
-);
+const OUT_DIR = path.resolve(process.env.SIM_OUT_DIR || ROOT);
 const RUNS_PER_PATTERN = Math.max(
   1,
   parseInt(String(process.env.SIM_RUNS || "1000"), 10) || 1000
 );
 const YIELD_EVERY = Math.max(1, parseInt(String(process.env.SIM_YIELD_EVERY || "5"), 10) || 5);
+const PROGRESS_EVERY = Math.max(
+  1,
+  parseInt(String(process.env.SIM_PROGRESS_EVERY || "100"), 10) || 100
+);
 
 const PATTERNS = [
   { label: "7x7_p7", boardSize: 7, pairs: 7 },
@@ -36,6 +39,18 @@ const PATTERNS = [
   { label: "8x8_p9", boardSize: 8, pairs: 9 },
   { label: "8x8_p10", boardSize: 8, pairs: 10 },
 ];
+
+function patternFileKey(p) {
+  return `${p.boardSize}x${p.boardSize}_p${p.pairs}`;
+}
+
+function patternDisplayName(p) {
+  return `${p.boardSize}x${p.boardSize}_Pairs${p.pairs}`;
+}
+
+function outputFilename(p) {
+  return `simulation_results_${p.boardSize}x${p.boardSize}_p${p.pairs}_fixed.json`;
+}
 
 function yieldEventLoop() {
   return new Promise((resolve) => setImmediate(resolve));
@@ -125,6 +140,19 @@ function percentileSorted(sorted, p) {
   return sorted[idx];
 }
 
+function basicStats(values) {
+  if (!values.length) {
+    return { mean: 0, median: 0, stddev: 0, max: 0, min: 0 };
+  }
+  return {
+    mean: mean(values),
+    median: median(values),
+    stddev: stddev(values),
+    max: Math.max(...values),
+    min: Math.min(...values),
+  };
+}
+
 async function runOneTrial(generatePairLinkPuzzle, pattern, runIndex) {
   const maxAttempts = 12;
   for (let a = 0; a < maxAttempts; a++) {
@@ -138,11 +166,13 @@ async function runOneTrial(generatePairLinkPuzzle, pattern, runIndex) {
     const bd = result.postMutationScoreBreakdown;
     return {
       pattern: pattern.label,
+      patternKey: patternFileKey(pattern),
       boardSize: pattern.boardSize,
       targetPairs: pattern.pairs,
       pairCount: result.pairCount,
       runIndex,
       seed: result.seed,
+      scoreTiming: "finalBoard",
       totalScore: bd.finalScore,
       coverage: bd.coverageScore,
       interference: bd.interferenceScore,
@@ -152,69 +182,23 @@ async function runOneTrial(generatePairLinkPuzzle, pattern, runIndex) {
       dist3: bd.semiAdjCount,
       generationTimeMs: result.totalMs,
       boardHash: makeBoardHash(result.pairs),
-      interferenceEndpoint: bd.interferenceEndpoint,
-      interferenceParallel: bd.interferenceParallel,
-      adjacencyTierPenaltyRaw: bd.adjacencyTierPenaltyRaw,
-      adjacencyPenaltyApplied: bd.adjacencyPenaltyApplied,
     };
   }
   return null;
 }
 
-async function main() {
-  console.error(
-    `[sim] Loading engine from ${WORKER_PATH}, ${RUNS_PER_PATTERN} runs × ${PATTERNS.length} patterns → ${OUT_PATH}`
-  );
-  const generatePairLinkPuzzle = loadBoardWorkerEngine();
-  const trials = [];
-  let done = 0;
-  const total = PATTERNS.length * RUNS_PER_PATTERN;
-
-  for (const pattern of PATTERNS) {
-    for (let r = 0; r < RUNS_PER_PATTERN; r++) {
-      if (done % YIELD_EVERY === 0) await yieldEventLoop();
-      const row = await runOneTrial(generatePairLinkPuzzle, pattern, r);
-      if (!row) {
-        console.error(`[sim] FAILED trial ${pattern.label} run ${r} (no breakdown)`);
-        process.exit(1);
-      }
-      trials.push(row);
-      done++;
-      if (done % 200 === 0 || done === total) {
-        console.error(`[sim] progress ${done}/${total}`);
-      }
-    }
-  }
-
+function buildPatternReport(pattern, trials) {
   const scores = trials.map((t) => t.totalScore);
   const times = trials.map((t) => t.generationTimeMs);
-  const adjRates = trials.map((t) => t.adjRate);
   const timesSorted = [...times].sort((a, b) => a - b);
 
-  const overall = {
-    trialCount: trials.length,
-    expectedTrials: total,
-    totalScore: {
-      mean: mean(scores),
-      median: median(scores),
-      stddev: stddev(scores),
-      max: scores.length ? Math.max(...scores) : 0,
-      min: scores.length ? Math.min(...scores) : 0,
-    },
-    generationTimeMs: {
-      max: times.length ? Math.max(...times) : 0,
-      min: times.length ? Math.min(...times) : 0,
-      mean: mean(times),
-      p95: percentileSorted(timesSorted, 0.95),
-    },
-    adjRate: {
-      mean: mean(adjRates),
-    },
-  };
+  const countScoreGt500 = trials.filter((t) => t.totalScore > 500).length;
+  const countEncGe1 = trials.filter((t) => t.enclosures >= 1).length;
+  const n = trials.length;
 
-  const top3ByTotalScore = [...trials]
+  const top5ByTotalScore = [...trials]
     .sort((a, b) => b.totalScore - a.totalScore)
-    .slice(0, 3)
+    .slice(0, 5)
     .map((t) => ({
       totalScore: t.totalScore,
       coverage: t.coverage,
@@ -225,27 +209,89 @@ async function main() {
       dist3: t.dist3,
       generationTimeMs: t.generationTimeMs,
       boardHash: t.boardHash,
-      pattern: t.pattern,
-      boardSize: t.boardSize,
-      targetPairs: t.targetPairs,
-      pairCount: t.pairCount,
+      runIndex: t.runIndex,
       seed: t.seed,
+      pairCount: t.pairCount,
     }));
 
-  const output = {
+  return {
     generatedAt: new Date().toISOString(),
+    pattern: patternDisplayName(pattern),
+    patternLabel: pattern.label,
+    patternKey: patternFileKey(pattern),
+    boardSize: pattern.boardSize,
+    targetPairs: pattern.pairs,
+    scoreTiming: "finalBoard",
     config: {
       runsPerPattern: RUNS_PER_PATTERN,
-      patterns: PATTERNS,
       workerPath: path.relative(ROOT, WORKER_PATH),
     },
-    overall,
-    top3ByTotalScore,
+    basicStatistics: {
+      totalScore: basicStats(scores),
+    },
+    generationEfficiency: {
+      timeMs: {
+        mean: mean(times),
+        p95: percentileSorted(timesSorted, 0.95),
+      },
+    },
+    qualityDistribution: {
+      totalScoreGreaterThan500Percent:
+        n > 0 ? (100 * countScoreGt500) / n : 0,
+      enclosuresAtLeast1Percent: n > 0 ? (100 * countEncGe1) / n : 0,
+    },
+    top5ByTotalScore,
+    trialCount: n,
     trials,
   };
+}
 
-  fs.writeFileSync(OUT_PATH, JSON.stringify(output, null, 2), "utf8");
-  console.error(`[sim] Wrote ${trials.length} trials to ${OUT_PATH}`);
+async function main() {
+  if (!fs.existsSync(OUT_DIR)) {
+    fs.mkdirSync(OUT_DIR, { recursive: true });
+  }
+
+  console.error(
+    `[sim] Engine: ${WORKER_PATH}\n[sim] ${RUNS_PER_PATTERN} runs × ${PATTERNS.length} patterns → ${OUT_DIR}/simulation_results_{N}x{N}_p{M}_fixed.json\n[sim] Score: Final Board (post crawl)`
+  );
+
+  const generatePairLinkPuzzle = loadBoardWorkerEngine();
+  let globalDone = 0;
+  const globalTotal = PATTERNS.length * RUNS_PER_PATTERN;
+
+  for (const pattern of PATTERNS) {
+    const trials = [];
+    const name = patternDisplayName(pattern);
+    console.error(`[sim] --- start ${name} (${RUNS_PER_PATTERN} trials) ---`);
+
+    for (let r = 0; r < RUNS_PER_PATTERN; r++) {
+      if (globalDone % YIELD_EVERY === 0) await yieldEventLoop();
+      const row = await runOneTrial(generatePairLinkPuzzle, pattern, r);
+      if (!row) {
+        console.error(`[sim] FAILED ${pattern.label} run ${r}`);
+        process.exit(1);
+      }
+      trials.push(row);
+      globalDone++;
+
+      const withinPattern = r + 1;
+      if (
+        withinPattern % PROGRESS_EVERY === 0 ||
+        withinPattern === RUNS_PER_PATTERN
+      ) {
+        console.error(
+          `[sim] progress ${name}: ${withinPattern}/${RUNS_PER_PATTERN} | global ${globalDone}/${globalTotal}`
+        );
+      }
+    }
+
+    const report = buildPatternReport(pattern, trials);
+    const outPath = path.join(OUT_DIR, outputFilename(pattern));
+    fs.writeFileSync(outPath, JSON.stringify(report, null, 2), "utf8");
+    console.error(`[sim] wrote ${trials.length} trials → ${outPath}`);
+  }
+
+  console.error(`[sim] done. All ${globalTotal} trials across ${PATTERNS.length} files.`);
 }
 
 main().catch((e) => {
