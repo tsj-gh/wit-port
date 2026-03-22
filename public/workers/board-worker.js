@@ -2046,7 +2046,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     null,
     scoreParamsEffective
   );
-  if (typeof console !== "undefined") {
+  if (typeof console !== "undefined" && !mOpts.suppressFinalLog) {
     logFinalScoreDetail(postMutationScoreBreakdown, "Final Board —");
   }
 
@@ -2208,24 +2208,49 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
   if (gridSize >= 4 && gridSize <= 10 && generationMode === "edgeSwap") {
     const minPairs = gridSize <= 6 ? Math.max(2, gridSize - 2) : (gridSize >= 9 ? 8 : (gridSize === 7 ? 7 : 8));
     const maxPairsEdge = gridSize <= 6 ? gridSize : 10;
-    const t0 = performance.now();
+    const scoreThreshold = typeof cfg.scoreThreshold === "number" ? cfg.scoreThreshold : -1;
     const hasSeed = seed != null && String(seed).trim() !== "";
-    const attemptSeed = hasSeed ? String(seed) : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
-    const random = createRandom(attemptSeed);
-    const targetPairCount = Math.max(minPairs, Math.min(maxPairsEdge, pairCount));
-    const edgeMutationOpts = {};
-    if (typeof cfg.targetEnclosureCount === "number" && cfg.targetEnclosureCount >= 0) {
-      edgeMutationOpts.targetEnclosureCount = cfg.targetEnclosureCount;
-    }
-    if (cfg.debugEnclosureViz) edgeMutationOpts.debugEnclosureViz = true;
-    if (cfg.edgeSwapScoreParams && typeof cfg.edgeSwapScoreParams === "object") {
-      edgeMutationOpts.edgeSwapScoreParams = cfg.edgeSwapScoreParams;
-    }
-    const candidate = generateByEdgeSwap(gridSize, targetPairCount, random, edgeMutationOpts);
-    const elapsed = Math.round(performance.now() - t0);
+    const applyThreshold = !hasSeed && scoreThreshold >= 0;
+    const totalStart = performance.now();
+    let attempts = 0;
+    let candidate = null;
+    let attemptSeed = "";
+    let random = null;
+
+    const maxRetries = applyThreshold ? 200 : 1;
+    do {
+      attempts += 1;
+      if (attempts > maxRetries) return null;
+      attemptSeed = hasSeed ? String(seed) : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+      random = createRandom(attemptSeed);
+      const targetPairCount = Math.max(minPairs, Math.min(maxPairsEdge, pairCount));
+      const edgeMutationOpts = {};
+      if (typeof cfg.targetEnclosureCount === "number" && cfg.targetEnclosureCount >= 0) {
+        edgeMutationOpts.targetEnclosureCount = cfg.targetEnclosureCount;
+      }
+      if (cfg.debugEnclosureViz) edgeMutationOpts.debugEnclosureViz = true;
+      if (cfg.edgeSwapScoreParams && typeof cfg.edgeSwapScoreParams === "object") {
+        edgeMutationOpts.edgeSwapScoreParams = cfg.edgeSwapScoreParams;
+      }
+      if (applyThreshold) edgeMutationOpts.suppressFinalLog = true;
+      candidate = generateByEdgeSwap(gridSize, targetPairCount, random, edgeMutationOpts);
+      if (!candidate) return null;
+      if (applyThreshold && candidate.postMutationScoreBreakdown != null) {
+        if (candidate.postMutationScoreBreakdown.finalScore >= scoreThreshold) {
+          if (typeof console !== "undefined") {
+            logFinalScoreDetail(candidate.postMutationScoreBreakdown, "Final Board —");
+          }
+          break;
+        }
+        candidate = null;
+      } else {
+        break;
+      }
+    } while (candidate === null);
 
     if (!candidate) return null;
 
+    const elapsed = Math.round(performance.now() - totalStart);
     pairCount = candidate.pairs.length;
     const numbers = [];
     candidate.pairs.forEach((p, idx) => {
@@ -2242,7 +2267,7 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
       gridSize,
       pairCount,
       profile: { EdgeSwap: elapsed },
-      attempts: 1,
+      attempts,
       totalMs: elapsed,
       seed: attemptSeed,
       solutionPaths: candidate.solutionPaths || null,

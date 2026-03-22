@@ -87,6 +87,8 @@ export type WorkerConfig = {
   debugEnclosureViz?: boolean;
   /** Edge-Swap 時: 評価関数の 7 定数（部分指定可、worker 側で既定とマージ） */
   edgeSwapScoreParams?: Partial<EdgeSwapScoreParams>;
+  /** Edge-Swap 時: FinalBoard Score 閾値（-1 で無効、0以上で閾値未満の盤面を破棄してリトライ） */
+  scoreThreshold?: number;
 };
 
 type QueueItem = {

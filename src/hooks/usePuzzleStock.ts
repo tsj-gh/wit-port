@@ -33,6 +33,8 @@ function makeKey(gridSize: number, numPairs: number, config?: WorkerConfig): str
   if (config?.generationMode === "edgeSwap") {
     const te = config.targetEnclosureCount;
     k += te != null && te >= 0 ? `:e${Math.round(te)}` : `:e_off`;
+    const st = config.scoreThreshold;
+    k += typeof st === "number" && st >= 0 ? `:st${st}` : "";
     k += config.debugEnclosureViz ? ":dv1" : ":dv0";
     const sp = mergeEdgeSwapScoreParams(config.edgeSwapScoreParams);
     k += `:sp${JSON.stringify(sp)}`;
@@ -247,14 +249,27 @@ export function usePuzzleStock(
       const head = getFromStock(key);
       if (head) {
         flushStatus();
+        if (head.attempts != null) setLastAttempts(head.attempts);
+        if (head.totalMs != null) setLastTotalMs(head.totalMs);
+        if (head.profile) setLastProfile(head.profile);
         refill(gs, clampedNp);
         return head;
       }
 
       const puzzle = await fetchOne(gs, clampedNp);
-      if (puzzle) return puzzle;
+      if (puzzle) {
+        if (puzzle.attempts != null) setLastAttempts(puzzle.attempts);
+        if (puzzle.totalMs != null) setLastTotalMs(puzzle.totalMs);
+        if (puzzle.profile) setLastProfile(puzzle.profile);
+        return puzzle;
+      }
       const retry = await fetchOne(gs, clampedNp);
-      if (retry) return retry;
+      if (retry) {
+        if (retry.attempts != null) setLastAttempts(retry.attempts);
+        if (retry.totalMs != null) setLastTotalMs(retry.totalMs);
+        if (retry.profile) setLastProfile(retry.profile);
+        return retry;
+      }
       throw new Error("パズルの生成に失敗しました。もう一度お試しください。");
     },
     [fetchOne, refill, flushStatus, config]

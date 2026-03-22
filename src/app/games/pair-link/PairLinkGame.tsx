@@ -124,9 +124,10 @@ export default function PairLinkGame() {
   const [configDetourWeight, setConfigDetourWeight] = useState(0);
   const [configBaseThreshold, setConfigBaseThreshold] = useState(0);
   const [debugGenerationMode, setDebugGenerationMode] = useState<"default" | "edgeSwap">("edgeSwap");
-  /** Edge-Swap: 囲い込み目標を worker に渡す（オフ時は従来どおり距離ベースのみ） */
-  const [debugEnclosureTargetOn, setDebugEnclosureTargetOn] = useState(true);
+  /** Edge-Swap: 囲い込み目標件数（常時ON、定数として Edge Swap 定数内に配置） */
   const [debugTargetEnclosureCount, setDebugTargetEnclosureCount] = useState(10);
+  const [scoreThresholdDraft, setScoreThresholdDraft] = useState(-1);
+  const [scoreThresholdApplied, setScoreThresholdApplied] = useState(-1);
   const [debugEnclosures, setDebugEnclosures] = useState<EnclosureDebugItem[] | null>(null);
   const [edgeSwapScoreDraft, setEdgeSwapScoreDraft] = useState<EdgeSwapScoreParams>(() => ({
     ...EDGE_SWAP_SCORE_DEFAULTS,
@@ -228,8 +229,11 @@ export default function PairLinkGame() {
     detourWeight: configDetourWeight,
     baseThreshold: configBaseThreshold > 0 ? configBaseThreshold : undefined,
     generationMode: debugGenerationMode,
-    ...(debugGenerationMode === "edgeSwap" && debugEnclosureTargetOn
-      ? { targetEnclosureCount: debugTargetEnclosureCount }
+    ...(debugGenerationMode === "edgeSwap"
+      ? {
+          targetEnclosureCount: debugTargetEnclosureCount,
+          scoreThreshold: scoreThresholdApplied,
+        }
       : {}),
     ...(isDebugMode && debugGenerationMode === "edgeSwap"
       ? { debugEnclosureViz: true }
@@ -335,7 +339,6 @@ export default function PairLinkGame() {
     debugGridSize,
     debugNumPairs,
     debugGenerationMode,
-    debugEnclosureTargetOn,
     debugTargetEnclosureCount,
     edgeSwapScoreApplied,
     isDebugMode,
@@ -381,7 +384,6 @@ export default function PairLinkGame() {
     settingsGridSize,
     settingsNumPairs,
     debugGenerationMode,
-    debugEnclosureTargetOn,
     debugTargetEnclosureCount,
     edgeSwapScoreApplied,
     isDebugMode,
@@ -1178,35 +1180,31 @@ export default function PairLinkGame() {
                       </button>
                     ))}
                   </div>
+                  <div className="mt-1 space-y-1 text-[10px]">
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-400 shrink-0 w-28">生成盤面のScore閾値（Default -1）</span>
+                      <input
+                        type="number"
+                        min={-1}
+                        value={scoreThresholdDraft}
+                        onChange={(e) => setScoreThresholdDraft(Number(e.target.value))}
+                        className="w-16 px-1 py-0.5 rounded bg-black/60 border border-white/20 text-slate-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setScoreThresholdApplied(scoreThresholdDraft)}
+                        className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/25 text-emerald-300 hover:bg-emerald-500/35"
+                      >
+                        反映
+                      </button>
+                    </div>
+                    <div className="flex gap-3 text-slate-400">
+                      <span>生成リトライ回数: {lastAttempts != null ? lastAttempts : "—"}</span>
+                      <span>生成所要時間: {lastTotalMs != null ? `${lastTotalMs} ms` : "—"}</span>
+                    </div>
+                  </div>
                   {debugGenerationMode === "edgeSwap" && (
                     <>
-                      <div className="mt-1 space-y-1 text-[10px] text-slate-400">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={debugEnclosureTargetOn}
-                            onChange={(e) => setDebugEnclosureTargetOn(e.target.checked)}
-                            className="rounded border-white/30"
-                          />
-                          <span>囲い込み目標（targetEnclosureCount）を有効化</span>
-                        </label>
-                        <div className="flex items-center gap-1 pl-5">
-                          <span className="shrink-0 w-24">目標件数</span>
-                          <input
-                            type="range"
-                            min={0}
-                            max={24}
-                            step={1}
-                            value={debugTargetEnclosureCount}
-                            onChange={(e) => setDebugTargetEnclosureCount(Number(e.target.value))}
-                            disabled={!debugEnclosureTargetOn}
-                            className="flex-1 disabled:opacity-40"
-                          />
-                          <span className="tabular-nums w-6 text-slate-300">
-                            {debugTargetEnclosureCount}
-                          </span>
-                        </div>
-                      </div>
                       <div className="mt-1 pt-1 border-t border-white/10">
                         <button
                           type="button"
@@ -1220,6 +1218,21 @@ export default function PairLinkGame() {
                         </button>
                         {edgeSwapConstantsPanelOpen && (
                           <div className="mt-1 space-y-1 pl-1 text-[10px]">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className="text-slate-400 shrink-0 w-[10.5rem]">目標件数（囲い込み）</span>
+                              <input
+                                type="range"
+                                min={0}
+                                max={24}
+                                step={1}
+                                value={debugTargetEnclosureCount}
+                                onChange={(e) => setDebugTargetEnclosureCount(Number(e.target.value))}
+                                className="flex-1 max-w-24"
+                              />
+                              <span className="tabular-nums w-6 text-slate-300">
+                                {debugTargetEnclosureCount}
+                              </span>
+                            </div>
                             {EDGE_SWAP_SCORE_FIELDS.map((f) => (
                               <div key={f.key} className="flex items-center gap-1 flex-wrap">
                                 <span className="text-slate-400 shrink-0 w-[10.5rem]">{f.label}</span>
