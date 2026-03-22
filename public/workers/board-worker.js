@@ -1044,8 +1044,9 @@ function adjacencyRateTierPenalty(adjRate) {
  * Coverage: Σ(A/L) × 1.5（面積支配の優遇）
  * Interference: 端点8近傍はセルあたり1回まで、並走もセルあたり1回まで
  * Enclosures: 厳格エンクロージャ件数
- * 隣接密度: 最短マンハッタン m — m<=2 → adjCount（ログ Dist2）、m===3 → semiAdjCount（Dist3）
- *   weightedAdjSum = adjCount + semiAdjCount*0.5、adjRate = weightedAdjSum / totalPairs
+ * 隣接密度: 各パスについて「同じIDの2端点間」のマンハッタン距離 m のみ（他ペアの端点同士は対象外）
+ *   m<=2 → adjCount（Dist2）、m===3 → semiAdjCount（Dist3）
+ *   weightedAdjSum = adjCount + semiAdjCount*0.5、adjRate = weightedAdjSum / pathCount（パス本数）
  *   段階ペナルティを scale（0〜499:0.5、500〜:1、null:1）で乗じて減算
  * FinalScore = (Coverage*1.5 + InterferenceW) * (1 + Enclosures * 1.5) - tierPenalty*scale
  */
@@ -1106,26 +1107,16 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n, mutationAttemptInde
   let adjCount = 0;
   let semiAdjCount = 0;
   for (let i = 0; i < epList.length; i++) {
-    for (let j = i + 1; j < epList.length; j++) {
-      const ai = epList[i].a;
-      const bi = epList[i].b;
-      const aj = epList[j].a;
-      const bj = epList[j].b;
-      const m = Math.min(
-        Math.abs(ai.r - aj.r) + Math.abs(ai.c - aj.c),
-        Math.abs(ai.r - bj.r) + Math.abs(ai.c - bj.c),
-        Math.abs(bi.r - aj.r) + Math.abs(bi.c - aj.c),
-        Math.abs(bi.r - bj.r) + Math.abs(bi.c - bj.c)
-      );
-      if (m <= 2) adjCount++;
-      else if (m === 3) semiAdjCount++;
-    }
+    const a = epList[i].a;
+    const b = epList[i].b;
+    const m = Math.abs(a.r - b.r) + Math.abs(a.c - b.c);
+    if (m <= 2) adjCount++;
+    else if (m === 3) semiAdjCount++;
   }
 
-  const totalPairs =
-    epList.length >= 2 ? (epList.length * (epList.length - 1)) / 2 : 0;
+  const pathCount = epList.length;
   const weightedAdjSum = adjCount + semiAdjCount * 0.5;
-  const adjRate = totalPairs > 0 ? weightedAdjSum / totalPairs : 0;
+  const adjRate = pathCount > 0 ? weightedAdjSum / pathCount : 0;
   const adjacencyTierPenaltyRaw = adjacencyRateTierPenalty(adjRate);
   const adjacencyPenaltyApplied =
     adjacencyTierPenaltyRaw * adjacentPenaltyScale;
@@ -1220,7 +1211,7 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n, mutationAttemptInde
     enclosureCount,
     adjCount,
     semiAdjCount,
-    totalPairs,
+    pathCount,
     weightedAdjSum,
     adjRate,
     adjacencyTierPenaltyRaw,
@@ -1259,7 +1250,7 @@ function logFinalScoreDetail(bd, tag) {
  * Phase 1: 行優先で空きマスにドミノ／既存パス端への接続を一般化（全セル埋め）
  * Phase 2: パス統合（目標ペア数まで隣接端同士を結合）
  * @param {{ targetEnclosureCount?: number, debugEnclosureViz?: boolean }} [mutationOpts]
- *   スワップ採択は FinalScore = (Coverage×1.5+InterferenceW)×(1+囲い込み×1.5)−隣接割合段階ペナルティ×scale。
+ *   スワップ採択は FinalScore = (Coverage×1.5+InterferenceW)×(1+囲い込み×1.5)−隣接割合段階ペナルティ×scale（隣接率は各パス内の2端点間距離のみ）。
  */
 function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   const mOpts = mutationOpts || {};

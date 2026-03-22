@@ -22,7 +22,8 @@ npm run sim:pairlink-scores
 
 - `overall`: TotalScore の平均・中央値・標準偏差・最大・最小、生成時間 ms の min/max/mean/P95、`adjRate` の平均
 - `top3ByTotalScore`: 全体で TotalScore 上位 3 件の詳細と `boardHash`（端点座標から SHA-256）
-- `trials`: 全試行の行（各試行に TotalScore, Coverage, Interference, Enclosures, AdjRate, Dist2, Dist3, 時間 ms, ハッシュ）
+- `trials`: 全試行の行（各試行に TotalScore, Coverage, Interference, Enclosures, AdjRate, Dist2, Dist3, 時間 ms, ハッシュ）  
+  ※ Dist2/Dist3・AdjRate は**同一数字ペアの2端点間**のマンハッタン距離に基づく（他ペアの端点同士は含めない）
 
 `simulation_results.json` は `.gitignore` に含めています（サイズ大）。必要ならローカルで生成してください。
 
