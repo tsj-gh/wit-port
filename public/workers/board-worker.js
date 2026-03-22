@@ -647,6 +647,77 @@ function classifyRowPassSide(path, idx, ty) {
 }
 
 /**
+ * X=tx に水平方向で入った直後（最大3セグ）、逆符号の dx かつ頂点 y∈[ty-1,ty+1]、かつまだ (tx,y2) に未到達ならエセ回り込み。
+ * path: {x:列,y:行}、yLow/yHigh は列 tx 上のブラケット（y2=yHigh）。
+ */
+function isVerticalPseudoEnclosureUpon(path, tx, ty, yLow, yHigh) {
+  if (!path || path.length < 2) return false;
+  const yTolLo = ty - 1;
+  const yTolHi = ty + 1;
+  for (let i = 1; i < path.length; i++) {
+    const prev = path[i - 1];
+    const cur = path[i];
+    if (cur.x !== tx || prev.x === tx) continue;
+    const vOverX = cur.x - prev.x;
+    if (vOverX === 0) continue;
+    if (cur.y < yLow || cur.y > yHigh) continue;
+    const jEnd = Math.min(i + 3, path.length - 1);
+    for (let j = i + 1; j <= jEnd; j++) {
+      const segDx = path[j].x - path[j - 1].x;
+      if (segDx === 0) continue;
+      if (Math.sign(segDx) !== -Math.sign(vOverX)) continue;
+      const yV = path[j].y;
+      if (yV < yTolLo || yV > yTolHi) continue;
+      let reachedY2 = false;
+      for (let u = 0; u <= j; u++) {
+        if (path[u].x === tx && path[u].y === yHigh) {
+          reachedY2 = true;
+          break;
+        }
+      }
+      if (reachedY2) continue;
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Y=ty に垂直方向で入った直後、逆符号の dy かつ頂点 x∈[tx-1,tx+1]、かつまだ (x2,ty) に未到達ならエセ回り込み。
+ */
+function isHorizontalPseudoEnclosureUpon(path, ty, tx, xLow, xHigh) {
+  if (!path || path.length < 2) return false;
+  const xTolLo = tx - 1;
+  const xTolHi = tx + 1;
+  for (let i = 1; i < path.length; i++) {
+    const prev = path[i - 1];
+    const cur = path[i];
+    if (cur.y !== ty || prev.y === ty) continue;
+    const vOverY = cur.y - prev.y;
+    if (vOverY === 0) continue;
+    if (cur.x < xLow || cur.x > xHigh) continue;
+    const jEnd = Math.min(i + 3, path.length - 1);
+    for (let j = i + 1; j <= jEnd; j++) {
+      const segDy = path[j].y - path[j - 1].y;
+      if (segDy === 0) continue;
+      if (Math.sign(segDy) !== -Math.sign(vOverY)) continue;
+      const xV = path[j].x;
+      if (xV < xTolLo || xV > xTolHi) continue;
+      let reachedX2 = false;
+      for (let u = 0; u <= j; u++) {
+        if (path[u].y === ty && path[u].x === xHigh) {
+          reachedX2 = true;
+          break;
+        }
+      }
+      if (reachedX2) continue;
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * 列 nc 上で y1<ty<y2 にターゲットがあり、(nc,y1) と (nc,y2) での「追い越し方向」（x≠nc 側の位置）が逆であること。
  */
 function checkVerticalWrapEnclosure(path, nc, tRow) {
@@ -682,6 +753,9 @@ function checkVerticalWrapEnclosure(path, nc, tRow) {
   }
   if (sLow === sHigh) {
     return { ok: false, reason: "same_x_pass_direction", sandwich: true, y1: yMin, y2: yMax };
+  }
+  if (isVerticalPseudoEnclosureUpon(path, nc, tRow, yMin, yMax)) {
+    return { ok: false, reason: "pseudo_u_turn_enclosure_x", sandwich: true, y1: yMin, y2: yMax };
   }
   return { ok: true, y1: yMin, y2: yMax };
 }
@@ -722,6 +796,9 @@ function checkHorizontalWrapEnclosure(path, nr, tCol) {
   }
   if (sLeft === sRight) {
     return { ok: false, reason: "same_y_pass_direction", sandwich: true, x1: xMin, x2: xMax };
+  }
+  if (isHorizontalPseudoEnclosureUpon(path, nr, tCol, xMin, xMax)) {
+    return { ok: false, reason: "pseudo_u_turn_enclosure_y", sandwich: true, x1: xMin, x2: xMax };
   }
   return { ok: true, x1: xMin, x2: xMax };
 }
