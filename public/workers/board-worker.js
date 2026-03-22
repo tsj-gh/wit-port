@@ -1466,6 +1466,11 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   let swapCount = 0;
   const MUTATION_ATTEMPTS = 1000;
   for (let attempt = 0; attempt < MUTATION_ATTEMPTS; attempt++) {
+    if (typeof console !== "undefined" && attempt > 0 && attempt % 200 === 0) {
+      const snap = computeMutationScoreBreakdown(solutionGrid, adj, n);
+      logFinalScoreDetail(snap, "[Periodic]");
+    }
+
     const r = Math.floor(random() * (n - 1));
     const c = Math.floor(random() * (n - 1));
     const tl = { r, c }, tr = { r: r, c: c + 1 }, bl = { r: r + 1, c }, br = { r: r + 1, c: c + 1 };
@@ -1504,11 +1509,6 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     }
 
     swapCount++;
-
-    if (typeof console !== "undefined" && attempt > 0 && attempt % 200 === 0) {
-      const snap = computeMutationScoreBreakdown(solutionGrid, adj, n);
-      logFinalScoreDetail(snap, "[Periodic]");
-    }
   }
 
   const mutFinal = computeMutationScoreBreakdown(solutionGrid, adj, n);
