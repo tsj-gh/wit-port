@@ -26,8 +26,11 @@ type PathPoint = { x: number; y: number };
 const PADDING = 50;
 const HIT_RADIUS_FACTOR = 0.55; // 数字・端点の当たり判定半径（spacing に対する倍率）
 
-/** Edge-Swap テスト: 7×7 は 7〜10 ペア、8×8 は 8〜10 ペア（board-worker と一致） */
+/** Edge-Swap: 4×4〜6×6 は Default と同様のペア範囲、7×7〜8×8 は密ペア（board-worker と一致） */
 export const EDGE_SWAP_PAIR_BOUNDS: Record<number, { min: number; max: number }> = {
+  4: { min: 2, max: 4 },
+  5: { min: 3, max: 5 },
+  6: { min: 4, max: 6 },
   7: { min: 7, max: 10 },
   8: { min: 8, max: 10 },
 };
