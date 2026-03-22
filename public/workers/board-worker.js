@@ -954,11 +954,113 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
   return { count, debugEnclosures };
 }
 
+/** 盤面中心で 4 象限: 0=左上, 1=右上, 2=左下, 3=右下（r,c は 0..n-1） */
+function quadrantIndexRC(r, c, n) {
+  const midR = Math.floor(n / 2);
+  const midC = Math.floor(n / 2);
+  const top = r < midR;
+  const left = c < midC;
+  if (top && left) return 0;
+  if (top && !left) return 1;
+  if (!top && left) return 2;
+  return 3;
+}
+
+/** 端点の象限ペアスコア: 対角 +100、それ以外の異象限 +50、同象限 0 */
+function quadrantPairScore(qa, qb) {
+  if (qa === qb) return 0;
+  if ((qa === 0 && qb === 3) || (qa === 3 && qb === 0)) return 100;
+  if ((qa === 1 && qb === 2) || (qa === 2 && qb === 1)) return 100;
+  return 50;
+}
+
+/**
+ * Edge-Swap ミューテーション用スコア内訳。
+ * FinalScore = (totalManhattan + totalQuadrantScore - adjacentPenalty) * (1 + enclosureCount * 0.5)
+ * adjacentPenalty: 端点間マンハッタン<=2 のペア数が 1 を超えると、(count-1)*200
+ */
+function computeMutationScoreBreakdown(solutionGrid, adj, n) {
+  const byPid = new Map();
+  for (let rr = 0; rr < n; rr++) {
+    for (let cc = 0; cc < n; cc++) {
+      const p = solutionGrid[rr][cc];
+      if (!p) continue;
+      if (!byPid.has(p)) byPid.set(p, []);
+      byPid.get(p).push({ r: rr, c: cc });
+    }
+  }
+  const epList = [];
+  for (const [, cells] of byPid) {
+    if (cells.length < 2) continue;
+    const endpoints = cells.filter(({ r: rr, c: cc }) => adj[rr][cc].length === 1);
+    if (endpoints.length < 2) continue;
+    let bestA = endpoints[0];
+    let bestB = endpoints[1];
+    let bestD = -1;
+    for (let j = 0; j < endpoints.length; j++) {
+      for (let k = j + 1; k < endpoints.length; k++) {
+        const d =
+          Math.abs(endpoints[j].r - endpoints[k].r) +
+          Math.abs(endpoints[j].c - endpoints[k].c);
+        if (d > bestD) {
+          bestD = d;
+          bestA = endpoints[j];
+          bestB = endpoints[k];
+        }
+      }
+    }
+    epList.push({ a: bestA, b: bestB, manhattan: bestD });
+  }
+
+  let totalManhattan = 0;
+  let totalQuadrantScore = 0;
+  for (let i = 0; i < epList.length; i++) {
+    const e = epList[i];
+    totalManhattan += e.manhattan;
+    const qa = quadrantIndexRC(e.a.r, e.a.c, n);
+    const qb = quadrantIndexRC(e.b.r, e.b.c, n);
+    totalQuadrantScore += quadrantPairScore(qa, qb);
+  }
+
+  let closePairCount = 0;
+  for (let i = 0; i < epList.length; i++) {
+    for (let j = i + 1; j < epList.length; j++) {
+      const ai = epList[i].a;
+      const bi = epList[i].b;
+      const aj = epList[j].a;
+      const bj = epList[j].b;
+      const m = Math.min(
+        Math.abs(ai.r - aj.r) + Math.abs(ai.c - aj.c),
+        Math.abs(ai.r - bj.r) + Math.abs(ai.c - bj.c),
+        Math.abs(bi.r - aj.r) + Math.abs(bi.c - aj.c),
+        Math.abs(bi.r - bj.r) + Math.abs(bi.c - bj.c)
+      );
+      if (m <= 2) closePairCount++;
+    }
+  }
+
+  const adjacentPenalty = closePairCount > 1 ? (closePairCount - 1) * 200 : 0;
+  const currentEnclosureCount = countPairLinkEnclosures(solutionGrid, adj, n);
+  const base = totalManhattan + totalQuadrantScore - adjacentPenalty;
+  const finalScore = base * (1 + currentEnclosureCount * 0.5);
+
+  return {
+    totalManhattan,
+    totalQuadrantScore,
+    closePairCount,
+    adjacentPenalty,
+    currentEnclosureCount,
+    base,
+    finalScore,
+  };
+}
+
 /**
  * generateByEdgeSwap: 動的グリッド（主に 7〜8）用エンジン
  * Phase 1: 行優先で空きマスにドミノ／既存パス端への接続を一般化（全セル埋め）
  * Phase 2: パス統合（目標ペア数まで隣接端同士を結合）
- * @param {{ targetEnclosureCount?: number }} [mutationOpts] targetEnclosureCount >= 0 で囲い込み目標＋焼きなまし（401〜1000 回目）
+ * @param {{ targetEnclosureCount?: number, debugEnclosureViz?: boolean }} [mutationOpts]
+ *   スワップ採択は FinalScore（マンハッタン＋象限−隣接ペナルティ）×(1+囲い込み*0.5) の単調増加のみ。
  */
 function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   const mOpts = mutationOpts || {};
@@ -1227,38 +1329,6 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     const ib = adj[rb][cb].indexOf(ka); if (ib >= 0) adj[rb][cb].splice(ib, 1);
   }
 
-  /**
-   * 良問スコア: 各内部パスについてグラフ端点（次数1）同士のマンハッタン距離の最大ペアを取り、全パスで合計。
-   */
-  function computeTotalDistEndPoints() {
-    const byPid = new Map();
-    for (let rr = 0; rr < n; rr++) {
-      for (let cc = 0; cc < n; cc++) {
-        const p = solutionGrid[rr][cc];
-        if (!p) continue;
-        if (!byPid.has(p)) byPid.set(p, []);
-        byPid.get(p).push({ r: rr, c: cc });
-      }
-    }
-    let totalDist = 0;
-    for (const [, cells] of byPid) {
-      if (cells.length < 2) continue;
-      const endpoints = cells.filter(({ r: rr, c: cc }) => adj[rr][cc].length === 1);
-      if (endpoints.length < 2) continue;
-      let best = 0;
-      for (let j = 0; j < endpoints.length; j++) {
-        for (let k = j + 1; k < endpoints.length; k++) {
-          const d =
-            Math.abs(endpoints[j].r - endpoints[k].r) +
-            Math.abs(endpoints[j].c - endpoints[k].c);
-          if (d > best) best = d;
-        }
-      }
-      totalDist += best;
-    }
-    return totalDist;
-  }
-
   function revertPattern(pattern, tl, tr, bl, br) {
     if (pattern === "A") {
       remEdge(tl.r, tl.c, tr.r, tr.c); remEdge(bl.r, bl.c, br.r, br.c);
@@ -1283,9 +1353,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     else if (hasEdge(tl.r, tl.c, tr.r, tr.c) && hasEdge(bl.r, bl.c, br.r, br.c)) pattern = "B";
     if (!pattern) continue;
 
-    const distBefore = computeTotalDistEndPoints();
-    const encBefore =
-      targetEnc != null ? countPairLinkEnclosures(solutionGrid, adj, n) : 0;
+    const scoreBefore = computeMutationScoreBreakdown(solutionGrid, adj, n);
 
     if (pattern === "A") {
       remEdge(tl.r, tl.c, bl.r, bl.c);
@@ -1305,34 +1373,8 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
       continue;
     }
 
-    const distAfter = computeTotalDistEndPoints();
-    const encAfter =
-      targetEnc != null ? countPairLinkEnclosures(solutionGrid, adj, n) : 0;
-
-    let accept = true;
-    if (targetEnc == null) {
-      if (distAfter < distBefore && random() < 0.5) accept = false;
-    } else {
-      let dE;
-      let T;
-      if (attempt < 400) {
-        const u = attempt / 399.0001;
-        T = 6 * (1 - u) + 1.2 * u;
-        dE = distBefore - distAfter;
-      } else {
-        const u = (attempt - 400) / 599.0001;
-        T = 1.8 * (1 - u) + 0.22 * u;
-        const kM = 0.35;
-        const kE = 1.0;
-        const energy = function (dist, enc) {
-          return -kM * dist + kE * (enc - targetEnc) * (enc - targetEnc);
-        };
-        dE = energy(distAfter, encAfter) - energy(distBefore, encBefore);
-      }
-      if (dE > 0 && random() >= Math.exp(-dE / T)) accept = false;
-    }
-
-    if (!accept) {
+    const scoreAfter = computeMutationScoreBreakdown(solutionGrid, adj, n);
+    if (scoreAfter.finalScore <= scoreBefore.finalScore) {
       revertPattern(pattern, tl, tr, bl, br);
       continue;
     }
@@ -1340,19 +1382,28 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     swapCount++;
   }
 
-  const mutationFinalTotalDist = computeTotalDistEndPoints();
-  const mutationEncCount =
-    targetEnc != null ? countPairLinkEnclosures(solutionGrid, adj, n) : null;
+  const mutFinal = computeMutationScoreBreakdown(solutionGrid, adj, n);
   if (typeof console !== "undefined") {
     console.log("Mutation Complete - Successful Swaps: " + swapCount);
-    console.log("Mutation — final totalDist (endpoint Manhattan sum): " + mutationFinalTotalDist);
-    if (mutationEncCount != null) {
+    console.log(
+      "Mutation — FinalScore: " +
+        mutFinal.finalScore +
+        " | Manhattan: " +
+        mutFinal.totalManhattan +
+        ", Quadrant: " +
+        mutFinal.totalQuadrantScore +
+        ", AdjClosePairs: " +
+        mutFinal.closePairCount +
+        ", AdjPenalty: " +
+        mutFinal.adjacentPenalty +
+        ", Enclosures: " +
+        mutFinal.currentEnclosureCount +
+        ", Base: " +
+        mutFinal.base
+    );
+    if (targetEnc != null) {
       console.log(
-        "Mutation — enclosures after swap phase: " +
-          mutationEncCount +
-          " (target " +
-          targetEnc +
-          ")"
+        "Mutation — targetEnclosureCount (debug ref only): " + targetEnc
       );
     }
   }
