@@ -1034,12 +1034,20 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
 /**
  * Edge-Swap ミューテーション用スコア。
  * Coverage: Σ(バウンディングボックス面積 A / パス長 L)
- * Interference: 他ペア端点のキング距離1リング上を経路が通るセル数
- * Enclosures: 厳格エンクロージャ件数（既存 count）
- * FinalScore = (Coverage + Interference) * (1 + Enclosures * 1.5)
- * ハード制約: 端点間マンハッタン<=2 のペア数 > floor(ペア数*0.2) なら Total を強制 -1e9
+ * Interference: 他ペア端点の8近傍リング＋他人パス本体（次数2）との4近接「並走」
+ * Enclosures: 厳格エンクロージャ件数
+ * Adjacent penalty: 端点ペア間マンハッタン<=2 の組み数 × -100 × scale（崖なし）
+ * scale: 試行 0〜499 で 0.5、500〜 で 1.0。mutationAttemptIndex が null のときは 1.0（最終ログ用）
+ * FinalScore = (Coverage + InterferenceWeighted) * (1 + Enclosures * 1.5) + adjacentPenalty
  */
-function computeMutationScoreBreakdown(solutionGrid, adj, n) {
+function computeMutationScoreBreakdown(solutionGrid, adj, n, mutationAttemptIndex) {
+  const adjacentPenaltyScale =
+    mutationAttemptIndex == null
+      ? 1
+      : mutationAttemptIndex < 500
+        ? 0.5
+        : 1;
+
   const byPid = new Map();
   for (let rr = 0; rr < n; rr++) {
     for (let cc = 0; cc < n; cc++) {
@@ -1048,6 +1056,17 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n) {
       if (!byPid.has(p)) byPid.set(p, []);
       byPid.get(p).push({ r: rr, c: cc });
     }
+  }
+
+  const interiorOfPid = new Map();
+  for (const [pid, cells] of byPid) {
+    const intSet = new Set();
+    for (let i = 0; i < cells.length; i++) {
+      const r = cells[i].r;
+      const c = cells[i].c;
+      if (adj[r][c].length === 2) intSet.add(r * n + c);
+    }
+    interiorOfPid.set(pid, intSet);
   }
 
   const epList = [];
@@ -1075,7 +1094,6 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n) {
     epList.push({ a: bestA, b: bestB });
   }
 
-  const pairCount = epList.length;
   let closePairCount = 0;
   for (let i = 0; i < epList.length; i++) {
     for (let j = i + 1; j < epList.length; j++) {
@@ -1093,8 +1111,9 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n) {
     }
   }
 
-  const maxCloseAllowed = pairCount > 0 ? Math.floor(pairCount * 0.2) : 0;
-  const hardConstraintViolated = pairCount > 0 && closePairCount > maxCloseAllowed;
+  const ADJ_PENALTY_PER_PAIR = 100;
+  const adjacentPenalty =
+    -closePairCount * ADJ_PENALTY_PER_PAIR * adjacentPenaltyScale;
 
   let coverageScore = 0;
   for (const [, cells] of byPid) {
@@ -1116,7 +1135,7 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n) {
     if (L > 0) coverageScore += A / L;
   }
 
-  let interferenceScore = 0;
+  let interferenceEndpoint = 0;
   for (const [pid, cells] of byPid) {
     if (cells.length < 2) continue;
     for (let ci = 0; ci < cells.length; ci++) {
@@ -1136,26 +1155,50 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n) {
         }
         if (hit) break;
       }
-      if (hit) interferenceScore++;
+      if (hit) interferenceEndpoint++;
     }
   }
 
-  const enclosureCount = countPairLinkEnclosures(solutionGrid, adj, n);
-  const base = coverageScore + interferenceScore;
-  const ENC_MULT = 1.5;
-  let finalScore = base * (1 + enclosureCount * ENC_MULT);
-
-  if (hardConstraintViolated) {
-    finalScore = -1e9;
+  const orthoDirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+  let interferenceParallel = 0;
+  for (const [pid, cells] of byPid) {
+    if (cells.length < 2) continue;
+    for (let ci = 0; ci < cells.length; ci++) {
+      const r = cells[ci].r;
+      const c = cells[ci].c;
+      for (let di = 0; di < orthoDirs.length; di++) {
+        const nr = r + orthoDirs[di][0];
+        const nc = c + orthoDirs[di][1];
+        if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+        const q = solutionGrid[nr][nc];
+        if (q == null || q === pid) continue;
+        const intSet = interiorOfPid.get(q);
+        if (intSet && intSet.has(nr * n + nc)) interferenceParallel++;
+      }
+    }
   }
+
+  const W_EP = 2;
+  const W_PAR = 7;
+  const interferenceWeighted =
+    W_EP * interferenceEndpoint + W_PAR * interferenceParallel;
+  const interferenceScore = interferenceWeighted;
+
+  const enclosureCount = countPairLinkEnclosures(solutionGrid, adj, n);
+  const ENC_MULT = 1.5;
+  const base = coverageScore + interferenceWeighted;
+  const finalScore = base * (1 + enclosureCount * ENC_MULT) + adjacentPenalty;
 
   return {
     coverageScore,
     interferenceScore,
+    interferenceEndpoint,
+    interferenceParallel,
     enclosureCount,
     closePairCount,
-    maxCloseAllowed,
-    hardConstraintViolated,
+    adjacentPairsCount: closePairCount,
+    adjacentPenalty,
+    adjacentPenaltyScale,
     base,
     finalScore,
   };
@@ -1174,7 +1217,8 @@ function logFinalScoreDetail(bd, tag) {
       bd.interferenceScore +
       ", Enclosures: " +
       bd.enclosureCount +
-      (bd.hardConstraintViolated ? " (HARD: adjacent-pair cap exceeded)" : "")
+      ", AdjacentPairsCount: " +
+      bd.closePairCount
   );
 }
 
@@ -1183,8 +1227,8 @@ function logFinalScoreDetail(bd, tag) {
  * Phase 1: 行優先で空きマスにドミノ／既存パス端への接続を一般化（全セル埋め）
  * Phase 2: パス統合（目標ペア数まで隣接端同士を結合）
  * @param {{ targetEnclosureCount?: number, debugEnclosureViz?: boolean }} [mutationOpts]
- *   スワップ採択は FinalScore = (Coverage+Interference)×(1+囲い込み×1.5) の単調増加のみ。
- *   隣接端点ペア数が floor(ペア数×0.2) を超える盤面はハード違反（Total 強制 -1e9）。
+ *   スワップ採択は FinalScore = (Coverage+InterferenceW)×(1+囲い込み×1.5)+隣接ペナルティ の単調増加のみ。
+ *   隣接ペナルティはペア数×-100×scale（前半 scale=0.5、後半 1.0）。
  */
 function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   const mOpts = mutationOpts || {};
@@ -1467,7 +1511,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   const MUTATION_ATTEMPTS = 1000;
   for (let attempt = 0; attempt < MUTATION_ATTEMPTS; attempt++) {
     if (typeof console !== "undefined" && attempt > 0 && attempt % 200 === 0) {
-      const snap = computeMutationScoreBreakdown(solutionGrid, adj, n);
+      const snap = computeMutationScoreBreakdown(solutionGrid, adj, n, attempt);
       logFinalScoreDetail(snap, "[Periodic]");
     }
 
@@ -1482,7 +1526,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     else if (hasEdge(tl.r, tl.c, tr.r, tr.c) && hasEdge(bl.r, bl.c, br.r, br.c)) pattern = "B";
     if (!pattern) continue;
 
-    const scoreBefore = computeMutationScoreBreakdown(solutionGrid, adj, n);
+    const scoreBefore = computeMutationScoreBreakdown(solutionGrid, adj, n, attempt);
 
     if (pattern === "A") {
       remEdge(tl.r, tl.c, bl.r, bl.c);
@@ -1502,7 +1546,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
       continue;
     }
 
-    const scoreAfter = computeMutationScoreBreakdown(solutionGrid, adj, n);
+    const scoreAfter = computeMutationScoreBreakdown(solutionGrid, adj, n, attempt);
     if (scoreAfter.finalScore <= scoreBefore.finalScore) {
       revertPattern(pattern, tl, tr, bl, br);
       continue;
@@ -1511,7 +1555,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     swapCount++;
   }
 
-  const mutFinal = computeMutationScoreBreakdown(solutionGrid, adj, n);
+  const mutFinal = computeMutationScoreBreakdown(solutionGrid, adj, n, null);
   if (typeof console !== "undefined") {
     console.log("Mutation Complete - Successful Swaps: " + swapCount);
     logFinalScoreDetail(mutFinal, "Mutation —");
