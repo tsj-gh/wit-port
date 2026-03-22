@@ -1000,6 +1000,33 @@ export default function PairLinkGame() {
           </div>
           {isDebugPanelExpanded && (
             <>
+              <div className="mt-2 flex flex-wrap gap-1">
+                <button
+                  onClick={() => triggerDebugSolve()}
+                  disabled={solved || loading || pairs.length === 0}
+                  className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  強制クリア (Solve & Sync)
+                </button>
+                <button
+                  onClick={() =>
+                    manualPrefetch(
+                      settingsGridSize,
+                      clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)
+                    )
+                  }
+                  disabled={isPrefetching}
+                  className="px-2 py-0.5 rounded text-[10px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  手動プリフェッチ実行
+                </button>
+                <button
+                  onClick={() => refreshAds()}
+                  className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                >
+                  フラッシュテスト
+                </button>
+              </div>
               <div className="mt-2 space-y-0.5 text-slate-400/90 text-[10px]">
                 <div>
                   プリフェッチ状態:{" "}
@@ -1322,33 +1349,6 @@ export default function PairLinkGame() {
                     </button>
                   )
                 )}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1">
-                <button
-                  onClick={() => triggerDebugSolve()}
-                  disabled={solved || loading || pairs.length === 0}
-                  className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  強制クリア (Solve & Sync)
-                </button>
-                <button
-                  onClick={() =>
-                    manualPrefetch(
-                      settingsGridSize,
-                      clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)
-                    )
-                  }
-                  disabled={isPrefetching}
-                  className="px-2 py-0.5 rounded text-[10px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  手動プリフェッチ実行
-                </button>
-                <button
-                  onClick={() => refreshAds()}
-                  className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
-                >
-                  フラッシュテスト
-                </button>
               </div>
             </>
           )}
