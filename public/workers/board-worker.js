@@ -1032,11 +1032,42 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
   return { count, debugEnclosures };
 }
 
-/** adjRate に応じた段階ペナルティ（正の値＝FinalScore から減算） */
-function adjacencyRateTierPenalty(adjRate) {
-  if (adjRate < 0.15) return 0;
-  if (adjRate < 0.3) return 200;
-  if (adjRate < 0.45) return 1000;
+/** Worker 側: Edge-Swap スコア定数（pair-link-edge-swap-score.ts と同値に保つ） */
+function mergeEdgeSwapScoreParams(raw) {
+  const d = {
+    coverageMult: 1.5,
+    wEndpoint: 2,
+    wParallel: 7,
+    enclosureMult: 1.5,
+    semiDist3Weight: 0.5,
+    adjRateT1: 0.15,
+    adjRateT2: 0.3,
+  };
+  if (!raw || typeof raw !== "object") return d;
+  const keys = Object.keys(d);
+  for (let ki = 0; ki < keys.length; ki++) {
+    const key = keys[ki];
+    const v = raw[key];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      if (key === "adjRateT1" || key === "adjRateT2") {
+        d[key] = Math.max(0.01, Math.min(0.99, v));
+      } else {
+        d[key] = Math.max(0, Math.min(30, v));
+      }
+    }
+  }
+  if (d.adjRateT2 <= d.adjRateT1) {
+    d.adjRateT2 = Math.min(0.99, d.adjRateT1 + 0.01);
+  }
+  return d;
+}
+
+/** adjRate に応じた段階ペナルティ（正の値＝FinalScore から減算）。第3しきい値 0.45 は固定 */
+function adjacencyRateTierPenalty(adjRate, sp) {
+  const t3 = 0.45;
+  if (adjRate < sp.adjRateT1) return 0;
+  if (adjRate < sp.adjRateT2) return 200;
+  if (adjRate < t3) return 1000;
   return 5000 + adjRate * 10000;
 }
 
@@ -1049,9 +1080,16 @@ function adjacencyRateTierPenalty(adjRate) {
  *   m<=2 → adjCount（Dist2）、m===3 → semiAdjCount（Dist3）
  *   weightedAdjSum = adjCount + semiAdjCount*0.5、adjRate = weightedAdjSum / pathCount（パス本数）
  *   段階ペナルティを scale（0〜499:0.5、500〜:1、null:1）で乗じて減算
- * FinalScore = (Coverage*1.5 + InterferenceW) * (1 + Enclosures * 1.5) - tierPenalty*scale
+ * FinalScore = (Coverage*cM + InterferenceW) * (1 + Enclosures*eM) - tierPenalty*scale
  */
-function computeMutationScoreBreakdown(solutionGrid, adj, n, mutationAttemptIndex) {
+function computeMutationScoreBreakdown(
+  solutionGrid,
+  adj,
+  n,
+  mutationAttemptIndex,
+  scoreParams
+) {
+  const sp = mergeEdgeSwapScoreParams(scoreParams);
   const adjacentPenaltyScale =
     mutationAttemptIndex == null
       ? 1
@@ -1116,9 +1154,9 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n, mutationAttemptInde
   }
 
   const pathCount = epList.length;
-  const weightedAdjSum = adjCount + semiAdjCount * 0.5;
+  const weightedAdjSum = adjCount + semiAdjCount * sp.semiDist3Weight;
   const adjRate = pathCount > 0 ? weightedAdjSum / pathCount : 0;
-  const adjacencyTierPenaltyRaw = adjacencyRateTierPenalty(adjRate);
+  const adjacencyTierPenaltyRaw = adjacencyRateTierPenalty(adjRate, sp);
   const adjacencyPenaltyApplied =
     adjacencyTierPenaltyRaw * adjacentPenaltyScale;
 
@@ -1190,22 +1228,18 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n, mutationAttemptInde
     }
   }
 
-  const W_EP = 2;
-  const W_PAR = 7;
-  const COVERAGE_MULT = 1.5;
   const interferenceWeighted =
-    W_EP * interferenceEndpoint + W_PAR * interferenceParallel;
+    sp.wEndpoint * interferenceEndpoint + sp.wParallel * interferenceParallel;
   const interferenceScore = interferenceWeighted;
 
   const enclosureCount = countPairLinkEnclosures(solutionGrid, adj, n);
-  const ENC_MULT = 1.5;
-  const base = coverageScore * COVERAGE_MULT + interferenceWeighted;
+  const base = coverageScore * sp.coverageMult + interferenceWeighted;
   const finalScore =
-    base * (1 + enclosureCount * ENC_MULT) - adjacencyPenaltyApplied;
+    base * (1 + enclosureCount * sp.enclosureMult) - adjacencyPenaltyApplied;
 
   return {
     coverageScore,
-    coverageWeighted: coverageScore * COVERAGE_MULT,
+    coverageWeighted: coverageScore * sp.coverageMult,
     interferenceScore,
     interferenceEndpoint,
     interferenceParallel,
@@ -1255,6 +1289,7 @@ function logFinalScoreDetail(bd, tag) {
  */
 function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   const mOpts = mutationOpts || {};
+  const scoreParamsEffective = mergeEdgeSwapScoreParams(mOpts.edgeSwapScoreParams);
   const targetEnc =
     typeof mOpts.targetEnclosureCount === "number" && mOpts.targetEnclosureCount >= 0
       ? mOpts.targetEnclosureCount
@@ -1534,7 +1569,13 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   const MUTATION_ATTEMPTS = 1000;
   for (let attempt = 0; attempt < MUTATION_ATTEMPTS; attempt++) {
     if (typeof console !== "undefined" && attempt > 0 && attempt % 200 === 0) {
-      const snap = computeMutationScoreBreakdown(solutionGrid, adj, n, attempt);
+      const snap = computeMutationScoreBreakdown(
+        solutionGrid,
+        adj,
+        n,
+        attempt,
+        scoreParamsEffective
+      );
       logFinalScoreDetail(snap, "[Periodic]");
     }
 
@@ -1549,7 +1590,13 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     else if (hasEdge(tl.r, tl.c, tr.r, tr.c) && hasEdge(bl.r, bl.c, br.r, br.c)) pattern = "B";
     if (!pattern) continue;
 
-    const scoreBefore = computeMutationScoreBreakdown(solutionGrid, adj, n, attempt);
+    const scoreBefore = computeMutationScoreBreakdown(
+      solutionGrid,
+      adj,
+      n,
+      attempt,
+      scoreParamsEffective
+    );
 
     if (pattern === "A") {
       remEdge(tl.r, tl.c, bl.r, bl.c);
@@ -1569,7 +1616,13 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
       continue;
     }
 
-    const scoreAfter = computeMutationScoreBreakdown(solutionGrid, adj, n, attempt);
+    const scoreAfter = computeMutationScoreBreakdown(
+      solutionGrid,
+      adj,
+      n,
+      attempt,
+      scoreParamsEffective
+    );
     if (scoreAfter.finalScore <= scoreBefore.finalScore) {
       revertPattern(pattern, tl, tr, bl, br);
       continue;
@@ -1578,7 +1631,13 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     swapCount++;
   }
 
-  const mutFinal = computeMutationScoreBreakdown(solutionGrid, adj, n, null);
+  const mutFinal = computeMutationScoreBreakdown(
+    solutionGrid,
+    adj,
+    n,
+    null,
+    scoreParamsEffective
+  );
   /** ミューテーション直後（クロール前）。最終値は buildSolutionPaths 後に上書き */
   let postMutationScoreBreakdown = mutFinal;
   if (typeof console !== "undefined") {
@@ -1980,7 +2039,13 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
 
   const solutionPaths = buildSolutionPathsFromAdj();
 
-  postMutationScoreBreakdown = computeMutationScoreBreakdown(solutionGrid, adj, n, null);
+  postMutationScoreBreakdown = computeMutationScoreBreakdown(
+    solutionGrid,
+    adj,
+    n,
+    null,
+    scoreParamsEffective
+  );
   if (typeof console !== "undefined") {
     logFinalScoreDetail(postMutationScoreBreakdown, "Final Board —");
   }
@@ -2153,6 +2218,9 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
       edgeMutationOpts.targetEnclosureCount = cfg.targetEnclosureCount;
     }
     if (cfg.debugEnclosureViz) edgeMutationOpts.debugEnclosureViz = true;
+    if (cfg.edgeSwapScoreParams && typeof cfg.edgeSwapScoreParams === "object") {
+      edgeMutationOpts.edgeSwapScoreParams = cfg.edgeSwapScoreParams;
+    }
     const candidate = generateByEdgeSwap(gridSize, targetPairCount, random, edgeMutationOpts);
     const elapsed = Math.round(performance.now() - t0);
 

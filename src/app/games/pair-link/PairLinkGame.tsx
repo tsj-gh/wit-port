@@ -14,6 +14,11 @@ import { useUserSyncContext } from "@/components/UserSyncProvider";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
 import { recordPuzzleClear } from "@/lib/wispo-user-data";
 import type { Pair } from "@/lib/puzzle-engine/pair-link";
+import {
+  EDGE_SWAP_SCORE_DEFAULTS,
+  mergeEdgeSwapScoreParams,
+  type EdgeSwapScoreParams,
+} from "@/lib/pair-link-edge-swap-score";
 
 type NumberCell = { x: number; y: number; val: number; color: string };
 type PathPoint = { x: number; y: number };
@@ -26,6 +31,22 @@ export const EDGE_SWAP_PAIR_BOUNDS: Record<number, { min: number; max: number }>
   7: { min: 7, max: 10 },
   8: { min: 8, max: 10 },
 };
+
+const EDGE_SWAP_SCORE_FIELDS: {
+  key: keyof EdgeSwapScoreParams;
+  label: string;
+  step: string;
+  min: number;
+  max: number;
+}[] = [
+  { key: "coverageMult", label: "Coverage 係数", step: "0.05", min: 0, max: 10 },
+  { key: "wEndpoint", label: "Interference 端点重み", step: "0.5", min: 0, max: 20 },
+  { key: "wParallel", label: "Interference 並走重み", step: "0.5", min: 0, max: 20 },
+  { key: "enclosureMult", label: "囲い込み倍率", step: "0.05", min: 0, max: 10 },
+  { key: "semiDist3Weight", label: "準隣接(距離3)重み", step: "0.05", min: 0, max: 5 },
+  { key: "adjRateT1", label: "隣接率しきい値1", step: "0.01", min: 0.01, max: 0.99 },
+  { key: "adjRateT2", label: "隣接率しきい値2", step: "0.01", min: 0.01, max: 0.99 },
+];
 
 function pairCountOptions(gridSize: number, generationMode: "default" | "edgeSwap"): number[] {
   const b = EDGE_SWAP_PAIR_BOUNDS[gridSize];
@@ -97,11 +118,19 @@ export default function PairLinkGame() {
   const [configEmptyIsolatedPenalty, setConfigEmptyIsolatedPenalty] = useState(5);
   const [configDetourWeight, setConfigDetourWeight] = useState(0);
   const [configBaseThreshold, setConfigBaseThreshold] = useState(0);
-  const [debugGenerationMode, setDebugGenerationMode] = useState<"default" | "edgeSwap">("default");
+  const [debugGenerationMode, setDebugGenerationMode] = useState<"default" | "edgeSwap">("edgeSwap");
   /** Edge-Swap: 囲い込み目標を worker に渡す（オフ時は従来どおり距離ベースのみ） */
-  const [debugEnclosureTargetOn, setDebugEnclosureTargetOn] = useState(false);
-  const [debugTargetEnclosureCount, setDebugTargetEnclosureCount] = useState(6);
+  const [debugEnclosureTargetOn, setDebugEnclosureTargetOn] = useState(true);
+  const [debugTargetEnclosureCount, setDebugTargetEnclosureCount] = useState(10);
   const [debugEnclosures, setDebugEnclosures] = useState<EnclosureDebugItem[] | null>(null);
+  const [edgeSwapScoreDraft, setEdgeSwapScoreDraft] = useState<EdgeSwapScoreParams>(() => ({
+    ...EDGE_SWAP_SCORE_DEFAULTS,
+  }));
+  const [edgeSwapScoreApplied, setEdgeSwapScoreApplied] = useState<EdgeSwapScoreParams>(() => ({
+    ...EDGE_SWAP_SCORE_DEFAULTS,
+  }));
+  const [edgeSwapConstantsPanelOpen, setEdgeSwapConstantsPanelOpen] = useState(false);
+  const [legacyDebugPanelOpen, setLegacyDebugPanelOpen] = useState(false);
   const countFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : 500)
@@ -199,6 +228,9 @@ export default function PairLinkGame() {
       : {}),
     ...(isDebugMode && debugGenerationMode === "edgeSwap"
       ? { debugEnclosureViz: true }
+      : {}),
+    ...(debugGenerationMode === "edgeSwap"
+      ? { edgeSwapScoreParams: edgeSwapScoreApplied }
       : {}),
   };
   const { getPuzzle, prefetch, manualPrefetch, clearStockForKey, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs, stockStatus } = usePuzzleStock({ config: evalConfig });
@@ -300,6 +332,7 @@ export default function PairLinkGame() {
     debugGenerationMode,
     debugEnclosureTargetOn,
     debugTargetEnclosureCount,
+    edgeSwapScoreApplied,
     isDebugMode,
     workerGenerate,
     configEmptyIsolatedPenalty,
@@ -345,6 +378,7 @@ export default function PairLinkGame() {
     debugGenerationMode,
     debugEnclosureTargetOn,
     debugTargetEnclosureCount,
+    edgeSwapScoreApplied,
     isDebugMode,
     workerGenerate,
     configEmptyIsolatedPenalty,
@@ -1109,6 +1143,16 @@ export default function PairLinkGame() {
                     </span>
                   ) : null}
                 </div>
+                <div>
+                  リフレッシュ回数:{" "}
+                  <span
+                    className={`tabular-nums transition-colors duration-200 ${
+                      countFlashing ? "text-amber-400 font-bold" : ""
+                    }`}
+                  >
+                    {adsRefreshState.refreshCount}
+                  </span>
+                </div>
                 <div className="mt-1 pt-1 border-t border-white/10">
                   <div className="font-semibold text-slate-300 mb-0.5">生成モード</div>
                   <div className="flex flex-wrap gap-1 mt-0.5">
@@ -1127,213 +1171,313 @@ export default function PairLinkGame() {
                     ))}
                   </div>
                   {debugGenerationMode === "edgeSwap" && (
-                    <div className="mt-1 space-y-1 text-[10px] text-slate-400">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={debugEnclosureTargetOn}
-                          onChange={(e) => setDebugEnclosureTargetOn(e.target.checked)}
-                          className="rounded border-white/30"
-                        />
-                        <span>囲い込み目標（targetEnclosureCount）を有効化</span>
-                      </label>
-                      <div className="flex items-center gap-1 pl-5">
-                        <span className="shrink-0 w-24">目標件数</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={24}
-                          step={1}
-                          value={debugTargetEnclosureCount}
-                          onChange={(e) => setDebugTargetEnclosureCount(Number(e.target.value))}
-                          disabled={!debugEnclosureTargetOn}
-                          className="flex-1 disabled:opacity-40"
-                        />
-                        <span className="tabular-nums w-6 text-slate-300">
-                          {debugTargetEnclosureCount}
-                        </span>
+                    <>
+                      <div className="mt-1 space-y-1 text-[10px] text-slate-400">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={debugEnclosureTargetOn}
+                            onChange={(e) => setDebugEnclosureTargetOn(e.target.checked)}
+                            className="rounded border-white/30"
+                          />
+                          <span>囲い込み目標（targetEnclosureCount）を有効化</span>
+                        </label>
+                        <div className="flex items-center gap-1 pl-5">
+                          <span className="shrink-0 w-24">目標件数</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={24}
+                            step={1}
+                            value={debugTargetEnclosureCount}
+                            onChange={(e) => setDebugTargetEnclosureCount(Number(e.target.value))}
+                            disabled={!debugEnclosureTargetOn}
+                            className="flex-1 disabled:opacity-40"
+                          />
+                          <span className="tabular-nums w-6 text-slate-300">
+                            {debugTargetEnclosureCount}
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                      <div className="mt-1 pt-1 border-t border-white/10">
+                        <button
+                          type="button"
+                          onClick={() => setEdgeSwapConstantsPanelOpen((o) => !o)}
+                          className="flex items-center gap-1 w-full text-left font-semibold text-slate-300 text-[10px] py-0.5 hover:text-white/90"
+                        >
+                          <span className="tabular-nums w-3 text-slate-500">
+                            {edgeSwapConstantsPanelOpen ? "▼" : "▶"}
+                          </span>
+                          Edge Swap定数
+                        </button>
+                        {edgeSwapConstantsPanelOpen && (
+                          <div className="mt-1 space-y-1 pl-1 text-[10px]">
+                            {EDGE_SWAP_SCORE_FIELDS.map((f) => (
+                              <div key={f.key} className="flex items-center gap-1 flex-wrap">
+                                <span className="text-slate-400 shrink-0 w-[10.5rem]">{f.label}</span>
+                                <input
+                                  type="number"
+                                  min={f.min}
+                                  max={f.max}
+                                  step={f.step}
+                                  value={edgeSwapScoreDraft[f.key]}
+                                  onChange={(e) =>
+                                    setEdgeSwapScoreDraft((d) => ({
+                                      ...d,
+                                      [f.key]: Number(e.target.value),
+                                    }))
+                                  }
+                                  className="w-[4.5rem] px-1 py-0.5 rounded bg-black/60 border border-white/20 text-slate-200"
+                                />
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEdgeSwapScoreApplied(mergeEdgeSwapScoreParams(edgeSwapScoreDraft))
+                              }
+                              className="mt-1 px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/25 text-emerald-300 hover:bg-emerald-500/35"
+                            >
+                              変更を反映
+                            </button>
+                            <p className="text-[9px] text-slate-500 leading-snug">
+                              隣接率の第3しきい値 0.45 および段階ペナルティ額（200 / 1000 / 5000+）は
+                              worker 固定です。
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
                 {isDevTj && (
                   <>
-                  <div className="mt-1 pt-1 border-t border-white/10">
-                    <div className="font-semibold text-slate-300">評価関数パラメータ</div>
-                    <div className="space-y-1 mt-0.5 text-[10px]">
+                    <DevDebugUserStats />
+                    <div className="mt-1 pt-1 border-t border-white/10 space-y-1">
+                      <div className="font-semibold text-slate-300">進捗同期</div>
                       <div className="flex items-center gap-1">
-                        <span className="text-slate-400 shrink-0 w-32">Empty Isolated:</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={20}
-                          step={1}
-                          value={configEmptyIsolatedPenalty}
-                          onChange={(e) => setConfigEmptyIsolatedPenalty(Number(e.target.value))}
-                          className="flex-1"
-                        />
-                        <span className="tabular-nums w-6">{configEmptyIsolatedPenalty}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-400 shrink-0 w-32">Detour Weight:</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={5}
-                          step={0.1}
-                          value={configDetourWeight}
-                          onChange={(e) => setConfigDetourWeight(Number(e.target.value))}
-                          className="flex-1"
-                        />
-                        <span className="tabular-nums w-8">{configDetourWeight.toFixed(1)}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-400 shrink-0 w-32">Base Threshold:</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={1000}
-                          step={10}
-                          value={configBaseThreshold}
-                          onChange={(e) => setConfigBaseThreshold(Number(e.target.value))}
-                          className="flex-1"
-                        />
-                        <span className="tabular-nums w-10">{configBaseThreshold === 0 ? "自動" : configBaseThreshold}</span>
+                        <span className="text-slate-400 shrink-0">anon_id:</span>
+                        <code
+                          className="text-[9px] truncate max-w-[120px] bg-black/40 px-1 rounded"
+                          title={userSync?.anonId ?? ""}
+                        >
+                          {userSync?.anonId ?? "—"}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => userSync?.syncNow()}
+                          className="px-1 py-0.5 rounded text-[9px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30"
+                        >
+                          同期
+                        </button>
                       </div>
                     </div>
-                  </div>
-                  <div className="mt-1 pt-1 border-t border-white/10">
-                    <div className="font-semibold text-slate-300">一意解限界調査</div>
-                    <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                      <label className="text-slate-400 text-[10px] shrink-0">Grid:</label>
-                      <input
-                        type="number"
-                        min={4}
-                        max={8}
-                        value={debugGridSize}
-                        onChange={(e) => {
-                          const v = Math.max(4, Math.min(8, Number(e.target.value) || 6));
-                          setDebugGridSize(v);
-                          const maxP = v >= 7 ? 10 : v;
-                          setDebugNumPairs((p) => Math.min(p, maxP));
-                        }}
-                        className="w-12 px-1 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
-                      />
-                      <label className="text-slate-400 text-[10px] shrink-0">Pairs:</label>
-                      <input
-                        type="number"
-                        min={2}
-                        max={debugGridSize >= 7 ? 10 : debugGridSize}
-                        value={debugNumPairs}
-                        onChange={(e) => setDebugNumPairs(Math.max(2, Math.min(debugGridSize >= 7 ? 10 : debugGridSize, Number(e.target.value) || 5)))}
-                        className="w-12 px-1 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
-                      />
+                    <div className="mt-1 pt-1 border-t border-white/10 space-y-1">
+                      <div className="font-semibold text-slate-300">シード（再現用）</div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-400 shrink-0">Current Hash:</span>
+                        <code
+                          className="text-[9px] truncate max-w-[140px] bg-black/40 px-1 rounded"
+                          title={currentSeed ?? ""}
+                        >
+                          {currentSeed ?? "—"}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (currentSeed && navigator.clipboard) {
+                              navigator.clipboard.writeText(currentSeed);
+                            }
+                          }}
+                          disabled={!currentSeed}
+                          className="px-1 py-0.5 rounded text-[9px] border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          コピー
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-1 pt-1 border-t border-white/10">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="text-slate-400 shrink-0">Input Hash:</span>
+                        <input
+                          type="text"
+                          value={hashInput}
+                          onChange={(e) => setHashInput(e.target.value)}
+                          placeholder="ハッシュを入力"
+                          className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const s = hashInput.trim();
+                            if (s) initGame(settingsGridSize, settingsNumPairs, s);
+                          }}
+                          disabled={!hashInput.trim() || loading}
+                          className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          ハッシュから生成
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-1 pt-1 border-t border-white/10">
                       <button
-                        onClick={runTest10}
-                        disabled={test10Running}
-                        className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                        type="button"
+                        onClick={() => setLegacyDebugPanelOpen((o) => !o)}
+                        className="flex items-center gap-1 w-full text-left font-semibold text-slate-300 text-[10px] py-0.5 hover:text-white/90"
                       >
-                        {test10Running ? "実行中..." : "Test 10 Runs"}
+                        <span className="tabular-nums w-3 text-slate-500">
+                          {legacyDebugPanelOpen ? "▼" : "▶"}
+                        </span>
+                        過去の情報（Default 生成・ABC 等）
                       </button>
-                    </div>
-                    {test10Result && (
-                      <div className="mt-0.5 text-[10px] text-slate-400">
-                        <span>成功: {test10Result.success}/10</span>
-                        <span className="ml-2">平均: {test10Result.avgMs}ms</span>
-                        {test10Result.lastAbc && (
-                          <div className="mt-0.5 text-amber-400/90">
-                            ABC: A={test10Result.lastAbc.detourScore.toFixed(2)} B={test10Result.lastAbc.enclosureScore} C={test10Result.lastAbc.junctionComplexity.toFixed(2)}
+                      {legacyDebugPanelOpen && (
+                        <>
+                          <div className="mt-1 pt-1 border-t border-white/10">
+                            <div className="font-semibold text-slate-300">評価関数パラメータ</div>
+                            <div className="space-y-1 mt-0.5 text-[10px]">
+                              <div className="flex items-center gap-1">
+                                <span className="text-slate-400 shrink-0 w-32">Empty Isolated:</span>
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={20}
+                                  step={1}
+                                  value={configEmptyIsolatedPenalty}
+                                  onChange={(e) => setConfigEmptyIsolatedPenalty(Number(e.target.value))}
+                                  className="flex-1"
+                                />
+                                <span className="tabular-nums w-6">{configEmptyIsolatedPenalty}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-slate-400 shrink-0 w-32">Detour Weight:</span>
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={5}
+                                  step={0.1}
+                                  value={configDetourWeight}
+                                  onChange={(e) => setConfigDetourWeight(Number(e.target.value))}
+                                  className="flex-1"
+                                />
+                                <span className="tabular-nums w-8">{configDetourWeight.toFixed(1)}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-slate-400 shrink-0 w-32">Base Threshold:</span>
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={1000}
+                                  step={10}
+                                  value={configBaseThreshold}
+                                  onChange={(e) => setConfigBaseThreshold(Number(e.target.value))}
+                                  className="flex-1"
+                                />
+                                <span className="tabular-nums w-10">
+                                  {configBaseThreshold === 0 ? "自動" : configBaseThreshold}
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-1 pt-1 border-t border-white/10">
-                    <div className="font-semibold text-slate-300">ABC スコア</div>
-                    <div className="space-y-0.5 text-slate-400/90">
-                      <div>A. 迂回率: <span className="tabular-nums text-amber-400">{abcScore ? abcScore.detourScore.toFixed(3) : "—"}</span></div>
-                      <div>B. エンクロージャ: <span className="tabular-nums text-amber-400">{abcScore != null ? abcScore.enclosureScore : "—"}</span></div>
-                      <div>C. 分岐複雑性: <span className="tabular-nums text-amber-400">{abcScore ? abcScore.junctionComplexity.toFixed(3) : "—"}</span></div>
+                          <div className="mt-1 pt-1 border-t border-white/10">
+                            <div className="font-semibold text-slate-300">一意解限界調査</div>
+                            <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                              <label className="text-slate-400 text-[10px] shrink-0">Grid:</label>
+                              <input
+                                type="number"
+                                min={4}
+                                max={8}
+                                value={debugGridSize}
+                                onChange={(e) => {
+                                  const v = Math.max(4, Math.min(8, Number(e.target.value) || 6));
+                                  setDebugGridSize(v);
+                                  const maxP = v >= 7 ? 10 : v;
+                                  setDebugNumPairs((p) => Math.min(p, maxP));
+                                }}
+                                className="w-12 px-1 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+                              />
+                              <label className="text-slate-400 text-[10px] shrink-0">Pairs:</label>
+                              <input
+                                type="number"
+                                min={2}
+                                max={debugGridSize >= 7 ? 10 : debugGridSize}
+                                value={debugNumPairs}
+                                onChange={(e) =>
+                                  setDebugNumPairs(
+                                    Math.max(
+                                      2,
+                                      Math.min(
+                                        debugGridSize >= 7 ? 10 : debugGridSize,
+                                        Number(e.target.value) || 5
+                                      )
+                                    )
+                                  )
+                                }
+                                className="w-12 px-1 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+                              />
+                              <button
+                                type="button"
+                                onClick={runTest10}
+                                disabled={test10Running}
+                                className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {test10Running ? "実行中..." : "Test 10 Runs"}
+                              </button>
+                            </div>
+                            {test10Result && (
+                              <div className="mt-0.5 text-[10px] text-slate-400">
+                                <span>成功: {test10Result.success}/10</span>
+                                <span className="ml-2">平均: {test10Result.avgMs}ms</span>
+                                {test10Result.lastAbc && (
+                                  <div className="mt-0.5 text-amber-400/90">
+                                    ABC: A={test10Result.lastAbc.detourScore.toFixed(2)} B=
+                                    {test10Result.lastAbc.enclosureScore} C=
+                                    {test10Result.lastAbc.junctionComplexity.toFixed(2)}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="mt-1 pt-1 border-t border-white/10">
+                            <div className="font-semibold text-slate-300">ABC スコア</div>
+                            <div className="space-y-0.5 text-slate-400/90">
+                              <div>
+                                A. 迂回率:{" "}
+                                <span className="tabular-nums text-amber-400">
+                                  {abcScore ? abcScore.detourScore.toFixed(3) : "—"}
+                                </span>
+                              </div>
+                              <div>
+                                B. エンクロージャ:{" "}
+                                <span className="tabular-nums text-amber-400">
+                                  {abcScore != null ? abcScore.enclosureScore : "—"}
+                                </span>
+                              </div>
+                              <div>
+                                C. 分岐複雑性:{" "}
+                                <span className="tabular-nums text-amber-400">
+                                  {abcScore ? abcScore.junctionComplexity.toFixed(3) : "—"}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={runBatch100}
+                              disabled={batch100Running}
+                              className="mt-1 px-2 py-0.5 rounded text-[10px] border border-violet-500/50 bg-violet-500/20 text-violet-400 hover:bg-violet-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {batch100Running ? "計測中..." : "100回生成 & 計測"}
+                            </button>
+                            {batch100Result && (
+                              <pre className="mt-1 p-1 rounded bg-black/40 text-[9px] text-slate-300 whitespace-pre-wrap max-h-24 overflow-y-auto">
+                                {batch100Result}
+                              </pre>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <button
-                      onClick={runBatch100}
-                      disabled={batch100Running}
-                      className="mt-1 px-2 py-0.5 rounded text-[10px] border border-violet-500/50 bg-violet-500/20 text-violet-400 hover:bg-violet-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {batch100Running ? "計測中..." : "100回生成 & 計測"}
-                    </button>
-                    {batch100Result && (
-                      <pre className="mt-1 p-1 rounded bg-black/40 text-[9px] text-slate-300 whitespace-pre-wrap max-h-24 overflow-y-auto">
-                        {batch100Result}
-                      </pre>
-                    )}
-                  </div>
-                  <DevDebugUserStats />
-                  <div className="mt-1 pt-1 border-t border-white/10 space-y-1">
-                    <div className="font-semibold text-slate-300">進捗同期</div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-slate-400 shrink-0">anon_id:</span>
-                      <code className="text-[9px] truncate max-w-[120px] bg-black/40 px-1 rounded" title={userSync?.anonId ?? ""}>
-                        {userSync?.anonId ?? "—"}
-                      </code>
-                      <button
-                        onClick={() => userSync?.syncNow()}
-                        className="px-1 py-0.5 rounded text-[9px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30"
-                      >
-                        同期
-                      </button>
-                    </div>
-                    <div className="font-semibold text-slate-300 mt-1">シード（再現用）</div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-slate-400 shrink-0">Current Hash:</span>
-                      <code className="text-[9px] truncate max-w-[140px] bg-black/40 px-1 rounded" title={currentSeed ?? ""}>
-                        {currentSeed ?? "—"}
-                      </code>
-                      <button
-                        onClick={() => {
-                          if (currentSeed && navigator.clipboard) {
-                            navigator.clipboard.writeText(currentSeed);
-                          }
-                        }}
-                        disabled={!currentSeed}
-                        className="px-1 py-0.5 rounded text-[9px] border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        コピー
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <span className="text-slate-400 shrink-0">Input Hash:</span>
-                      <input
-                        type="text"
-                        value={hashInput}
-                        onChange={(e) => setHashInput(e.target.value)}
-                        placeholder="ハッシュを入力"
-                        className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
-                      />
-                      <button
-                        onClick={() => {
-                          const s = hashInput.trim();
-                          if (s) initGame(settingsGridSize, settingsNumPairs, s);
-                        }}
-                        disabled={!hashInput.trim() || loading}
-                        className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        ハッシュから生成
-                      </button>
-                    </div>
-                  </div>
                   </>
                 )}
-                <div>
-                  リフレッシュ回数:{" "}
-                  <span
-                    className={`tabular-nums transition-colors duration-200 ${
-                      countFlashing ? "text-amber-400 font-bold" : ""
-                    }`}
-                  >
-                    {adsRefreshState.refreshCount}
-                  </span>
-                </div>
               </div>
               <div className="mt-2 flex gap-1">
                 {([{ label: "PC", value: null }, { label: "Mobile", value: 375 }, { label: "Tablet", value: 768 }] as const).map(

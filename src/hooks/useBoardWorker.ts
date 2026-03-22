@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { EdgeSwapScoreParams } from "@/lib/pair-link-edge-swap-score";
+
+export type { EdgeSwapScoreParams };
 
 /** Worker（Edge-Swap 囲い込みデバッグ）から返る可視化用エントリ */
 export type EnclosureDebugItem =
@@ -82,6 +85,8 @@ export type WorkerConfig = {
   targetEnclosureCount?: number;
   /** Edge-Swap 時: 囲い込み列挙ログと可視化データを返す */
   debugEnclosureViz?: boolean;
+  /** Edge-Swap 時: 評価関数の 7 定数（部分指定可、worker 側で既定とマージ） */
+  edgeSwapScoreParams?: Partial<EdgeSwapScoreParams>;
 };
 
 type QueueItem = {

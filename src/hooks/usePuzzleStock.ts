@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBoardWorker, type GenerateResult, type WorkerConfig } from "@/hooks/useBoardWorker";
+import { mergeEdgeSwapScoreParams } from "@/lib/pair-link-edge-swap-score";
 
 const STOCK_MAX = 3;
 const STOCK_REFILL_THRESHOLD = 2;
@@ -13,6 +14,8 @@ function makeKey(gridSize: number, numPairs: number, config?: WorkerConfig): str
     const te = config.targetEnclosureCount;
     k += te != null && te >= 0 ? `:e${Math.round(te)}` : `:e_off`;
     k += config.debugEnclosureViz ? ":dv1" : ":dv0";
+    const sp = mergeEdgeSwapScoreParams(config.edgeSwapScoreParams);
+    k += `:sp${JSON.stringify(sp)}`;
   }
   return k;
 }
