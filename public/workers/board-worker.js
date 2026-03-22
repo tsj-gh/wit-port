@@ -1587,6 +1587,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   }
 
   const mutFinal = computeMutationScoreBreakdown(solutionGrid, adj, n, null);
+  const postMutationScoreBreakdown = mutFinal;
   if (typeof console !== "undefined") {
     console.log("Mutation Complete - Successful Swaps: " + swapCount);
     logFinalScoreDetail(mutFinal, "Mutation —");
@@ -2071,6 +2072,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     solutionPaths,
     difficultyScore: 0,
     debugEnclosures: encAnalysis != null ? encAnalysis.debugEnclosures : null,
+    postMutationScoreBreakdown,
   };
 }
 
@@ -2177,6 +2179,7 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
       seed: attemptSeed,
       solutionPaths: candidate.solutionPaths || null,
       debugEnclosures: candidate.debugEnclosures || null,
+      postMutationScoreBreakdown: candidate.postMutationScoreBreakdown || null,
     };
   }
 

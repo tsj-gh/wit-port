@@ -29,3 +29,6 @@ yarn-error.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Local simulation output (large JSON; regenerate with npm run sim:pairlink-scores)
+simulation_results.json
