@@ -26,13 +26,15 @@ type PathPoint = { x: number; y: number };
 const PADDING = 50;
 const HIT_RADIUS_FACTOR = 0.55; // 数字・端点の当たり判定半径（spacing に対する倍率）
 
-/** Edge-Swap: 4×4〜6×6 は Default と同様のペア範囲、7×7〜8×8 は密ペア（board-worker と一致） */
+/** Edge-Swap: 4×4〜6×6 は Default と同様、7×7 は 7〜10、8×8〜10×10 は 8〜10（board-worker と一致） */
 export const EDGE_SWAP_PAIR_BOUNDS: Record<number, { min: number; max: number }> = {
   4: { min: 2, max: 4 },
   5: { min: 3, max: 5 },
   6: { min: 4, max: 6 },
   7: { min: 7, max: 10 },
   8: { min: 8, max: 10 },
+  9: { min: 8, max: 10 },
+  10: { min: 8, max: 10 },
 };
 
 const EDGE_SWAP_SCORE_FIELDS: {
@@ -670,7 +672,10 @@ export default function PairLinkGame() {
         const isActive =
           isDrawing && activeVal === v && activePathIdx === idx;
         ctx.strokeStyle = color;
-        ctx.lineWidth = spacing * (isActive ? 0.55 : 0.45);
+        ctx.lineWidth =
+          gridSize >= 9
+            ? Math.max(2, spacing * (isActive ? 0.55 : 0.45))
+            : spacing * (isActive ? 0.55 : 0.45);
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         ctx.globalAlpha = isActive ? 0.7 : 1;
@@ -1577,7 +1582,7 @@ export default function PairLinkGame() {
               }}
               className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
             >
-              {[4, 5, 6, 7, 8].map((n) => (
+              {[4, 5, 6, 7, 8, 9, 10].map((n) => (
                 <option key={n} value={n}>{n}×{n}</option>
               ))}
             </select>

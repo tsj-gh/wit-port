@@ -8,6 +8,26 @@ const STOCK_MAX = 3;
 const STOCK_REFILL_THRESHOLD = 2;
 const MAX_KEYS = 5;
 
+function getPairBounds(gs: number, config?: WorkerConfig): { min: number; max: number } {
+  if (config?.generationMode === "edgeSwap") {
+    const b: Record<number, { min: number; max: number }> = {
+      4: { min: 2, max: 4 },
+      5: { min: 3, max: 5 },
+      6: { min: 4, max: 6 },
+      7: { min: 7, max: 10 },
+      8: { min: 8, max: 10 },
+      9: { min: 8, max: 10 },
+      10: { min: 8, max: 10 },
+    };
+    const bound = b[gs];
+    if (bound) return bound;
+  }
+  return {
+    min: Math.max(2, gs - 2),
+    max: gs >= 7 ? 10 : gs,
+  };
+}
+
 function makeKey(gridSize: number, numPairs: number, config?: WorkerConfig): string {
   let k = `${gridSize}x${numPairs}`;
   if (config?.generationMode === "edgeSwap") {
@@ -214,8 +234,7 @@ export function usePuzzleStock(
 
   const getPuzzle = useCallback(
     async (gs: number, np: number, seed?: string): Promise<GenerateResult> => {
-      const minNp = Math.max(2, gs - 2);
-      const maxNp = gs >= 7 ? 10 : gs;
+      const { min: minNp, max: maxNp } = getPairBounds(gs, config);
       const clampedNp = Math.max(minNp, Math.min(maxNp, np));
       const key = makeKey(gs, clampedNp, config);
 

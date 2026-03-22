@@ -2205,8 +2205,8 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
   const cfg = config || {};
   const generationMode = cfg.generationMode || "default";
 
-  if (gridSize >= 4 && gridSize <= 8 && generationMode === "edgeSwap") {
-    const minPairs = gridSize <= 6 ? Math.max(2, gridSize - 2) : (gridSize === 7 ? 7 : 8);
+  if (gridSize >= 4 && gridSize <= 10 && generationMode === "edgeSwap") {
+    const minPairs = gridSize <= 6 ? Math.max(2, gridSize - 2) : (gridSize >= 9 ? 8 : (gridSize === 7 ? 7 : 8));
     const maxPairsEdge = gridSize <= 6 ? gridSize : 10;
     const t0 = performance.now();
     const hasSeed = seed != null && String(seed).trim() !== "";
