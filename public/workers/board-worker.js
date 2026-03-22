@@ -805,7 +805,7 @@ function checkHorizontalWrapEnclosure(path, nr, tCol) {
 
 /**
  * 囲い込み（Enclosure）の件数 — 幾何的挟み＋**追い越し方向（変位）が逆**のときのみ。
- * 重複除去: キー V|nr|nc / H|nr|nc
+ * 重複除去: **囲むパス pPid × 囲まれるパス qPid** につき最大 1 回（縦横・複数線・複数端点の重複はまとめる）
  */
 function countPairLinkEnclosures(solutionGrid, adj, n) {
   const pidSet = new Set();
@@ -820,34 +820,25 @@ function countPairLinkEnclosures(solutionGrid, adj, n) {
   for (let i = 0; i < pids.length; i++) {
     pathCache.set(pids[i], getOrderedPathForPid(pids[i], solutionGrid, adj, n));
   }
-  const seen = new Set();
+  const pairCounted = new Set();
   let count = 0;
   for (let nr = 0; nr < n; nr++) {
     for (let nc = 0; nc < n; nc++) {
       if (adj[nr][nc].length !== 1) continue;
       const qPid = solutionGrid[nr][nc];
-      let vertEnc = false;
-      let horizEnc = false;
       for (let pi = 0; pi < pids.length; pi++) {
         const pPid = pids[pi];
         if (pPid === qPid) continue;
+        const pk = pPid + ">" + qPid;
+        if (pairCounted.has(pk)) continue;
         const path = pathCache.get(pPid);
         if (!path) continue;
         const rv = checkVerticalWrapEnclosure(path, nc, nr);
-        if (rv.ok) vertEnc = true;
         const rh = checkHorizontalWrapEnclosure(path, nr, nc);
-        if (rh.ok) horizEnc = true;
-        if (vertEnc && horizEnc) break;
-      }
-      const kv = "V|" + nr + "|" + nc;
-      const kh = "H|" + nr + "|" + nc;
-      if (vertEnc && !seen.has(kv)) {
-        seen.add(kv);
-        count++;
-      }
-      if (horizEnc && !seen.has(kh)) {
-        seen.add(kh);
-        count++;
+        if (rv.ok || rh.ok) {
+          pairCounted.add(pk);
+          count++;
+        }
       }
     }
   }
@@ -872,7 +863,7 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
   for (let i = 0; i < pids.length; i++) {
     pathCache.set(pids[i], getOrderedPathForPid(pids[i], solutionGrid, adj, n));
   }
-  const seen = new Set();
+  const pairCounted = new Set();
   const debugEnclosures = [];
   let count = 0;
 
@@ -894,25 +885,16 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
         const path = pathCache.get(pPid);
         if (!path) continue;
 
+        const pk = pPid + ">" + qPid;
+
         const rv = checkVerticalWrapEnclosure(path, nc, nr);
-        const kv = "V|" + nr + "|" + nc;
-        if (rv.ok) {
-          if (!seen.has(kv)) {
-            seen.add(kv);
-            count++;
-            debugEnclosures.push({
-              kind: "vertical",
-              col: nc,
-              y1: rv.y1,
-              y2: rv.y2,
-              nRow: nr,
-              nCol: nc,
-              pathIdP: pairP,
-              pathIdN: pairN,
-            });
-            if (logToConsole) {
+        const rh = checkHorizontalWrapEnclosure(path, nr, nc);
+
+        if (pairCounted.has(pk)) {
+          if (logToConsole) {
+            if (rv.ok) {
               console.log(
-                "[Enclosure Found] TargetPair: " +
+                "[Enclosure Skipped] TargetPair: " +
                   pairN +
                   ", Line: X=" +
                   nc +
@@ -922,10 +904,37 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                   rv.y2 +
                   "), OccupiedBy: PathID=" +
                   pairP +
-                  " (opposite X pass: L/R)"
+                  " — reason: already counted pair " +
+                  pairP +
+                  "→" +
+                  pairN +
+                  " (one per victim path)"
+              );
+            } else if (rh.ok) {
+              console.log(
+                "[Enclosure Skipped] TargetPair: " +
+                  pairN +
+                  ", Line: Y=" +
+                  nr +
+                  " (X:" +
+                  rh.x1 +
+                  "-" +
+                  rh.x2 +
+                  "), OccupiedBy: PathID=" +
+                  pairP +
+                  " — reason: already counted pair " +
+                  pairP +
+                  "→" +
+                  pairN +
+                  " (one per victim path)"
               );
             }
-          } else if (logToConsole) {
+          }
+          continue;
+        }
+
+        if (!rv.ok && !rh.ok) {
+          if (logToConsole && rv.sandwich) {
             console.log(
               "[Enclosure Skipped] TargetPair: " +
                 pairN +
@@ -937,61 +946,12 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                 rv.y2 +
                 "), OccupiedBy: PathID=" +
                 pairP +
-                " — reason: duplicate vertical key " +
-                kv +
-                " (already counted)"
+                " — reason: " +
+                rv.reason +
+                " (geometric sandwich but not opposite X-displacement pass)"
             );
           }
-        } else if (logToConsole && rv.sandwich) {
-          console.log(
-            "[Enclosure Skipped] TargetPair: " +
-              pairN +
-              ", Line: X=" +
-              nc +
-              " (Y:" +
-              rv.y1 +
-              "-" +
-              rv.y2 +
-              "), OccupiedBy: PathID=" +
-              pairP +
-              " — reason: " +
-              rv.reason +
-              " (geometric sandwich but not opposite X-displacement pass)"
-          );
-        }
-
-        const rh = checkHorizontalWrapEnclosure(path, nr, nc);
-        const kh = "H|" + nr + "|" + nc;
-        if (rh.ok) {
-          if (!seen.has(kh)) {
-            seen.add(kh);
-            count++;
-            debugEnclosures.push({
-              kind: "horizontal",
-              row: nr,
-              x1: rh.x1,
-              x2: rh.x2,
-              nRow: nr,
-              nCol: nc,
-              pathIdP: pairP,
-              pathIdN: pairN,
-            });
-            if (logToConsole) {
-              console.log(
-                "[Enclosure Found] TargetPair: " +
-                  pairN +
-                  ", Line: Y=" +
-                  nr +
-                  " (X:" +
-                  rh.x1 +
-                  "-" +
-                  rh.x2 +
-                  "), OccupiedBy: PathID=" +
-                  pairP +
-                  " (opposite Y pass: B/A)"
-              );
-            }
-          } else if (logToConsole) {
+          if (logToConsole && rh.sandwich) {
             console.log(
               "[Enclosure Skipped] TargetPair: " +
                 pairN +
@@ -1003,27 +963,68 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                 rh.x2 +
                 "), OccupiedBy: PathID=" +
                 pairP +
-                " — reason: duplicate horizontal key " +
-                kh +
-                " (already counted)"
+                " — reason: " +
+                rh.reason +
+                " (geometric sandwich but not opposite Y-displacement pass)"
             );
           }
-        } else if (logToConsole && rh.sandwich) {
-          console.log(
-            "[Enclosure Skipped] TargetPair: " +
-              pairN +
-              ", Line: Y=" +
-              nr +
-              " (X:" +
-              rh.x1 +
-              "-" +
-              rh.x2 +
-              "), OccupiedBy: PathID=" +
-              pairP +
-              " — reason: " +
-              rh.reason +
-              " (geometric sandwich but not opposite Y-displacement pass)"
-          );
+          continue;
+        }
+
+        pairCounted.add(pk);
+        count++;
+        if (rv.ok) {
+          debugEnclosures.push({
+            kind: "vertical",
+            col: nc,
+            y1: rv.y1,
+            y2: rv.y2,
+            nRow: nr,
+            nCol: nc,
+            pathIdP: pairP,
+            pathIdN: pairN,
+          });
+          if (logToConsole) {
+            console.log(
+              "[Enclosure Found] TargetPair: " +
+                pairN +
+                ", Line: X=" +
+                nc +
+                " (Y:" +
+                rv.y1 +
+                "-" +
+                rv.y2 +
+                "), OccupiedBy: PathID=" +
+                pairP +
+                " (opposite X pass: L/R)"
+            );
+          }
+        } else {
+          debugEnclosures.push({
+            kind: "horizontal",
+            row: nr,
+            x1: rh.x1,
+            x2: rh.x2,
+            nRow: nr,
+            nCol: nc,
+            pathIdP: pairP,
+            pathIdN: pairN,
+          });
+          if (logToConsole) {
+            console.log(
+              "[Enclosure Found] TargetPair: " +
+                pairN +
+                ", Line: Y=" +
+                nr +
+                " (X:" +
+                rh.x1 +
+                "-" +
+                rh.x2 +
+                "), OccupiedBy: PathID=" +
+                pairP +
+                " (opposite Y pass: B/A)"
+            );
+          }
         }
       }
     }
