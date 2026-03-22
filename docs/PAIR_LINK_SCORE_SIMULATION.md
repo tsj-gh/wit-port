@@ -7,7 +7,7 @@ npm run sim:pairlink-scores
 ```
 
 - 6 パターン（7×7 でペア 7/8/9、8×8 で 8/9/10）× **1000** 試行（計 6000）
-- 各試行はミューテーション（スワップ）完了直後の `postMutationScoreBreakdown` を記録（評価式の変更なし）
+- 各試行は **クロール・パス整形後の最終盤面** に対する `postMutationScoreBreakdown` を記録（評価式の変更なし）。コンソールの `Mutation —` はスワップ直後、`Final Board —` が最終スコア
 - 試行間は `setImmediate` でイベントループに譲る（既定: 5 試行ごと）
 
 ## 環境変数
@@ -30,4 +30,4 @@ npm run sim:pairlink-scores
 ## 実装ファイル
 
 - `scripts/run-pairlink-score-simulation.mjs` — Node + `vm` で `public/workers/board-worker.js` を読み込み（末尾の `onmessage` のみ除去）
-- `generateByEdgeSwap` の戻り値に `postMutationScoreBreakdown` を付与（観測用。`computeMutationScoreBreakdown` 本体は未変更）
+- `generateByEdgeSwap` の戻り値の `postMutationScoreBreakdown` は **最終盤面** 用（`buildSolutionPathsFromAdj` 後に再計算）。`computeMutationScoreBreakdown` 本体は未変更

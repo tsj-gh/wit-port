@@ -1578,7 +1578,8 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   }
 
   const mutFinal = computeMutationScoreBreakdown(solutionGrid, adj, n, null);
-  const postMutationScoreBreakdown = mutFinal;
+  /** ミューテーション直後（クロール前）。最終値は buildSolutionPaths 後に上書き */
+  let postMutationScoreBreakdown = mutFinal;
   if (typeof console !== "undefined") {
     console.log("Mutation Complete - Successful Swaps: " + swapCount);
     logFinalScoreDetail(mutFinal, "Mutation —");
@@ -1978,6 +1979,11 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
 
   const solutionPaths = buildSolutionPathsFromAdj();
 
+  postMutationScoreBreakdown = computeMutationScoreBreakdown(solutionGrid, adj, n, null);
+  if (typeof console !== "undefined") {
+    logFinalScoreDetail(postMutationScoreBreakdown, "Final Board —");
+  }
+
   let totalCount = 0;
   for (const k of Object.keys(solutionPaths)) {
     const segs = solutionPaths[k];
@@ -2039,7 +2045,9 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
         Math.abs(pairs[pi].start[1] - pairs[pi].end[1]);
     }
     const finalEncCount =
-      encAnalysis != null ? encAnalysis.count : countPairLinkEnclosures(solutionGrid, adj, n);
+      encAnalysis != null
+        ? encAnalysis.count
+        : postMutationScoreBreakdown.enclosureCount;
     const encTargetLabel = targetEnc == null ? "-" : String(targetEnc);
     console.log(
       "Grid: " +
