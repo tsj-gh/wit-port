@@ -746,13 +746,19 @@ function checkVerticalWrapEnclosure(path, nc, tRow) {
   if (path[iMin].x !== nc || path[iMax].x !== nc) {
     return { ok: false, reason: "invalid_bracket_column" };
   }
-  const sLow = classifyColumnPassSide(path, iMin, nc);
-  const sHigh = classifyColumnPassSide(path, iMax, nc);
+  let sLow = classifyColumnPassSide(path, iMin, nc);
+  let sHigh = classifyColumnPassSide(path, iMax, nc);
   if (sLow == null || sHigh == null) {
     return { ok: false, reason: "cannot_classify_x_pass", sandwich: true, y1: yMin, y2: yMax };
   }
   if (sLow === sHigh) {
-    return { ok: false, reason: "same_x_pass_direction", sandwich: true, y1: yMin, y2: yMax };
+    const rev = path.slice().reverse();
+    const len = path.length;
+    sLow = classifyColumnPassSide(rev, len - 1 - iMin, nc);
+    sHigh = classifyColumnPassSide(rev, len - 1 - iMax, nc);
+    if (sLow == null || sHigh == null || sLow === sHigh) {
+      return { ok: false, reason: "same_x_pass_direction", sandwich: true, y1: yMin, y2: yMax };
+    }
   }
   if (isVerticalPseudoEnclosureUpon(path, nc, tRow, yMin, yMax)) {
     return { ok: false, reason: "pseudo_u_turn_enclosure_x", sandwich: true, y1: yMin, y2: yMax };
@@ -789,13 +795,19 @@ function checkHorizontalWrapEnclosure(path, nr, tCol) {
   if (path[iMin].y !== nr || path[iMax].y !== nr) {
     return { ok: false, reason: "invalid_bracket_row" };
   }
-  const sLeft = classifyRowPassSide(path, iMin, nr);
-  const sRight = classifyRowPassSide(path, iMax, nr);
+  let sLeft = classifyRowPassSide(path, iMin, nr);
+  let sRight = classifyRowPassSide(path, iMax, nr);
   if (sLeft == null || sRight == null) {
     return { ok: false, reason: "cannot_classify_y_pass", sandwich: true, x1: xMin, x2: xMax };
   }
   if (sLeft === sRight) {
-    return { ok: false, reason: "same_y_pass_direction", sandwich: true, x1: xMin, x2: xMax };
+    const rev = path.slice().reverse();
+    const len = path.length;
+    sLeft = classifyRowPassSide(rev, len - 1 - iMin, nr);
+    sRight = classifyRowPassSide(rev, len - 1 - iMax, nr);
+    if (sLeft == null || sRight == null || sLeft === sRight) {
+      return { ok: false, reason: "same_y_pass_direction", sandwich: true, x1: xMin, x2: xMax };
+    }
   }
   if (isHorizontalPseudoEnclosureUpon(path, nr, tCol, xMin, xMax)) {
     return { ok: false, reason: "pseudo_u_turn_enclosure_y", sandwich: true, x1: xMin, x2: xMax };
