@@ -1031,30 +1031,13 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
   return { count, debugEnclosures };
 }
 
-/** 盤面中心で 4 象限: 0=左上, 1=右上, 2=左下, 3=右下（r,c は 0..n-1） */
-function quadrantIndexRC(r, c, n) {
-  const midR = Math.floor(n / 2);
-  const midC = Math.floor(n / 2);
-  const top = r < midR;
-  const left = c < midC;
-  if (top && left) return 0;
-  if (top && !left) return 1;
-  if (!top && left) return 2;
-  return 3;
-}
-
-/** 端点の象限ペアスコア: 対角 +100、それ以外の異象限 +50、同象限 0 */
-function quadrantPairScore(qa, qb) {
-  if (qa === qb) return 0;
-  if ((qa === 0 && qb === 3) || (qa === 3 && qb === 0)) return 100;
-  if ((qa === 1 && qb === 2) || (qa === 2 && qb === 1)) return 100;
-  return 50;
-}
-
 /**
- * Edge-Swap ミューテーション用スコア内訳。
- * FinalScore = (totalManhattan + totalQuadrantScore - adjacentPenalty) * (1 + enclosureCount * 0.5)
- * adjacentPenalty: 端点間マンハッタン<=2 のペア数が 1 を超えると、(count-1)*200
+ * Edge-Swap ミューテーション用スコア。
+ * Coverage: Σ(バウンディングボックス面積 A / パス長 L)
+ * Interference: 他ペア端点のキング距離1リング上を経路が通るセル数
+ * Enclosures: 厳格エンクロージャ件数（既存 count）
+ * FinalScore = (Coverage + Interference) * (1 + Enclosures * 1.5)
+ * ハード制約: 端点間マンハッタン<=2 のペア数 > floor(ペア数*0.2) なら Total を強制 -1e9
  */
 function computeMutationScoreBreakdown(solutionGrid, adj, n) {
   const byPid = new Map();
@@ -1066,11 +1049,14 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n) {
       byPid.get(p).push({ r: rr, c: cc });
     }
   }
+
   const epList = [];
-  for (const [, cells] of byPid) {
+  const epsByPid = new Map();
+  for (const [pid, cells] of byPid) {
     if (cells.length < 2) continue;
     const endpoints = cells.filter(({ r: rr, c: cc }) => adj[rr][cc].length === 1);
     if (endpoints.length < 2) continue;
+    epsByPid.set(pid, endpoints);
     let bestA = endpoints[0];
     let bestB = endpoints[1];
     let bestD = -1;
@@ -1086,19 +1072,10 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n) {
         }
       }
     }
-    epList.push({ a: bestA, b: bestB, manhattan: bestD });
+    epList.push({ a: bestA, b: bestB });
   }
 
-  let totalManhattan = 0;
-  let totalQuadrantScore = 0;
-  for (let i = 0; i < epList.length; i++) {
-    const e = epList[i];
-    totalManhattan += e.manhattan;
-    const qa = quadrantIndexRC(e.a.r, e.a.c, n);
-    const qb = quadrantIndexRC(e.b.r, e.b.c, n);
-    totalQuadrantScore += quadrantPairScore(qa, qb);
-  }
-
+  const pairCount = epList.length;
   let closePairCount = 0;
   for (let i = 0; i < epList.length; i++) {
     for (let j = i + 1; j < epList.length; j++) {
@@ -1116,20 +1093,89 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n) {
     }
   }
 
-  const adjacentPenalty = closePairCount > 1 ? (closePairCount - 1) * 200 : 0;
-  const currentEnclosureCount = countPairLinkEnclosures(solutionGrid, adj, n);
-  const base = totalManhattan + totalQuadrantScore - adjacentPenalty;
-  const finalScore = base * (1 + currentEnclosureCount * 0.5);
+  const maxCloseAllowed = pairCount > 0 ? Math.floor(pairCount * 0.2) : 0;
+  const hardConstraintViolated = pairCount > 0 && closePairCount > maxCloseAllowed;
+
+  let coverageScore = 0;
+  for (const [, cells] of byPid) {
+    if (cells.length < 2) continue;
+    let minX = n;
+    let maxX = -1;
+    let minY = n;
+    let maxY = -1;
+    for (let i = 0; i < cells.length; i++) {
+      const c = cells[i].c;
+      const r = cells[i].r;
+      if (c < minX) minX = c;
+      if (c > maxX) maxX = c;
+      if (r < minY) minY = r;
+      if (r > maxY) maxY = r;
+    }
+    const A = (maxX - minX + 1) * (maxY - minY + 1);
+    const L = cells.length;
+    if (L > 0) coverageScore += A / L;
+  }
+
+  let interferenceScore = 0;
+  for (const [pid, cells] of byPid) {
+    if (cells.length < 2) continue;
+    for (let ci = 0; ci < cells.length; ci++) {
+      const r = cells[ci].r;
+      const c = cells[ci].c;
+      let hit = false;
+      for (const [qid, eps] of epsByPid) {
+        if (qid === pid) continue;
+        for (let ei = 0; ei < eps.length; ei++) {
+          const er = eps[ei].r;
+          const ec = eps[ei].c;
+          const king = Math.max(Math.abs(r - er), Math.abs(c - ec));
+          if (king === 1) {
+            hit = true;
+            break;
+          }
+        }
+        if (hit) break;
+      }
+      if (hit) interferenceScore++;
+    }
+  }
+
+  const enclosureCount = countPairLinkEnclosures(solutionGrid, adj, n);
+  const base = coverageScore + interferenceScore;
+  const ENC_MULT = 1.5;
+  let finalScore = base * (1 + enclosureCount * ENC_MULT);
+
+  if (hardConstraintViolated) {
+    finalScore = -1e9;
+  }
 
   return {
-    totalManhattan,
-    totalQuadrantScore,
+    coverageScore,
+    interferenceScore,
+    enclosureCount,
     closePairCount,
-    adjacentPenalty,
-    currentEnclosureCount,
+    maxCloseAllowed,
+    hardConstraintViolated,
     base,
     finalScore,
   };
+}
+
+function logFinalScoreDetail(bd, tag) {
+  if (typeof console === "undefined") return;
+  const t = tag ? tag + " " : "";
+  console.log(
+    t +
+      "[Final Score Detail] Total: " +
+      bd.finalScore +
+      ", Coverage: " +
+      bd.coverageScore +
+      ", Interference: " +
+      bd.interferenceScore +
+      ", Enclosures: " +
+      bd.enclosureCount +
+      (bd.hardConstraintViolated ? " (HARD: adjacent-pair cap exceeded)" : "")
+  );
 }
 
 /**
@@ -1137,7 +1183,8 @@ function computeMutationScoreBreakdown(solutionGrid, adj, n) {
  * Phase 1: 行優先で空きマスにドミノ／既存パス端への接続を一般化（全セル埋め）
  * Phase 2: パス統合（目標ペア数まで隣接端同士を結合）
  * @param {{ targetEnclosureCount?: number, debugEnclosureViz?: boolean }} [mutationOpts]
- *   スワップ採択は FinalScore（マンハッタン＋象限−隣接ペナルティ）×(1+囲い込み*0.5) の単調増加のみ。
+ *   スワップ採択は FinalScore = (Coverage+Interference)×(1+囲い込み×1.5) の単調増加のみ。
+ *   隣接端点ペア数が floor(ペア数×0.2) を超える盤面はハード違反（Total 強制 -1e9）。
  */
 function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   const mOpts = mutationOpts || {};
@@ -1457,27 +1504,17 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     }
 
     swapCount++;
+
+    if (typeof console !== "undefined" && attempt > 0 && attempt % 200 === 0) {
+      const snap = computeMutationScoreBreakdown(solutionGrid, adj, n);
+      logFinalScoreDetail(snap, "[Periodic]");
+    }
   }
 
   const mutFinal = computeMutationScoreBreakdown(solutionGrid, adj, n);
   if (typeof console !== "undefined") {
     console.log("Mutation Complete - Successful Swaps: " + swapCount);
-    console.log(
-      "Mutation — FinalScore: " +
-        mutFinal.finalScore +
-        " | Manhattan: " +
-        mutFinal.totalManhattan +
-        ", Quadrant: " +
-        mutFinal.totalQuadrantScore +
-        ", AdjClosePairs: " +
-        mutFinal.closePairCount +
-        ", AdjPenalty: " +
-        mutFinal.adjacentPenalty +
-        ", Enclosures: " +
-        mutFinal.currentEnclosureCount +
-        ", Base: " +
-        mutFinal.base
-    );
+    logFinalScoreDetail(mutFinal, "Mutation —");
     if (targetEnc != null) {
       console.log(
         "Mutation — targetEnclosureCount (debug ref only): " + targetEnc
