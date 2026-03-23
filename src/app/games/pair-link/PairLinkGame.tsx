@@ -1640,42 +1640,70 @@ export default function PairLinkGame() {
             </div>
           )}
         </div>
-        <div className="flex flex-wrap gap-4 items-end justify-center mt-4">
-          <div>
+        <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-stretch sm:items-end justify-center mt-4 mb-2">
+          <div className="min-w-0 flex-shrink-0">
             <label className="block text-xs text-wit-muted mb-1">Grid Size</label>
-            <select
-              value={settingsGridSize}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setSettingsGridSize(v);
-                const maxP = v >= 7 ? 10 : v;
-                const b = EDGE_SWAP_PAIR_BOUNDS[v];
-                const minP =
-                  debugGenerationMode === "edgeSwap" && b
-                    ? b.min
-                    : Math.max(2, v - 2);
-                setSettingsNumPairs((p) =>
-                  Math.min(maxP, Math.max(minP, Math.min(p, maxP)))
+            <div
+              className="flex overflow-x-auto gap-2 py-1 -mx-1 max-w-full snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              {[4, 5, 6, 7, 8, 9, 10].map((n) => {
+                const isActive = settingsGridSize === n;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => {
+                      setSettingsGridSize(n);
+                      const maxP = n >= 7 ? 10 : n;
+                      const b = EDGE_SWAP_PAIR_BOUNDS[n];
+                      const minP =
+                        debugGenerationMode === "edgeSwap" && b
+                          ? b.min
+                          : Math.max(2, n - 2);
+                      setSettingsNumPairs((p) =>
+                        Math.min(maxP, Math.max(minP, Math.min(p, maxP)))
+                      );
+                    }}
+                    className={`shrink-0 snap-center whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${
+                      isActive
+                        ? "bg-sky-600 text-white border border-sky-500"
+                        : "bg-slate-800 text-wit-text border border-slate-600 hover:bg-slate-700"
+                    }`}
+                  >
+                    {n}×{n}
+                  </button>
                 );
-              }}
-              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
-            >
-              {[4, 5, 6, 7, 8, 9, 10].map((n) => (
-                <option key={n} value={n}>{n}×{n}</option>
-              ))}
-            </select>
+              })}
+            </div>
           </div>
-          <div>
+          <div className="min-w-0 flex-shrink-0">
             <label className="block text-xs text-wit-muted mb-1">Number of Pairs</label>
-            <select
-              value={clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)}
-              onChange={(e) => setSettingsNumPairs(Number(e.target.value))}
-              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
+            <div
+              className="flex overflow-x-auto gap-2 py-1 -mx-1 max-w-full snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
+              style={{ WebkitOverflowScrolling: "touch" }}
             >
-              {pairCountOptions(settingsGridSize, debugGenerationMode).map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
+              {pairCountOptions(settingsGridSize, debugGenerationMode).map((n) => {
+                const clamped = clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode);
+                const isActive = clamped === n;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => setSettingsNumPairs(n)}
+                    className={`shrink-0 snap-center whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${
+                      isActive
+                        ? "bg-sky-600 text-white border border-sky-500"
+                        : "bg-slate-800 text-wit-text border border-slate-600 hover:bg-slate-700"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <button
             onClick={() => {
@@ -1702,8 +1730,8 @@ export default function PairLinkGame() {
             </button>
           )}
         </div>
-        {/* 広告枠2（AD-UNIT-B）: サイズ/新規作成の直下 */}
-        <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
+        {/* 広告枠2（AD-UNIT-B）: サイズ/新規作成の直下（余白を確保して接触を回避） */}
+        <div className="mt-8 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
           <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
         </div>
         <p className="text-xs text-wit-muted mt-3">
