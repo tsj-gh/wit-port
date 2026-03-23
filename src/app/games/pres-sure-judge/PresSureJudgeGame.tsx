@@ -2089,8 +2089,8 @@ export default function PresSureJudgeGame() {
                     Judge（確定）
                   </button>
                 </div>
-                {/* 広告枠B: 在庫/Judgeパネルの外・直下に配置（誤タップ防止の余白） */}
-                <div className="mt-6 shrink-0" style={{ minHeight: 100 }}>
+                {/* 広告枠B: 在庫/Judgeパネルの外・直下（誤タップ防止のため30px以上の余白） */}
+                <div className="mt-8 shrink-0" style={{ minHeight: 100 }}>
                   <PresSureJudgeAdSlot slotIndex={2} isDebugMode={isDebugMode} />
                 </div>
                 </>

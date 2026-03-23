@@ -25,17 +25,21 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <head>
-        <Script
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5383262801288621"
-          strategy="afterInteractive"
-          crossOrigin="anonymous"
-        />
-        {/* GPT: googletag.pubads().refresh() 用（ペアリンク等の動的リフレッシュに必要） */}
-        <Script
-          src="https://securepubads.g.doubleclick.net/tag/js/gpt.js"
-          strategy="afterInteractive"
-          crossOrigin="anonymous"
-        />
+        {process.env.NODE_ENV === "production" && (
+          <>
+            <Script
+              src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5383262801288621"
+              strategy="afterInteractive"
+              crossOrigin="anonymous"
+            />
+            {/* GPT: googletag.pubads().refresh() 用（ペアリンク等の動的リフレッシュに必要） */}
+            <Script
+              src="https://securepubads.g.doubleclick.net/tag/js/gpt.js"
+              strategy="afterInteractive"
+              crossOrigin="anonymous"
+            />
+          </>
+        )}
       </head>
       <body className="min-h-screen flex flex-col overflow-x-hidden bg-gradient-to-br from-wit-bg to-wit-bg-2 text-wit-text font-sans antialiased">
         <UserSyncProvider>

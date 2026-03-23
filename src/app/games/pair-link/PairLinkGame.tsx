@@ -1730,7 +1730,7 @@ export default function PairLinkGame() {
             </button>
           )}
         </div>
-        {/* 広告枠2（AD-UNIT-B）: サイズ/新規作成の直下（余白を確保して接触を回避） */}
+        {/* 広告枠2: サイズ/新規作成の直下（余白を確保して接触を回避） */}
         <div className="mt-8 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
           <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
         </div>

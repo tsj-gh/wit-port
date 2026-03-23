@@ -22,12 +22,27 @@ export default function HomePage() {
           <HomePageLinks />
         </Suspense>
 
+        <section className="py-12 border-t border-white/10 animate-fade-in-up-delay-more">
+          <h2 className="text-xl font-bold mb-4 text-wit-text">Wispoについて</h2>
+          <p className="text-wit-muted leading-relaxed mb-4">
+            Wispoは、論理的思考力と直感を育む知育パズルの無料サイトです。ペアリンク・スカイスクレイパー・Pres-Sure Judgeなど、様々なロジックパズルをブラウザで手軽にお楽しみいただけます。
+          </p>
+          <h2 className="text-lg font-bold mt-6 mb-3 text-wit-text">遊び方・ご利用について</h2>
+          <p className="text-wit-muted leading-relaxed mb-4">
+            各ゲームは無料でプレイ可能です。ルールや操作方法は各ゲーム画面内をご確認ください。お問い合わせは
+            <a href="/contact" className="text-wit-accent hover:underline">お問い合わせページ</a>
+            より承ります。利用規約・プライバシーポリシーは
+            <a href="/privacy" className="text-wit-accent hover:underline">プライバシーポリシー</a>
+            をご参照ください。
+          </p>
+        </section>
+
+        {/* 自動広告用スペース（AdSense 自動広告有効時のみ表示）。本番でスロット未設定時は非表示 */}
         <aside
-          className="min-h-[90px] my-6 flex items-center justify-center rounded-xl border border-[var(--wit-border)] bg-[rgba(30,41,59,0.4)] text-wit-muted text-[11px] tracking-wider"
+          className="min-h-[90px] my-8 rounded-xl"
           aria-label="広告スペース"
-        >
-          AD
-        </aside>
+          style={{ minHeight: 90 }}
+        />
       </main>
     </div>
   );

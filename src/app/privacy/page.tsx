@@ -59,10 +59,10 @@ export default function PrivacyPage() {
           </ul>
 
           <h2 className="text-lg font-bold mt-6 mb-3 text-wit-text">
-            4. 広告の配信について
+            4. 広告の配信・Cookieの使用について
           </h2>
           <p className="text-wit-muted leading-relaxed mb-4">
-            当サイトでは、第三者配信事業者である「Google AdSense」を利用して広告を掲載しています。
+            当サイトでは、第三者配信事業者である「Google AdSense」を利用して広告を掲載しています。広告配信のため、当サイトおよび第三者はCookieを使用しています。
           </p>
           <p className="text-wit-muted leading-relaxed mb-4">
             Googleなどの第三者配信事業者は、Cookieを使用して、ユーザーが当サイトや他のウェブサイトに過去にアクセスした際の情報に基づき、適切な広告を配信します。

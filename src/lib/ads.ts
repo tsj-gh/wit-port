@@ -49,8 +49,6 @@ export function refreshAds(): void {
   if (now - lastRefreshAt < AD_REFRESH_COOLDOWN_MS) {
     lastAttemptSkipped = true;
     dispatchStateChanged();
-    // eslint-disable-next-line no-console
-    console.log("Refresh skipped: Cool-down active");
     return;
   }
 

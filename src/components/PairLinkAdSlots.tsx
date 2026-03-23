@@ -23,7 +23,10 @@ type PairLinkAdSlotProps = {
   isDebugMode: boolean;
 };
 
-const AD_LABELS: Record<number, string> = { 1: "[AD-UNIT-A]", 2: "[AD-UNIT-B]" };
+/** デバッグ時のみ表示するラベル（本番ではプレースホルダー自体を出さない） */
+function getDebugSlotLabel(slotIndex: number): string {
+  return `広告スペース #${slotIndex}`;
+}
 
 function AdPlaceholder({ slotIndex, isFlashing }: { slotIndex: number; isFlashing: boolean }) {
   return (
@@ -34,7 +37,7 @@ function AdPlaceholder({ slotIndex, isFlashing }: { slotIndex: number; isFlashin
       style={{ minHeight: AD_MIN_HEIGHT_PX }}
       aria-label={`広告スペース ${slotIndex}（デバッグ表示）`}
     >
-      {AD_LABELS[slotIndex] ?? `[AD-UNIT-${slotIndex}]`}
+      {getDebugSlotLabel(slotIndex)}
     </div>
   );
 }
@@ -49,7 +52,7 @@ export function PairLinkAdSlot({ slotIndex, isDebugMode }: PairLinkAdSlotProps) 
 
   const slotId = slotIndex === 1 ? SLOT_1 : SLOT_2;
   const divId = `ad-pairlink-${slotIndex}`;
-  const showPlaceholder = isDebugMode || !slotId;
+  const showPlaceholder = isDebugMode || (!slotId && process.env.NODE_ENV !== "production");
 
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
