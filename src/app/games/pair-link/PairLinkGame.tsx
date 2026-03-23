@@ -639,31 +639,48 @@ export default function PairLinkGame() {
       ctx.lineWidth = Math.max(1.5, spacing * 0.08);
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
+      const pseudoStroke = "rgba(192, 132, 252, 0.92)";
+      const pseudoMarkFs = Math.max(7, spacing * 0.22);
       for (const e of debugEnclosures) {
+        const isPseudo = e.pseudo === true;
         if (e.kind === "vertical") {
           const px = PADDING + e.col * spacing;
           const py1 = PADDING + e.y1 * spacing;
           const py2 = PADDING + e.y2 * spacing;
-          ctx.strokeStyle = "rgba(251, 191, 36, 0.9)";
+          ctx.strokeStyle = isPseudo ? pseudoStroke : "rgba(251, 191, 36, 0.9)";
           ctx.beginPath();
           ctx.moveTo(px, py1);
           ctx.lineTo(px, py2);
           ctx.stroke();
+          if (isPseudo) {
+            ctx.font = `bold ${pseudoMarkFs}px Arial`;
+            ctx.fillStyle = pseudoStroke;
+            ctx.fillText("▼", px, py1 - spacing * 0.14);
+            ctx.fillText("▲", px, py2 + spacing * 0.14);
+          }
         } else {
           const py = PADDING + e.row * spacing;
           const px1 = PADDING + e.x1 * spacing;
           const px2 = PADDING + e.x2 * spacing;
-          ctx.strokeStyle = "rgba(56, 189, 248, 0.9)";
+          ctx.strokeStyle = isPseudo ? pseudoStroke : "rgba(56, 189, 248, 0.9)";
           ctx.beginPath();
           ctx.moveTo(px1, py);
           ctx.lineTo(px2, py);
           ctx.stroke();
+          if (isPseudo) {
+            ctx.font = `bold ${pseudoMarkFs}px Arial`;
+            ctx.fillStyle = pseudoStroke;
+            ctx.fillText("▼", px1 - spacing * 0.14, py);
+            ctx.fillText("▲", px2 + spacing * 0.14, py);
+          }
         }
-        const mx = PADDING + e.nCol * spacing;
-        const my = PADDING + e.nRow * spacing;
-        ctx.font = `bold ${Math.max(10, spacing * 0.38)}px Arial`;
-        ctx.fillStyle = "rgba(248, 113, 113, 0.95)";
-        ctx.fillText(e.kind === "vertical" ? "▼" : "×", mx, my);
+        if (!isPseudo) {
+          const mx = PADDING + e.nCol * spacing;
+          const my = PADDING + e.nRow * spacing;
+          ctx.font = `bold ${Math.max(10, spacing * 0.38)}px Arial`;
+          ctx.fillStyle = "rgba(248, 113, 113, 0.95)";
+          ctx.fillText(e.kind === "vertical" ? "▼" : "×", mx, my);
+        }
       }
       ctx.restore();
     }

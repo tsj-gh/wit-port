@@ -647,74 +647,133 @@ function classifyRowPassSide(path, idx, ty) {
 }
 
 /**
- * X=tx に水平方向で入った直後（最大3セグ）、逆符号の dx かつ頂点 y∈[ty-1,ty+1]、かつまだ (tx,y2) に未到達ならエセ回り込み。
- * path: {x:列,y:行}、yLow/yHigh は列 tx 上のブラケット（y2=yHigh）。
+ * 回り込みブラケット上の「腕」の向きを基準に、角から最大3セグメント以内に同じ軸で符号が逆のセグメントがあればエセ回り込み。
+ * path: {x:列,y:行}。iMin/iMax は check*WrapEnclosure と同じく行／列上の最小・最大座標側のインデックス。
  */
-function isVerticalPseudoEnclosureUpon(path, tx, ty, yLow, yHigh) {
-  if (!path || path.length < 2) return false;
-  const yTolLo = ty - 1;
-  const yTolHi = ty + 1;
-  for (let i = 1; i < path.length; i++) {
-    const prev = path[i - 1];
-    const cur = path[i];
-    if (cur.x !== tx || prev.x === tx) continue;
-    const vOverX = cur.x - prev.x;
-    if (vOverX === 0) continue;
-    if (cur.y < yLow || cur.y > yHigh) continue;
-    const jEnd = Math.min(i + 3, path.length - 1);
-    for (let j = i + 1; j <= jEnd; j++) {
-      const segDx = path[j].x - path[j - 1].x;
-      if (segDx === 0) continue;
-      if (Math.sign(segDx) !== -Math.sign(vOverX)) continue;
-      const yV = path[j].y;
-      if (yV < yTolLo || yV > yTolHi) continue;
-      let reachedY2 = false;
-      for (let u = 0; u <= j; u++) {
-        if (path[u].x === tx && path[u].y === yHigh) {
-          reachedY2 = true;
-          break;
-        }
-      }
-      if (reachedY2) continue;
-      return true;
-    }
+function pickHorizontalBracketRef(path, len, nr, iBracket, xMin, xMax) {
+  const segs = [];
+  if (iBracket > 0 && path[iBracket - 1].y === nr && path[iBracket].y === nr) {
+    const dx = path[iBracket].x - path[iBracket - 1].x;
+    if (dx !== 0) segs.push({ to: iBracket, dx });
+  }
+  if (iBracket + 1 < len && path[iBracket].y === nr && path[iBracket + 1].y === nr) {
+    const dx = path[iBracket + 1].x - path[iBracket].x;
+    if (dx !== 0) segs.push({ to: iBracket + 1, dx });
+  }
+  if (segs.length === 0) return null;
+  const bx = path[iBracket].x;
+  const atMin = bx === xMin;
+  const atMax = bx === xMax;
+  let pick = segs[0];
+  if (atMax) {
+    const neg = segs.find((s) => s.dx < 0);
+    if (neg) pick = neg;
+  } else if (atMin) {
+    const pos = segs.find((s) => s.dx > 0);
+    if (pos) pick = pos;
+  }
+  const cornerIdx = pick.to;
+  return { refDx: pick.dx, cornerIdx };
+}
+
+function tryHorizontalBracketCornerPseudo(path, nr, tCol, xMin, xMax, iBracket) {
+  const len = path.length;
+  if (!path || len < 2 || iBracket < 0 || iBracket >= len) return false;
+  const ref = pickHorizontalBracketRef(path, len, nr, iBracket, xMin, xMax);
+  if (!ref) return false;
+  const { refDx, cornerIdx } = ref;
+  if (refDx === 0) return false;
+  const tLo = tCol - 2;
+  const tHi = tCol + 2;
+  for (let j = 1; j <= 3; j++) {
+    const i1 = cornerIdx + j;
+    if (i1 >= len) break;
+    const p0 = path[cornerIdx + j - 1];
+    const p1 = path[i1];
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    if (dy !== 0 || dx === 0) continue;
+    if (Math.sign(dx) !== -Math.sign(refDx)) continue;
+    const near =
+      (p0.x >= tLo && p0.x <= tHi) ||
+      (p1.x >= tLo && p1.x <= tHi) ||
+      (p0.x < tCol && p1.x > tCol) ||
+      (p0.x > tCol && p1.x < tCol);
+    if (!near) continue;
+    return true;
   }
   return false;
 }
 
-/**
- * Y=ty に垂直方向で入った直後、逆符号の dy かつ頂点 x∈[tx-1,tx+1]、かつまだ (x2,ty) に未到達ならエセ回り込み。
- */
-function isHorizontalPseudoEnclosureUpon(path, ty, tx, xLow, xHigh) {
+function isHorizontalBracketPseudoEnclosure(path, nr, tCol, xMin, xMax, iMin, iMax) {
   if (!path || path.length < 2) return false;
-  const xTolLo = tx - 1;
-  const xTolHi = tx + 1;
-  for (let i = 1; i < path.length; i++) {
-    const prev = path[i - 1];
-    const cur = path[i];
-    if (cur.y !== ty || prev.y === ty) continue;
-    const vOverY = cur.y - prev.y;
-    if (vOverY === 0) continue;
-    if (cur.x < xLow || cur.x > xHigh) continue;
-    const jEnd = Math.min(i + 3, path.length - 1);
-    for (let j = i + 1; j <= jEnd; j++) {
-      const segDy = path[j].y - path[j - 1].y;
-      if (segDy === 0) continue;
-      if (Math.sign(segDy) !== -Math.sign(vOverY)) continue;
-      const xV = path[j].x;
-      if (xV < xTolLo || xV > xTolHi) continue;
-      let reachedX2 = false;
-      for (let u = 0; u <= j; u++) {
-        if (path[u].y === ty && path[u].x === xHigh) {
-          reachedX2 = true;
-          break;
-        }
-      }
-      if (reachedX2) continue;
-      return true;
-    }
+  return (
+    tryHorizontalBracketCornerPseudo(path, nr, tCol, xMin, xMax, iMax) ||
+    tryHorizontalBracketCornerPseudo(path, nr, tCol, xMin, xMax, iMin)
+  );
+}
+
+function pickVerticalBracketRef(path, len, nc, iBracket, yMin, yMax) {
+  const segs = [];
+  if (iBracket > 0 && path[iBracket - 1].x === nc && path[iBracket].x === nc) {
+    const dy = path[iBracket].y - path[iBracket - 1].y;
+    if (dy !== 0) segs.push({ to: iBracket, dy });
+  }
+  if (iBracket + 1 < len && path[iBracket].x === nc && path[iBracket + 1].x === nc) {
+    const dy = path[iBracket + 1].y - path[iBracket].y;
+    if (dy !== 0) segs.push({ to: iBracket + 1, dy });
+  }
+  if (segs.length === 0) return null;
+  const by = path[iBracket].y;
+  const atMin = by === yMin;
+  const atMax = by === yMax;
+  let pick = segs[0];
+  if (atMax) {
+    const up = segs.find((s) => s.dy < 0);
+    if (up) pick = up;
+  } else if (atMin) {
+    const down = segs.find((s) => s.dy > 0);
+    if (down) pick = down;
+  }
+  const cornerIdx = pick.to;
+  return { refDy: pick.dy, cornerIdx };
+}
+
+function tryVerticalBracketCornerPseudo(path, nc, tRow, yMin, yMax, iBracket) {
+  const len = path.length;
+  if (!path || len < 2 || iBracket < 0 || iBracket >= len) return false;
+  const ref = pickVerticalBracketRef(path, len, nc, iBracket, yMin, yMax);
+  if (!ref) return false;
+  const { refDy, cornerIdx } = ref;
+  if (refDy === 0) return false;
+  const tLo = tRow - 2;
+  const tHi = tRow + 2;
+  for (let j = 1; j <= 3; j++) {
+    const i1 = cornerIdx + j;
+    if (i1 >= len) break;
+    const p0 = path[cornerIdx + j - 1];
+    const p1 = path[i1];
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    if (dx !== 0 || dy === 0) continue;
+    if (Math.sign(dy) !== -Math.sign(refDy)) continue;
+    const near =
+      (p0.y >= tLo && p0.y <= tHi) ||
+      (p1.y >= tLo && p1.y <= tHi) ||
+      (p0.y < tRow && p1.y > tRow) ||
+      (p0.y > tRow && p1.y < tRow);
+    if (!near) continue;
+    return true;
   }
   return false;
+}
+
+function isVerticalBracketPseudoEnclosure(path, nc, tRow, yMin, yMax, iMin, iMax) {
+  if (!path || path.length < 2) return false;
+  return (
+    tryVerticalBracketCornerPseudo(path, nc, tRow, yMin, yMax, iMax) ||
+    tryVerticalBracketCornerPseudo(path, nc, tRow, yMin, yMax, iMin)
+  );
 }
 
 /**
@@ -760,7 +819,7 @@ function checkVerticalWrapEnclosure(path, nc, tRow) {
       return { ok: false, reason: "same_x_pass_direction", sandwich: true, y1: yMin, y2: yMax };
     }
   }
-  if (isVerticalPseudoEnclosureUpon(path, nc, tRow, yMin, yMax)) {
+  if (isVerticalBracketPseudoEnclosure(path, nc, tRow, yMin, yMax, iMin, iMax)) {
     return { ok: false, reason: "pseudo_u_turn_enclosure_x", sandwich: true, y1: yMin, y2: yMax };
   }
   return { ok: true, y1: yMin, y2: yMax };
@@ -809,7 +868,7 @@ function checkHorizontalWrapEnclosure(path, nr, tCol) {
       return { ok: false, reason: "same_y_pass_direction", sandwich: true, x1: xMin, x2: xMax };
     }
   }
-  if (isHorizontalPseudoEnclosureUpon(path, nr, tCol, xMin, xMax)) {
+  if (isHorizontalBracketPseudoEnclosure(path, nr, tCol, xMin, xMax, iMin, iMax)) {
     return { ok: false, reason: "pseudo_u_turn_enclosure_y", sandwich: true, x1: xMin, x2: xMax };
   }
   return { ok: true, x1: xMin, x2: xMax };
@@ -941,6 +1000,67 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                   " (one per victim path)"
               );
             }
+          }
+          continue;
+        }
+
+        if (rv.reason === "pseudo_u_turn_enclosure_x" && typeof rv.y1 === "number") {
+          debugEnclosures.push({
+            kind: "vertical",
+            col: nc,
+            y1: rv.y1,
+            y2: rv.y2,
+            nRow: nr,
+            nCol: nc,
+            pathIdP: pairP,
+            pathIdN: pairN,
+            pseudo: true,
+          });
+          pairCounted.add(pk);
+          if (logToConsole) {
+            console.log(
+              "[Enclosure Pseudo] TargetPair: " +
+                pairN +
+                ", Line: X=" +
+                nc +
+                " (Y:" +
+                rv.y1 +
+                "-" +
+                rv.y2 +
+                "), OccupiedBy: PathID=" +
+                pairP +
+                " — rejected as pseudo U-turn (bracket-based)"
+            );
+          }
+          continue;
+        }
+        if (rh.reason === "pseudo_u_turn_enclosure_y" && typeof rh.x1 === "number") {
+          debugEnclosures.push({
+            kind: "horizontal",
+            row: nr,
+            x1: rh.x1,
+            x2: rh.x2,
+            nRow: nr,
+            nCol: nc,
+            pathIdP: pairP,
+            pathIdN: pairN,
+            pseudo: true,
+          });
+          pairCounted.add(pk);
+          if (logToConsole) {
+            console.log(
+              "[Enclosure Pseudo] TargetPair: " +
+                pairN +
+                ", Line: Y=" +
+                nr +
+                " (X:" +
+                rh.x1 +
+                "-" +
+                rh.x2 +
+                "), OccupiedBy: PathID=" +
+                pairP +
+                " — rejected as pseudo U-turn (bracket-based)"
+            );
           }
           continue;
         }

@@ -16,6 +16,8 @@ export type EnclosureDebugItem =
       nCol: number;
       pathIdP: number;
       pathIdN: number;
+      /** エセ回り込みで棄却されたライン（可視化用） */
+      pseudo?: boolean;
     }
   | {
       kind: "horizontal";
@@ -26,6 +28,7 @@ export type EnclosureDebugItem =
       nCol: number;
       pathIdP: number;
       pathIdN: number;
+      pseudo?: boolean;
     };
 
 export type GenerateResult = {
