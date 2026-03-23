@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "sim:pairlink-scores": "node scripts/run-pairlink-score-simulation.mjs"
+    "sim:pairlink-scores": "node scripts/run-pairlink-score-simulation.mjs",
+    "bench:pairlink-9k": "node scripts/run-pairlink-benchmark-9k.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
