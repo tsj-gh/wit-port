@@ -847,28 +847,27 @@ function isVerticalPseudoByHorizontalContinuation(path, nc, iMin, iMax) {
  * path: {x:列,y:行}。画面上の水平 = 行 y 固定で列 x が変わる辺。
  */
 function checkVerticalWrapEnclosure(path, nc, tRow) {
-  let yMin = Infinity;
-  let yMax = -Infinity;
+  // ターゲットに最も近い上下の交差をブラケットとする（y最小/最大ではなく）
+  let yUpper = -Infinity;  // 上ブラケット: y < tRow のうち tRow に最も近い（最大の y）
+  let yLower = Infinity;   // 下ブラケット: y > tRow のうち tRow に最も近い（最小の y）
   let iMin = -1;
   let iMax = -1;
   for (let i = 0; i < path.length; i++) {
     if (path[i].x !== nc) continue;
     const y = path[i].y;
-    if (y < yMin) {
-      yMin = y;
+    if (y < tRow && y > yUpper) {
+      yUpper = y;
       iMin = i;
     }
-    if (y > yMax) {
-      yMax = y;
+    if (y > tRow && y < yLower) {
+      yLower = y;
       iMax = i;
     }
   }
-  if (iMin < 0 || !(yMin < yMax)) {
+  if (iMin < 0 || iMax < 0 || !(yUpper < yLower)) {
     return { ok: false, reason: "no_column_span" };
   }
-  if (!(yMin < tRow && tRow < yMax)) {
-    return { ok: false, reason: "target_not_between_y" };
-  }
+  // yUpper < tRow < yLower は上記ロジックで常に成立（両ブラケット存在時）
   if (path[iMin].x !== nc || path[iMax].x !== nc) {
     return { ok: false, reason: "invalid_bracket_column" };
   }
@@ -880,13 +879,13 @@ function checkVerticalWrapEnclosure(path, nc, tRow) {
     armTop = horizontalScreenArmAtVerticalBracket(rev, len - 1 - iMin, nc, true);
     armBottom = horizontalScreenArmAtVerticalBracket(rev, len - 1 - iMax, nc, false);
     if (!verticalOppositeHorizontalArmsOk(armTop, armBottom)) {
-      return { ok: false, reason: "same_horizontal_arm_direction", sandwich: true, y1: yMin, y2: yMax };
+      return { ok: false, reason: "same_horizontal_arm_direction", sandwich: true, y1: yUpper, y2: yLower };
     }
   }
   if (isVerticalPseudoByHorizontalContinuation(path, nc, iMin, iMax)) {
-    return { ok: false, reason: "pseudo_u_turn_enclosure_x", sandwich: true, y1: yMin, y2: yMax };
+    return { ok: false, reason: "pseudo_u_turn_enclosure_x", sandwich: true, y1: yUpper, y2: yLower };
   }
-  return { ok: true, y1: yMin, y2: yMax };
+  return { ok: true, y1: yUpper, y2: yLower };
 }
 
 /**
