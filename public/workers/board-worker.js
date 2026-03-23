@@ -2497,7 +2497,7 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
     const maxPairsEdge = gridSize <= 6 ? gridSize : 10;
     const scoreThreshold = typeof cfg.scoreThreshold === "number" ? cfg.scoreThreshold : -1;
     const hasSeed = seed != null && String(seed).trim() !== "";
-    const applyThreshold = !hasSeed && scoreThreshold >= 0;
+    const applyThreshold = !hasSeed && scoreThreshold >= 0 && gridSize > 6;
     const totalStart = performance.now();
     let attempts = 0;
     let candidate = null;
