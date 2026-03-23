@@ -1243,6 +1243,11 @@ function mergeEdgeSwapScoreParams(raw) {
     dominanceRatioThreshold: 0.3,
     dominancePenaltyBase: 200,
     dominancePenaltySlope: 3000,
+    size6AdjPenaltyScale: 0.2,
+    size6AdjRateT3: 0.65,
+    size6DominanceThreshold: 0.65,
+    size6DominancePenaltyScale: 0.3,
+    enclosureBonusPerCount: 80,
   };
   if (!raw || typeof raw !== "object") return d;
   const keys = Object.keys(d);
@@ -1252,8 +1257,12 @@ function mergeEdgeSwapScoreParams(raw) {
     if (typeof v === "number" && Number.isFinite(v)) {
       if (key === "adjRateT1" || key === "adjRateT2" || key === "straightRatioThreshold" || key === "dominanceRatioThreshold") {
         d[key] = Math.max(0.01, Math.min(0.99, v));
-      } else if (key === "straightPenaltyBase" || key === "straightPenaltySlope" || key === "dominancePenaltyBase" || key === "dominancePenaltySlope") {
+      } else if (key === "straightPenaltyBase" || key === "straightPenaltySlope" || key === "dominancePenaltyBase" || key === "dominancePenaltySlope" || key === "enclosureBonusPerCount") {
         d[key] = Math.max(0, Math.min(10000, v));
+      } else if (key === "size6AdjPenaltyScale" || key === "size6DominancePenaltyScale") {
+        d[key] = Math.max(0, Math.min(1, v));
+      } else if (key === "size6AdjRateT3" || key === "size6DominanceThreshold") {
+        d[key] = Math.max(0.01, Math.min(0.99, v));
       } else {
         d[key] = Math.max(0, Math.min(30, v));
       }
@@ -1314,13 +1323,16 @@ function straightRunRatio(ordered) {
   return maxRun / ordered.length;
 }
 
-/** adjRate に応じた段階ペナルティ（正の値＝FinalScore から減算）。第3しきい値 0.45 は固定 */
-function adjacencyRateTierPenalty(adjRate, sp) {
-  const t3 = 0.45;
-  if (adjRate < sp.adjRateT1) return 0;
-  if (adjRate < sp.adjRateT2) return 200;
-  if (adjRate < t3) return 1000;
-  return 5000 + adjRate * 10000;
+/** adjRate に応じた段階ペナルティ。6x6以下はしきい値・倍率を緩和 */
+function adjacencyRateTierPenalty(adjRate, sp, n) {
+  const t3 = (n != null && n <= 6 && sp.size6AdjRateT3 != null) ? sp.size6AdjRateT3 : 0.45;
+  const scale = (n != null && n <= 6 && sp.size6AdjPenaltyScale != null) ? sp.size6AdjPenaltyScale : 1;
+  let raw = 0;
+  if (adjRate < sp.adjRateT1) raw = 0;
+  else if (adjRate < sp.adjRateT2) raw = 200;
+  else if (adjRate < t3) raw = 1000;
+  else raw = 5000 + adjRate * 10000;
+  return raw * scale;
 }
 
 /**
@@ -1408,7 +1420,7 @@ function computeMutationScoreBreakdown(
   const pathCount = epList.length;
   const weightedAdjSum = adjCount + semiAdjCount * sp.semiDist3Weight;
   const adjRate = pathCount > 0 ? weightedAdjSum / pathCount : 0;
-  const adjacencyTierPenaltyRaw = adjacencyRateTierPenalty(adjRate, sp);
+  const adjacencyTierPenaltyRaw = adjacencyRateTierPenalty(adjRate, sp, n);
   const adjacencyPenaltyApplied =
     adjacencyTierPenaltyRaw * adjacentPenaltyScale;
 
@@ -1513,12 +1525,17 @@ function computeMutationScoreBreakdown(
   lengths.sort(function (a, b) { return b - a; });
   const top2Sum = (lengths[0] || 0) + (lengths[1] || 0);
   const dominanceRatio = top2Sum / (n * n);
+  const domThreshold = (n <= 6 && sp.size6DominanceThreshold != null) ? sp.size6DominanceThreshold : sp.dominanceRatioThreshold;
+  const domScale = (n <= 6 && sp.size6DominancePenaltyScale != null) ? sp.size6DominancePenaltyScale : 1;
   let dominancePenalty = 0;
-  if (dominanceRatio > sp.dominanceRatioThreshold) {
-    dominancePenalty = sp.dominancePenaltyBase + (dominanceRatio - sp.dominanceRatioThreshold) * sp.dominancePenaltySlope;
+  if (dominanceRatio > domThreshold) {
+    dominancePenalty = (sp.dominancePenaltyBase + (dominanceRatio - domThreshold) * sp.dominancePenaltySlope) * domScale;
   }
 
   finalScore -= straightPenalty + dominancePenalty;
+
+  const enclosureBonus = (sp.enclosureBonusPerCount != null ? sp.enclosureBonusPerCount : 80) * enclosureCount;
+  finalScore += enclosureBonus;
 
   return {
     coverageScore,
@@ -1540,6 +1557,7 @@ function computeMutationScoreBreakdown(
     straightPenalty,
     dominanceRatio,
     dominancePenalty,
+    enclosureBonus,
     finalScore,
   };
 }

@@ -57,6 +57,11 @@ const EDGE_SWAP_SCORE_FIELDS: {
   { key: "dominanceRatioThreshold", label: "上位2ペア支配しきい値", step: "0.05", min: 0.01, max: 0.99 },
   { key: "dominancePenaltyBase", label: "支配ペナルティ基本", step: "10", min: 0, max: 500 },
   { key: "dominancePenaltySlope", label: "支配ペナルティ傾き", step: "100", min: 0, max: 5000 },
+  { key: "size6AdjPenaltyScale", label: "6x6隣接ペナルティ倍率", step: "0.05", min: 0, max: 1 },
+  { key: "size6AdjRateT3", label: "6x6隣接率第3しきい値", step: "0.05", min: 0.01, max: 0.99 },
+  { key: "size6DominanceThreshold", label: "6x6支配しきい値", step: "0.05", min: 0.01, max: 0.99 },
+  { key: "size6DominancePenaltyScale", label: "6x6支配ペナルティ倍率", step: "0.05", min: 0, max: 1 },
+  { key: "enclosureBonusPerCount", label: "囲い込みボーナス/件", step: "10", min: 0, max: 200 },
 ];
 
 function pairCountOptions(gridSize: number, generationMode: "default" | "edgeSwap"): number[] {
