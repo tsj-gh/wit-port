@@ -1237,6 +1237,12 @@ function mergeEdgeSwapScoreParams(raw) {
     semiDist3Weight: 0.5,
     adjRateT1: 0.15,
     adjRateT2: 0.3,
+    straightRatioThreshold: 0.4,
+    straightPenaltyBase: 150,
+    straightPenaltySlope: 2500,
+    dominanceRatioThreshold: 0.3,
+    dominancePenaltyBase: 200,
+    dominancePenaltySlope: 3000,
   };
   if (!raw || typeof raw !== "object") return d;
   const keys = Object.keys(d);
@@ -1244,8 +1250,10 @@ function mergeEdgeSwapScoreParams(raw) {
     const key = keys[ki];
     const v = raw[key];
     if (typeof v === "number" && Number.isFinite(v)) {
-      if (key === "adjRateT1" || key === "adjRateT2") {
+      if (key === "adjRateT1" || key === "adjRateT2" || key === "straightRatioThreshold" || key === "dominanceRatioThreshold") {
         d[key] = Math.max(0.01, Math.min(0.99, v));
+      } else if (key === "straightPenaltyBase" || key === "straightPenaltySlope" || key === "dominancePenaltyBase" || key === "dominancePenaltySlope") {
+        d[key] = Math.max(0, Math.min(10000, v));
       } else {
         d[key] = Math.max(0, Math.min(30, v));
       }
@@ -1255,6 +1263,55 @@ function mergeEdgeSwapScoreParams(raw) {
     d.adjRateT2 = Math.min(0.99, d.adjRateT1 + 0.01);
   }
   return d;
+}
+
+function pathCellsInOrder(cells, adj, n) {
+  if (cells.length < 2) return cells;
+  const cellSet = new Set(cells.map(function (c) { return c.r * n + c.c; }));
+  const endpoints = cells.filter(function (c) { return adj[c.r][c.c].length === 1; });
+  if (endpoints.length < 2) return cells;
+  const start = endpoints[0];
+  const out = [start];
+  const seen = new Set([start.r * n + start.c]);
+  let cur = start;
+  while (out.length < cells.length) {
+    var next = null;
+    for (var ni = 0; ni < adj[cur.r][cur.c].length; ni++) {
+      const nk = adj[cur.r][cur.c][ni];
+      const nr = Math.floor(nk / n);
+      const nc = nk % n;
+      if (cellSet.has(nk) && !seen.has(nk)) {
+        next = { r: nr, c: nc };
+        break;
+      }
+    }
+    if (!next) break;
+    out.push(next);
+    seen.add(next.r * n + next.c);
+    cur = next;
+  }
+  return out;
+}
+
+function straightRunRatio(ordered) {
+  if (ordered.length < 2) return 1;
+  let maxRun = 1;
+  let curRun = 1;
+  let prevDir = null;
+  for (let i = 1; i < ordered.length; i++) {
+    const dr = ordered[i].r - ordered[i - 1].r;
+    const dc = ordered[i].c - ordered[i - 1].c;
+    const dir = Math.abs(dr) > 0 ? 1 : 0;
+    if (dir === prevDir) {
+      curRun++;
+    } else {
+      maxRun = Math.max(maxRun, curRun);
+      curRun = 1;
+      prevDir = dir;
+    }
+  }
+  maxRun = Math.max(maxRun, curRun);
+  return maxRun / ordered.length;
 }
 
 /** adjRate に応じた段階ペナルティ（正の値＝FinalScore から減算）。第3しきい値 0.45 は固定 */
@@ -1429,8 +1486,39 @@ function computeMutationScoreBreakdown(
 
   const enclosureCount = countPairLinkEnclosures(solutionGrid, adj, n);
   const base = coverageScore * sp.coverageMult + interferenceWeighted;
-  const finalScore =
+  let finalScore =
     base * (1 + enclosureCount * sp.enclosureMult) - adjacencyPenaltyApplied;
+
+  let straightPairCount = 0;
+  for (const [pid, cells] of byPid) {
+    if (cells.length < 2) continue;
+    const eps = epsByPid.get(pid);
+    const manhattan = (eps && eps.length >= 2)
+      ? Math.abs(eps[0].r - eps[1].r) + Math.abs(eps[0].c - eps[1].c)
+      : 999;
+    const ordered = pathCellsInOrder(cells, adj, n);
+    const ratio = straightRunRatio(ordered);
+    if (manhattan === 1 || ratio >= 0.8) straightPairCount++;
+  }
+  const straightPairRatio = pathCount > 0 ? straightPairCount / pathCount : 0;
+  let straightPenalty = 0;
+  if (straightPairRatio > sp.straightRatioThreshold) {
+    straightPenalty = sp.straightPenaltyBase + (straightPairRatio - sp.straightRatioThreshold) * sp.straightPenaltySlope;
+  }
+
+  const lengths = [];
+  for (const [, cells] of byPid) {
+    if (cells.length >= 2) lengths.push(cells.length);
+  }
+  lengths.sort(function (a, b) { return b - a; });
+  const top2Sum = (lengths[0] || 0) + (lengths[1] || 0);
+  const dominanceRatio = top2Sum / (n * n);
+  let dominancePenalty = 0;
+  if (dominanceRatio > sp.dominanceRatioThreshold) {
+    dominancePenalty = sp.dominancePenaltyBase + (dominanceRatio - sp.dominanceRatioThreshold) * sp.dominancePenaltySlope;
+  }
+
+  finalScore -= straightPenalty + dominancePenalty;
 
   return {
     coverageScore,
@@ -1448,6 +1536,10 @@ function computeMutationScoreBreakdown(
     adjacencyPenaltyApplied,
     adjacentPenaltyScale,
     base,
+    straightPairRatio,
+    straightPenalty,
+    dominanceRatio,
+    dominancePenalty,
     finalScore,
   };
 }

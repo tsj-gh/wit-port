@@ -51,6 +51,12 @@ const EDGE_SWAP_SCORE_FIELDS: {
   { key: "semiDist3Weight", label: "準隣接(距離3)重み", step: "0.05", min: 0, max: 5 },
   { key: "adjRateT1", label: "隣接率しきい値1", step: "0.01", min: 0.01, max: 0.99 },
   { key: "adjRateT2", label: "隣接率しきい値2", step: "0.01", min: 0.01, max: 0.99 },
+  { key: "straightRatioThreshold", label: "直線ペア割合しきい値", step: "0.05", min: 0.01, max: 0.99 },
+  { key: "straightPenaltyBase", label: "直線ペナルティ基本", step: "10", min: 0, max: 500 },
+  { key: "straightPenaltySlope", label: "直線ペナルティ傾き", step: "100", min: 0, max: 5000 },
+  { key: "dominanceRatioThreshold", label: "上位2ペア支配しきい値", step: "0.05", min: 0.01, max: 0.99 },
+  { key: "dominancePenaltyBase", label: "支配ペナルティ基本", step: "10", min: 0, max: 500 },
+  { key: "dominancePenaltySlope", label: "支配ペナルティ傾き", step: "100", min: 0, max: 5000 },
 ];
 
 function pairCountOptions(gridSize: number, generationMode: "default" | "edgeSwap"): number[] {
@@ -126,8 +132,8 @@ export default function PairLinkGame() {
   const [debugGenerationMode, setDebugGenerationMode] = useState<"default" | "edgeSwap">("edgeSwap");
   /** Edge-Swap: 囲い込み目標件数（常時ON、定数として Edge Swap 定数内に配置） */
   const [debugTargetEnclosureCount, setDebugTargetEnclosureCount] = useState(10);
-  const [scoreThresholdDraft, setScoreThresholdDraft] = useState(-1);
-  const [scoreThresholdApplied, setScoreThresholdApplied] = useState(-1);
+  const [scoreThresholdDraft, setScoreThresholdDraft] = useState(10);
+  const [scoreThresholdApplied, setScoreThresholdApplied] = useState(10);
   const [debugEnclosures, setDebugEnclosures] = useState<EnclosureDebugItem[] | null>(null);
   const [edgeSwapScoreDraft, setEdgeSwapScoreDraft] = useState<EdgeSwapScoreParams>(() => ({
     ...EDGE_SWAP_SCORE_DEFAULTS,
@@ -1236,7 +1242,7 @@ export default function PairLinkGame() {
                   </div>
                   <div className="mt-1 space-y-1 text-[10px]">
                     <div className="flex items-center gap-1">
-                      <span className="text-slate-400 shrink-0 w-28">生成盤面のScore閾値（Default -1）</span>
+                      <span className="text-slate-400 shrink-0 w-28">生成盤面のScore閾値（Default 10）</span>
                       <input
                         type="number"
                         min={-1}
