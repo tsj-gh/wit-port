@@ -751,31 +751,53 @@ function verticalOppositeHorizontalArmsOk(armTop, armBottom) {
 }
 
 /**
- * 下ブラケット（列 nc, 行が大きい方）: 東隣マスからブラケットへ入り、ブラケットを出た続きのパスで
- * 最大 K 辺のうち「画面上水平で +x（R）」の辺があれば pseudo。
+ * 垂直 pseudo: ブラケット ib の「東 or 西」側の水平隣を lateralI とし、ブラケットを出たもう一方へ進んだあと
+ * パスに沿って最大 K 辺を見る。画面上水平で wantR なら +x（R）、!wantR なら -x（L）の辺があれば true。
+ * skipFirstAdvance: true のとき、検査ループの前に 1 辺進める（上ブラケットで幹の第 1 水平辺を除外）。
  */
-function verticalPseudoHorizontalRAfterLowerBracket(path, nc, iBracket, K) {
+function verticalPseudoHorizontalKickback(
+  path,
+  nc,
+  iBracket,
+  K,
+  lateralIsEast,
+  wantR,
+  skipFirstAdvance
+) {
   const len = path.length;
   if (!path || len < 2 || iBracket < 0 || iBracket >= len || K < 1) return false;
   const b = path[iBracket];
   if (b.x !== nc) return false;
-  let eastI = -1;
-  if (iBracket > 0 && path[iBracket - 1].y === b.y && path[iBracket - 1].x > b.x) {
-    eastI = iBracket - 1;
+  let lateralI = -1;
+  if (iBracket > 0 && path[iBracket - 1].y === b.y) {
+    const lx = path[iBracket - 1].x;
+    if (lateralIsEast && lx > b.x) lateralI = iBracket - 1;
+    if (!lateralIsEast && lx < b.x) lateralI = iBracket - 1;
   }
-  if (iBracket + 1 < len && path[iBracket + 1].y === b.y && path[iBracket + 1].x > b.x) {
-    eastI = iBracket + 1;
+  if (lateralI < 0 && iBracket + 1 < len && path[iBracket + 1].y === b.y) {
+    const lx = path[iBracket + 1].x;
+    if (lateralIsEast && lx > b.x) lateralI = iBracket + 1;
+    if (!lateralIsEast && lx < b.x) lateralI = iBracket + 1;
   }
-  if (eastI < 0) return false;
-  const otherI = eastI === iBracket - 1 ? iBracket + 1 : iBracket - 1;
+  if (lateralI < 0) return false;
+  const otherI = lateralI === iBracket - 1 ? iBracket + 1 : iBracket - 1;
   if (otherI < 0 || otherI >= len) return false;
   let prev = iBracket;
   let cur = otherI;
+  if (skipFirstAdvance) {
+    const dir0 = cur - prev;
+    const nxt0 = cur + dir0;
+    if (nxt0 < 0 || nxt0 >= len) return false;
+    prev = cur;
+    cur = nxt0;
+  }
   for (let e = 0; e < K; e++) {
     const pa = path[prev];
     const pb = path[cur];
-    if (pa.y === pb.y && pb.x - pa.x > 0) {
-      return true;
+    if (pa.y === pb.y) {
+      const dx = pb.x - pa.x;
+      if (wantR && dx > 0) return true;
+      if (!wantR && dx < 0) return true;
     }
     const dir = cur - prev;
     const nxt = cur + dir;
@@ -790,8 +812,34 @@ function verticalPseudoHorizontalRAfterLowerBracket(path, nc, iBracket, K) {
 
 const VERTICAL_PSEUDO_HORIZONTAL_K = 4;
 
+/** 下ブラケット・東側からの回り込み → 続きで水平 R があれば pseudo */
+function verticalPseudoHorizontalRAfterLowerBracketEast(path, nc, iBracket, K) {
+  return verticalPseudoHorizontalKickback(path, nc, iBracket, K, true, true, false);
+}
+
+/** 下ブラケット・西側からの回り込み → 続きで水平 L があれば pseudo（東西対称） */
+function verticalPseudoHorizontalLAfterLowerBracketWest(path, nc, iBracket, K) {
+  return verticalPseudoHorizontalKickback(path, nc, iBracket, K, false, false, false);
+}
+
+/** 上ブラケット・東側からの回り込み → 続きで水平 L（1 辺先送りで幹を除外） */
+function verticalPseudoHorizontalLAfterUpperBracketEast(path, nc, iBracket, K) {
+  return verticalPseudoHorizontalKickback(path, nc, iBracket, K, true, false, true);
+}
+
+/** 上ブラケット・西側からの回り込み → 続きで水平 R（1 辺先送り） */
+function verticalPseudoHorizontalRAfterUpperBracketWest(path, nc, iBracket, K) {
+  return verticalPseudoHorizontalKickback(path, nc, iBracket, K, false, true, true);
+}
+
 function isVerticalPseudoByHorizontalContinuation(path, nc, iMin, iMax) {
-  return verticalPseudoHorizontalRAfterLowerBracket(path, nc, iMax, VERTICAL_PSEUDO_HORIZONTAL_K);
+  const K = VERTICAL_PSEUDO_HORIZONTAL_K;
+  return (
+    verticalPseudoHorizontalRAfterLowerBracketEast(path, nc, iMax, K) ||
+    verticalPseudoHorizontalLAfterLowerBracketWest(path, nc, iMax, K) ||
+    verticalPseudoHorizontalLAfterUpperBracketEast(path, nc, iMin, K) ||
+    verticalPseudoHorizontalRAfterUpperBracketWest(path, nc, iMin, K)
+  );
 }
 
 /**
