@@ -329,7 +329,18 @@ export default function PairLinkGame() {
       setStatus(gradeStockStatus[grade] != null && gradeStockStatus[grade] > 0 ? "読み込み中" : "生成中...");
 
       try {
-        const result = await getPuzzleByGrade(grade, seed);
+        const PUZZLE_LOAD_TIMEOUT_MS = 60_000;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        const result = await Promise.race([
+          getPuzzleByGrade(grade, seed),
+          new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(
+              () => reject(new Error("タイムアウトしました。もう一度お試しください。")),
+              PUZZLE_LOAD_TIMEOUT_MS
+            );
+          }),
+        ]);
+        if (timeoutId != null) clearTimeout(timeoutId);
         if (result.error) {
           setStatus(result.error ?? "生成に失敗しました");
           return;
@@ -1121,11 +1132,19 @@ export default function PairLinkGame() {
   }, []);
 
   if (loading || !numbers.length) {
+    const loadingText =
+      status === "探索中"
+        ? `${status}…`
+        : status === "生成中..."
+        ? "生成中…"
+        : status === "読み込み中"
+        ? "読み込み中…"
+        : status && status !== "Playing"
+        ? `${status}…`
+        : "パズルを読み込み中…";
     return (
       <div className="min-h-screen flex items-center justify-center bg-wit-bg text-wit-text">
-        <p className="text-wit-muted">
-          {status === "探索中" ? `${status}…` : "パズルを読み込み中…"}
-        </p>
+        <p className="text-wit-muted">{loadingText}</p>
       </div>
     );
   }

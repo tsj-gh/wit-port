@@ -102,8 +102,10 @@ export function usePuzzleStockByGrade(
   const { generate } = useBoardWorker();
   const debugLog = _options.debugLog ?? false;
   const [stockStatus, setStockStatus] = useState<Record<number, number>>(() => getGradeStockStatus());
-  const isFetchingRef = useRef(false);
-  const refillTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** グレードごとの refill 実行中フラグ（複数グレード同時 refill を許可） */
+  const fetchingGradesRef = useRef<Set<number>>(new Set());
+  /** グレードごとの refill スケジュール用タイマー（他グレードのタイマーを上書きしない） */
+  const refillTimeoutByGradeRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
   const flushStatus = useCallback(() => {
     setStockStatus(getGradeStockStatus());
@@ -149,27 +151,29 @@ export function usePuzzleStockByGrade(
   const refillGrade = useCallback(
     async (grade: number) => {
       const def = GRADE_MAP.get(grade);
-      if (!def || isFetchingRef.current) return;
+      if (!def || fetchingGradesRef.current.has(grade)) return;
       if (getGradeStockCount(grade) >= STOCK_PER_GRADE_MAX) return;
 
-      isFetchingRef.current = true;
+      fetchingGradesRef.current.add(grade);
       const maxRetries = LOW_SUCCESS_GRADES.has(grade) ? MAX_RETRIES_PER_PUZZLE * 2 : MAX_RETRIES_PER_PUZZLE;
 
-      let trial = 0;
-      while (getGradeStockCount(grade) < STOCK_PER_GRADE_MAX && trial < maxRetries) {
-        trial++;
-        const puzzle = await fetchOneForGrade(def, trial);
-        if (puzzle && !isDuplicateInGrade(grade, puzzle)) {
-          addToGradeStock(grade, puzzle);
-          flushStatus();
+      try {
+        let trial = 0;
+        while (getGradeStockCount(grade) < STOCK_PER_GRADE_MAX && trial < maxRetries) {
+          trial++;
+          const puzzle = await fetchOneForGrade(def, trial);
+          if (puzzle && !isDuplicateInGrade(grade, puzzle)) {
+            addToGradeStock(grade, puzzle);
+            flushStatus();
+          }
+          if (trial % 10 === 0 && typeof window !== "undefined") {
+            await new Promise((r) => setTimeout(r, 0));
+          }
         }
-        if (trial % 10 === 0 && typeof window !== "undefined") {
-          await new Promise((r) => setTimeout(r, 0));
-        }
+      } finally {
+        fetchingGradesRef.current.delete(grade);
+        flushStatus();
       }
-
-      isFetchingRef.current = false;
-      flushStatus();
     },
     [fetchOneForGrade, flushStatus]
   );
@@ -180,11 +184,13 @@ export function usePuzzleStockByGrade(
       if (!def) return;
       if (getGradeStockCount(grade) >= STOCK_REFILL_THRESHOLD) return;
 
-      if (refillTimeoutRef.current) clearTimeout(refillTimeoutRef.current);
-      refillTimeoutRef.current = setTimeout(() => {
+      const existing = refillTimeoutByGradeRef.current.get(grade);
+      if (existing) clearTimeout(existing);
+      const id = setTimeout(() => {
+        refillTimeoutByGradeRef.current.delete(grade);
         refillGrade(grade);
-        refillTimeoutRef.current = null;
       }, 100);
+      refillTimeoutByGradeRef.current.set(grade, id);
     },
     [refillGrade]
   );
@@ -229,7 +235,8 @@ export function usePuzzleStockByGrade(
   useEffect(() => {
     flushStatus();
     return () => {
-      if (refillTimeoutRef.current) clearTimeout(refillTimeoutRef.current);
+      refillTimeoutByGradeRef.current.forEach((id) => clearTimeout(id));
+      refillTimeoutByGradeRef.current.clear();
     };
   }, [flushStatus]);
 

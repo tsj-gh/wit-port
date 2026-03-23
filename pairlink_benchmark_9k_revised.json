@@ -1,0 +1,1683 @@
+{
+  "results": [
+    {
+      "pattern": "4x4_Pairs3",
+      "config": {
+        "size": 4,
+        "pairs": 3
+      },
+      "basicStats": {
+        "mean": -1278.23,
+        "median": -312.82,
+        "max": 184,
+        "min": -4868
+      },
+      "generationEfficiency": {
+        "avgGenTimeMs": 77.55,
+        "positiveScoreRate": 1.9
+      },
+      "qualityDistribution": {
+        "scoreGt500Rate": 0,
+        "enclosureEq0Rate": 90,
+        "enclosureGe1Rate": 10
+      },
+      "top10": [
+        {
+          "Score": 184,
+          "enclosureCount": 2,
+          "pathLengths": [
+            8,
+            4,
+            4
+          ],
+          "top2Share": 0.75,
+          "totalBends": 5,
+          "boardData": "bench-4x3-1774278072184-t43wullxw"
+        },
+        {
+          "Score": 184,
+          "enclosureCount": 2,
+          "pathLengths": [
+            8,
+            4,
+            4
+          ],
+          "top2Share": 0.75,
+          "totalBends": 5,
+          "boardData": "bench-4x3-1774278083048-h50m93bf3"
+        },
+        {
+          "Score": 143.05,
+          "enclosureCount": 1,
+          "pathLengths": [
+            7,
+            5,
+            4
+          ],
+          "top2Share": 0.75,
+          "totalBends": 5,
+          "boardData": "bench-4x3-1774278036590-xxvo9eyk2"
+        },
+        {
+          "Score": 143.05,
+          "enclosureCount": 1,
+          "pathLengths": [
+            7,
+            5,
+            4
+          ],
+          "top2Share": 0.75,
+          "totalBends": 5,
+          "boardData": "bench-4x3-1774278052026-107l6ek6s"
+        },
+        {
+          "Score": 143.05,
+          "enclosureCount": 1,
+          "pathLengths": [
+            7,
+            5,
+            4
+          ],
+          "top2Share": 0.75,
+          "totalBends": 5,
+          "boardData": "bench-4x3-1774278089789-66qlcix4n"
+        },
+        {
+          "Score": 143.05,
+          "enclosureCount": 1,
+          "pathLengths": [
+            7,
+            5,
+            4
+          ],
+          "top2Share": 0.75,
+          "totalBends": 5,
+          "boardData": "bench-4x3-1774278097460-x529h8pdy"
+        },
+        {
+          "Score": 124.16,
+          "enclosureCount": 1,
+          "pathLengths": [
+            7,
+            5,
+            4
+          ],
+          "top2Share": 0.75,
+          "totalBends": 7,
+          "boardData": "bench-4x3-1774278100833-gk9gvm7g5"
+        },
+        {
+          "Score": 123.8,
+          "enclosureCount": 1,
+          "pathLengths": [
+            7,
+            5,
+            4
+          ],
+          "top2Share": 0.75,
+          "totalBends": 4,
+          "boardData": "bench-4x3-1774278032087-wg7uqr5my"
+        },
+        {
+          "Score": 123.8,
+          "enclosureCount": 1,
+          "pathLengths": [
+            7,
+            5,
+            4
+          ],
+          "top2Share": 0.75,
+          "totalBends": 4,
+          "boardData": "bench-4x3-1774278064942-utzpaqcho"
+        },
+        {
+          "Score": 123.8,
+          "enclosureCount": 1,
+          "pathLengths": [
+            7,
+            5,
+            4
+          ],
+          "top2Share": 0.75,
+          "totalBends": 4,
+          "boardData": "bench-4x3-1774278067638-rgvnie77o"
+        }
+      ]
+    },
+    {
+      "pattern": "5x5_Pairs4",
+      "config": {
+        "size": 5,
+        "pairs": 4
+      },
+      "basicStats": {
+        "mean": -404.77,
+        "median": -46.93,
+        "max": 825.66,
+        "min": -4170.29
+      },
+      "generationEfficiency": {
+        "avgGenTimeMs": 104.42,
+        "positiveScoreRate": 44.5
+      },
+      "qualityDistribution": {
+        "scoreGt500Rate": 2.4,
+        "enclosureEq0Rate": 82.3,
+        "enclosureGe1Rate": 17.7
+      },
+      "top10": [
+        {
+          "Score": 825.66,
+          "enclosureCount": 2,
+          "pathLengths": [
+            7,
+            7,
+            6,
+            5
+          ],
+          "top2Share": 0.56,
+          "totalBends": 8,
+          "boardData": "bench-5x4-1774278190817-nufuv2e0c"
+        },
+        {
+          "Score": 795,
+          "enclosureCount": 2,
+          "pathLengths": [
+            10,
+            6,
+            5,
+            4
+          ],
+          "top2Share": 0.64,
+          "totalBends": 6,
+          "boardData": "bench-5x4-1774278127498-u261eu4ji"
+        },
+        {
+          "Score": 788.29,
+          "enclosureCount": 2,
+          "pathLengths": [
+            9,
+            7,
+            6,
+            3
+          ],
+          "top2Share": 0.64,
+          "totalBends": 11,
+          "boardData": "bench-5x4-1774278210973-36r6c56mi"
+        },
+        {
+          "Score": 773.6,
+          "enclosureCount": 2,
+          "pathLengths": [
+            8,
+            8,
+            5,
+            4
+          ],
+          "top2Share": 0.64,
+          "totalBends": 6,
+          "boardData": "bench-5x4-1774278163010-1l5lnvmn9"
+        },
+        {
+          "Score": 768.86,
+          "enclosureCount": 2,
+          "pathLengths": [
+            8,
+            7,
+            6,
+            4
+          ],
+          "top2Share": 0.6,
+          "totalBends": 8,
+          "boardData": "bench-5x4-1774278145311-6hb30frch"
+        },
+        {
+          "Score": 747.6,
+          "enclosureCount": 2,
+          "pathLengths": [
+            10,
+            6,
+            5,
+            4
+          ],
+          "top2Share": 0.64,
+          "totalBends": 8,
+          "boardData": "bench-5x4-1774278140706-3s6vbpc61"
+        },
+        {
+          "Score": 747.6,
+          "enclosureCount": 2,
+          "pathLengths": [
+            10,
+            6,
+            5,
+            4
+          ],
+          "top2Share": 0.64,
+          "totalBends": 8,
+          "boardData": "bench-5x4-1774278207588-x1v0dw3h1"
+        },
+        {
+          "Score": 732.6,
+          "enclosureCount": 2,
+          "pathLengths": [
+            10,
+            6,
+            5,
+            4
+          ],
+          "top2Share": 0.64,
+          "totalBends": 7,
+          "boardData": "bench-5x4-1774278147020-jy0sbrwqy"
+        },
+        {
+          "Score": 715.21,
+          "enclosureCount": 2,
+          "pathLengths": [
+            8,
+            7,
+            6,
+            4
+          ],
+          "top2Share": 0.6,
+          "totalBends": 12,
+          "boardData": "bench-5x4-1774278172693-mwsr291v7"
+        },
+        {
+          "Score": 711.71,
+          "enclosureCount": 2,
+          "pathLengths": [
+            10,
+            7,
+            4,
+            4
+          ],
+          "top2Share": 0.68,
+          "totalBends": 9,
+          "boardData": "bench-5x4-1774278211594-bsfb9vytd"
+        }
+      ]
+    },
+    {
+      "pattern": "6x6_Pairs5",
+      "config": {
+        "size": 6,
+        "pairs": 5
+      },
+      "basicStats": {
+        "mean": -345.72,
+        "median": 4.05,
+        "max": 1623.11,
+        "min": -4591.5
+      },
+      "generationEfficiency": {
+        "avgGenTimeMs": 133.53,
+        "positiveScoreRate": 52.2
+      },
+      "qualityDistribution": {
+        "scoreGt500Rate": 9.5,
+        "enclosureEq0Rate": 73.7,
+        "enclosureGe1Rate": 26.3
+      },
+      "top10": [
+        {
+          "Score": 1623.11,
+          "enclosureCount": 3,
+          "pathLengths": [
+            13,
+            7,
+            7,
+            6,
+            3
+          ],
+          "top2Share": 0.556,
+          "totalBends": 8,
+          "boardData": "bench-6x5-1774278314037-u2ew0fg12"
+        },
+        {
+          "Score": 1542.49,
+          "enclosureCount": 3,
+          "pathLengths": [
+            12,
+            8,
+            7,
+            6,
+            3
+          ],
+          "top2Share": 0.556,
+          "totalBends": 13,
+          "boardData": "bench-6x5-1774278305800-v1xy5rtou"
+        },
+        {
+          "Score": 1537.49,
+          "enclosureCount": 3,
+          "pathLengths": [
+            11,
+            8,
+            7,
+            6,
+            4
+          ],
+          "top2Share": 0.528,
+          "totalBends": 15,
+          "boardData": "bench-6x5-1774278298398-z5b4ea6de"
+        },
+        {
+          "Score": 1516.6,
+          "enclosureCount": 3,
+          "pathLengths": [
+            11,
+            11,
+            6,
+            5,
+            3
+          ],
+          "top2Share": 0.611,
+          "totalBends": 11,
+          "boardData": "bench-6x5-1774278321200-k5sh6c8g0"
+        },
+        {
+          "Score": 1515.32,
+          "enclosureCount": 3,
+          "pathLengths": [
+            13,
+            9,
+            7,
+            5,
+            2
+          ],
+          "top2Share": 0.611,
+          "totalBends": 12,
+          "boardData": "bench-6x5-1774278215143-knc8mkyf7"
+        },
+        {
+          "Score": 1439.45,
+          "enclosureCount": 3,
+          "pathLengths": [
+            11,
+            9,
+            9,
+            5,
+            2
+          ],
+          "top2Share": 0.556,
+          "totalBends": 12,
+          "boardData": "bench-6x5-1774278316439-kx0a9mecz"
+        },
+        {
+          "Score": 1170.98,
+          "enclosureCount": 3,
+          "pathLengths": [
+            17,
+            7,
+            5,
+            4,
+            3
+          ],
+          "top2Share": 0.667,
+          "totalBends": 16,
+          "boardData": "bench-6x5-1774278304639-iyaefs2f6"
+        },
+        {
+          "Score": 1142.36,
+          "enclosureCount": 3,
+          "pathLengths": [
+            14,
+            8,
+            7,
+            4,
+            3
+          ],
+          "top2Share": 0.611,
+          "totalBends": 18,
+          "boardData": "bench-6x5-1774278302197-avgb2t51a"
+        },
+        {
+          "Score": 1121.71,
+          "enclosureCount": 2,
+          "pathLengths": [
+            10,
+            9,
+            7,
+            6,
+            4
+          ],
+          "top2Share": 0.528,
+          "totalBends": 12,
+          "boardData": "bench-6x5-1774278220486-1rsmv1jzn"
+        },
+        {
+          "Score": 1105.45,
+          "enclosureCount": 2,
+          "pathLengths": [
+            13,
+            6,
+            6,
+            6,
+            5
+          ],
+          "top2Share": 0.528,
+          "totalBends": 14,
+          "boardData": "bench-6x5-1774278232502-j1z3p9cex"
+        }
+      ]
+    },
+    {
+      "pattern": "7x7_Pairs7",
+      "config": {
+        "size": 7,
+        "pairs": 7
+      },
+      "basicStats": {
+        "mean": -4513.81,
+        "median": -1449.86,
+        "max": 1481.59,
+        "min": -16803.28
+      },
+      "generationEfficiency": {
+        "avgGenTimeMs": 185.35,
+        "positiveScoreRate": 6
+      },
+      "qualityDistribution": {
+        "scoreGt500Rate": 1.6,
+        "enclosureEq0Rate": 68.7,
+        "enclosureGe1Rate": 31.3
+      },
+      "top10": [
+        {
+          "Score": 1481.59,
+          "enclosureCount": 3,
+          "pathLengths": [
+            11,
+            9,
+            8,
+            7,
+            6,
+            6,
+            2
+          ],
+          "top2Share": 0.408,
+          "totalBends": 19,
+          "boardData": "bench-7x7-1774278416199-bxgyg7816"
+        },
+        {
+          "Score": 1337.91,
+          "enclosureCount": 3,
+          "pathLengths": [
+            11,
+            10,
+            8,
+            7,
+            6,
+            5,
+            2
+          ],
+          "top2Share": 0.429,
+          "totalBends": 17,
+          "boardData": "bench-7x7-1774278453392-0zvjfd44t"
+        },
+        {
+          "Score": 1165.32,
+          "enclosureCount": 3,
+          "pathLengths": [
+            15,
+            7,
+            7,
+            6,
+            6,
+            5,
+            3
+          ],
+          "top2Share": 0.449,
+          "totalBends": 18,
+          "boardData": "bench-7x7-1774278447171-rffmrnh21"
+        },
+        {
+          "Score": 929.8,
+          "enclosureCount": 3,
+          "pathLengths": [
+            13,
+            12,
+            7,
+            5,
+            5,
+            4,
+            3
+          ],
+          "top2Share": 0.51,
+          "totalBends": 24,
+          "boardData": "bench-7x7-1774278364039-cx06jt2un"
+        },
+        {
+          "Score": 911.56,
+          "enclosureCount": 2,
+          "pathLengths": [
+            11,
+            9,
+            8,
+            6,
+            6,
+            5,
+            4
+          ],
+          "top2Share": 0.408,
+          "totalBends": 21,
+          "boardData": "bench-7x7-1774278492867-8nbhl1e63"
+        },
+        {
+          "Score": 681.07,
+          "enclosureCount": 2,
+          "pathLengths": [
+            12,
+            9,
+            8,
+            7,
+            6,
+            4,
+            3
+          ],
+          "top2Share": 0.429,
+          "totalBends": 19,
+          "boardData": "bench-7x7-1774278414691-8gp46s8j2"
+        },
+        {
+          "Score": 654.5,
+          "enclosureCount": 2,
+          "pathLengths": [
+            13,
+            10,
+            8,
+            6,
+            6,
+            4,
+            2
+          ],
+          "top2Share": 0.469,
+          "totalBends": 12,
+          "boardData": "bench-7x7-1774278420000-ojd8l67gb"
+        },
+        {
+          "Score": 628.63,
+          "enclosureCount": 2,
+          "pathLengths": [
+            11,
+            10,
+            8,
+            7,
+            6,
+            5,
+            2
+          ],
+          "top2Share": 0.429,
+          "totalBends": 18,
+          "boardData": "bench-7x7-1774278430967-7istllj1v"
+        },
+        {
+          "Score": 626.09,
+          "enclosureCount": 2,
+          "pathLengths": [
+            13,
+            9,
+            8,
+            8,
+            6,
+            3,
+            2
+          ],
+          "top2Share": 0.449,
+          "totalBends": 15,
+          "boardData": "bench-7x7-1774278517087-5860hm5bk"
+        },
+        {
+          "Score": 596.66,
+          "enclosureCount": 2,
+          "pathLengths": [
+            12,
+            10,
+            8,
+            6,
+            5,
+            4,
+            4
+          ],
+          "top2Share": 0.449,
+          "totalBends": 14,
+          "boardData": "bench-7x7-1774278496578-l3ogm0xcx"
+        }
+      ]
+    },
+    {
+      "pattern": "8x8_Pairs8",
+      "config": {
+        "size": 8,
+        "pairs": 8
+      },
+      "basicStats": {
+        "mean": -4199.36,
+        "median": -1232.19,
+        "max": 3234.36,
+        "min": -15865.27
+      },
+      "generationEfficiency": {
+        "avgGenTimeMs": 221.23,
+        "positiveScoreRate": 12.4
+      },
+      "qualityDistribution": {
+        "scoreGt500Rate": 5.6,
+        "enclosureEq0Rate": 56.8,
+        "enclosureGe1Rate": 43.2
+      },
+      "top10": [
+        {
+          "Score": 3234.36,
+          "enclosureCount": 6,
+          "pathLengths": [
+            13,
+            12,
+            9,
+            8,
+            7,
+            6,
+            5,
+            4
+          ],
+          "top2Share": 0.391,
+          "totalBends": 28,
+          "boardData": "bench-8x8-1774278745731-mm3k0xi88"
+        },
+        {
+          "Score": 2035.88,
+          "enclosureCount": 5,
+          "pathLengths": [
+            19,
+            16,
+            6,
+            6,
+            6,
+            5,
+            4,
+            2
+          ],
+          "top2Share": 0.547,
+          "totalBends": 27,
+          "boardData": "bench-8x8-1774278728021-2q3bds15a"
+        },
+        {
+          "Score": 1862.56,
+          "enclosureCount": 5,
+          "pathLengths": [
+            22,
+            14,
+            10,
+            5,
+            4,
+            4,
+            3,
+            2
+          ],
+          "top2Share": 0.563,
+          "totalBends": 21,
+          "boardData": "bench-8x8-1774278679234-tw6kckvhj"
+        },
+        {
+          "Score": 1740.93,
+          "enclosureCount": 4,
+          "pathLengths": [
+            15,
+            13,
+            11,
+            8,
+            7,
+            4,
+            3,
+            3
+          ],
+          "top2Share": 0.438,
+          "totalBends": 26,
+          "boardData": "bench-8x8-1774278591728-mgexfuy3z"
+        },
+        {
+          "Score": 1729.24,
+          "enclosureCount": 3,
+          "pathLengths": [
+            14,
+            13,
+            11,
+            9,
+            7,
+            4,
+            4,
+            2
+          ],
+          "top2Share": 0.422,
+          "totalBends": 34,
+          "boardData": "bench-8x8-1774278531915-ges84l7yw"
+        },
+        {
+          "Score": 1728.78,
+          "enclosureCount": 3,
+          "pathLengths": [
+            15,
+            13,
+            11,
+            9,
+            7,
+            5,
+            2,
+            2
+          ],
+          "top2Share": 0.438,
+          "totalBends": 23,
+          "boardData": "bench-8x8-1774278673702-eg3d9cycs"
+        },
+        {
+          "Score": 1647.68,
+          "enclosureCount": 3,
+          "pathLengths": [
+            17,
+            13,
+            11,
+            7,
+            6,
+            4,
+            4,
+            2
+          ],
+          "top2Share": 0.469,
+          "totalBends": 25,
+          "boardData": "bench-8x8-1774278563671-hpnytuagp"
+        },
+        {
+          "Score": 1639.49,
+          "enclosureCount": 2,
+          "pathLengths": [
+            10,
+            10,
+            9,
+            8,
+            7,
+            7,
+            7,
+            6
+          ],
+          "top2Share": 0.313,
+          "totalBends": 24,
+          "boardData": "bench-8x8-1774278685690-u4krc0nbe"
+        },
+        {
+          "Score": 1507.26,
+          "enclosureCount": 2,
+          "pathLengths": [
+            13,
+            11,
+            8,
+            8,
+            7,
+            7,
+            6,
+            4
+          ],
+          "top2Share": 0.375,
+          "totalBends": 26,
+          "boardData": "bench-8x8-1774278625527-aantzji4f"
+        },
+        {
+          "Score": 1334.79,
+          "enclosureCount": 2,
+          "pathLengths": [
+            14,
+            11,
+            8,
+            7,
+            6,
+            6,
+            6,
+            6
+          ],
+          "top2Share": 0.391,
+          "totalBends": 25,
+          "boardData": "bench-8x8-1774278540582-xax5tg6tc"
+        }
+      ]
+    },
+    {
+      "pattern": "8x8_Pairs9",
+      "config": {
+        "size": 8,
+        "pairs": 9
+      },
+      "basicStats": {
+        "mean": -3794.95,
+        "median": -1075.98,
+        "max": 3576.29,
+        "min": -14928.15
+      },
+      "generationEfficiency": {
+        "avgGenTimeMs": 227.46,
+        "positiveScoreRate": 15.3
+      },
+      "qualityDistribution": {
+        "scoreGt500Rate": 7.7,
+        "enclosureEq0Rate": 56.4,
+        "enclosureGe1Rate": 43.6
+      },
+      "top10": [
+        {
+          "Score": 3576.29,
+          "enclosureCount": 5,
+          "pathLengths": [
+            13,
+            11,
+            9,
+            9,
+            6,
+            5,
+            5,
+            4,
+            2
+          ],
+          "top2Share": 0.375,
+          "totalBends": 22,
+          "boardData": "bench-8x9-1774278859130-d1v5elqbk"
+        },
+        {
+          "Score": 3299.75,
+          "enclosureCount": 6,
+          "pathLengths": [
+            14,
+            13,
+            10,
+            6,
+            6,
+            5,
+            5,
+            3,
+            2
+          ],
+          "top2Share": 0.422,
+          "totalBends": 22,
+          "boardData": "bench-8x9-1774278755783-4kah4u92k"
+        },
+        {
+          "Score": 2789.77,
+          "enclosureCount": 4,
+          "pathLengths": [
+            12,
+            11,
+            10,
+            9,
+            7,
+            6,
+            4,
+            3,
+            2
+          ],
+          "top2Share": 0.359,
+          "totalBends": 21,
+          "boardData": "bench-8x9-1774278913052-pjvb36qzj"
+        },
+        {
+          "Score": 2691.27,
+          "enclosureCount": 4,
+          "pathLengths": [
+            18,
+            12,
+            8,
+            7,
+            5,
+            5,
+            5,
+            2,
+            2
+          ],
+          "top2Share": 0.469,
+          "totalBends": 15,
+          "boardData": "bench-8x9-1774278873022-wynob2joc"
+        },
+        {
+          "Score": 2313.33,
+          "enclosureCount": 5,
+          "pathLengths": [
+            15,
+            14,
+            11,
+            9,
+            4,
+            4,
+            3,
+            2,
+            2
+          ],
+          "top2Share": 0.453,
+          "totalBends": 26,
+          "boardData": "bench-8x9-1774278758735-4b7ir9sde"
+        },
+        {
+          "Score": 2215.43,
+          "enclosureCount": 4,
+          "pathLengths": [
+            20,
+            9,
+            7,
+            7,
+            6,
+            5,
+            4,
+            4,
+            2
+          ],
+          "top2Share": 0.453,
+          "totalBends": 27,
+          "boardData": "bench-8x9-1774278759527-4d10uoevx"
+        },
+        {
+          "Score": 2193.17,
+          "enclosureCount": 5,
+          "pathLengths": [
+            18,
+            11,
+            8,
+            7,
+            5,
+            4,
+            4,
+            4,
+            3
+          ],
+          "top2Share": 0.453,
+          "totalBends": 21,
+          "boardData": "bench-8x9-1774278802008-eqdzjypuo"
+        },
+        {
+          "Score": 2027.82,
+          "enclosureCount": 3,
+          "pathLengths": [
+            13,
+            12,
+            9,
+            7,
+            6,
+            6,
+            5,
+            4,
+            2
+          ],
+          "top2Share": 0.391,
+          "totalBends": 25,
+          "boardData": "bench-8x9-1774278854364-dsy3w7krv"
+        },
+        {
+          "Score": 1911.65,
+          "enclosureCount": 4,
+          "pathLengths": [
+            15,
+            11,
+            10,
+            8,
+            8,
+            5,
+            3,
+            2,
+            2
+          ],
+          "top2Share": 0.406,
+          "totalBends": 19,
+          "boardData": "bench-8x9-1774278898485-e87kxw1th"
+        },
+        {
+          "Score": 1893.47,
+          "enclosureCount": 3,
+          "pathLengths": [
+            16,
+            11,
+            9,
+            8,
+            6,
+            6,
+            4,
+            2,
+            2
+          ],
+          "top2Share": 0.422,
+          "totalBends": 23,
+          "boardData": "bench-8x9-1774278798520-312mc6d29"
+        }
+      ]
+    },
+    {
+      "pattern": "9x9_Pairs9",
+      "config": {
+        "size": 9,
+        "pairs": 9
+      },
+      "basicStats": {
+        "mean": -3536.61,
+        "median": -897.62,
+        "max": 4444.27,
+        "min": -15075.15
+      },
+      "generationEfficiency": {
+        "avgGenTimeMs": 263.56,
+        "positiveScoreRate": 24.7
+      },
+      "qualityDistribution": {
+        "scoreGt500Rate": 17.2,
+        "enclosureEq0Rate": 45.7,
+        "enclosureGe1Rate": 54.3
+      },
+      "top10": [
+        {
+          "Score": 4444.27,
+          "enclosureCount": 5,
+          "pathLengths": [
+            15,
+            15,
+            14,
+            11,
+            7,
+            6,
+            5,
+            4,
+            4
+          ],
+          "top2Share": 0.37,
+          "totalBends": 40,
+          "boardData": "bench-9x9-1774279050864-6pk27l94c"
+        },
+        {
+          "Score": 4241,
+          "enclosureCount": 7,
+          "pathLengths": [
+            37,
+            12,
+            6,
+            6,
+            6,
+            5,
+            4,
+            3,
+            2
+          ],
+          "top2Share": 0.605,
+          "totalBends": 40,
+          "boardData": "bench-9x9-1774279236461-f8l7taszn"
+        },
+        {
+          "Score": 3599.61,
+          "enclosureCount": 4,
+          "pathLengths": [
+            14,
+            14,
+            12,
+            10,
+            10,
+            7,
+            5,
+            5,
+            4
+          ],
+          "top2Share": 0.346,
+          "totalBends": 39,
+          "boardData": "bench-9x9-1774279015158-zbagtboke"
+        },
+        {
+          "Score": 3311.5,
+          "enclosureCount": 4,
+          "pathLengths": [
+            27,
+            14,
+            9,
+            7,
+            7,
+            6,
+            5,
+            4,
+            2
+          ],
+          "top2Share": 0.506,
+          "totalBends": 39,
+          "boardData": "bench-9x9-1774279075671-oidkd9pzi"
+        },
+        {
+          "Score": 3236.68,
+          "enclosureCount": 5,
+          "pathLengths": [
+            22,
+            16,
+            10,
+            9,
+            7,
+            6,
+            4,
+            4,
+            3
+          ],
+          "top2Share": 0.469,
+          "totalBends": 35,
+          "boardData": "bench-9x9-1774278990874-beajl2x7e"
+        },
+        {
+          "Score": 3052.87,
+          "enclosureCount": 4,
+          "pathLengths": [
+            19,
+            18,
+            12,
+            10,
+            6,
+            5,
+            4,
+            4,
+            3
+          ],
+          "top2Share": 0.457,
+          "totalBends": 39,
+          "boardData": "bench-9x9-1774279016674-s85od04xr"
+        },
+        {
+          "Score": 2687.49,
+          "enclosureCount": 3,
+          "pathLengths": [
+            13,
+            12,
+            12,
+            11,
+            10,
+            8,
+            7,
+            4,
+            4
+          ],
+          "top2Share": 0.309,
+          "totalBends": 43,
+          "boardData": "bench-9x9-1774279057623-9qgye0553"
+        },
+        {
+          "Score": 2627.72,
+          "enclosureCount": 3,
+          "pathLengths": [
+            14,
+            11,
+            10,
+            10,
+            9,
+            9,
+            8,
+            6,
+            4
+          ],
+          "top2Share": 0.309,
+          "totalBends": 43,
+          "boardData": "bench-9x9-1774279012468-us78p0oky"
+        },
+        {
+          "Score": 2592.69,
+          "enclosureCount": 3,
+          "pathLengths": [
+            16,
+            14,
+            12,
+            10,
+            7,
+            6,
+            6,
+            5,
+            5
+          ],
+          "top2Share": 0.37,
+          "totalBends": 36,
+          "boardData": "bench-9x9-1774279125242-6gzpjg1fp"
+        },
+        {
+          "Score": 2536.48,
+          "enclosureCount": 3,
+          "pathLengths": [
+            15,
+            14,
+            13,
+            11,
+            10,
+            6,
+            6,
+            4,
+            2
+          ],
+          "top2Share": 0.358,
+          "totalBends": 36,
+          "boardData": "bench-9x9-1774279165661-4x46dhjs8"
+        }
+      ]
+    },
+    {
+      "pattern": "9x9_Pairs10",
+      "config": {
+        "size": 9,
+        "pairs": 10
+      },
+      "basicStats": {
+        "mean": -4701.19,
+        "median": -1208.51,
+        "max": 3662.78,
+        "min": -13743.14
+      },
+      "generationEfficiency": {
+        "avgGenTimeMs": 292.24,
+        "positiveScoreRate": 21
+      },
+      "qualityDistribution": {
+        "scoreGt500Rate": 15.2,
+        "enclosureEq0Rate": 43.4,
+        "enclosureGe1Rate": 56.6
+      },
+      "top10": [
+        {
+          "Score": 3662.78,
+          "enclosureCount": 4,
+          "pathLengths": [
+            19,
+            11,
+            9,
+            8,
+            8,
+            7,
+            6,
+            5,
+            4,
+            4
+          ],
+          "top2Share": 0.37,
+          "totalBends": 32,
+          "boardData": "bench-9x10-1774279335442-nzd89u6t6"
+        },
+        {
+          "Score": 3630.07,
+          "enclosureCount": 4,
+          "pathLengths": [
+            14,
+            12,
+            11,
+            10,
+            9,
+            8,
+            6,
+            4,
+            4,
+            3
+          ],
+          "top2Share": 0.321,
+          "totalBends": 28,
+          "boardData": "bench-9x10-1774279474061-p17if5kpu"
+        },
+        {
+          "Score": 3418.73,
+          "enclosureCount": 5,
+          "pathLengths": [
+            23,
+            10,
+            8,
+            8,
+            7,
+            6,
+            5,
+            5,
+            5,
+            4
+          ],
+          "top2Share": 0.407,
+          "totalBends": 30,
+          "boardData": "bench-9x10-1774279497309-by3qidxq7"
+        },
+        {
+          "Score": 3381.52,
+          "enclosureCount": 5,
+          "pathLengths": [
+            23,
+            12,
+            10,
+            9,
+            7,
+            6,
+            4,
+            4,
+            3,
+            3
+          ],
+          "top2Share": 0.432,
+          "totalBends": 31,
+          "boardData": "bench-9x10-1774279524146-oej2dj2ai"
+        },
+        {
+          "Score": 3172.05,
+          "enclosureCount": 5,
+          "pathLengths": [
+            14,
+            12,
+            12,
+            12,
+            8,
+            7,
+            5,
+            5,
+            4,
+            2
+          ],
+          "top2Share": 0.321,
+          "totalBends": 29,
+          "boardData": "bench-9x10-1774279472233-mzoztfcrl"
+        },
+        {
+          "Score": 3096.75,
+          "enclosureCount": 5,
+          "pathLengths": [
+            21,
+            14,
+            14,
+            9,
+            5,
+            5,
+            4,
+            4,
+            3,
+            2
+          ],
+          "top2Share": 0.432,
+          "totalBends": 32,
+          "boardData": "bench-9x10-1774279320161-ueuclpiso"
+        },
+        {
+          "Score": 2975.22,
+          "enclosureCount": 5,
+          "pathLengths": [
+            20,
+            19,
+            10,
+            8,
+            7,
+            6,
+            4,
+            3,
+            2,
+            2
+          ],
+          "top2Share": 0.481,
+          "totalBends": 39,
+          "boardData": "bench-9x10-1774279314231-sa7b19mtr"
+        },
+        {
+          "Score": 2912.69,
+          "enclosureCount": 4,
+          "pathLengths": [
+            13,
+            12,
+            11,
+            10,
+            9,
+            9,
+            8,
+            4,
+            3,
+            2
+          ],
+          "top2Share": 0.309,
+          "totalBends": 30,
+          "boardData": "bench-9x10-1774279490974-iozh595zo"
+        },
+        {
+          "Score": 2744.26,
+          "enclosureCount": 3,
+          "pathLengths": [
+            17,
+            14,
+            10,
+            9,
+            8,
+            7,
+            5,
+            5,
+            4,
+            2
+          ],
+          "top2Share": 0.383,
+          "totalBends": 32,
+          "boardData": "bench-9x10-1774279433214-zllskm5l5"
+        },
+        {
+          "Score": 2744.08,
+          "enclosureCount": 5,
+          "pathLengths": [
+            25,
+            20,
+            9,
+            6,
+            4,
+            4,
+            4,
+            4,
+            3,
+            2
+          ],
+          "top2Share": 0.556,
+          "totalBends": 23,
+          "boardData": "bench-9x10-1774279418593-ni7u4r00k"
+        }
+      ]
+    },
+    {
+      "pattern": "10x10_Pairs10",
+      "config": {
+        "size": 10,
+        "pairs": 10
+      },
+      "basicStats": {
+        "mean": -4415.27,
+        "median": -1273.46,
+        "max": 6199.19,
+        "min": -14416.9
+      },
+      "generationEfficiency": {
+        "avgGenTimeMs": 389.34,
+        "positiveScoreRate": 29.7
+      },
+      "qualityDistribution": {
+        "scoreGt500Rate": 21.9,
+        "enclosureEq0Rate": 31.8,
+        "enclosureGe1Rate": 68.2
+      },
+      "top10": [
+        {
+          "Score": 6199.19,
+          "enclosureCount": 6,
+          "pathLengths": [
+            20,
+            19,
+            18,
+            12,
+            8,
+            7,
+            5,
+            4,
+            4,
+            3
+          ],
+          "top2Share": 0.39,
+          "totalBends": 46,
+          "boardData": "bench-10x10-1774279720385-kau0semdr"
+        },
+        {
+          "Score": 5634.35,
+          "enclosureCount": 6,
+          "pathLengths": [
+            20,
+            20,
+            19,
+            11,
+            8,
+            6,
+            5,
+            5,
+            4,
+            2
+          ],
+          "top2Share": 0.4,
+          "totalBends": 49,
+          "boardData": "bench-10x10-1774279792489-9kslclk83"
+        },
+        {
+          "Score": 5345.23,
+          "enclosureCount": 5,
+          "pathLengths": [
+            22,
+            15,
+            11,
+            10,
+            9,
+            8,
+            8,
+            7,
+            6,
+            4
+          ],
+          "top2Share": 0.37,
+          "totalBends": 42,
+          "boardData": "bench-10x10-1774279625325-jai75bjrm"
+        },
+        {
+          "Score": 4485.46,
+          "enclosureCount": 5,
+          "pathLengths": [
+            32,
+            13,
+            13,
+            12,
+            9,
+            6,
+            5,
+            5,
+            3,
+            2
+          ],
+          "top2Share": 0.45,
+          "totalBends": 46,
+          "boardData": "bench-10x10-1774279920560-l6a1eohsj"
+        },
+        {
+          "Score": 4380.08,
+          "enclosureCount": 4,
+          "pathLengths": [
+            19,
+            12,
+            12,
+            11,
+            10,
+            8,
+            8,
+            8,
+            7,
+            5
+          ],
+          "top2Share": 0.31,
+          "totalBends": 49,
+          "boardData": "bench-10x10-1774279798972-njqa8h7wp"
+        },
+        {
+          "Score": 4374.81,
+          "enclosureCount": 4,
+          "pathLengths": [
+            21,
+            14,
+            14,
+            12,
+            8,
+            8,
+            7,
+            6,
+            6,
+            4
+          ],
+          "top2Share": 0.35,
+          "totalBends": 58,
+          "boardData": "bench-10x10-1774279775016-pvzy629j2"
+        },
+        {
+          "Score": 4128.92,
+          "enclosureCount": 5,
+          "pathLengths": [
+            27,
+            15,
+            11,
+            10,
+            9,
+            8,
+            6,
+            6,
+            6,
+            2
+          ],
+          "top2Share": 0.42,
+          "totalBends": 46,
+          "boardData": "bench-10x10-1774279853883-p30gey678"
+        },
+        {
+          "Score": 3997.04,
+          "enclosureCount": 4,
+          "pathLengths": [
+            24,
+            16,
+            12,
+            10,
+            8,
+            7,
+            6,
+            6,
+            6,
+            5
+          ],
+          "top2Share": 0.4,
+          "totalBends": 47,
+          "boardData": "bench-10x10-1774279874131-kl0skj79d"
+        },
+        {
+          "Score": 3986.12,
+          "enclosureCount": 4,
+          "pathLengths": [
+            23,
+            17,
+            14,
+            10,
+            10,
+            8,
+            5,
+            5,
+            5,
+            3
+          ],
+          "top2Share": 0.4,
+          "totalBends": 37,
+          "boardData": "bench-10x10-1774279571671-k819prcif"
+        },
+        {
+          "Score": 3928.7,
+          "enclosureCount": 4,
+          "pathLengths": [
+            28,
+            16,
+            14,
+            11,
+            10,
+            5,
+            4,
+            4,
+            4,
+            4
+          ],
+          "top2Share": 0.44,
+          "totalBends": 42,
+          "boardData": "bench-10x10-1774279809082-lca86pr75"
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-03-23T15:32:04.859Z",
+  "totalTrials": 9000,
+  "note": "Score閾値による破棄なし。Mutation完了・全マス埋まり・パス確定状態でスコア算出。"
+}
