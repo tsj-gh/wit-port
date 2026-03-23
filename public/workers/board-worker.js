@@ -646,63 +646,9 @@ function classifyRowPassSide(path, idx, ty) {
   return null;
 }
 
-/** 水平囲い込み: 行 nr 上で x < tCol 側の最大 x、x > tCol 側の最小 x のブラケット（ターゲット列を挟む）。無ければ null。 */
-function findHorizontalStraddleBrackets(path, nr, tCol) {
-  let xLeft = -Infinity;
-  let iLeft = -1;
-  let xRight = Infinity;
-  let iRight = -1;
-  for (let i = 0; i < path.length; i++) {
-    if (path[i].y !== nr) continue;
-    const x = path[i].x;
-    if (x < tCol) {
-      if (x > xLeft || (x === xLeft && (iLeft < 0 || i < iLeft))) {
-        xLeft = x;
-        iLeft = i;
-      }
-    } else if (x > tCol) {
-      if (x < xRight || (x === xRight && (iRight < 0 || i < iRight))) {
-        xRight = x;
-        iRight = i;
-      }
-    }
-  }
-  if (iLeft < 0 || iRight < 0 || !(xLeft < tCol && tCol < xRight)) {
-    return null;
-  }
-  return { iMin: iLeft, iMax: iRight, xMin: xLeft, xMax: xRight };
-}
-
-/** 垂直囲い込み: 列 nc 上で y < tRow 側の最大 y、y > tRow 側の最小 y のブラケット。無ければ null。 */
-function findVerticalStraddleBrackets(path, nc, tRow) {
-  let yTop = -Infinity;
-  let iTop = -1;
-  let yBottom = Infinity;
-  let iBottom = -1;
-  for (let i = 0; i < path.length; i++) {
-    if (path[i].x !== nc) continue;
-    const y = path[i].y;
-    if (y < tRow) {
-      if (y > yTop || (y === yTop && (iTop < 0 || i < iTop))) {
-        yTop = y;
-        iTop = i;
-      }
-    } else if (y > tRow) {
-      if (y < yBottom || (y === yBottom && (iBottom < 0 || i < iBottom))) {
-        yBottom = y;
-        iBottom = i;
-      }
-    }
-  }
-  if (iTop < 0 || iBottom < 0 || !(yTop < tRow && tRow < yBottom)) {
-    return null;
-  }
-  return { iMin: iTop, iMax: iBottom, yMin: yTop, yMax: yBottom };
-}
-
 /**
- * 回り込みブラケット上の「腕」の向きを基準に、角から最大4セグメント以内に同じ軸で符号が逆のセグメントがあればエセ回り込み。
- * path: {x:列,y:行}。iMin/iMax は check*WrapEnclosure と同じく行／列上のブラケットインデックス。
+ * 回り込みブラケット上の「腕」の向きを基準に、角から最大3セグメント以内に同じ軸で符号が逆のセグメントがあればエセ回り込み。
+ * path: {x:列,y:行}。iMin/iMax は check*WrapEnclosure と同じく行／列上の最小・最大座標側のインデックス。
  */
 function pickHorizontalBracketRef(path, len, nr, iBracket, xMin, xMax) {
   const segs = [];
@@ -739,7 +685,7 @@ function tryHorizontalBracketCornerPseudo(path, nr, tCol, xMin, xMax, iBracket) 
   if (refDx === 0) return false;
   const tLo = tCol - 2;
   const tHi = tCol + 2;
-  for (let j = 1; j <= 4; j++) {
+  for (let j = 1; j <= 3; j++) {
     const i1 = cornerIdx + j;
     if (i1 >= len) break;
     const p0 = path[cornerIdx + j - 1];
@@ -834,32 +780,20 @@ function isVerticalBracketPseudoEnclosure(path, nc, tRow, yMin, yMax, iMin, iMax
  * 列 nc 上で y1<ty<y2 にターゲットがあり、(nc,y1) と (nc,y2) での「追い越し方向」（x≠nc 側の位置）が逆であること。
  */
 function checkVerticalWrapEnclosure(path, nc, tRow) {
-  let yMin;
-  let yMax;
-  let iMin;
-  let iMax;
-  const straddle = findVerticalStraddleBrackets(path, nc, tRow);
-  if (straddle) {
-    iMin = straddle.iMin;
-    iMax = straddle.iMax;
-    yMin = straddle.yMin;
-    yMax = straddle.yMax;
-  } else {
-    yMin = Infinity;
-    yMax = -Infinity;
-    iMin = -1;
-    iMax = -1;
-    for (let i = 0; i < path.length; i++) {
-      if (path[i].x !== nc) continue;
-      const y = path[i].y;
-      if (y < yMin) {
-        yMin = y;
-        iMin = i;
-      }
-      if (y > yMax) {
-        yMax = y;
-        iMax = i;
-      }
+  let yMin = Infinity;
+  let yMax = -Infinity;
+  let iMin = -1;
+  let iMax = -1;
+  for (let i = 0; i < path.length; i++) {
+    if (path[i].x !== nc) continue;
+    const y = path[i].y;
+    if (y < yMin) {
+      yMin = y;
+      iMin = i;
+    }
+    if (y > yMax) {
+      yMax = y;
+      iMax = i;
     }
   }
   if (iMin < 0 || !(yMin < yMax)) {
@@ -895,32 +829,20 @@ function checkVerticalWrapEnclosure(path, nc, tRow) {
  * 行 nr 上で x1<tx<x2 にターゲットがあり、(x1,nr) と (x2,nr) での y 方向追い越しが逆であること。
  */
 function checkHorizontalWrapEnclosure(path, nr, tCol) {
-  let xMin;
-  let xMax;
-  let iMin;
-  let iMax;
-  const straddle = findHorizontalStraddleBrackets(path, nr, tCol);
-  if (straddle) {
-    iMin = straddle.iMin;
-    iMax = straddle.iMax;
-    xMin = straddle.xMin;
-    xMax = straddle.xMax;
-  } else {
-    xMin = Infinity;
-    xMax = -Infinity;
-    iMin = -1;
-    iMax = -1;
-    for (let i = 0; i < path.length; i++) {
-      if (path[i].y !== nr) continue;
-      const x = path[i].x;
-      if (x < xMin) {
-        xMin = x;
-        iMin = i;
-      }
-      if (x > xMax) {
-        xMax = x;
-        iMax = i;
-      }
+  let xMin = Infinity;
+  let xMax = -Infinity;
+  let iMin = -1;
+  let iMax = -1;
+  for (let i = 0; i < path.length; i++) {
+    if (path[i].y !== nr) continue;
+    const x = path[i].x;
+    if (x < xMin) {
+      xMin = x;
+      iMin = i;
+    }
+    if (x > xMax) {
+      xMax = x;
+      iMax = i;
     }
   }
   if (iMin < 0 || !(xMin < xMax)) {
@@ -979,11 +901,12 @@ function countPairLinkEnclosures(solutionGrid, adj, n) {
         const pPid = pids[pi];
         if (pPid === qPid) continue;
         const pk = pPid + ">" + qPid;
+        if (pairCounted.has(pk)) continue;
         const path = pathCache.get(pPid);
         if (!path) continue;
         const rv = checkVerticalWrapEnclosure(path, nc, nr);
         const rh = checkHorizontalWrapEnclosure(path, nr, nc);
-        if ((rv.ok || rh.ok) && !pairCounted.has(pk)) {
+        if (rv.ok || rh.ok) {
           pairCounted.add(pk);
           count++;
         }
@@ -1038,23 +961,11 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
         const rv = checkVerticalWrapEnclosure(path, nc, nr);
         const rh = checkHorizontalWrapEnclosure(path, nr, nc);
 
-        if (rv.reason === "pseudo_u_turn_enclosure_x" && typeof rv.y1 === "number") {
-          if (!pairCounted.has(pk)) {
-            debugEnclosures.push({
-              kind: "vertical",
-              col: nc,
-              y1: rv.y1,
-              y2: rv.y2,
-              nRow: nr,
-              nCol: nc,
-              pathIdP: pairP,
-              pathIdN: pairN,
-              pseudo: true,
-            });
-            pairCounted.add(pk);
-            if (logToConsole) {
+        if (pairCounted.has(pk)) {
+          if (logToConsole) {
+            if (rv.ok) {
               console.log(
-                "[Enclosure Pseudo] TargetPair: " +
+                "[Enclosure Skipped] TargetPair: " +
                   pairN +
                   ", Line: X=" +
                   nc +
@@ -1064,42 +975,15 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                   rv.y2 +
                   "), OccupiedBy: PathID=" +
                   pairP +
-                  " — rejected as pseudo U-turn (bracket-based)"
+                  " — reason: already counted pair " +
+                  pairP +
+                  "→" +
+                  pairN +
+                  " (one per victim path)"
               );
-            }
-          } else if (logToConsole) {
-            console.log(
-              "[Enclosure Pseudo Skipped] TargetPair: " +
-                pairN +
-                " @(" +
-                nr +
-                "," +
-                nc +
-                ") — already recorded for pair " +
-                pairP +
-                "→" +
-                pairN
-            );
-          }
-          continue;
-        }
-        if (rh.reason === "pseudo_u_turn_enclosure_y" && typeof rh.x1 === "number") {
-          if (!pairCounted.has(pk)) {
-            debugEnclosures.push({
-              kind: "horizontal",
-              row: nr,
-              x1: rh.x1,
-              x2: rh.x2,
-              nRow: nr,
-              nCol: nc,
-              pathIdP: pairP,
-              pathIdN: pairN,
-              pseudo: true,
-            });
-            pairCounted.add(pk);
-            if (logToConsole) {
+            } else if (rh.ok) {
               console.log(
-                "[Enclosure Pseudo] TargetPair: " +
+                "[Enclosure Skipped] TargetPair: " +
                   pairN +
                   ", Line: Y=" +
                   nr +
@@ -1109,21 +993,73 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
                   rh.x2 +
                   "), OccupiedBy: PathID=" +
                   pairP +
-                  " — rejected as pseudo U-turn (bracket-based)"
+                  " — reason: already counted pair " +
+                  pairP +
+                  "→" +
+                  pairN +
+                  " (one per victim path)"
               );
             }
-          } else if (logToConsole) {
+          }
+          continue;
+        }
+
+        if (rv.reason === "pseudo_u_turn_enclosure_x" && typeof rv.y1 === "number") {
+          debugEnclosures.push({
+            kind: "vertical",
+            col: nc,
+            y1: rv.y1,
+            y2: rv.y2,
+            nRow: nr,
+            nCol: nc,
+            pathIdP: pairP,
+            pathIdN: pairN,
+            pseudo: true,
+          });
+          pairCounted.add(pk);
+          if (logToConsole) {
             console.log(
-              "[Enclosure Pseudo Skipped] TargetPair: " +
+              "[Enclosure Pseudo] TargetPair: " +
                 pairN +
-                " @(" +
-                nr +
-                "," +
+                ", Line: X=" +
                 nc +
-                ") — already recorded for pair " +
+                " (Y:" +
+                rv.y1 +
+                "-" +
+                rv.y2 +
+                "), OccupiedBy: PathID=" +
                 pairP +
-                "→" +
-                pairN
+                " — rejected as pseudo U-turn (bracket-based)"
+            );
+          }
+          continue;
+        }
+        if (rh.reason === "pseudo_u_turn_enclosure_y" && typeof rh.x1 === "number") {
+          debugEnclosures.push({
+            kind: "horizontal",
+            row: nr,
+            x1: rh.x1,
+            x2: rh.x2,
+            nRow: nr,
+            nCol: nc,
+            pathIdP: pairP,
+            pathIdN: pairN,
+            pseudo: true,
+          });
+          pairCounted.add(pk);
+          if (logToConsole) {
+            console.log(
+              "[Enclosure Pseudo] TargetPair: " +
+                pairN +
+                ", Line: Y=" +
+                nr +
+                " (X:" +
+                rh.x1 +
+                "-" +
+                rh.x2 +
+                "), OccupiedBy: PathID=" +
+                pairP +
+                " — rejected as pseudo U-turn (bracket-based)"
             );
           }
           continue;
@@ -1167,94 +1103,58 @@ function analyzePairLinkEnclosuresDebug(solutionGrid, adj, n, pidToPairId, logTo
           continue;
         }
 
-        if (!pairCounted.has(pk)) {
-          pairCounted.add(pk);
-          count++;
-          if (rv.ok) {
-            debugEnclosures.push({
-              kind: "vertical",
-              col: nc,
-              y1: rv.y1,
-              y2: rv.y2,
-              nRow: nr,
-              nCol: nc,
-              pathIdP: pairP,
-              pathIdN: pairN,
-            });
-            if (logToConsole) {
-              console.log(
-                "[Enclosure Found] TargetPair: " +
-                  pairN +
-                  ", Line: X=" +
-                  nc +
-                  " (Y:" +
-                  rv.y1 +
-                  "-" +
-                  rv.y2 +
-                  "), OccupiedBy: PathID=" +
-                  pairP +
-                  " (opposite X pass: L/R)"
-              );
-            }
-          } else {
-            debugEnclosures.push({
-              kind: "horizontal",
-              row: nr,
-              x1: rh.x1,
-              x2: rh.x2,
-              nRow: nr,
-              nCol: nc,
-              pathIdP: pairP,
-              pathIdN: pairN,
-            });
-            if (logToConsole) {
-              console.log(
-                "[Enclosure Found] TargetPair: " +
-                  pairN +
-                  ", Line: Y=" +
-                  nr +
-                  " (X:" +
-                  rh.x1 +
-                  "-" +
-                  rh.x2 +
-                  "), OccupiedBy: PathID=" +
-                  pairP +
-                  " (opposite Y pass: B/A)"
-              );
-            }
-          }
-        } else if (logToConsole) {
-          if (rv.ok) {
+        pairCounted.add(pk);
+        count++;
+        if (rv.ok) {
+          debugEnclosures.push({
+            kind: "vertical",
+            col: nc,
+            y1: rv.y1,
+            y2: rv.y2,
+            nRow: nr,
+            nCol: nc,
+            pathIdP: pairP,
+            pathIdN: pairN,
+          });
+          if (logToConsole) {
             console.log(
-              "[Enclosure Skipped] TargetPair: " +
+              "[Enclosure Found] TargetPair: " +
                 pairN +
-                " @(" +
-                nr +
-                "," +
+                ", Line: X=" +
                 nc +
-                "), Line: X=" +
-                nc +
-                " — already counted pair " +
+                " (Y:" +
+                rv.y1 +
+                "-" +
+                rv.y2 +
+                "), OccupiedBy: PathID=" +
                 pairP +
-                "→" +
-                pairN +
-                " (other endpoint)"
+                " (opposite X pass: L/R)"
             );
-          } else {
+          }
+        } else {
+          debugEnclosures.push({
+            kind: "horizontal",
+            row: nr,
+            x1: rh.x1,
+            x2: rh.x2,
+            nRow: nr,
+            nCol: nc,
+            pathIdP: pairP,
+            pathIdN: pairN,
+          });
+          if (logToConsole) {
             console.log(
-              "[Enclosure Skipped] TargetPair: " +
+              "[Enclosure Found] TargetPair: " +
                 pairN +
-                " @(" +
+                ", Line: Y=" +
                 nr +
-                "," +
-                nc +
-                "), Line: Y=" +
-                nr +
-                " — already counted pair " +
+                " (X:" +
+                rh.x1 +
+                "-" +
+                rh.x2 +
+                "), OccupiedBy: PathID=" +
                 pairP +
-                "→" +
-                pairN +
-                " (other endpoint)"
+                " (opposite Y pass: B/A)"
             );
           }
         }
