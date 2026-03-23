@@ -713,71 +713,90 @@ function isHorizontalBracketPseudoEnclosure(path, nr, tCol, xMin, xMax, iMin, iM
   );
 }
 
-function pickVerticalBracketRef(path, len, nc, iBracket, yMin, yMax) {
-  const segs = [];
-  if (iBracket > 0 && path[iBracket - 1].x === nc && path[iBracket].x === nc) {
-    const dy = path[iBracket].y - path[iBracket - 1].y;
-    if (dy !== 0) segs.push({ to: iBracket, dy });
+/**
+ * 垂直挟み込み用: ブラケット頂点 ib（列 nc 上）で、画面上の「水平」辺（同一行）の向き。
+ * 上ブラケット（y 小さい方）は +x（R）を優先、下ブラケットは東から入る -x（L）を優先（見つからなければ他方）。
+ * @returns {1|-1|null} 1=R(+x), -1=L(-x)
+ */
+function horizontalScreenArmAtVerticalBracket(path, ib, nc, isUpperBracket) {
+  const len = path.length;
+  if (!path || ib < 0 || ib >= len) return null;
+  const b = path[ib];
+  if (b.x !== nc) return null;
+  let hasR = false;
+  let hasL = false;
+  if (ib > 0 && path[ib - 1].y === b.y) {
+    const dx = path[ib].x - path[ib - 1].x;
+    if (dx > 0) hasR = true;
+    if (dx < 0) hasL = true;
   }
-  if (iBracket + 1 < len && path[iBracket].x === nc && path[iBracket + 1].x === nc) {
-    const dy = path[iBracket + 1].y - path[iBracket].y;
-    if (dy !== 0) segs.push({ to: iBracket + 1, dy });
+  if (ib + 1 < len && path[ib + 1].y === b.y) {
+    const dx = path[ib + 1].x - path[ib].x;
+    if (dx > 0) hasR = true;
+    if (dx < 0) hasL = true;
   }
-  if (segs.length === 0) return null;
-  const by = path[iBracket].y;
-  const atMin = by === yMin;
-  const atMax = by === yMax;
-  let pick = segs[0];
-  if (atMax) {
-    const up = segs.find((s) => s.dy < 0);
-    if (up) pick = up;
-  } else if (atMin) {
-    const down = segs.find((s) => s.dy > 0);
-    if (down) pick = down;
+  if (isUpperBracket) {
+    if (hasR) return 1;
+    if (hasL) return -1;
+  } else {
+    if (hasL) return -1;
+    if (hasR) return 1;
   }
-  const cornerIdx = pick.to;
-  return { refDy: pick.dy, cornerIdx };
+  return null;
 }
 
-function tryVerticalBracketCornerPseudo(path, nc, tRow, yMin, yMax, iBracket) {
+function verticalOppositeHorizontalArmsOk(armTop, armBottom) {
+  if (armTop == null || armBottom == null) return false;
+  return armTop * armBottom === -1;
+}
+
+/**
+ * 下ブラケット（列 nc, 行が大きい方）: 東隣マスからブラケットへ入り、ブラケットを出た続きのパスで
+ * 最大 K 辺のうち「画面上水平で +x（R）」の辺があれば pseudo。
+ */
+function verticalPseudoHorizontalRAfterLowerBracket(path, nc, iBracket, K) {
   const len = path.length;
-  if (!path || len < 2 || iBracket < 0 || iBracket >= len) return false;
-  const ref = pickVerticalBracketRef(path, len, nc, iBracket, yMin, yMax);
-  if (!ref) return false;
-  const { refDy, cornerIdx } = ref;
-  if (refDy === 0) return false;
-  const tLo = tRow - 2;
-  const tHi = tRow + 2;
-  for (let j = 1; j <= 3; j++) {
-    const i1 = cornerIdx + j;
-    if (i1 >= len) break;
-    const p0 = path[cornerIdx + j - 1];
-    const p1 = path[i1];
-    const dx = p1.x - p0.x;
-    const dy = p1.y - p0.y;
-    if (dx !== 0 || dy === 0) continue;
-    if (Math.sign(dy) !== -Math.sign(refDy)) continue;
-    const near =
-      (p0.y >= tLo && p0.y <= tHi) ||
-      (p1.y >= tLo && p1.y <= tHi) ||
-      (p0.y < tRow && p1.y > tRow) ||
-      (p0.y > tRow && p1.y < tRow);
-    if (!near) continue;
-    return true;
+  if (!path || len < 2 || iBracket < 0 || iBracket >= len || K < 1) return false;
+  const b = path[iBracket];
+  if (b.x !== nc) return false;
+  let eastI = -1;
+  if (iBracket > 0 && path[iBracket - 1].y === b.y && path[iBracket - 1].x > b.x) {
+    eastI = iBracket - 1;
+  }
+  if (iBracket + 1 < len && path[iBracket + 1].y === b.y && path[iBracket + 1].x > b.x) {
+    eastI = iBracket + 1;
+  }
+  if (eastI < 0) return false;
+  const otherI = eastI === iBracket - 1 ? iBracket + 1 : iBracket - 1;
+  if (otherI < 0 || otherI >= len) return false;
+  let prev = iBracket;
+  let cur = otherI;
+  for (let e = 0; e < K; e++) {
+    const pa = path[prev];
+    const pb = path[cur];
+    if (pa.y === pb.y && pb.x - pa.x > 0) {
+      return true;
+    }
+    const dir = cur - prev;
+    const nxt = cur + dir;
+    if (nxt < 0 || nxt >= len) {
+      break;
+    }
+    prev = cur;
+    cur = nxt;
   }
   return false;
 }
 
-function isVerticalBracketPseudoEnclosure(path, nc, tRow, yMin, yMax, iMin, iMax) {
-  if (!path || path.length < 2) return false;
-  return (
-    tryVerticalBracketCornerPseudo(path, nc, tRow, yMin, yMax, iMax) ||
-    tryVerticalBracketCornerPseudo(path, nc, tRow, yMin, yMax, iMin)
-  );
+const VERTICAL_PSEUDO_HORIZONTAL_K = 4;
+
+function isVerticalPseudoByHorizontalContinuation(path, nc, iMin, iMax) {
+  return verticalPseudoHorizontalRAfterLowerBracket(path, nc, iMax, VERTICAL_PSEUDO_HORIZONTAL_K);
 }
 
 /**
- * 列 nc 上で y1<ty<y2 にターゲットがあり、(nc,y1) と (nc,y2) での「追い越し方向」（x≠nc 側の位置）が逆であること。
+ * 列 nc 上で y1<ty<y2 にターゲットがあり、上下ブラケット周りの「画面上水平」腕が逆向き（R vs L）であること。
+ * path: {x:列,y:行}。画面上の水平 = 行 y 固定で列 x が変わる辺。
  */
 function checkVerticalWrapEnclosure(path, nc, tRow) {
   let yMin = Infinity;
@@ -805,21 +824,18 @@ function checkVerticalWrapEnclosure(path, nc, tRow) {
   if (path[iMin].x !== nc || path[iMax].x !== nc) {
     return { ok: false, reason: "invalid_bracket_column" };
   }
-  let sLow = classifyColumnPassSide(path, iMin, nc);
-  let sHigh = classifyColumnPassSide(path, iMax, nc);
-  if (sLow == null || sHigh == null) {
-    return { ok: false, reason: "cannot_classify_x_pass", sandwich: true, y1: yMin, y2: yMax };
-  }
-  if (sLow === sHigh) {
+  let armTop = horizontalScreenArmAtVerticalBracket(path, iMin, nc, true);
+  let armBottom = horizontalScreenArmAtVerticalBracket(path, iMax, nc, false);
+  if (!verticalOppositeHorizontalArmsOk(armTop, armBottom)) {
     const rev = path.slice().reverse();
     const len = path.length;
-    sLow = classifyColumnPassSide(rev, len - 1 - iMin, nc);
-    sHigh = classifyColumnPassSide(rev, len - 1 - iMax, nc);
-    if (sLow == null || sHigh == null || sLow === sHigh) {
-      return { ok: false, reason: "same_x_pass_direction", sandwich: true, y1: yMin, y2: yMax };
+    armTop = horizontalScreenArmAtVerticalBracket(rev, len - 1 - iMin, nc, true);
+    armBottom = horizontalScreenArmAtVerticalBracket(rev, len - 1 - iMax, nc, false);
+    if (!verticalOppositeHorizontalArmsOk(armTop, armBottom)) {
+      return { ok: false, reason: "same_horizontal_arm_direction", sandwich: true, y1: yMin, y2: yMax };
     }
   }
-  if (isVerticalBracketPseudoEnclosure(path, nc, tRow, yMin, yMax, iMin, iMax)) {
+  if (isVerticalPseudoByHorizontalContinuation(path, nc, iMin, iMax)) {
     return { ok: false, reason: "pseudo_u_turn_enclosure_x", sandwich: true, y1: yMin, y2: yMax };
   }
   return { ok: true, y1: yMin, y2: yMax };
