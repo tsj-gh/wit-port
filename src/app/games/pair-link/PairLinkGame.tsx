@@ -246,7 +246,12 @@ export default function PairLinkGame() {
   const { generate: workerGenerate } = useBoardWorker();
 
   const initGame = useCallback(
-    async (gs: number, np: number, seed?: string) => {
+    async (
+      gs: number,
+      np: number,
+      seed?: string,
+      options?: { onSuccess?: (result: Awaited<ReturnType<typeof getPuzzle>>) => void | Promise<void> }
+    ) => {
       hasTriggeredClearRef.current = false;
       isCheckingClearRef.current = false;
       setSolved(false);
@@ -279,6 +284,7 @@ export default function PairLinkGame() {
         setCurrentSeed(result.seed ?? null);
         currentSolutionPathsRef.current = result.solutionPaths ?? null;
         setDebugEnclosures(result.debugEnclosures ?? null);
+        await options?.onSuccess?.(result);
       } catch (err) {
         setStatus(
           err instanceof Error ? err.message : "生成に失敗しました。もう一度お試しください。"
@@ -542,8 +548,39 @@ export default function PairLinkGame() {
         hasTriggered: hasTriggeredClearRef.current,
       });
     }
-    // hasTriggeredClearRef はボタンクリックの pointerup で checkClear が先に発火し true になるため除外
-    if (loading || solved || pairs.length === 0) return;
+    if (loading || pairs.length === 0) return;
+
+    if (solved) {
+      setShowClearOverlay(false);
+      hasTriggeredClearRef.current = false;
+      try {
+        await initGame(settingsGridSize, settingsNumPairs, undefined, {
+          onSuccess: async (result) => {
+            let solvedPaths = result.solutionPaths ?? null;
+            if (!solvedPaths || Object.keys(solvedPaths).length === 0) {
+              const solveResult = await solvePathsAction(result.pairs, result.gridSize);
+              if (solveResult.error || !solveResult.paths || Object.keys(solveResult.paths).length === 0) {
+                setStatus(solveResult.error ?? "解の取得に失敗しました");
+                return;
+              }
+              solvedPaths = solveResult.paths;
+            }
+            setPaths(solvedPaths);
+            setSolved(true);
+            setTimerActive(false);
+            setShowClearOverlay(true);
+            recordPuzzleClear("pairLink");
+            if (userSync?.saveProgressAndSync) {
+              userSync.saveProgressAndSync(() => {}).catch(() => {});
+            }
+          },
+        });
+      } catch (err) {
+        setStatus(err instanceof Error ? err.message : "強制クリアに失敗しました");
+      }
+      return;
+    }
+
     hasTriggeredClearRef.current = true;
     try {
       let solvedPaths: Record<string, { x: number; y: number }[][]> | null =
@@ -586,7 +623,7 @@ export default function PairLinkGame() {
       }
       hasTriggeredClearRef.current = false;
     }
-  }, [pairs, gridSize, loading, solved, userSync]);
+  }, [pairs, gridSize, loading, solved, userSync, initGame, settingsGridSize, settingsNumPairs]);
 
   // トリガーA: クリア判定され正解演出開始時に広告リフレッシュ
   useEffect(() => {
@@ -631,58 +668,6 @@ export default function PairLinkGame() {
         );
         ctx.fill();
       }
-    }
-
-    if (isDebugMode && debugEnclosures && debugEnclosures.length > 0) {
-      ctx.save();
-      ctx.setLineDash([5, 5]);
-      ctx.lineWidth = Math.max(1.5, spacing * 0.08);
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      const pseudoStroke = "rgba(192, 132, 252, 0.92)";
-      const pseudoMarkFs = Math.max(7, spacing * 0.22);
-      for (const e of debugEnclosures) {
-        const isPseudo = e.pseudo === true;
-        if (e.kind === "vertical") {
-          const px = PADDING + e.col * spacing;
-          const py1 = PADDING + e.y1 * spacing;
-          const py2 = PADDING + e.y2 * spacing;
-          ctx.strokeStyle = isPseudo ? pseudoStroke : "rgba(251, 191, 36, 0.9)";
-          ctx.beginPath();
-          ctx.moveTo(px, py1);
-          ctx.lineTo(px, py2);
-          ctx.stroke();
-          if (isPseudo) {
-            ctx.font = `bold ${pseudoMarkFs}px Arial`;
-            ctx.fillStyle = pseudoStroke;
-            ctx.fillText("▼", px, py1 - spacing * 0.14);
-            ctx.fillText("▲", px, py2 + spacing * 0.14);
-          }
-        } else {
-          const py = PADDING + e.row * spacing;
-          const px1 = PADDING + e.x1 * spacing;
-          const px2 = PADDING + e.x2 * spacing;
-          ctx.strokeStyle = isPseudo ? pseudoStroke : "rgba(56, 189, 248, 0.9)";
-          ctx.beginPath();
-          ctx.moveTo(px1, py);
-          ctx.lineTo(px2, py);
-          ctx.stroke();
-          if (isPseudo) {
-            ctx.font = `bold ${pseudoMarkFs}px Arial`;
-            ctx.fillStyle = pseudoStroke;
-            ctx.fillText("▼", px1 - spacing * 0.14, py);
-            ctx.fillText("▲", px2 + spacing * 0.14, py);
-          }
-        }
-        if (!isPseudo) {
-          const mx = PADDING + e.nCol * spacing;
-          const my = PADDING + e.nRow * spacing;
-          ctx.font = `bold ${Math.max(10, spacing * 0.38)}px Arial`;
-          ctx.fillStyle = "rgba(248, 113, 113, 0.95)";
-          ctx.fillText(e.kind === "vertical" ? "▼" : "×", mx, my);
-        }
-      }
-      ctx.restore();
     }
 
     Object.entries(paths).forEach(([v, pathList]) => {
@@ -739,6 +724,58 @@ export default function PairLinkGame() {
       ctx.fillStyle = "white";
       ctx.fillText(String(n.val), x, y);
     });
+
+    if (isDebugMode && debugEnclosures && debugEnclosures.length > 0) {
+      ctx.save();
+      ctx.setLineDash([5, 5]);
+      ctx.lineWidth = Math.max(1.5, spacing * 0.08);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const pseudoStroke = "rgba(192, 132, 252, 0.92)";
+      const pseudoMarkFs = Math.max(7, spacing * 0.22);
+      for (const e of debugEnclosures) {
+        const isPseudo = e.pseudo === true;
+        if (e.kind === "vertical") {
+          const px = PADDING + e.col * spacing;
+          const py1 = PADDING + e.y1 * spacing;
+          const py2 = PADDING + e.y2 * spacing;
+          ctx.strokeStyle = isPseudo ? pseudoStroke : "rgba(251, 191, 36, 0.9)";
+          ctx.beginPath();
+          ctx.moveTo(px, py1);
+          ctx.lineTo(px, py2);
+          ctx.stroke();
+          if (isPseudo) {
+            ctx.font = `bold ${pseudoMarkFs}px Arial`;
+            ctx.fillStyle = pseudoStroke;
+            ctx.fillText("▼", px, py1 - spacing * 0.14);
+            ctx.fillText("▲", px, py2 + spacing * 0.14);
+          }
+        } else {
+          const py = PADDING + e.row * spacing;
+          const px1 = PADDING + e.x1 * spacing;
+          const px2 = PADDING + e.x2 * spacing;
+          ctx.strokeStyle = isPseudo ? pseudoStroke : "rgba(56, 189, 248, 0.9)";
+          ctx.beginPath();
+          ctx.moveTo(px1, py);
+          ctx.lineTo(px2, py);
+          ctx.stroke();
+          if (isPseudo) {
+            ctx.font = `bold ${pseudoMarkFs}px Arial`;
+            ctx.fillStyle = pseudoStroke;
+            ctx.fillText("◀", px1 - spacing * 0.14, py);
+            ctx.fillText("▶", px2 + spacing * 0.14, py);
+          }
+        }
+        if (!isPseudo) {
+          const mx = PADDING + e.nCol * spacing;
+          const my = PADDING + e.nRow * spacing;
+          ctx.font = `bold ${Math.max(10, spacing * 0.38)}px Arial`;
+          ctx.fillStyle = "rgba(248, 113, 113, 0.95)";
+          ctx.fillText(e.kind === "vertical" ? "▼" : "×", mx, my);
+        }
+      }
+      ctx.restore();
+    }
   }, [
     paths,
     numbers,
@@ -1064,7 +1101,7 @@ export default function PairLinkGame() {
               <div className="mt-2 flex flex-wrap gap-1">
                 <button
                   onClick={() => triggerDebugSolve()}
-                  disabled={solved || loading || pairs.length === 0}
+                  disabled={loading || pairs.length === 0}
                   className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   強制クリア (Solve & Sync)
@@ -1680,7 +1717,7 @@ export default function PairLinkGame() {
             <p className="text-wit-muted mb-4">
               パズルを解き明かしました。（{formatTime(timeSeconds)}）
             </p>
-            <div className="flex gap-2 justify-center">
+            <div className="flex flex-wrap gap-2 justify-center">
               <button
                 onClick={() => setShowClearOverlay(false)}
                 className="px-6 py-3 rounded-lg bg-slate-700 text-wit-text font-medium hover:bg-slate-600"
@@ -1697,6 +1734,15 @@ export default function PairLinkGame() {
               >
                 次に進む
               </button>
+              {isDevTj && (
+                <button
+                  onClick={() => triggerDebugSolve()}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-lg text-sm border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  強制クリア (新規→Solve & Sync)
+                </button>
+              )}
             </div>
           </div>
         </div>

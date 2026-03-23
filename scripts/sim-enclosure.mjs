@@ -74,7 +74,7 @@ function verticalPseudoHorizontalKickback(path, nc, iBracket, K, lateralIsEast, 
   return false;
 }
 
-const K = 4;
+const K = 3;
 
 function simulate() {
   const nc = 4;

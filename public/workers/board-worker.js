@@ -810,7 +810,7 @@ function verticalPseudoHorizontalKickback(
   return false;
 }
 
-const VERTICAL_PSEUDO_HORIZONTAL_K = 4;
+const VERTICAL_PSEUDO_HORIZONTAL_K = 3;
 
 /** 下ブラケット・東側からの回り込み → 続きで水平 R があれば pseudo */
 function verticalPseudoHorizontalRAfterLowerBracketEast(path, nc, iBracket, K) {
