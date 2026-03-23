@@ -2660,6 +2660,7 @@ self.onmessage = function (e) {
           seed: result.seed,
           solutionPaths: result.solutionPaths || null,
           debugEnclosures: result.debugEnclosures || null,
+          postMutationScoreBreakdown: result.postMutationScoreBreakdown || null,
         },
         metrics: {
           profile: result.profile,

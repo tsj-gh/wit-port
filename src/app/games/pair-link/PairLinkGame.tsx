@@ -6,7 +6,7 @@ import { DevLink } from "@/components/DevLink";
 import confetti from "canvas-confetti";
 import { validatePathsAction, solvePathsAction } from "./actions";
 import { usePuzzleStock } from "@/hooks/usePuzzleStock";
-import { useBoardWorker, type EnclosureDebugItem } from "@/hooks/useBoardWorker";
+import { useBoardWorker, type EnclosureDebugItem, type GenerateResult } from "@/hooks/useBoardWorker";
 import { computeABCScore, computeStats, type ABCScore } from "@/lib/pair-link-abc-score";
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
@@ -19,6 +19,8 @@ import {
   mergeEdgeSwapScoreParams,
   type EdgeSwapScoreParams,
 } from "@/lib/pair-link-edge-swap-score";
+import { PAIR_LINK_GRADE_CONSTANTS, GRADE_MAP } from "@/lib/pair-link-grade-constants";
+import { usePuzzleStockByGrade } from "@/hooks/usePuzzleStockByGrade";
 
 type NumberCell = { x: number; y: number; val: number; color: string };
 type PathPoint = { x: number; y: number };
@@ -131,6 +133,8 @@ export default function PairLinkGame() {
   const [test10Result, setTest10Result] = useState<{ success: number; avgMs: number; lastAbc: ABCScore | null } | null>(null);
   const [settingsGridSize, setSettingsGridSize] = useState(6);
   const [settingsNumPairs, setSettingsNumPairs] = useState(5);
+  const [currentGrade, setCurrentGrade] = useState(1);
+  const [useLegacyMode, setUseLegacyMode] = useState(false);
   const [configEmptyIsolatedPenalty, setConfigEmptyIsolatedPenalty] = useState(5);
   const [configDetourWeight, setConfigDetourWeight] = useState(0);
   const [configBaseThreshold, setConfigBaseThreshold] = useState(0);
@@ -254,6 +258,7 @@ export default function PairLinkGame() {
       : {}),
   };
   const { getPuzzle, prefetch, manualPrefetch, clearStockForKey, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs, stockStatus } = usePuzzleStock({ config: evalConfig });
+  const { getPuzzleByGrade, prefetchGrade, stockStatus: gradeStockStatus } = usePuzzleStockByGrade({ debugLog: true });
   const { generate: workerGenerate } = useBoardWorker();
 
   const initGame = useCallback(
@@ -307,9 +312,60 @@ export default function PairLinkGame() {
     [getPuzzle, stockStatus, debugGenerationMode, isDebugMode]
   );
 
+  const initGameByGrade = useCallback(
+    async (
+      grade: number,
+      seed?: string,
+      options?: { onSuccess?: (result: GenerateResult) => void | Promise<void> }
+    ) => {
+      hasTriggeredClearRef.current = false;
+      isCheckingClearRef.current = false;
+      setSolved(false);
+      setShowClearOverlay(false);
+      setTimeSeconds(0);
+      setTimerActive(false);
+      setDebugEnclosures(null);
+      setLoading(true);
+      setStatus(gradeStockStatus[grade] != null && gradeStockStatus[grade] > 0 ? "読み込み中" : "生成中...");
+
+      try {
+        const result = await getPuzzleByGrade(grade, seed);
+        if (result.error) {
+          setStatus(result.error ?? "生成に失敗しました");
+          return;
+        }
+        setGridSize(result.gridSize);
+        setNumbers(result.numbers);
+        setPairs(result.pairs);
+        setPaths(emptyPaths(result.pairs));
+        setStatus("Playing");
+        setTimerActive(true);
+        setPuzzleKey((k) => k + 1);
+        setCurrentSeed(result.seed ?? null);
+        currentSolutionPathsRef.current = result.solutionPaths ?? null;
+        setDebugEnclosures(result.debugEnclosures ?? null);
+        await options?.onSuccess?.(result);
+      } catch (err) {
+        setStatus(
+          err instanceof Error ? err.message : "生成に失敗しました。もう一度お試しください。"
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [getPuzzleByGrade, gradeStockStatus]
+  );
+
   useEffect(() => {
-    initGame(6, 5);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (useLegacyMode) {
+      initGame(6, 5);
+    } else {
+      initGameByGrade(1);
+      prefetchGrade(1);
+      prefetchGrade(2);
+      prefetchGrade(3);
+    }
+  }, [useLegacyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ABC スコアを盤面ロード時に計算
   useEffect(() => {
@@ -564,28 +620,31 @@ export default function PairLinkGame() {
     if (solved) {
       setShowClearOverlay(false);
       hasTriggeredClearRef.current = false;
+      const onSuccess = async (result: GenerateResult) => {
+        let solvedPaths = result.solutionPaths ?? null;
+        if (!solvedPaths || Object.keys(solvedPaths).length === 0) {
+          const solveResult = await solvePathsAction(result.pairs, result.gridSize);
+          if (solveResult.error || !solveResult.paths || Object.keys(solveResult.paths).length === 0) {
+            setStatus(solveResult.error ?? "解の取得に失敗しました");
+            return;
+          }
+          solvedPaths = solveResult.paths;
+        }
+        setPaths(solvedPaths);
+        setSolved(true);
+        setTimerActive(false);
+        setShowClearOverlay(true);
+        recordPuzzleClear("pairLink");
+        if (userSync?.saveProgressAndSync) {
+          userSync.saveProgressAndSync(() => {}).catch(() => {});
+        }
+      };
       try {
-        await initGame(settingsGridSize, settingsNumPairs, undefined, {
-          onSuccess: async (result) => {
-            let solvedPaths = result.solutionPaths ?? null;
-            if (!solvedPaths || Object.keys(solvedPaths).length === 0) {
-              const solveResult = await solvePathsAction(result.pairs, result.gridSize);
-              if (solveResult.error || !solveResult.paths || Object.keys(solveResult.paths).length === 0) {
-                setStatus(solveResult.error ?? "解の取得に失敗しました");
-                return;
-              }
-              solvedPaths = solveResult.paths;
-            }
-            setPaths(solvedPaths);
-            setSolved(true);
-            setTimerActive(false);
-            setShowClearOverlay(true);
-            recordPuzzleClear("pairLink");
-            if (userSync?.saveProgressAndSync) {
-              userSync.saveProgressAndSync(() => {}).catch(() => {});
-            }
-          },
-        });
+        if (useLegacyMode) {
+          await initGame(settingsGridSize, settingsNumPairs, undefined, { onSuccess });
+        } else {
+          await initGameByGrade(currentGrade, undefined, { onSuccess });
+        }
       } catch (err) {
         setStatus(err instanceof Error ? err.message : "強制クリアに失敗しました");
       }
@@ -634,7 +693,7 @@ export default function PairLinkGame() {
       }
       hasTriggeredClearRef.current = false;
     }
-  }, [pairs, gridSize, loading, solved, userSync, initGame, settingsGridSize, settingsNumPairs]);
+  }, [pairs, gridSize, loading, solved, userSync, initGame, initGameByGrade, useLegacyMode, currentGrade, settingsGridSize, settingsNumPairs]);
 
   // トリガーA: クリア判定され正解演出開始時に広告リフレッシュ
   useEffect(() => {
@@ -1229,6 +1288,32 @@ export default function PairLinkGame() {
                   </span>
                 </div>
                 <div className="mt-1 pt-1 border-t border-white/10">
+                  <div className="font-semibold text-slate-300 mb-0.5">UIモード</div>
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    <button
+                      onClick={() => setUseLegacyMode(false)}
+                      className={`px-2 py-0.5 rounded text-[10px] border ${
+                        !useLegacyMode ? "border-emerald-500 bg-emerald-500/30 text-emerald-400" : "border-white/20 bg-black/40 text-slate-400 hover:bg-white/10"
+                      }`}
+                    >
+                      [グレード 1-11]
+                    </button>
+                    <button
+                      onClick={() => setUseLegacyMode(true)}
+                      className={`px-2 py-0.5 rounded text-[10px] border ${
+                        useLegacyMode ? "border-emerald-500 bg-emerald-500/30 text-emerald-400" : "border-white/20 bg-black/40 text-slate-400 hover:bg-white/10"
+                      }`}
+                    >
+                      [Size/Pairs レガシー]
+                    </button>
+                  </div>
+                  {!useLegacyMode && (
+                    <div className="mt-0.5 text-[10px] text-slate-500">
+                      グレードストック: {Object.entries(gradeStockStatus).map(([g, n]) => `G${g}:${n}`).join(" ")}
+                    </div>
+                  )}
+                </div>
+                <div className="mt-1 pt-1 border-t border-white/10">
                   <div className="font-semibold text-slate-300 mb-0.5">生成モード</div>
                   <div className="flex flex-wrap gap-1 mt-0.5">
                     {(["default", "edgeSwap"] as const).map((m) => (
@@ -1396,7 +1481,13 @@ export default function PairLinkGame() {
                           type="button"
                           onClick={() => {
                             const s = hashInput.trim();
-                            if (s) initGame(settingsGridSize, settingsNumPairs, s);
+                            if (s) {
+                              if (useLegacyMode) {
+                                initGame(settingsGridSize, settingsNumPairs, s);
+                              } else {
+                                initGameByGrade(currentGrade, s);
+                              }
+                            }
                           }}
                           disabled={!hashInput.trim() || loading}
                           className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1641,93 +1732,145 @@ export default function PairLinkGame() {
           )}
         </div>
         <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-stretch sm:items-end justify-center mt-4 mb-2">
-          <div className="min-w-0 flex-shrink-0">
-            <label className="block text-xs text-wit-muted mb-1">Grid Size</label>
-            <div
-              className="flex overflow-x-auto gap-2 py-1 -mx-1 max-w-full snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
-              style={{ WebkitOverflowScrolling: "touch" }}
-            >
-              {[4, 5, 6, 7, 8, 9, 10].map((n) => {
-                const isActive = settingsGridSize === n;
-                return (
-                  <button
-                    key={n}
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => {
-                      setSettingsGridSize(n);
-                      const maxP = n >= 7 ? 10 : n;
-                      const b = EDGE_SWAP_PAIR_BOUNDS[n];
-                      const minP =
-                        debugGenerationMode === "edgeSwap" && b
-                          ? b.min
-                          : Math.max(2, n - 2);
-                      setSettingsNumPairs((p) =>
-                        Math.min(maxP, Math.max(minP, Math.min(p, maxP)))
-                      );
-                    }}
-                    className={`shrink-0 snap-center whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${
-                      isActive
-                        ? "bg-sky-600 text-white border border-sky-500"
-                        : "bg-slate-800 text-wit-text border border-slate-600 hover:bg-slate-700"
-                    }`}
-                  >
-                    {n}×{n}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="min-w-0 flex-shrink-0">
-            <label className="block text-xs text-wit-muted mb-1">Number of Pairs</label>
-            <div
-              className="flex overflow-x-auto gap-2 py-1 -mx-1 max-w-full snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
-              style={{ WebkitOverflowScrolling: "touch" }}
-            >
-              {pairCountOptions(settingsGridSize, debugGenerationMode).map((n) => {
-                const clamped = clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode);
-                const isActive = clamped === n;
-                return (
-                  <button
-                    key={n}
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => setSettingsNumPairs(n)}
-                    className={`shrink-0 snap-center whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${
-                      isActive
-                        ? "bg-sky-600 text-white border border-sky-500"
-                        : "bg-slate-800 text-wit-text border border-slate-600 hover:bg-slate-700"
-                    }`}
-                  >
-                    {n}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              refreshAds();
-              initGame(settingsGridSize, settingsNumPairs);
-            }}
-            disabled={loading}
-            className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
-          >
-            新規作成
-          </button>
-          {isDebugMode && (
-            <button
-              onClick={() =>
-                clearStockForKey(
-                  settingsGridSize,
-                  clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)
-                )
-              }
-              className="px-4 py-2 rounded-lg bg-slate-600 text-slate-200 text-sm font-medium hover:bg-slate-500"
-              title={`${settingsGridSize}×${clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)} のストックを削除（プリフェッチ中もキャンセル）`}
-            >
-              （debug）ストックを削除
-            </button>
+          {useLegacyMode ? (
+            <>
+              <div className="min-w-0 flex-shrink-0">
+                <label className="block text-xs text-wit-muted mb-1">Grid Size</label>
+                <div
+                  className="flex overflow-x-auto gap-2 py-1 -mx-1 max-w-full snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  {[4, 5, 6, 7, 8, 9, 10].map((n) => {
+                    const isActive = settingsGridSize === n;
+                    return (
+                      <button
+                        key={n}
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={() => {
+                          setSettingsGridSize(n);
+                          const maxP = n >= 7 ? 10 : n;
+                          const b = EDGE_SWAP_PAIR_BOUNDS[n];
+                          const minP =
+                            debugGenerationMode === "edgeSwap" && b
+                              ? b.min
+                              : Math.max(2, n - 2);
+                          setSettingsNumPairs((p) =>
+                            Math.min(maxP, Math.max(minP, Math.min(p, maxP)))
+                          );
+                        }}
+                        className={`shrink-0 snap-center whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${
+                          isActive
+                            ? "bg-sky-600 text-white border border-sky-500"
+                            : "bg-slate-800 text-wit-text border border-slate-600 hover:bg-slate-700"
+                        }`}
+                      >
+                        {n}×{n}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="min-w-0 flex-shrink-0">
+                <label className="block text-xs text-wit-muted mb-1">Number of Pairs</label>
+                <div
+                  className="flex overflow-x-auto gap-2 py-1 -mx-1 max-w-full snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  {pairCountOptions(settingsGridSize, debugGenerationMode).map((n) => {
+                    const clamped = clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode);
+                    const isActive = clamped === n;
+                    return (
+                      <button
+                        key={n}
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={() => setSettingsNumPairs(n)}
+                        className={`shrink-0 snap-center whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${
+                          isActive
+                            ? "bg-sky-600 text-white border border-sky-500"
+                            : "bg-slate-800 text-wit-text border border-slate-600 hover:bg-slate-700"
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  refreshAds();
+                  initGame(settingsGridSize, settingsNumPairs);
+                }}
+                disabled={loading}
+                className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
+              >
+                新規作成
+              </button>
+              {isDebugMode && (
+                <button
+                  onClick={() =>
+                    clearStockForKey(
+                      settingsGridSize,
+                      clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)
+                    )
+                  }
+                  className="px-4 py-2 rounded-lg bg-slate-600 text-slate-200 text-sm font-medium hover:bg-slate-500"
+                  title={`${settingsGridSize}×${clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)} のストックを削除（プリフェッチ中もキャンセル）`}
+                >
+                  （debug）ストックを削除
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="min-w-0 flex-shrink-0">
+                <label className="block text-xs text-wit-muted mb-1">グレード</label>
+                <div
+                  className="flex overflow-x-auto gap-2 py-1 -mx-1 max-w-full snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  {PAIR_LINK_GRADE_CONSTANTS.map((g) => {
+                    const isActive = currentGrade === g.grade;
+                    return (
+                      <button
+                        key={g.grade}
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={() => {
+                          setCurrentGrade(g.grade);
+                          prefetchGrade(g.grade);
+                        }}
+                        className={`shrink-0 snap-center whitespace-nowrap px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${
+                          isActive
+                            ? "bg-sky-600 text-white border border-sky-500"
+                            : "bg-slate-800 text-wit-text border border-slate-600 hover:bg-slate-700"
+                        }`}
+                        title={g.theme}
+                      >
+                        G{g.grade}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  refreshAds();
+                  initGameByGrade(currentGrade);
+                }}
+                disabled={loading}
+                className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
+              >
+                次の問題
+              </button>
+              {GRADE_MAP.get(currentGrade) && (
+                <p className="w-full text-center text-xs text-wit-muted mt-0.5">
+                  {GRADE_MAP.get(currentGrade)!.theme}
+                </p>
+              )}
+            </>
           )}
         </div>
         {/* 広告枠2: サイズ/新規作成の直下（余白を確保して接触を回避） */}
@@ -1767,7 +1910,11 @@ export default function PairLinkGame() {
                 onClick={() => {
                   refreshAds();
                   setShowClearOverlay(false);
-                  initGame(settingsGridSize, settingsNumPairs);
+                  if (useLegacyMode) {
+                    initGame(settingsGridSize, settingsNumPairs);
+                  } else {
+                    initGameByGrade(currentGrade);
+                  }
                 }}
                 className="px-6 py-3 rounded-lg bg-wit-emerald text-white font-medium hover:bg-emerald-600"
               >

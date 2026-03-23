@@ -31,6 +31,13 @@ export type EnclosureDebugItem =
       pseudo?: boolean;
     };
 
+/** postMutationScoreBreakdown（Worker返却、グレードフィルタ用） */
+export type PostMutationScoreBreakdown = {
+  finalScore: number;
+  enclosureCount?: number;
+  [key: string]: unknown;
+};
+
 export type GenerateResult = {
   numbers: { x: number; y: number; val: number; color: string }[];
   pairs: { id: number; start: [number, number]; end: [number, number] }[];
@@ -46,6 +53,8 @@ export type GenerateResult = {
   solutionPaths?: Record<string, { x: number; y: number }[][]> | null;
   /** Edge-Swap + debugEnclosureViz 時：囲い込みライン描画用 */
   debugEnclosures?: EnclosureDebugItem[] | null;
+  /** グレードフィルタ・分析用（Edge-Swap のみ） */
+  postMutationScoreBreakdown?: PostMutationScoreBreakdown | null;
 };
 
 /** Worker との通信メッセージ（全タイプで requestId を任意に持てる） */
@@ -141,6 +150,7 @@ export function useBoardWorker(): {
         const { board, metrics } = data;
         item.resolve({
           ...board,
+          postMutationScoreBreakdown: board.postMutationScoreBreakdown ?? null,
           profile: metrics?.profile,
           attempts: metrics?.attempts,
           totalMs: metrics?.totalMs,
