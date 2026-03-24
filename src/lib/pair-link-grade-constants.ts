@@ -6,13 +6,14 @@
 export type GradeEnclosureRequirement =
   | { type: "any" }
   | { type: "eq"; value: number }
-  | { type: "gte"; value: number };
+  | { type: "gte"; value: number }
+  | { type: "lte"; value: number };
 
 export type PairLinkGradeDef = {
   grade: number;
   size: number;
   pairs: number;
-  /** 囲い込み条件: any=指定なし, eq=一致, gte=以上 */
+  /** 囲い込み条件: any=指定なし, eq=一致, gte=以上, lte=以下 */
   enclosureReq: GradeEnclosureRequirement;
   /** Score閾値（-1=なし/全許容）。Workerは finalScore >= scoreThreshold でフィルタ */
   scoreThreshold: number;
@@ -28,11 +29,11 @@ export const PAIR_LINK_GRADE_CONSTANTS: PairLinkGradeDef[] = [
   { grade: 4, size: 5, pairs: 4, enclosureReq: { type: "gte", value: 1 }, scoreThreshold: 400, theme: "【初級】回り込みの概念を知る" },
   { grade: 5, size: 6, pairs: 5, enclosureReq: { type: "eq", value: 0 }, scoreThreshold: 200, theme: "【中級】効率的なルート設計" },
   { grade: 6, size: 6, pairs: 5, enclosureReq: { type: "gte", value: 1 }, scoreThreshold: 800, theme: "【中級】回り込みを使いこなす" },
-  { grade: 7, size: 7, pairs: 7, enclosureReq: { type: "eq", value: 0 }, scoreThreshold: 0, theme: "【難関への扉】高密度な盤面の整理" },
-  { grade: 8, size: 8, pairs: 8, enclosureReq: { type: "eq", value: 0 }, scoreThreshold: 300, theme: "【上級】広い盤面でのルート俯瞰" },
-  { grade: 9, size: 8, pairs: 9, enclosureReq: { type: "gte", value: 1 }, scoreThreshold: 1500, theme: "【特級】複雑な干渉を解き明かす" },
+  { grade: 7, size: 7, pairs: 7, enclosureReq: { type: "lte", value: 1 }, scoreThreshold: 0, theme: "【難関への扉】高密度な盤面の整理" },
+  { grade: 8, size: 8, pairs: 8, enclosureReq: { type: "lte", value: 1 }, scoreThreshold: 300, theme: "【上級】広い盤面でのルート俯瞰" },
+  { grade: 9, size: 8, pairs: 9, enclosureReq: { type: "gte", value: 2 }, scoreThreshold: 1500, theme: "【特級】複雑な干渉を解き明かす" },
   { grade: 10, size: 9, pairs: 10, enclosureReq: { type: "gte", value: 1 }, scoreThreshold: 2500, theme: "【達人】AIが選んだ迷宮に挑む" },
-  { grade: 11, size: 10, pairs: 10, enclosureReq: { type: "gte", value: 2 }, scoreThreshold: 4000, theme: "【神・隠し】極限の思考の先へ" },
+  { grade: 11, size: 10, pairs: 10, enclosureReq: { type: "gte", value: 2 }, scoreThreshold: 3500, theme: "【神・隠し】極限の思考の先へ" },
 ];
 
 /**

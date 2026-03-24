@@ -60,8 +60,12 @@ function matchesEnclosure(enc: number | undefined, req: GradeEnclosureRequiremen
       return count === req.value;
     case "gte":
       return count >= req.value;
-    default:
-      return true;
+    case "lte":
+      return count <= req.value;
+    default: {
+      const _exhaustive: never = req;
+      return _exhaustive;
+    }
   }
 }
 

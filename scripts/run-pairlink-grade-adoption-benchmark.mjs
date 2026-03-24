@@ -11,7 +11,7 @@
  * 環境変数:
  *   SIM_OUT_DIR — JSON 出力先ディレクトリ（既定: リポジトリルート）
  *   BENCH_ADOPTIONS_PER_GRADE — グレードあたり採用回数（既定 5）
- *   BENCH_MAX_WORKER_CALLS_PER_ADOPTION — 1採用あたり Worker 呼び出し上限（既定 10000。上限まで採用できなければ当該回の wallMs は NaN／JSON では "NaN"、グレード平均も NaN 扱いでランキング最遅）
+ *   BENCH_MAX_WORKER_CALLS_PER_ADOPTION — 1採用あたり Worker 呼び出し上限（既定 500。上限まで採用できなければ当該回の wallMs は NaN／JSON では "NaN"、グレード平均も NaN 扱いでランキング最遅）
  *   BENCH_GRADE_MIN / BENCH_GRADE_MAX — この範囲のグレードだけ実行（既定 1〜11）
  *   BENCH_PROGRESS_EVERY_CALLS — 指定した Worker 呼び出しごとに進捗を stderr へ（既定 0 = 無効、例: 500）
  *
@@ -32,13 +32,13 @@ const OUT_FILE = "pairlink_grade_adoption_benchmark_b.json";
 const ADOPTIONS_PER_GRADE = Math.max(1, parseInt(String(process.env.BENCH_ADOPTIONS_PER_GRADE || "5"), 10) || 5);
 const MAX_WORKER_CALLS_PER_ADOPTION = Math.max(
   1,
-  parseInt(String(process.env.BENCH_MAX_WORKER_CALLS_PER_ADOPTION || "10000"), 10) || 10000
+  parseInt(String(process.env.BENCH_MAX_WORKER_CALLS_PER_ADOPTION || "500"), 10) || 500
 );
 const GRADE_MIN = Math.max(1, parseInt(String(process.env.BENCH_GRADE_MIN || "1"), 10) || 1);
 const GRADE_MAX = Math.min(11, parseInt(String(process.env.BENCH_GRADE_MAX || "11"), 10) || 11);
 const PROGRESS_EVERY_CALLS = Math.max(0, parseInt(String(process.env.BENCH_PROGRESS_EVERY_CALLS || "0"), 10) || 0);
 
-/** @typedef {{ type: 'any' } | { type: 'eq'; value: number } | { type: 'gte'; value: number }} GradeEnclosureRequirement */
+/** @typedef {{ type: 'any' } | { type: 'eq'; value: number } | { type: 'gte'; value: number } | { type: 'lte'; value: number }} GradeEnclosureRequirement */
 /** @typedef {{ grade: number; size: number; pairs: number; enclosureReq: GradeEnclosureRequirement; scoreThreshold: number; theme: string }} PairLinkGradeDef */
 
 /** pair-link-grade-constants.ts と同期 */
@@ -52,11 +52,11 @@ const PAIR_LINK_GRADE_CONSTANTS = [
   { grade: 4, size: 5, pairs: 4, enclosureReq: { type: "gte", value: 1 }, scoreThreshold: 400, theme: "【初級】回り込みの概念を知る" },
   { grade: 5, size: 6, pairs: 5, enclosureReq: { type: "eq", value: 0 }, scoreThreshold: 200, theme: "【中級】効率的なルート設計" },
   { grade: 6, size: 6, pairs: 5, enclosureReq: { type: "gte", value: 1 }, scoreThreshold: 800, theme: "【中級】回り込みを使いこなす" },
-  { grade: 7, size: 7, pairs: 7, enclosureReq: { type: "eq", value: 0 }, scoreThreshold: 0, theme: "【難関への扉】高密度な盤面の整理" },
-  { grade: 8, size: 8, pairs: 8, enclosureReq: { type: "eq", value: 0 }, scoreThreshold: 300, theme: "【上級】広い盤面でのルート俯瞰" },
-  { grade: 9, size: 8, pairs: 9, enclosureReq: { type: "gte", value: 1 }, scoreThreshold: 1500, theme: "【特級】複雑な干渉を解き明かす" },
+  { grade: 7, size: 7, pairs: 7, enclosureReq: { type: "lte", value: 1 }, scoreThreshold: 0, theme: "【難関への扉】高密度な盤面の整理" },
+  { grade: 8, size: 8, pairs: 8, enclosureReq: { type: "lte", value: 1 }, scoreThreshold: 300, theme: "【上級】広い盤面でのルート俯瞰" },
+  { grade: 9, size: 8, pairs: 9, enclosureReq: { type: "gte", value: 2 }, scoreThreshold: 1500, theme: "【特級】複雑な干渉を解き明かす" },
   { grade: 10, size: 9, pairs: 10, enclosureReq: { type: "gte", value: 1 }, scoreThreshold: 2500, theme: "【達人】AIが選んだ迷宮に挑む" },
-  { grade: 11, size: 10, pairs: 10, enclosureReq: { type: "gte", value: 2 }, scoreThreshold: 4000, theme: "【神・隠し】極限の思考の先へ" },
+  { grade: 11, size: 10, pairs: 10, enclosureReq: { type: "gte", value: 2 }, scoreThreshold: 3500, theme: "【神・隠し】極限の思考の先へ" },
 ];
 
 const YIELD_EVERY_INNER = 20;
@@ -109,6 +109,8 @@ function matchesEnclosure(enc, req) {
       return count === req.value;
     case "gte":
       return count >= req.value;
+    case "lte":
+      return count <= req.value;
     default:
       return true;
   }
