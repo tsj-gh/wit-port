@@ -11,7 +11,7 @@
  * 環境変数:
  *   SIM_OUT_DIR — JSON 出力先ディレクトリ（既定: リポジトリルート）
  *   BENCH_ADOPTIONS_PER_GRADE — グレードあたり採用回数（既定 5）
- *   BENCH_MAX_WORKER_CALLS_PER_ADOPTION — 1採用あたり Worker 呼び出し上限（既定 10000。本番の保険切替前は 1000 回だが、統計用には長めに取れる）
+ *   BENCH_MAX_WORKER_CALLS_PER_ADOPTION — 1採用あたり Worker 呼び出し上限（既定 10000。上限まで採用できなければ当該回の wallMs は NaN／JSON では "NaN"、グレード平均も NaN 扱いでランキング最遅）
  *   BENCH_GRADE_MIN / BENCH_GRADE_MAX — この範囲のグレードだけ実行（既定 1〜11）
  *   BENCH_PROGRESS_EVERY_CALLS — 指定した Worker 呼び出しごとに進捗を stderr へ（既定 0 = 無効、例: 500）
  *
@@ -163,15 +163,58 @@ async function measureOneAdoption(gen, def, adoptionIndex, adoptionOrdinal) {
         wallMs: Math.round(wallMs * 100) / 100,
         workerCalls,
         seed: result.seed ?? seed,
+        failed: false,
       };
     }
   }
-  return null;
+  console.error(
+    `[bench-b]   G${def.grade} adoption ${adoptionOrdinal}/${ADOPTIONS_PER_GRADE}: 上限 ${MAX_WORKER_CALLS_PER_ADOPTION} 回で未採用 → wallMs=NaN（測定不能）として続行`
+  );
+  return {
+    wallMs: NaN,
+    workerCalls: MAX_WORKER_CALLS_PER_ADOPTION,
+    seed: null,
+    failed: true,
+  };
 }
 
 function mean(arr) {
   if (!arr.length) return 0;
   return arr.reduce((a, b) => a + b, 0) / arr.length;
+}
+
+/** JSON では NaN を "NaN" 文字列として出す（仕様上 number の NaN は無効のため） */
+function jsonReplacer(_key, value) {
+  return typeof value === "number" && Number.isNaN(value) ? "NaN" : value;
+}
+
+/** グレード並び: 平均が NaN（いずれかの回が測定不能）を最遅。同格は失敗回数多い方を上、さらにグレード番号大きい方を上 */
+function compareGradeByAvgDesc(a, b) {
+  const aNaN = a.failedAdoptions > 0;
+  const bNaN = b.failedAdoptions > 0;
+  if (aNaN !== bNaN) return aNaN ? -1 : 1;
+  if (aNaN && bNaN) {
+    if (b.failedAdoptions !== a.failedAdoptions) return b.failedAdoptions - a.failedAdoptions;
+    return b.grade - a.grade;
+  }
+  if (b.wallMsAvg !== a.wallMsAvg) return b.wallMsAvg - a.wallMsAvg;
+  return b.grade - a.grade;
+}
+
+function compareGradeByTotalDesc(a, b) {
+  const aNaN = a.failedAdoptions > 0;
+  const bNaN = b.failedAdoptions > 0;
+  if (aNaN !== bNaN) return aNaN ? -1 : 1;
+  if (aNaN && bNaN) {
+    if (b.failedAdoptions !== a.failedAdoptions) return b.failedAdoptions - a.failedAdoptions;
+    return b.grade - a.grade;
+  }
+  if (b.wallMsTotal !== a.wallMsTotal) return b.wallMsTotal - a.wallMsTotal;
+  return b.grade - a.grade;
+}
+
+function fmtMsCell(v) {
+  return typeof v === "number" && Number.isNaN(v) ? "     NaN" : String(v).padStart(8);
 }
 
 async function main() {
@@ -198,39 +241,39 @@ async function main() {
     for (let i = 0; i < ADOPTIONS_PER_GRADE; i++) {
       console.error(`[bench-b] G${def.grade} adoption ${i + 1}/${ADOPTIONS_PER_GRADE} ...`);
       const row = await measureOneAdoption(gen, def, i, i + 1);
-      if (!row) {
-        throw new Error(
-          `G${def.grade} adoption ${i + 1}: 上限 ${MAX_WORKER_CALLS_PER_ADOPTION} 回で採用に至りませんでした（fetchOneForGrade 相当）`
-        );
-      }
       runs.push(row);
     }
-    const wallMsList = runs.map((r) => r.wallMs);
+    const failedAdoptions = runs.filter((r) => r.failed).length;
+    const okWallMs = runs.filter((r) => !r.failed).map((r) => r.wallMs);
     const workerCallsList = runs.map((r) => r.workerCalls);
+    const anyFailed = failedAdoptions > 0;
     gradeRows.push({
       grade: def.grade,
       theme: def.theme,
       size: def.size,
       pairs: def.pairs,
       runs,
-      wallMsTotal: Math.round(wallMsList.reduce((a, b) => a + b, 0) * 100) / 100,
-      wallMsAvg: Math.round(mean(wallMsList) * 100) / 100,
-      wallMsMin: Math.round(Math.min(...wallMsList) * 100) / 100,
-      wallMsMax: Math.round(Math.max(...wallMsList) * 100) / 100,
+      failedAdoptions,
+      wallMsTotal: anyFailed
+        ? NaN
+        : Math.round(okWallMs.reduce((a, b) => a + b, 0) * 100) / 100,
+      wallMsAvg: anyFailed ? NaN : Math.round(mean(okWallMs) * 100) / 100,
+      wallMsMin: anyFailed ? NaN : Math.round(Math.min(...okWallMs) * 100) / 100,
+      wallMsMax: anyFailed ? NaN : Math.round(Math.max(...okWallMs) * 100) / 100,
       workerCallsAvg: Math.round(mean(workerCallsList) * 10) / 10,
     });
   }
 
-  const sortedByAvgDesc = [...gradeRows].sort((a, b) => b.wallMsAvg - a.wallMsAvg);
-  const sortedByTotalDesc = [...gradeRows].sort((a, b) => b.wallMsTotal - a.wallMsTotal);
+  const sortedByAvgDesc = [...gradeRows].sort(compareGradeByAvgDesc);
+  const sortedByTotalDesc = [...gradeRows].sort(compareGradeByTotalDesc);
 
-  console.error("\n=== 平均採用時間（壁時計 ms）降順（遅いグレードが上）===\n");
+  console.error("\n=== 平均採用時間（壁時計 ms）降順（NaN=測定不能は最遅扱い）===\n");
   console.error(
-    `grade | avgMs | totalMs(${ADOPTIONS_PER_GRADE}) | min | max | avgWorkerCalls\n` +
+    `grade | avgMs | totalMs(${ADOPTIONS_PER_GRADE}) | min | max | fails | avgWorkerCalls\n` +
       sortedByAvgDesc
         .map(
           (r) =>
-            `  G${String(r.grade).padStart(2)} | ${String(r.wallMsAvg).padStart(8)} | ${String(r.wallMsTotal).padStart(10)} | ${String(r.wallMsMin).padStart(6)} | ${String(r.wallMsMax).padStart(6)} | ${r.workerCallsAvg}`
+            `  G${String(r.grade).padStart(2)} | ${fmtMsCell(r.wallMsAvg)} | ${fmtMsCell(r.wallMsTotal)} | ${fmtMsCell(r.wallMsMin)} | ${fmtMsCell(r.wallMsMax)} | ${String(r.failedAdoptions).padStart(5)} | ${r.workerCallsAvg}`
         )
         .join("\n")
   );
@@ -241,6 +284,8 @@ async function main() {
       generatedAt: new Date().toISOString(),
       definition:
         "1 adoption = wall-clock until first board passing fetchOneForGrade filters (enclosure, scoreThreshold, adjRate < GRADE_ADOPTION_MAX_ADJ_RATE), including all worker retries",
+      nanPolicy:
+        "If max worker calls reached without adoption, that run's wallMs is NaN (JSON string \"NaN\"). Grade aggregates avg/total/min/max become NaN if any run failed. Ranking treats NaN grades as slowest; tie-break by failedAdoptions desc then grade desc.",
       adoptionsPerGrade: ADOPTIONS_PER_GRADE,
       maxWorkerCallsPerAdoption: MAX_WORKER_CALLS_PER_ADOPTION,
       gradeRange: { min: GRADE_MIN, max: GRADE_MAX },
@@ -253,7 +298,7 @@ async function main() {
   };
 
   const outPath = path.join(OUT_DIR, OUT_FILE);
-  fs.writeFileSync(outPath, JSON.stringify(out, null, 2), "utf8");
+  fs.writeFileSync(outPath, JSON.stringify(out, jsonReplacer, 2), "utf8");
   console.error(`[bench-b] Wrote ${outPath}`);
 }
 
