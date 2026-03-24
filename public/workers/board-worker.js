@@ -1594,6 +1594,11 @@ function logFinalScoreDetail(bd, tag) {
  */
 function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   const mOpts = mutationOpts || {};
+  const enableAlgoLogs = !!mOpts.enableAlgoLogs;
+  const verboseAlgoLogs = !!mOpts.verboseAlgoLogs;
+  const canLogFinal = function () { return enableAlgoLogs && typeof console !== "undefined"; };
+  const canLogVerbose = function () { return enableAlgoLogs && verboseAlgoLogs && typeof console !== "undefined"; };
+  const canLogWarn = function () { return enableAlgoLogs && typeof console !== "undefined"; };
   const scoreParamsEffective = mergeEdgeSwapScoreParams(mOpts.edgeSwapScoreParams);
   const targetEnc =
     typeof mOpts.targetEnclosureCount === "number" && mOpts.targetEnclosureCount >= 0
@@ -1647,7 +1652,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       if (solutionGrid[r][c] === 0) {
-        if (typeof console !== "undefined") {
+        if (canLogWarn()) {
           console.warn("[Edge-Swap] Phase 1: unfilled cell at", r, c, "regenerating...");
         }
         return generateByEdgeSwap(gridSize, targetPairCount, random, mOpts);
@@ -1664,7 +1669,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   let pathCount = initialPathIds.size;
 
   if (pathCount < targetPairCount) {
-    if (typeof console !== "undefined") {
+    if (canLogWarn()) {
       console.warn(
         "[Edge-Swap] Phase 1 path count " + pathCount + " < target " + targetPairCount + ", regenerating..."
       );
@@ -1672,7 +1677,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     return generateByEdgeSwap(gridSize, targetPairCount, random, mOpts);
   }
 
-  if (typeof console !== "undefined") {
+  if (canLogVerbose()) {
     console.log(
       "Phase 1: Tiling complete. Cells: " + nn + ", initial paths: " + pathCount
     );
@@ -1697,7 +1702,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
       }
     }
     if (endpointPairs.length === 0) {
-      if (typeof console !== "undefined") {
+      if (canLogWarn()) {
         console.warn("[Edge-Swap] No endpoint-endpoint adjacencies. Regenerating...");
       }
       return generateByEdgeSwap(gridSize, targetPairCount, random, mOpts);
@@ -1736,12 +1741,12 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
       }
     }
     pathCount--;
-    if (typeof console !== "undefined") {
+    if (canLogVerbose()) {
       console.log("[Edge-Swap] Merge:", "A-endpoint", a.r, a.c, "<-> B-endpoint", b.r, b.c, "| Paths:", pathCount);
     }
   }
 
-  if (typeof console !== "undefined") {
+  if (canLogVerbose()) {
     console.log("Phase 2: Merging Complete. Total Paths: " + pathCount);
   }
 
@@ -1754,7 +1759,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
       for (let c = 0; c < n; c++) {
         const pid = solutionGrid[r][c];
         if (pid == null || pid === 0) {
-          if (typeof console !== "undefined") {
+          if (canLogWarn()) {
             console.error("[Edge-Swap] Validation failed: isolated empty cell at", r, c);
           }
           return false;
@@ -1763,7 +1768,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
         if (deg === 1) deg1Count++;
         else if (deg === 2) deg2Count++;
         else {
-          if (typeof console !== "undefined") {
+          if (canLogWarn()) {
             console.error("[Edge-Swap] Validation failed: cell", r, c, "has degree", deg);
           }
           return false;
@@ -1771,7 +1776,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
       }
     }
     if (deg1Count !== expectDeg1 || deg2Count !== expectDeg2) {
-      if (typeof console !== "undefined") {
+      if (canLogWarn()) {
         console.error(
           "[Edge-Swap] Validation failed: deg1=" +
             deg1Count +
@@ -1786,7 +1791,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
       }
       return false;
     }
-    if (typeof console !== "undefined") {
+    if (canLogVerbose()) {
       console.log(
         "[Edge-Swap] Degree validation: deg1=" + expectDeg1 + " deg2=" + expectDeg2 + " OK"
       );
@@ -1795,7 +1800,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   }
 
   if (!validateGrid()) {
-    if (typeof console !== "undefined") {
+    if (canLogWarn()) {
       console.error("[Edge-Swap] Grid validation failed. Regenerating...");
     }
     return generateByEdgeSwap(gridSize, targetPairCount, random, mOpts);
@@ -1873,7 +1878,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   let swapCount = 0;
   const MUTATION_ATTEMPTS = 1000;
   for (let attempt = 0; attempt < MUTATION_ATTEMPTS; attempt++) {
-    if (typeof console !== "undefined" && attempt > 0 && attempt % 200 === 0) {
+    if (canLogVerbose() && attempt > 0 && attempt % 200 === 0) {
       const snap = computeMutationScoreBreakdown(
         solutionGrid,
         adj,
@@ -1945,7 +1950,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   );
   /** ミューテーション直後（クロール前）。最終値は buildSolutionPaths 後に上書き */
   let postMutationScoreBreakdown = mutFinal;
-  if (typeof console !== "undefined") {
+  if (canLogVerbose()) {
     console.log("Mutation Complete - Successful Swaps: " + swapCount);
     logFinalScoreDetail(mutFinal, "Mutation —");
     if (targetEnc != null) {
@@ -1956,7 +1961,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   }
 
   if (!validateGrid()) {
-    if (typeof console !== "undefined") {
+    if (canLogWarn()) {
       console.error("[Edge-Swap] Post-mutation validation failed. Regenerating...");
     }
     return generateByEdgeSwap(gridSize, targetPairCount, random, mOpts);
@@ -2027,7 +2032,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
 
   const CRAWL_EXCHANGE_ITERS = 1000;
 
-  if (typeof console !== "undefined" && console.time) {
+  if (canLogVerbose() && typeof console !== "undefined" && console.time) {
     console.time("Crawling Phase");
   }
 
@@ -2189,7 +2194,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
       }
     }
   }
-  if (typeof console !== "undefined" && console.timeEnd) {
+  if (canLogVerbose() && typeof console !== "undefined" && console.timeEnd) {
     console.timeEnd("Crawling Phase");
   }
 
@@ -2202,7 +2207,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
       const pid = solutionGrid[r][c];
       const outId = pathToOutId.get(pid);
       if (outId == null || outId === 0) {
-        if (typeof console !== "undefined") {
+        if (canLogWarn()) {
           console.warn("[Edge-Swap] Cell", r, c, "unmapped pid", pid, "(debug: no regeneration)");
         }
         outGrid[r][c] = 0;
@@ -2316,7 +2321,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
         path = buildSolutionPathDirected(sr, sc, tr, tc, pid);
       }
       if (!path || path.length === 0) {
-        if (typeof console !== "undefined") {
+        if (canLogWarn()) {
           console.error("[Edge-Swap] buildSolutionPathsFromAdj failed for pair id", pairs[i].id);
         }
         result[String(pairs[i].id)] = [[]];
@@ -2351,7 +2356,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
     null,
     scoreParamsEffective
   );
-  if (typeof console !== "undefined" && !mOpts.suppressFinalLog) {
+  if (canLogFinal() && !mOpts.suppressFinalLog) {
     logFinalScoreDetail(postMutationScoreBreakdown, "Final Board —");
   }
 
@@ -2364,7 +2369,7 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
   /** デバッグ可視化時のみ詳細列挙（ログ + クライアントへ返す座標） */
   let encAnalysis = null;
   if (debugEnclosureViz) {
-    if (typeof console !== "undefined") {
+    if (canLogVerbose()) {
       console.log("[Enclosure Debug] Final enumeration (Found / Skipped) —");
     }
     encAnalysis = analyzePairLinkEnclosuresDebug(
@@ -2372,11 +2377,11 @@ function generateByEdgeSwap(gridSize, targetPairCount, random, mutationOpts) {
       adj,
       n,
       pathToOutId,
-      typeof console !== "undefined"
+      canLogVerbose()
     );
   }
 
-  if (typeof console !== "undefined") {
+  if (canLogVerbose()) {
     for (let i = 0; i < pairs.length; i++) {
       const id = pairs[i].id;
       const segs = solutionPaths[String(id)];
@@ -2538,11 +2543,15 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
         edgeMutationOpts.edgeSwapScoreParams = cfg.edgeSwapScoreParams;
       }
       if (applyThreshold) edgeMutationOpts.suppressFinalLog = true;
+      if (cfg.enableAlgoLogs) {
+        edgeMutationOpts.enableAlgoLogs = true;
+        edgeMutationOpts.verboseAlgoLogs = !!cfg.verboseAlgoLogs;
+      }
       candidate = generateByEdgeSwap(gridSize, targetPairCount, random, edgeMutationOpts);
       if (!candidate) return null;
       if (applyThreshold && candidate.postMutationScoreBreakdown != null) {
         if (candidate.postMutationScoreBreakdown.finalScore >= scoreThreshold) {
-          if (typeof console !== "undefined") {
+          if (typeof console !== "undefined" && cfg.enableAlgoLogs) {
             logFinalScoreDetail(candidate.postMutationScoreBreakdown, "Final Board —");
           }
           break;
@@ -2588,7 +2597,7 @@ function generatePairLinkPuzzle(gridSize, seed, numPairs, config) {
   const totalStart = performance.now();
   const cumulativeProfile = {};
   let attempts = 0;
-  const logFailure = numPairs != null;
+  const logFailure = numPairs != null && !!cfg.enableAlgoLogs;
 
   const hasSeed = seed != null && String(seed).trim() !== "";
 

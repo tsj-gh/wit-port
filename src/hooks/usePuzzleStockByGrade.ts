@@ -89,6 +89,10 @@ export function getGradeStockStatus(): Record<number, number> {
 export type UsePuzzleStockByGradeOptions = {
   /** デバッグログ（devtj=true 時） */
   debugLog?: boolean;
+  /** デバッグモードON時: アルゴリズムのコンソール出力を有効化 */
+  enableAlgoLogs?: boolean;
+  /** enableAlgoLogs が true のとき: true で全ログ、false で Final Board とエラーのみ */
+  verboseAlgoLogs?: boolean;
 };
 
 export function usePuzzleStockByGrade(
@@ -101,6 +105,8 @@ export function usePuzzleStockByGrade(
 } {
   const { generate } = useBoardWorker();
   const debugLog = _options.debugLog ?? false;
+  const enableAlgoLogs = _options.enableAlgoLogs ?? false;
+  const verboseAlgoLogs = _options.verboseAlgoLogs ?? false;
   const [stockStatus, setStockStatus] = useState<Record<number, number>>(() => getGradeStockStatus());
   /** グレードごとの refill 実行中フラグ（複数グレード同時 refill を許可） */
   const fetchingGradesRef = useRef<Set<number>>(new Set());
@@ -116,6 +122,7 @@ export function usePuzzleStockByGrade(
       const config = {
         generationMode: "edgeSwap" as const,
         scoreThreshold: def.scoreThreshold >= 0 ? def.scoreThreshold : -1,
+        ...(enableAlgoLogs ? { enableAlgoLogs: true, verboseAlgoLogs: verboseAlgoLogs } : {}),
       };
       const result = await generate(def.size, undefined, def.pairs, config);
       if (result.error || !result.numbers?.length) return null;
@@ -145,7 +152,7 @@ export function usePuzzleStockByGrade(
       }
       return result;
     },
-    [generate, debugLog]
+    [generate, debugLog, enableAlgoLogs, verboseAlgoLogs]
   );
 
   const refillGrade = useCallback(
@@ -204,6 +211,7 @@ export function usePuzzleStockByGrade(
         const config = {
           generationMode: "edgeSwap" as const,
           scoreThreshold: -1,
+          ...(enableAlgoLogs ? { enableAlgoLogs: true, verboseAlgoLogs: verboseAlgoLogs } : {}),
         };
         const result = await generate(def.size, seed, def.pairs, config);
         if (!result.error) return result;
@@ -229,7 +237,7 @@ export function usePuzzleStockByGrade(
       }
       throw new Error("パズルの生成に失敗しました。もう一度お試しください。");
     },
-    [generate, fetchOneForGrade, flushStatus, prefetchGrade]
+    [generate, fetchOneForGrade, flushStatus, prefetchGrade, enableAlgoLogs, verboseAlgoLogs]
   );
 
   useEffect(() => {

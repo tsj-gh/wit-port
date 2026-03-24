@@ -101,6 +101,10 @@ export type WorkerConfig = {
   edgeSwapScoreParams?: Partial<EdgeSwapScoreParams>;
   /** Edge-Swap 時: FinalBoard Score 閾値（-1 で無効、0以上で閾値未満の盤面を破棄してリトライ） */
   scoreThreshold?: number;
+  /** デバッグモードON時のみ: アルゴリズムのコンソール出力を有効化 */
+  enableAlgoLogs?: boolean;
+  /** enableAlgoLogs が true のとき: true で全ログ、false で Final Board とエラーのみ */
+  verboseAlgoLogs?: boolean;
 };
 
 type QueueItem = {

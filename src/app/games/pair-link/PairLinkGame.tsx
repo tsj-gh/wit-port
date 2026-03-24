@@ -118,6 +118,8 @@ export default function PairLinkGame() {
   const [puzzleKey, setPuzzleKey] = useState(0);
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
+  /** 詳細なコンソール出力（デバッグモードON時、OFFなら Final Board とエラーのみ） */
+  const [verboseConsoleLogs, setVerboseConsoleLogs] = useState(false);
   const [forcedWidth, setForcedWidth] = useState<number | null>(null);
   const [adsRefreshState, setAdsRefreshState] = useState(() => getAdsRefreshState());
   const [countFlashing, setCountFlashing] = useState(false);
@@ -256,9 +258,14 @@ export default function PairLinkGame() {
     ...(debugGenerationMode === "edgeSwap"
       ? { edgeSwapScoreParams: edgeSwapScoreApplied }
       : {}),
+    ...(isDebugMode ? { enableAlgoLogs: true, verboseAlgoLogs: verboseConsoleLogs } : {}),
   };
   const { getPuzzle, prefetch, manualPrefetch, clearStockForKey, isPrefetching, lastGenerationTimeMs, lastProfile, lastAttempts, lastTotalMs, stockStatus } = usePuzzleStock({ config: evalConfig });
-  const { getPuzzleByGrade, prefetchGrade, stockStatus: gradeStockStatus } = usePuzzleStockByGrade({ debugLog: true });
+  const { getPuzzleByGrade, prefetchGrade, stockStatus: gradeStockStatus } = usePuzzleStockByGrade({
+    debugLog: true,
+    enableAlgoLogs: isDebugMode,
+    verboseAlgoLogs: verboseConsoleLogs,
+  });
   const { generate: workerGenerate } = useBoardWorker();
 
   const initGame = useCallback(
@@ -1187,6 +1194,15 @@ export default function PairLinkGame() {
           </div>
           {isDebugPanelExpanded && (
             <>
+              <label className="mt-2 flex items-center gap-2 cursor-pointer text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={verboseConsoleLogs}
+                  onChange={(e) => setVerboseConsoleLogs(e.target.checked)}
+                  className="rounded border-white/30"
+                />
+                <span className="text-[10px]">詳細なコンソール出力</span>
+              </label>
               <div className="mt-2 flex flex-wrap gap-1">
                 <button
                   onClick={() => triggerDebugSolve()}
