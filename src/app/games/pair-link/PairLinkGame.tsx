@@ -348,6 +348,47 @@ function gridCellCenterPercent(gx: number, gy: number, spacing: number, canvasSi
   return { leftPct: (px / canvasSize) * 100, topPct: (py / canvasSize) * 100 };
 }
 
+/** 親の再レンダーで型が変わらないようモジュール直下に置く（内側で定義すると毎回アンマウント→波紋が再発火） */
+function TapRippleRing({
+  gx,
+  gy,
+  zClass,
+  spacing,
+  canvasSize,
+  diamPct,
+  rippleMaxScale,
+}: {
+  gx: number;
+  gy: number;
+  zClass: string;
+  spacing: number;
+  canvasSize: number;
+  diamPct: number;
+  rippleMaxScale: number;
+}) {
+  const { leftPct, topPct } = gridCellCenterPercent(gx, gy, spacing, canvasSize);
+  return (
+    <div
+      className={`absolute flex items-center justify-center pointer-events-none ${zClass}`}
+      style={{
+        left: `${leftPct}%`,
+        top: `${topPct}%`,
+        width: `${diamPct}%`,
+        aspectRatio: "1",
+        transform: "translate(-50%, -50%)",
+      }}
+    >
+      <motion.div
+        layout={false}
+        className="absolute inset-0 rounded-full border border-white/12 shadow-[0_0_14px_rgba(255,255,255,0.06)]"
+        initial={{ scale: 1, opacity: 0.22 }}
+        animate={{ scale: rippleMaxScale, opacity: 0 }}
+        transition={{ duration: TAP_RIPPLE_DURATION_SEC, ease: TAP_RIPPLE_EASE }}
+      />
+    </div>
+  );
+}
+
 function PairLinkEndpointTapOverlay({
   tapFx,
   canvasSize,
@@ -366,36 +407,30 @@ function PairLinkEndpointTapOverlay({
   const diamPct = ((2 * NUMBER_DOT_RADIUS_FACTOR * spacing) / canvasSize) * 100;
   const fontPx = Math.max(10, Math.round(spacing * 0.32));
 
-  const RippleRing = ({ gx, gy, zClass }: { gx: number; gy: number; zClass: string }) => {
-    const { leftPct, topPct } = gridCellCenterPercent(gx, gy, spacing, canvasSize);
-    return (
-      <div
-        className={`absolute flex items-center justify-center pointer-events-none ${zClass}`}
-        style={{
-          left: `${leftPct}%`,
-          top: `${topPct}%`,
-          width: `${diamPct}%`,
-          aspectRatio: "1",
-          transform: "translate(-50%, -50%)",
-        }}
-      >
-        <motion.div
-          layout={false}
-          className="absolute inset-0 rounded-full border border-white/12 shadow-[0_0_14px_rgba(255,255,255,0.06)]"
-          initial={{ scale: 1, opacity: 0.22 }}
-          animate={{ scale: rippleMaxScale, opacity: 0 }}
-          transition={{ duration: TAP_RIPPLE_DURATION_SEC, ease: TAP_RIPPLE_EASE }}
-        />
-      </div>
-    );
-  };
-
   const { leftPct, topPct } = gridCellCenterPercent(tapFx.gx, tapFx.gy, spacing, canvasSize);
 
   return (
     <div className="absolute inset-0 pointer-events-none z-[6] overflow-hidden rounded-[inherit]" aria-hidden>
-      {tapFx.partner ? <RippleRing gx={tapFx.partner.x} gy={tapFx.partner.y} zClass="z-[4]" /> : null}
-      <RippleRing gx={tapFx.gx} gy={tapFx.gy} zClass="z-[5]" />
+      {tapFx.partner ? (
+        <TapRippleRing
+          gx={tapFx.partner.x}
+          gy={tapFx.partner.y}
+          zClass="z-[4]"
+          spacing={spacing}
+          canvasSize={canvasSize}
+          diamPct={diamPct}
+          rippleMaxScale={rippleMaxScale}
+        />
+      ) : null}
+      <TapRippleRing
+        gx={tapFx.gx}
+        gy={tapFx.gy}
+        zClass="z-[5]"
+        spacing={spacing}
+        canvasSize={canvasSize}
+        diamPct={diamPct}
+        rippleMaxScale={rippleMaxScale}
+      />
       <div
         className="absolute z-[7] flex items-center justify-center pointer-events-none"
         style={{
