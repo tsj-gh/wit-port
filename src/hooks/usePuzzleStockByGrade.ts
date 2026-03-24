@@ -12,7 +12,10 @@ import {
   type GradeEnclosureRequirement,
   type PairLinkGradeDef,
 } from "@/lib/pair-link-grade-constants";
-import { getInsuranceEntriesForGrade } from "@/lib/puzzle-insurance-assets";
+import {
+  getInsuranceEntriesForGrade,
+  preloadInsuranceAssets,
+} from "@/lib/puzzle-insurance-assets";
 
 /** 生成試行上限を超えた場合に保険アセットへフォールバック */
 const MAX_RETRIES_BEFORE_INSURANCE = 1000;
@@ -216,6 +219,7 @@ export function usePuzzleStockByGrade(
     (grade: number) => {
       const def = GRADE_MAP.get(grade);
       if (!def) return;
+      preloadInsuranceAssets();
       if (getGradeStockCount(grade) >= STOCK_REFILL_THRESHOLD) return;
 
       const existing = refillTimeoutByGradeRef.current.get(grade);

@@ -883,6 +883,7 @@ export default function PairLinkGame() {
       ctx.restore();
     }
   }, [
+    puzzleKey,
     paths,
     numbers,
     gridSize,
@@ -1780,6 +1781,7 @@ export default function PairLinkGame() {
             style={{ minHeight: canvasSize, WebkitTapHighlightColor: "transparent" }}
           >
             <canvas
+              key={puzzleKey}
               ref={canvasRef}
               width={canvasSize}
               height={canvasSize}
