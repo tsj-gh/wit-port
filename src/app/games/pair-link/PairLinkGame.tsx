@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { DevLink } from "@/components/DevLink";
 import confetti from "canvas-confetti";
@@ -802,7 +802,9 @@ export default function PairLinkGame() {
   }, [showClearOverlay]);
 
   // --- Draw canvas ---
-  useEffect(() => {
+  // useLayoutEffect: loading 解除直後に key 付き canvas が差し替わると、useEffect だと ref がまだ null のタイミングで
+  // 一度走りスキップされ、以降 deps が変わらず再描画されないことがある（G1「次の問題」で再現）。
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     const g1Dbg = isDevTj && typeof window !== "undefined" && !useLegacyMode;
     if (g1Dbg) {
