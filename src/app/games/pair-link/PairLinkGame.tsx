@@ -24,7 +24,11 @@ import {
   GRADE_MAP,
   STOCK_PER_GRADE_MAX,
 } from "@/lib/pair-link-grade-constants";
-import { usePuzzleStockByGrade, type GenerateResultWithSource } from "@/hooks/usePuzzleStockByGrade";
+import {
+  usePuzzleStockByGrade,
+  type GenerateResultWithSource,
+  DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE,
+} from "@/hooks/usePuzzleStockByGrade";
 
 type NumberCell = { x: number; y: number; val: number; color: string };
 type PathPoint = { x: number; y: number };
@@ -317,6 +321,10 @@ export default function PairLinkGame() {
   const [configDetourWeight, setConfigDetourWeight] = useState(0);
   const [configBaseThreshold, setConfigBaseThreshold] = useState(0);
   const [debugGenerationMode, setDebugGenerationMode] = useState<"default" | "edgeSwap">("edgeSwap");
+  /** ストック空き時、Worker 試行の累計がこの ms を超えたら保険へ（デバッグパネルで調整） */
+  const [debugWorkerInsuranceBudgetMs, setDebugWorkerInsuranceBudgetMs] = useState(
+    DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE
+  );
   /** Edge-Swap: 囲い込み目標件数（常時ON、定数として Edge Swap 定数内に配置） */
   const [debugTargetEnclosureCount, setDebugTargetEnclosureCount] = useState(10);
   const [scoreThresholdDraft, setScoreThresholdDraft] = useState(10);
@@ -455,6 +463,7 @@ export default function PairLinkGame() {
     debugLog: true,
     enableAlgoLogs: isDebugMode,
     verboseAlgoLogs: verboseConsoleLogs,
+    workerPhaseMaxMsBeforeInsurance: debugWorkerInsuranceBudgetMs,
   });
   const { generate: workerGenerate } = useBoardWorker();
 
@@ -1530,6 +1539,26 @@ export default function PairLinkGame() {
                     <div className="mt-0.5 text-[10px] text-slate-500 space-y-0.5">
                       <div>
                         グレードストック: {Object.entries(gradeStockStatus).map(([g, n]) => `G${g}:${n}/${STOCK_PER_GRADE_MAX}`).join(" ")}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                        <span className="text-slate-400 shrink-0">
+                          ストック空→保険まで Worker 累計(ms)
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={120_000}
+                          step={50}
+                          value={debugWorkerInsuranceBudgetMs}
+                          onChange={(e) => {
+                            const n = Number(e.target.value);
+                            if (!Number.isFinite(n)) return;
+                            setDebugWorkerInsuranceBudgetMs(Math.max(0, Math.min(120_000, Math.round(n))));
+                          }}
+                          className="w-20 px-1 py-0.5 rounded bg-black/60 border border-white/20 text-slate-200 tabular-nums"
+                          title="プリフェッチ無しで Worker 試行がこの時間を超えたら保険アセットへ切替（既定 300）"
+                        />
+                        <span className="text-slate-600">既定 {DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE}</span>
                       </div>
                       {lastPuzzleDebugInfo && (
                         <div className="text-slate-400">

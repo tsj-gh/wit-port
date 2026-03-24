@@ -23,8 +23,9 @@ const MAX_RETRIES_BEFORE_INSURANCE = 1000;
 /**
  * ストックが空で Worker 試行に入ったとき、この累計時間（ms）を超えたら保険アセットへ切り替える。
  * 単一の generate が長くても、各試行の完了後に判定する。
+ * UI から `workerPhaseMaxMsBeforeInsurance` で上書き可能。
  */
-const WORKER_PHASE_MAX_MS_BEFORE_INSURANCE = 1_000;
+export const DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE = 300;
 
 /** 保険からの連続出題を避けるための直近履歴サイズ */
 const INSURANCE_RECENT_HISTORY_SIZE = 5;
@@ -129,6 +130,11 @@ export type UsePuzzleStockByGradeOptions = {
   enableAlgoLogs?: boolean;
   /** enableAlgoLogs が true のとき: true で全ログ、false で Final Board とエラーのみ */
   verboseAlgoLogs?: boolean;
+  /**
+   * ストックが空のとき Worker 連続試行の累計がこの ms を超えたら保険アセットへ。
+   * 未指定時は {@link DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE}
+   */
+  workerPhaseMaxMsBeforeInsurance?: number;
 };
 
 export function usePuzzleStockByGrade(
@@ -143,6 +149,10 @@ export function usePuzzleStockByGrade(
   const debugLog = _options.debugLog ?? false;
   const enableAlgoLogs = _options.enableAlgoLogs ?? false;
   const verboseAlgoLogs = _options.verboseAlgoLogs ?? false;
+  const workerPhaseMaxMsBeforeInsurance = Math.max(
+    0,
+    _options.workerPhaseMaxMsBeforeInsurance ?? DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE
+  );
   const [stockStatus, setStockStatus] = useState<Record<number, number>>(() => getGradeStockStatus());
   /** グレードごとの refill 実行中フラグ（複数グレード同時 refill を許可） */
   const fetchingGradesRef = useRef<Set<number>>(new Set());
@@ -273,14 +283,14 @@ export function usePuzzleStockByGrade(
           prefetchGrade(grade);
           return { ...puzzle, source: "generated" as const };
         }
-        if (nowMs() - workerPhaseStart >= WORKER_PHASE_MAX_MS_BEFORE_INSURANCE) {
+        if (nowMs() - workerPhaseStart >= workerPhaseMaxMsBeforeInsurance) {
           if (
             debugLog &&
             typeof window !== "undefined" &&
             window.location?.search?.includes("devtj=true")
           ) {
             console.log(
-              `Grade ${grade}: Worker 試行が ${WORKER_PHASE_MAX_MS_BEFORE_INSURANCE}ms 超過のため保険アセットを試行（trial=${trial}）`
+              `Grade ${grade}: Worker 試行が ${workerPhaseMaxMsBeforeInsurance}ms 超過のため保険アセットを試行（trial=${trial}）`
             );
           }
           break;
@@ -320,7 +330,16 @@ export function usePuzzleStockByGrade(
           : "パズルの生成に失敗しました。もう一度お試しください。"
       );
     },
-    [generate, fetchOneForGrade, flushStatus, prefetchGrade, enableAlgoLogs, verboseAlgoLogs, debugLog]
+    [
+      generate,
+      fetchOneForGrade,
+      flushStatus,
+      prefetchGrade,
+      enableAlgoLogs,
+      verboseAlgoLogs,
+      debugLog,
+      workerPhaseMaxMsBeforeInsurance,
+    ]
   );
 
   useEffect(() => {
