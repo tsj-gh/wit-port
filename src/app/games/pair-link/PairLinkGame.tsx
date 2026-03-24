@@ -1986,13 +1986,13 @@ export default function PairLinkGame() {
             </div>
           )}
         </div>
-        <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-stretch sm:items-end justify-center mt-4 mb-2">
+        <div className="w-full max-w-[520px] mx-auto min-w-0 mt-4 mb-2 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
           {useLegacyMode ? (
             <>
-              <div className="min-w-0 flex-shrink-0">
+              <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
                 <label className="block text-xs text-wit-muted mb-1">Grid Size</label>
                 <div
-                  className="flex overflow-x-auto gap-2 py-1 -mx-1 max-w-full snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
+                  className="flex w-full min-w-0 overflow-x-auto gap-2 py-1 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
                   {[4, 5, 6, 7, 8, 9, 10].map((n) => {
@@ -2026,10 +2026,10 @@ export default function PairLinkGame() {
                   })}
                 </div>
               </div>
-              <div className="min-w-0 flex-shrink-0">
+              <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
                 <label className="block text-xs text-wit-muted mb-1">Number of Pairs</label>
                 <div
-                  className="flex overflow-x-auto gap-2 py-1 -mx-1 max-w-full snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
+                  className="flex w-full min-w-0 overflow-x-auto gap-2 py-1 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
                   {pairCountOptions(settingsGridSize, debugGenerationMode).map((n) => {
@@ -2053,37 +2053,39 @@ export default function PairLinkGame() {
                   })}
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  refreshAds();
-                  initGame(settingsGridSize, settingsNumPairs);
-                }}
-                disabled={loading}
-                className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
-              >
-                新規作成
-              </button>
-              {isDebugMode && (
+              <div className="flex flex-wrap gap-2 items-center shrink-0 w-full sm:w-auto">
                 <button
-                  onClick={() =>
-                    clearStockForKey(
-                      settingsGridSize,
-                      clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)
-                    )
-                  }
-                  className="px-4 py-2 rounded-lg bg-slate-600 text-slate-200 text-sm font-medium hover:bg-slate-500"
-                  title={`${settingsGridSize}×${clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)} のストックを削除（プリフェッチ中もキャンセル）`}
+                  onClick={() => {
+                    refreshAds();
+                    initGame(settingsGridSize, settingsNumPairs);
+                  }}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
                 >
-                  （debug）ストックを削除
+                  新規作成
                 </button>
-              )}
+                {isDebugMode && (
+                  <button
+                    onClick={() =>
+                      clearStockForKey(
+                        settingsGridSize,
+                        clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)
+                      )
+                    }
+                    className="px-4 py-2 rounded-lg bg-slate-600 text-slate-200 text-sm font-medium hover:bg-slate-500"
+                    title={`${settingsGridSize}×${clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)} のストックを削除（プリフェッチ中もキャンセル）`}
+                  >
+                    （debug）ストックを削除
+                  </button>
+                )}
+              </div>
             </>
           ) : (
             <>
-              <div className="min-w-0 flex-shrink-0">
+              <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
                 <label className="block text-xs text-wit-muted mb-1">グレード</label>
                 <div
-                  className="flex overflow-x-auto gap-2 py-1 -mx-1 max-w-full snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
+                  className="flex w-full min-w-0 overflow-x-auto gap-2 py-1 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
                   {PAIR_LINK_GRADE_CONSTANTS.map((g) => {
@@ -2110,34 +2112,36 @@ export default function PairLinkGame() {
                   })}
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  if (isDevTj && typeof window !== "undefined") {
-                    console.log("[G1調査] 次の問題 クリック直前", {
-                      currentGrade,
-                      loading,
-                      numbersLen: numbers.length,
-                      gridSize,
-                      puzzleKey,
-                      pairsLen: pairs.length,
-                    });
-                  }
-                  refreshAds();
-                  initGameByGrade(currentGrade, undefined, { debugReason: "次の問題" });
-                }}
-                disabled={loading}
-                className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
-              >
-                次の問題
-              </button>
-              {GRADE_MAP.get(currentGrade) && (
-                <p className="w-full text-center text-xs text-wit-muted mt-0.5">
-                  {GRADE_MAP.get(currentGrade)!.theme}
-                </p>
-              )}
+              <div className="shrink-0 w-full sm:w-auto flex justify-center sm:justify-start">
+                <button
+                  onClick={() => {
+                    if (isDevTj && typeof window !== "undefined") {
+                      console.log("[G1調査] 次の問題 クリック直前", {
+                        currentGrade,
+                        loading,
+                        numbersLen: numbers.length,
+                        gridSize,
+                        puzzleKey,
+                        pairsLen: pairs.length,
+                      });
+                    }
+                    refreshAds();
+                    initGameByGrade(currentGrade, undefined, { debugReason: "次の問題" });
+                  }}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
+                >
+                  次の問題
+                </button>
+              </div>
             </>
           )}
         </div>
+        {!useLegacyMode && GRADE_MAP.get(currentGrade) && (
+          <p className="w-full max-w-[520px] mx-auto text-center text-xs text-wit-muted mt-1 px-1">
+            {GRADE_MAP.get(currentGrade)!.theme}
+          </p>
+        )}
         {/* 広告枠2: サイズ/新規作成の直下（余白を確保して接触を回避） */}
         <div className="mt-8 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
           <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
