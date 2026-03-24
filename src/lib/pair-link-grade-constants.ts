@@ -35,6 +35,14 @@ export const PAIR_LINK_GRADE_CONSTANTS: PairLinkGradeDef[] = [
   { grade: 11, size: 10, pairs: 10, enclosureReq: { type: "gte", value: 2 }, scoreThreshold: 4000, theme: "【神・隠し】極限の思考の先へ" },
 ];
 
+/**
+ * 全グレード共通の盤面採用条件（ストック投入・即時生成の fetch フィルタ）。
+ * Worker の `postMutationScoreBreakdown.adjRate`（各ペアの2端点間マンハッタン距離に基づく
+ * 隣接密度を pathCount で割った値。Dist2+Dist3重み付き）がこの値 **未満** であること。
+ * すなわち「隣接ペア相当の割合」が全ペアの 40% 未満。
+ */
+export const GRADE_ADOPTION_MAX_ADJ_RATE = 0.4;
+
 /** グレード番号→定義のマップ */
 export const GRADE_MAP = new Map(PAIR_LINK_GRADE_CONSTANTS.map((g) => [g.grade, g]));
 

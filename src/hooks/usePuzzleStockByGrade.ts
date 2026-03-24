@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBoardWorker, type GenerateResult } from "@/hooks/useBoardWorker";
 import {
+  GRADE_ADOPTION_MAX_ADJ_RATE,
   GRADE_MAP,
   LOW_SUCCESS_GRADES,
   MAX_RETRIES_PER_PUZZLE,
@@ -189,6 +190,16 @@ export function usePuzzleStockByGrade(
       if (def.scoreThreshold >= 0 && score < def.scoreThreshold) {
         if (debugLog && typeof window !== "undefined" && window.location?.search?.includes("devtj=true")) {
           console.log(`Grade ${def.grade}: Trial ${trialIndex}... Score ${score} < ${def.scoreThreshold} reject`);
+        }
+        return null;
+      }
+
+      const adjRate = bd && typeof bd.adjRate === "number" ? bd.adjRate : NaN;
+      if (!(adjRate < GRADE_ADOPTION_MAX_ADJ_RATE)) {
+        if (debugLog && typeof window !== "undefined" && window.location?.search?.includes("devtj=true")) {
+          console.log(
+            `Grade ${def.grade}: Trial ${trialIndex}... adjRate ${Number.isFinite(adjRate) ? adjRate.toFixed(4) : "—"} need < ${GRADE_ADOPTION_MAX_ADJ_RATE} reject`
+          );
         }
         return null;
       }

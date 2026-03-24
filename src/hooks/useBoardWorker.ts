@@ -35,6 +35,8 @@ export type EnclosureDebugItem =
 export type PostMutationScoreBreakdown = {
   finalScore: number;
   enclosureCount?: number;
+  /** 隣接密度（pathCount 正規化）。グレード採用では pair-link-grade-constants の GRADE_ADOPTION_MAX_ADJ_RATE 未満 */
+  adjRate?: number;
   [key: string]: unknown;
 };
 
