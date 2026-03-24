@@ -112,6 +112,16 @@ type HitTarget =
   | { type: "endpoint"; val: string; pathIdx: number; point: PathPoint; isFirst: boolean }
   | { type: "number"; x: number; y: number; val: number };
 
+/** 盤面に印刷された数字マスか。線の先端など「数字のないマス」上の端点は false */
+function isPrintedNumberCell(
+  numbers: NumberCell[],
+  valStr: string,
+  gx: number,
+  gy: number
+): boolean {
+  return numbers.some((n) => String(n.val) === valStr && n.x === gx && n.y === gy);
+}
+
 function emptyPaths(pairs: Pair[]): Record<string, PathPoint[][]> {
   const out: Record<string, PathPoint[][]> = {};
   pairs.forEach((p) => {
@@ -1163,7 +1173,9 @@ export default function PairLinkGame() {
         setActiveVal(v);
         setActivePathIdx(i);
         setIsDrawing(true);
-        pulseEndpointTap(v, hit.point.x, hit.point.y);
+        if (isPrintedNumberCell(numbers, v, hit.point.x, hit.point.y)) {
+          pulseEndpointTap(v, hit.point.x, hit.point.y);
+        }
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
         return;
       }
