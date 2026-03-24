@@ -5,7 +5,6 @@ import { useBoardWorker, type GenerateResult } from "@/hooks/useBoardWorker";
 import {
   GRADE_ADOPTION_MAX_ADJ_RATE,
   GRADE_MAP,
-  LOW_SUCCESS_GRADES,
   MAX_RETRIES_PER_PUZZLE,
   PAIR_LINK_GRADE_CONSTANTS,
   STOCK_PER_GRADE_MAX,
@@ -26,7 +25,7 @@ const MAX_RETRIES_BEFORE_INSURANCE = 1000;
  * 単一の generate が長くても、各試行の完了後に判定する。
  * UI から `workerPhaseMaxMsBeforeInsurance` で上書き可能。
  */
-export const DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE = 300;
+export const DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE = 100;
 
 /** 保険からの連続出題を避けるための直近履歴サイズ */
 const INSURANCE_RECENT_HISTORY_SIZE = 5;
@@ -223,7 +222,7 @@ export function usePuzzleStockByGrade(
       if (getGradeStockCount(grade) >= STOCK_PER_GRADE_MAX) return;
 
       fetchingGradesRef.current.add(grade);
-      const maxRetries = LOW_SUCCESS_GRADES.has(grade) ? MAX_RETRIES_PER_PUZZLE * 2 : MAX_RETRIES_PER_PUZZLE;
+      const maxRetries = MAX_RETRIES_PER_PUZZLE;
 
       try {
         let trial = 0;

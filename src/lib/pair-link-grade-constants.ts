@@ -47,13 +47,10 @@ export const GRADE_ADOPTION_MAX_ADJ_RATE = 0.4;
 /** グレード番号→定義のマップ */
 export const GRADE_MAP = new Map(PAIR_LINK_GRADE_CONSTANTS.map((g) => [g.grade, g]));
 
-/** 成功率が低い（Positive率が低い）グレード：リトライ上限を多めに */
-export const LOW_SUCCESS_GRADES = new Set([1, 2, 7]);
-
 /** ストック数の設定 */
 export const STOCK_PER_GRADE_MIN = 3;
 export const STOCK_PER_GRADE_MAX = 5;
 export const STOCK_REFILL_THRESHOLD = 2;
 
-/** グレード別リトライ上限（低成功率グレードは多め） */
-export const MAX_RETRIES_PER_PUZZLE = 300;
+/** ストック補填（refill）時の Worker 試行上限（全グレード共通） */
+export const MAX_RETRIES_PER_PUZZLE = 1000;

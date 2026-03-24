@@ -335,8 +335,7 @@ export default function PairLinkGame() {
   const [settingsGridSize, setSettingsGridSize] = useState(6);
   const [settingsNumPairs, setSettingsNumPairs] = useState(5);
   const [currentGrade, setCurrentGrade] = useState(1);
-  /** 問題解決までサイズ/レガシーをデフォルト */
-  const [useLegacyMode, setUseLegacyMode] = useState(true);
+  const [useLegacyMode, setUseLegacyMode] = useState(false);
   const [configEmptyIsolatedPenalty, setConfigEmptyIsolatedPenalty] = useState(5);
   const [configDetourWeight, setConfigDetourWeight] = useState(0);
   const [configBaseThreshold, setConfigBaseThreshold] = useState(0);
@@ -1520,7 +1519,7 @@ export default function PairLinkGame() {
                             setDebugWorkerInsuranceBudgetMs(Math.max(0, Math.min(120_000, Math.round(n))));
                           }}
                           className="w-20 px-1 py-0.5 rounded bg-black/60 border border-white/20 text-slate-200 tabular-nums"
-                          title="プリフェッチ無しで Worker 試行がこの時間を超えたら保険アセットへ切替（既定 300）"
+                          title={`プリフェッチ無しで Worker 試行がこの時間を超えたら保険アセットへ切替（既定 ${DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE}ms）`}
                         />
                         <span className="text-slate-600">既定 {DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE}</span>
                       </div>
