@@ -20,6 +20,12 @@ import {
 /** 生成試行上限を超えた場合に保険アセットへフォールバック */
 const MAX_RETRIES_BEFORE_INSURANCE = 1000;
 
+/**
+ * ストックが空で Worker 試行に入ったとき、この累計時間（ms）を超えたら保険アセットへ切り替える。
+ * 単一の generate が長くても、各試行の完了後に判定する。
+ */
+const WORKER_PHASE_MAX_MS_BEFORE_INSURANCE = 1_000;
+
 /** 保険からの連続出題を避けるための直近履歴サイズ */
 const INSURANCE_RECENT_HISTORY_SIZE = 5;
 
@@ -256,6 +262,9 @@ export function usePuzzleStockByGrade(
         return { ...head, source: "generated" as const };
       }
 
+      const nowMs = () =>
+        typeof performance !== "undefined" ? performance.now() : Date.now();
+      const workerPhaseStart = nowMs();
       let trial = 0;
       while (trial < MAX_RETRIES_BEFORE_INSURANCE) {
         trial++;
@@ -264,7 +273,22 @@ export function usePuzzleStockByGrade(
           prefetchGrade(grade);
           return { ...puzzle, source: "generated" as const };
         }
+        if (nowMs() - workerPhaseStart >= WORKER_PHASE_MAX_MS_BEFORE_INSURANCE) {
+          if (
+            debugLog &&
+            typeof window !== "undefined" &&
+            window.location?.search?.includes("devtj=true")
+          ) {
+            console.log(
+              `Grade ${grade}: Worker 試行が ${WORKER_PHASE_MAX_MS_BEFORE_INSURANCE}ms 超過のため保険アセットを試行（trial=${trial}）`
+            );
+          }
+          break;
+        }
       }
+
+      // 保険へ。裏で refill（Worker）を継続してストックを溜める。
+      prefetchGrade(grade);
 
       let entries: { seed: string }[] = [];
       try {
