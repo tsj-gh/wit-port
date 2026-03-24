@@ -50,6 +50,15 @@ const NUMBER_DOT_RADIUS_FACTOR = 0.35;
 
 const ENDPOINT_TAP_SPRING = { type: "spring" as const, stiffness: 400, damping: 10 };
 
+/** タップ波紋: 1回ふわっと広がる時間（秒）。大きいほどゆっくり（ソナー／空気リング風） */
+const TAP_RIPPLE_DURATION_SEC = 1.12;
+/** タップ波紋: 最大拡大倍率。大きいほど遠くまで届くが派手になる */
+const TAP_RIPPLE_MAX_SCALE = 1.48;
+/** 波紋＋数字スプリングが終わるまでオーバーレイを維持（ms） */
+const TAP_OVERLAY_CLEAR_MS = Math.round(TAP_RIPPLE_DURATION_SEC * 1000) + 480;
+/** 波紋のイージング（終端で減速して消える） */
+const TAP_RIPPLE_EASE: [number, number, number, number] = [0.2, 0.85, 0.35, 1];
+
 /** Edge-Swap: 4×4〜6×6 は Default と同様、7×7 は 7〜10、8×8〜10×10 は 8〜10（board-worker と一致） */
 export const EDGE_SWAP_PAIR_BOUNDS: Record<number, { min: number; max: number }> = {
   4: { min: 2, max: 4 },
@@ -354,10 +363,10 @@ function PairLinkEndpointTapOverlay({
       >
         <motion.div
           layout={false}
-          className="absolute inset-0 rounded-full border-2 border-white/22 shadow-[0_0_12px_rgba(255,255,255,0.14)]"
-          initial={{ scale: 0.9, opacity: 0.4 }}
-          animate={{ scale: 2.1, opacity: 0 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          className="absolute inset-0 rounded-full border border-white/12 shadow-[0_0_14px_rgba(255,255,255,0.06)]"
+          initial={{ scale: 1, opacity: 0.22 }}
+          animate={{ scale: TAP_RIPPLE_MAX_SCALE, opacity: 0 }}
+          transition={{ duration: TAP_RIPPLE_DURATION_SEC, ease: TAP_RIPPLE_EASE }}
         />
       </div>
     );
@@ -590,7 +599,7 @@ export default function PairLinkGame() {
     tapFxTimeoutRef.current = setTimeout(() => {
       setTapFx(null);
       tapFxTimeoutRef.current = null;
-    }, 680);
+    }, TAP_OVERLAY_CLEAR_MS);
   }, [numbers]);
 
   useEffect(() => {
