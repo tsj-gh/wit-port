@@ -6,7 +6,12 @@ import { DevLink } from "@/components/DevLink";
 import confetti from "canvas-confetti";
 import { validatePathsAction, solvePathsAction } from "./actions";
 import { usePuzzleStock } from "@/hooks/usePuzzleStock";
-import { useBoardWorker, type EnclosureDebugItem, type GenerateResult } from "@/hooks/useBoardWorker";
+import {
+  useBoardWorker,
+  type EnclosureDebugItem,
+  type GenerateResult,
+  type PostMutationScoreBreakdown,
+} from "@/hooks/useBoardWorker";
 import { computeABCScore, computeStats, type ABCScore } from "@/lib/pair-link-abc-score";
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
@@ -108,6 +113,41 @@ function emptyPaths(pairs: Pair[]): Record<string, PathPoint[][]> {
   return out;
 }
 
+/** board-worker の logFinalScoreDetail と同形式（Final Board — …） */
+function logFinalBoardScoreToConsole(bd: PostMutationScoreBreakdown | null | undefined): void {
+  if (bd == null) {
+    console.warn(
+      "[盤面スコア] postMutationScoreBreakdown がありません（Edge-Swap で生成された直近の盤のスコアのみ保持されます）"
+    );
+    return;
+  }
+  const row = bd as PostMutationScoreBreakdown & {
+    coverageScore?: number;
+    interferenceScore?: number;
+    adjRate?: number;
+    adjCount?: number;
+    semiAdjCount?: number;
+  };
+  const adjPct = ((row.adjRate ?? 0) * 100).toFixed(1);
+  console.log(
+    "Final Board — [Final Score Detail] Total: " +
+      row.finalScore +
+      ", Coverage: " +
+      (row.coverageScore ?? "—") +
+      ", Interference: " +
+      (row.interferenceScore ?? "—") +
+      ", Enclosures: " +
+      (row.enclosureCount ?? 0) +
+      ", AdjRate: " +
+      adjPct +
+      "%, Dist2: " +
+      (row.adjCount ?? "—") +
+      ", Dist3: " +
+      (row.semiAdjCount ?? "—")
+  );
+  console.log("[盤面スコア] postMutationScoreBreakdown (raw):", bd);
+}
+
 type PairLinkBoardPaintParams = {
   numbers: NumberCell[];
   paths: Record<string, PathPoint[][]>;
@@ -118,14 +158,10 @@ type PairLinkBoardPaintParams = {
   activePathIdx: number | null;
   isDebugMode: boolean;
   debugEnclosures: EnclosureDebugItem[] | null;
-  puzzleKey: number;
-  isDevTj: boolean;
-  useLegacyMode: boolean;
 };
 
 /** canvas への実描画（ref コールバック / useLayoutEffect / rAF リトライから共通利用） */
 function drawPairLinkBoard(canvas: HTMLCanvasElement, p: PairLinkBoardPaintParams): void {
-  const g1Dbg = p.isDevTj && typeof window !== "undefined" && !p.useLegacyMode;
   const {
     numbers,
     paths,
@@ -136,15 +172,11 @@ function drawPairLinkBoard(canvas: HTMLCanvasElement, p: PairLinkBoardPaintParam
     activePathIdx,
     isDebugMode,
     debugEnclosures,
-    puzzleKey,
   } = p;
 
   if (!numbers.length || spacing <= 0) return;
   const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    if (g1Dbg) console.warn("[G1調査] canvas描画スキップ: getContext('2d') が null");
-    return;
-  }
+  if (!ctx) return;
 
   const w = canvas.width;
   const h = canvas.height;
@@ -257,18 +289,6 @@ function drawPairLinkBoard(canvas: HTMLCanvasElement, p: PairLinkBoardPaintParam
       }
     }
     ctx.restore();
-  }
-
-  if (g1Dbg) {
-    console.log("[G1調査] canvas描画完了", {
-      puzzleKey,
-      canvasW: canvas.width,
-      canvasH: canvas.height,
-      gridSize,
-      spacing: Number(spacing.toFixed(4)),
-      numbersLen: numbers.length,
-      pathKeys: Object.keys(paths).length,
-    });
   }
 }
 
@@ -416,9 +436,6 @@ export default function PairLinkGame() {
     activePathIdx: null,
     isDebugMode: false,
     debugEnclosures: null,
-    puzzleKey: 0,
-    isDevTj: false,
-    useLegacyMode: false,
   });
   const isDrawingRef = useRef(false);
   const activeValRef = useRef<string | null>(null);
@@ -426,6 +443,8 @@ export default function PairLinkGame() {
   const hasTriggeredClearRef = useRef(false);
   const isCheckingClearRef = useRef(false);
   const currentSolutionPathsRef = useRef<Record<string, { x: number; y: number }[][]> | null>(null);
+  /** 直近ロードした盤の Worker Final Board スコア（デバッグボタン用） */
+  const lastPostMutationScoreRef = useRef<PostMutationScoreBreakdown | null>(null);
   const mergeIndexRef = useRef<number | null>(null);
   const mergeJustHappenedRef = useRef(false);
 
@@ -481,6 +500,7 @@ export default function PairLinkGame() {
       setTimeSeconds(0);
       setTimerActive(false);
       setDebugEnclosures(null);
+      lastPostMutationScoreRef.current = null;
 
       const npClamped = clampPairCount(gs, np, debugGenerationMode);
       const key = `${gs}x${npClamped}`;
@@ -506,6 +526,7 @@ export default function PairLinkGame() {
         setCurrentSeed(result.seed ?? null);
         currentSolutionPathsRef.current = result.solutionPaths ?? null;
         setDebugEnclosures(result.debugEnclosures ?? null);
+        lastPostMutationScoreRef.current = result.postMutationScoreBreakdown ?? null;
         await options?.onSuccess?.(result);
       } catch (err) {
         setStatus(
@@ -546,6 +567,7 @@ export default function PairLinkGame() {
       setTimeSeconds(0);
       setTimerActive(false);
       setDebugEnclosures(null);
+      lastPostMutationScoreRef.current = null;
       setLoading(true);
       setStatus(gradeStockStatus[grade] != null && gradeStockStatus[grade] > 0 ? "読み込み中" : "生成中...");
 
@@ -589,6 +611,7 @@ export default function PairLinkGame() {
         setCurrentSeed(result.seed ?? null);
         currentSolutionPathsRef.current = result.solutionPaths ?? null;
         setDebugEnclosures(result.debugEnclosures ?? null);
+        lastPostMutationScoreRef.current = result.postMutationScoreBreakdown ?? null;
         const source = result.source ?? "generated";
         const score = result.postMutationScoreBreakdown?.finalScore ?? null;
         setLastPuzzleDebugInfo({ source, score, seed: result.seed ?? null, grade });
@@ -607,20 +630,6 @@ export default function PairLinkGame() {
         setLoading(false);
         if (dbg) {
           console.log("[G1調査] initGameByGrade finally (setLoading(false) 済)", { reason, grade });
-        }
-        if (dbg && options?.debugReason === "次の問題") {
-          queueMicrotask(() => {
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                const el = canvasRef.current;
-                console.log("[G1調査] 次の問題後・約2フレーム経過時の canvas DOM", {
-                  canvasExists: !!el,
-                  width: el?.width ?? null,
-                  height: el?.height ?? null,
-                });
-              });
-            });
-          });
         }
       }
     },
@@ -1000,7 +1009,6 @@ export default function PairLinkGame() {
   // コールバック ref でマウント直後に描画。useLayoutEffect 時点では canvasRef が null のケースがあるため rAF でも追い描き。
   useLayoutEffect(() => {
     if (loading || !numbers.length || spacing <= 0) return;
-    const g1Dbg = isDevTj && typeof window !== "undefined" && !useLegacyMode;
 
     let cancelled = false;
     let rafId = 0;
@@ -1013,16 +1021,8 @@ export default function PairLinkGame() {
         return;
       }
       attempt += 1;
-      if (g1Dbg && attempt === 1) {
-        console.warn("[G1調査] canvas useLayout: ref が null→rAF でリトライ", {
-          numbersLen: numbers.length,
-          puzzleKey,
-        });
-      }
       if (attempt < 24) {
         rafId = requestAnimationFrame(run);
-      } else if (g1Dbg) {
-        console.warn("[G1調査] canvas描画: ref null の rAF リトライ打ち切り", { puzzleKey });
       }
     };
     run();
@@ -1042,8 +1042,6 @@ export default function PairLinkGame() {
     activePathIdx,
     isDebugMode,
     debugEnclosures,
-    isDevTj,
-    useLegacyMode,
   ]);
 
   const handlePointerDown = useCallback(
@@ -1318,9 +1316,6 @@ export default function PairLinkGame() {
     activePathIdx,
     isDebugMode,
     debugEnclosures,
-    puzzleKey,
-    isDevTj,
-    useLegacyMode,
   };
 
   if (loading || !numbers.length) {
@@ -1403,6 +1398,15 @@ export default function PairLinkGame() {
                   className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   強制クリア (Solve & Sync)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => logFinalBoardScoreToConsole(lastPostMutationScoreRef.current)}
+                  disabled={loading}
+                  className="px-2 py-0.5 rounded text-[10px] border border-cyan-500/50 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="直近ロード時の postMutationScoreBreakdown を、Worker と同形式でコンソールへ"
+                >
+                  今の盤面スコアをコンソールに出力
                 </button>
                 <button
                   onClick={() =>
