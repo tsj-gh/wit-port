@@ -19,8 +19,12 @@ import {
   mergeEdgeSwapScoreParams,
   type EdgeSwapScoreParams,
 } from "@/lib/pair-link-edge-swap-score";
-import { PAIR_LINK_GRADE_CONSTANTS, GRADE_MAP } from "@/lib/pair-link-grade-constants";
-import { usePuzzleStockByGrade } from "@/hooks/usePuzzleStockByGrade";
+import {
+  PAIR_LINK_GRADE_CONSTANTS,
+  GRADE_MAP,
+  STOCK_PER_GRADE_MAX,
+} from "@/lib/pair-link-grade-constants";
+import { usePuzzleStockByGrade, type GenerateResultWithSource } from "@/hooks/usePuzzleStockByGrade";
 
 type NumberCell = { x: number; y: number; val: number; color: string };
 type PathPoint = { x: number; y: number };
@@ -120,6 +124,13 @@ export default function PairLinkGame() {
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
   /** 詳細なコンソール出力（デバッグモードON時、OFFなら Final Board とエラーのみ） */
   const [verboseConsoleLogs, setVerboseConsoleLogs] = useState(false);
+  /** devtj=true 時: 出題元・Score・Seed のデバッグ表示用 */
+  const [lastPuzzleDebugInfo, setLastPuzzleDebugInfo] = useState<{
+    source: "generated" | "insurance";
+    score: number | null;
+    seed: string | null;
+    grade: number;
+  } | null>(null);
   const [forcedWidth, setForcedWidth] = useState<number | null>(null);
   const [adsRefreshState, setAdsRefreshState] = useState(() => getAdsRefreshState());
   const [countFlashing, setCountFlashing] = useState(false);
@@ -136,7 +147,8 @@ export default function PairLinkGame() {
   const [settingsGridSize, setSettingsGridSize] = useState(6);
   const [settingsNumPairs, setSettingsNumPairs] = useState(5);
   const [currentGrade, setCurrentGrade] = useState(1);
-  const [useLegacyMode, setUseLegacyMode] = useState(false);
+  /** 問題解決までサイズ/レガシーをデフォルト */
+  const [useLegacyMode, setUseLegacyMode] = useState(true);
   const [configEmptyIsolatedPenalty, setConfigEmptyIsolatedPenalty] = useState(5);
   const [configDetourWeight, setConfigDetourWeight] = useState(0);
   const [configBaseThreshold, setConfigBaseThreshold] = useState(0);
@@ -323,7 +335,7 @@ export default function PairLinkGame() {
     async (
       grade: number,
       seed?: string,
-      options?: { onSuccess?: (result: GenerateResult) => void | Promise<void> }
+      options?: { onSuccess?: (result: GenerateResultWithSource) => void | Promise<void> }
     ) => {
       hasTriggeredClearRef.current = false;
       isCheckingClearRef.current = false;
@@ -362,6 +374,12 @@ export default function PairLinkGame() {
         setCurrentSeed(result.seed ?? null);
         currentSolutionPathsRef.current = result.solutionPaths ?? null;
         setDebugEnclosures(result.debugEnclosures ?? null);
+        const source = result.source ?? "generated";
+        const score = result.postMutationScoreBreakdown?.finalScore ?? null;
+        setLastPuzzleDebugInfo({ source, score, seed: result.seed ?? null, grade });
+        if (isDevTj && typeof window !== "undefined") {
+          console.log(`[出題] Source: ${source === "insurance" ? "Insurance" : "Generated"}, Grade: ${grade}, Score: ${score ?? "—"}, Seed: ${result.seed ?? "—"}`);
+        }
         await options?.onSuccess?.(result);
       } catch (err) {
         setStatus(
@@ -371,7 +389,7 @@ export default function PairLinkGame() {
         setLoading(false);
       }
     },
-    [getPuzzleByGrade, gradeStockStatus]
+    [getPuzzleByGrade, gradeStockStatus, isDevTj]
   );
 
   useEffect(() => {
@@ -1158,6 +1176,14 @@ export default function PairLinkGame() {
 
   return (
     <div className="mx-auto max-w-[1080px] w-full px-4 py-6">
+      {isDevTj && lastPuzzleDebugInfo && !useLegacyMode && (
+        <div
+          className="fixed left-4 bottom-4 z-40 rounded-lg border border-white/10 bg-black/70 px-2 py-1.5 text-[10px] font-mono text-slate-400"
+          aria-live="polite"
+        >
+          Source: {lastPuzzleDebugInfo.source === "insurance" ? "Insurance" : "Generated"} | Stock: {(gradeStockStatus[lastPuzzleDebugInfo.grade] ?? 0)}/{STOCK_PER_GRADE_MAX} | Score: {lastPuzzleDebugInfo.score ?? "—"} | Seed: {lastPuzzleDebugInfo.seed ? lastPuzzleDebugInfo.seed.slice(-12) : "—"}
+        </div>
+      )}
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-4 z-50">
           <button
@@ -1343,8 +1369,15 @@ export default function PairLinkGame() {
                     </button>
                   </div>
                   {!useLegacyMode && (
-                    <div className="mt-0.5 text-[10px] text-slate-500">
-                      グレードストック: {Object.entries(gradeStockStatus).map(([g, n]) => `G${g}:${n}`).join(" ")}
+                    <div className="mt-0.5 text-[10px] text-slate-500 space-y-0.5">
+                      <div>
+                        グレードストック: {Object.entries(gradeStockStatus).map(([g, n]) => `G${g}:${n}/${STOCK_PER_GRADE_MAX}`).join(" ")}
+                      </div>
+                      {lastPuzzleDebugInfo && (
+                        <div className="text-slate-400">
+                          Source: {lastPuzzleDebugInfo.source === "insurance" ? "Insurance" : "Generated"} | Score: {lastPuzzleDebugInfo.score ?? "—"} | Seed: {lastPuzzleDebugInfo.seed ?? "—"}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

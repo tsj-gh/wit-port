@@ -12,6 +12,21 @@ import {
   type GradeEnclosureRequirement,
   type PairLinkGradeDef,
 } from "@/lib/pair-link-grade-constants";
+import { getInsuranceEntriesForGrade } from "@/lib/puzzle-insurance-assets";
+
+/** 生成試行上限を超えた場合に保険アセットへフォールバック */
+const MAX_RETRIES_BEFORE_INSURANCE = 1000;
+
+/** 保険からの連続出題を避けるための直近履歴サイズ */
+const INSURANCE_RECENT_HISTORY_SIZE = 5;
+
+/** 出題元を表す */
+export type PuzzleSource = "generated" | "insurance";
+
+export type GenerateResultWithSource = GenerateResult & { source?: PuzzleSource };
+
+/** グレードごとの直近使用シード履歴（保険の重複防止用） */
+const insuranceRecentByGrade = new Map<number, string[]>();
 
 function boardHash(pairs: GenerateResult["pairs"]): string {
   const sorted = [...pairs].sort((a, b) => a.id - b.id);
@@ -86,6 +101,18 @@ export function getGradeStockStatus(): Record<number, number> {
   return out;
 }
 
+function pickInsuranceSeed(grade: number, entries: { seed: string }[]): string | null {
+  if (entries.length === 0) return null;
+  const recent = insuranceRecentByGrade.get(grade) ?? [];
+  const candidates = entries.filter((e) => !recent.includes(e.seed));
+  const pool = candidates.length > 0 ? candidates : entries;
+  const idx = Math.floor(Math.random() * pool.length);
+  const seed = pool[idx].seed;
+  const nextRecent = [...recent, seed].slice(-INSURANCE_RECENT_HISTORY_SIZE);
+  insuranceRecentByGrade.set(grade, nextRecent);
+  return seed;
+}
+
 export type UsePuzzleStockByGradeOptions = {
   /** デバッグログ（devtj=true 時） */
   debugLog?: boolean;
@@ -98,7 +125,7 @@ export type UsePuzzleStockByGradeOptions = {
 export function usePuzzleStockByGrade(
   _options: UsePuzzleStockByGradeOptions = {}
 ): {
-  getPuzzleByGrade: (grade: number, seed?: string) => Promise<GenerateResult>;
+  getPuzzleByGrade: (grade: number, seed?: string) => Promise<GenerateResultWithSource>;
   prefetchGrade: (grade: number) => void;
   stockStatus: Record<number, number>;
   isPrefetching: boolean;
@@ -203,7 +230,7 @@ export function usePuzzleStockByGrade(
   );
 
   const getPuzzleByGrade = useCallback(
-    async (grade: number, seed?: string): Promise<GenerateResult> => {
+    async (grade: number, seed?: string): Promise<GenerateResultWithSource> => {
       const def = GRADE_MAP.get(grade);
       if (!def) throw new Error(`無効なグレード: ${grade}`);
 
@@ -214,7 +241,7 @@ export function usePuzzleStockByGrade(
           ...(enableAlgoLogs ? { enableAlgoLogs: true, verboseAlgoLogs: verboseAlgoLogs } : {}),
         };
         const result = await generate(def.size, seed, def.pairs, config);
-        if (!result.error) return result;
+        if (!result.error) return { ...result, source: "generated" as const };
         throw new Error("指定されたハッシュでの生成に失敗しました。");
       }
 
@@ -222,22 +249,50 @@ export function usePuzzleStockByGrade(
       if (head) {
         flushStatus();
         prefetchGrade(grade);
-        return head;
+        return { ...head, source: "generated" as const };
       }
 
       let trial = 0;
-      const maxRetries = LOW_SUCCESS_GRADES.has(grade) ? MAX_RETRIES_PER_PUZZLE * 2 : MAX_RETRIES_PER_PUZZLE;
-      while (trial < maxRetries) {
+      while (trial < MAX_RETRIES_BEFORE_INSURANCE) {
         trial++;
         const puzzle = await fetchOneForGrade(def, trial);
         if (puzzle) {
           prefetchGrade(grade);
-          return puzzle;
+          return { ...puzzle, source: "generated" as const };
         }
       }
-      throw new Error("パズルの生成に失敗しました。もう一度お試しください。");
+
+      let entries: { seed: string }[] = [];
+      try {
+        entries = await getInsuranceEntriesForGrade(grade);
+      } catch (e) {
+        if (debugLog && typeof window !== "undefined") {
+          console.warn(`Grade ${grade}: 保険アセット読み込み失敗`, e);
+        }
+      }
+      const insuranceSeed = entries.length > 0 ? pickInsuranceSeed(grade, entries) : null;
+      if (insuranceSeed) {
+        const config = {
+          generationMode: "edgeSwap" as const,
+          scoreThreshold: -1,
+          ...(enableAlgoLogs ? { enableAlgoLogs: true, verboseAlgoLogs: verboseAlgoLogs } : {}),
+        };
+        const result = await generate(def.size, insuranceSeed, def.pairs, config);
+        if (!result.error && result.numbers?.length) {
+          if (debugLog && typeof window !== "undefined" && window.location?.search?.includes("devtj=true")) {
+            console.log(`Grade ${grade}: Fallback to insurance (seed: ${insuranceSeed})`);
+          }
+          return { ...result, source: "insurance" as const };
+        }
+      }
+
+      throw new Error(
+        entries.length === 0
+          ? "パズルの生成に失敗しました（保険アセット読み込み不可）。もう一度お試しください。"
+          : "パズルの生成に失敗しました。もう一度お試しください。"
+      );
     },
-    [generate, fetchOneForGrade, flushStatus, prefetchGrade, enableAlgoLogs, verboseAlgoLogs]
+    [generate, fetchOneForGrade, flushStatus, prefetchGrade, enableAlgoLogs, verboseAlgoLogs, debugLog]
   );
 
   useEffect(() => {
