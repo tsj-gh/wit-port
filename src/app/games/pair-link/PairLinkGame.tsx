@@ -587,9 +587,6 @@ export default function PairLinkGame() {
         const source = result.source ?? "generated";
         const score = result.postMutationScoreBreakdown?.finalScore ?? null;
         setLastPuzzleDebugInfo({ source, score, seed: result.seed ?? null, grade });
-        if (isDevTj && typeof window !== "undefined") {
-          console.log(`[出題] Source: ${source === "insurance" ? "Insurance" : "Generated"}, Grade: ${grade}, Score: ${score ?? "—"}, Seed: ${result.seed ?? "—"}`);
-        }
         await options?.onSuccess?.(result);
       } catch (err) {
         setStatus(
@@ -599,7 +596,7 @@ export default function PairLinkGame() {
         setLoading(false);
       }
     },
-    [getPuzzleByGrade, gradeStockStatus, isDevTj]
+    [getPuzzleByGrade, gradeStockStatus]
   );
 
   useEffect(() => {
