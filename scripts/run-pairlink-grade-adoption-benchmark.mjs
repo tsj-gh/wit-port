@@ -11,7 +11,7 @@
  * 環境変数:
  *   SIM_OUT_DIR — JSON 出力先ディレクトリ（既定: リポジトリルート）
  *   BENCH_ADOPTIONS_PER_GRADE — グレードあたり採用回数（既定 5）
- *   BENCH_MAX_WORKER_CALLS_PER_ADOPTION — 1採用あたり Worker 呼び出し上限（既定 500。上限まで採用できなければ当該回の wallMs は NaN／JSON では "NaN"、グレード平均も NaN 扱いでランキング最遅）
+ *   BENCH_MAX_WORKER_CALLS_PER_ADOPTION — 1採用あたり Worker 呼び出し上限（既定 1000。上限まで採用できなければ当該回の wallMs は NaN／JSON では "NaN"、グレード平均も NaN 扱いでランキング最遅）
  *   BENCH_GRADE_MIN / BENCH_GRADE_MAX — この範囲のグレードだけ実行（既定 1〜11）
  *   BENCH_PROGRESS_EVERY_CALLS — 指定した Worker 呼び出しごとに進捗を stderr へ（既定 0 = 無効、例: 500）
  *
@@ -32,7 +32,7 @@ const OUT_FILE = "pairlink_grade_adoption_benchmark_b.json";
 const ADOPTIONS_PER_GRADE = Math.max(1, parseInt(String(process.env.BENCH_ADOPTIONS_PER_GRADE || "5"), 10) || 5);
 const MAX_WORKER_CALLS_PER_ADOPTION = Math.max(
   1,
-  parseInt(String(process.env.BENCH_MAX_WORKER_CALLS_PER_ADOPTION || "500"), 10) || 500
+  parseInt(String(process.env.BENCH_MAX_WORKER_CALLS_PER_ADOPTION || "1000"), 10) || 1000
 );
 const GRADE_MIN = Math.max(1, parseInt(String(process.env.BENCH_GRADE_MIN || "1"), 10) || 1);
 const GRADE_MAX = Math.min(11, parseInt(String(process.env.BENCH_GRADE_MAX || "11"), 10) || 11);

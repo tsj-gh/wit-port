@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import { DevLink } from "@/components/DevLink";
 import confetti from "canvas-confetti";
@@ -40,6 +41,14 @@ type PathPoint = { x: number; y: number };
 
 const PADDING = 50;
 const HIT_RADIUS_FACTOR = 0.55; // 数字・端点の当たり判定半径（spacing に対する倍率）
+
+/** 端点タップ時のスケールピーク（デバッグ: 1.0〜1.35 程度で調整） */
+export const TAP_SCALE_FACTOR = 1.2;
+
+/** 盤面の数字円半径（canvas draw と一致） */
+const NUMBER_DOT_RADIUS_FACTOR = 0.35;
+
+const ENDPOINT_TAP_SPRING = { type: "spring" as const, stiffness: 400, damping: 10 };
 
 /** Edge-Swap: 4×4〜6×6 は Default と同様、7×7 は 7〜10、8×8〜10×10 は 8〜10（board-worker と一致） */
 export const EDGE_SWAP_PAIR_BOUNDS: Record<number, { min: number; max: number }> = {
@@ -224,7 +233,7 @@ function drawPairLinkBoard(canvas: HTMLCanvasElement, p: PairLinkBoardPaintParam
   });
 
   ctx.globalAlpha = 1;
-  const r = spacing * 0.35;
+  const r = spacing * NUMBER_DOT_RADIUS_FACTOR;
   ctx.font = `bold ${r}px Arial`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -290,6 +299,95 @@ function drawPairLinkBoard(canvas: HTMLCanvasElement, p: PairLinkBoardPaintParam
     }
     ctx.restore();
   }
+}
+
+type EndpointTapFxPayload = {
+  id: number;
+  valStr: string;
+  gx: number;
+  gy: number;
+  partner: PathPoint | null;
+};
+
+function gridCellCenterPercent(gx: number, gy: number, spacing: number, canvasSize: number) {
+  const px = PADDING + gx * spacing;
+  const py = PADDING + gy * spacing;
+  return { leftPct: (px / canvasSize) * 100, topPct: (py / canvasSize) * 100 };
+}
+
+function PairLinkEndpointTapOverlay({
+  tapFx,
+  canvasSize,
+  spacing,
+  color,
+}: {
+  tapFx: EndpointTapFxPayload;
+  canvasSize: number;
+  spacing: number;
+  color: string;
+}) {
+  const diamPct = ((2 * NUMBER_DOT_RADIUS_FACTOR * spacing) / canvasSize) * 100;
+  const fontPx = Math.max(10, Math.round(spacing * 0.32));
+
+  const RippleRing = ({ gx, gy, zClass }: { gx: number; gy: number; zClass: string }) => {
+    const { leftPct, topPct } = gridCellCenterPercent(gx, gy, spacing, canvasSize);
+    return (
+      <div
+        className={`absolute flex items-center justify-center pointer-events-none ${zClass}`}
+        style={{
+          left: `${leftPct}%`,
+          top: `${topPct}%`,
+          width: `${diamPct}%`,
+          aspectRatio: "1",
+          transform: "translate(-50%, -50%)",
+        }}
+      >
+        <motion.div
+          layout={false}
+          className="absolute inset-0 rounded-full border-2 border-white/22 shadow-[0_0_12px_rgba(255,255,255,0.14)]"
+          initial={{ scale: 0.9, opacity: 0.4 }}
+          animate={{ scale: 2.1, opacity: 0 }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        />
+      </div>
+    );
+  };
+
+  const { leftPct, topPct } = gridCellCenterPercent(tapFx.gx, tapFx.gy, spacing, canvasSize);
+
+  return (
+    <div className="absolute inset-0 pointer-events-none z-[6] overflow-hidden rounded-[inherit]" aria-hidden>
+      {tapFx.partner ? <RippleRing gx={tapFx.partner.x} gy={tapFx.partner.y} zClass="z-[4]" /> : null}
+      <RippleRing gx={tapFx.gx} gy={tapFx.gy} zClass="z-[5]" />
+      <div
+        className="absolute z-[7] flex items-center justify-center pointer-events-none"
+        style={{
+          left: `${leftPct}%`,
+          top: `${topPct}%`,
+          width: `${diamPct}%`,
+          aspectRatio: "1",
+          transform: "translate(-50%, -50%)",
+        }}
+      >
+        <motion.div
+          layout={false}
+          className="absolute inset-0 flex items-center justify-center rounded-full"
+          initial={{ scale: TAP_SCALE_FACTOR }}
+          animate={{ scale: 1 }}
+          transition={ENDPOINT_TAP_SPRING}
+        >
+          <div
+            className="absolute inset-0 rounded-full flex items-center justify-center shadow-sm"
+            style={{ backgroundColor: color }}
+          >
+            <span className="relative z-10 font-bold text-white drop-shadow-sm" style={{ fontSize: fontPx }}>
+              {tapFx.valStr}
+            </span>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
 }
 
 export default function PairLinkGame() {
@@ -446,6 +544,14 @@ export default function PairLinkGame() {
   const lastPostMutationScoreRef = useRef<PostMutationScoreBreakdown | null>(null);
   const mergeIndexRef = useRef<number | null>(null);
   const mergeJustHappenedRef = useRef(false);
+  const tapFxTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [tapFx, setTapFx] = useState<EndpointTapFxPayload | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (tapFxTimeoutRef.current) clearTimeout(tapFxTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     isDrawingRef.current = isDrawing;
@@ -456,6 +562,34 @@ export default function PairLinkGame() {
   const spacing =
     gridSize > 1 ? (canvasPixelSize - PADDING * 2) / (gridSize - 1) : 0;
   const canvasSize = Math.round(PADDING * 2 + (gridSize - 1) * spacing) || 420;
+
+  const pulseEndpointTap = useCallback((valStr: string, gx: number, gy: number) => {
+    const partnerCell =
+      numbers.find((n) => String(n.val) === valStr && (n.x !== gx || n.y !== gy)) ?? null;
+    const partner: PathPoint | null = partnerCell
+      ? { x: partnerCell.x, y: partnerCell.y }
+      : null;
+    setTapFx({
+      id: typeof performance !== "undefined" ? performance.now() : Date.now(),
+      valStr,
+      gx,
+      gy,
+      partner,
+    });
+    if (tapFxTimeoutRef.current) clearTimeout(tapFxTimeoutRef.current);
+    tapFxTimeoutRef.current = setTimeout(() => {
+      setTapFx(null);
+      tapFxTimeoutRef.current = null;
+    }, 680);
+  }, [numbers]);
+
+  useEffect(() => {
+    setTapFx(null);
+    if (tapFxTimeoutRef.current) {
+      clearTimeout(tapFxTimeoutRef.current);
+      tapFxTimeoutRef.current = null;
+    }
+  }, [puzzleKey, loading]);
 
   const evalConfig = {
     emptyIsolatedPenalty: configEmptyIsolatedPenalty,
@@ -1029,6 +1163,7 @@ export default function PairLinkGame() {
         setActiveVal(v);
         setActivePathIdx(i);
         setIsDrawing(true);
+        pulseEndpointTap(v, hit.point.x, hit.point.y);
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
         return;
       }
@@ -1055,10 +1190,11 @@ export default function PairLinkGame() {
         setActiveVal(v);
         setActivePathIdx(pathIdx);
         setIsDrawing(true);
+        pulseEndpointTap(v, x, y);
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
       }
     },
-    [paths, numbers, solved, findNearestHit]
+    [paths, numbers, solved, findNearestHit, pulseEndpointTap]
   );
 
   const handlePointerMove = useCallback(
@@ -1929,18 +2065,31 @@ export default function PairLinkGame() {
             className="w-full max-w-[520px] touch-none select-none"
             style={{ minHeight: canvasSize, WebkitTapHighlightColor: "transparent" }}
           >
-            <canvas
-              ref={attachCanvasRef}
-              width={canvasSize}
-              height={canvasSize}
-              className="w-full max-w-[500px] border-2 border-slate-600 rounded-xl shadow-lg cursor-crosshair block mx-auto bg-slate-900"
-              style={{ touchAction: "none" }}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerLeave={handlePointerUp}
-              onPointerCancel={handlePointerUp}
-            />
+            <div className="relative w-full max-w-[500px] mx-auto border-2 border-slate-600 rounded-xl shadow-lg overflow-hidden bg-slate-900">
+              <canvas
+                ref={attachCanvasRef}
+                width={canvasSize}
+                height={canvasSize}
+                className="w-full h-auto cursor-crosshair block align-top bg-slate-900"
+                style={{ touchAction: "none" }}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerLeave={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+              />
+              {tapFx != null && spacing > 0 && canvasSize > 0 && (
+                <PairLinkEndpointTapOverlay
+                  key={tapFx.id}
+                  tapFx={tapFx}
+                  canvasSize={canvasSize}
+                  spacing={spacing}
+                  color={
+                    numbers.find((n) => String(n.val) === tapFx.valStr)?.color ?? "#10b981"
+                  }
+                />
+              )}
+            </div>
           </div>
           {/* 広告枠1（モバイルのみ）: 盤面直下・操作UIの上に配置 */}
           {isMobile && (
