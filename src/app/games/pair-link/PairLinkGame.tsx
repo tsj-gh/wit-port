@@ -543,23 +543,8 @@ export default function PairLinkGame() {
     async (
       grade: number,
       seed?: string,
-      options?: {
-        onSuccess?: (result: GenerateResultWithSource) => void | Promise<void>;
-        /** devtj=true 時の G1 盤面不具合調査用ログのラベル */
-        debugReason?: string;
-      }
+      options?: { onSuccess?: (result: GenerateResultWithSource) => void | Promise<void> }
     ) => {
-      const dbg = isDevTj && typeof window !== "undefined";
-      const reason = options?.debugReason ?? "(理由未指定)";
-      if (dbg) {
-        console.log("[G1調査] initGameByGrade 開始", {
-          reason,
-          grade,
-          seed: seed ?? null,
-          stockForGrade: gradeStockStatus[grade] ?? 0,
-          t: performance.now(),
-        });
-      }
       hasTriggeredClearRef.current = false;
       isCheckingClearRef.current = false;
       setSolved(false);
@@ -586,20 +571,7 @@ export default function PairLinkGame() {
         if (timeoutId != null) clearTimeout(timeoutId);
         if (result.error) {
           setStatus(result.error ?? "生成に失敗しました");
-          if (dbg) {
-            console.warn("[G1調査] getPuzzleByGrade 失敗(result.error)", { reason, grade, error: result.error });
-          }
           return;
-        }
-        if (dbg) {
-          console.log("[G1調査] getPuzzleByGrade 成功→setState 直前", {
-            reason,
-            grade,
-            gridSize: result.gridSize,
-            numbersLen: result.numbers?.length ?? 0,
-            pairsLen: result.pairs?.length ?? 0,
-            numbersSample: result.numbers?.slice(0, 4),
-          });
         }
         setGridSize(result.gridSize);
         setNumbers(result.numbers);
@@ -620,17 +592,11 @@ export default function PairLinkGame() {
         }
         await options?.onSuccess?.(result);
       } catch (err) {
-        if (dbg) {
-          console.warn("[G1調査] initGameByGrade 例外", { reason, grade, err });
-        }
         setStatus(
           err instanceof Error ? err.message : "生成に失敗しました。もう一度お試しください。"
         );
       } finally {
         setLoading(false);
-        if (dbg) {
-          console.log("[G1調査] initGameByGrade finally (setLoading(false) 済)", { reason, grade });
-        }
       }
     },
     [getPuzzleByGrade, gradeStockStatus, isDevTj]
@@ -640,7 +606,7 @@ export default function PairLinkGame() {
     if (useLegacyMode) {
       initGame(6, 5);
     } else {
-      initGameByGrade(1, undefined, { debugReason: "useEffect_グレードモード初期化" });
+      initGameByGrade(1);
       prefetchGrade(1);
       prefetchGrade(2);
       prefetchGrade(3);
@@ -923,10 +889,7 @@ export default function PairLinkGame() {
         if (useLegacyMode) {
           await initGame(settingsGridSize, settingsNumPairs, undefined, { onSuccess });
         } else {
-          await initGameByGrade(currentGrade, undefined, {
-            onSuccess,
-            debugReason: "強制クリア_onSuccess",
-          });
+          await initGameByGrade(currentGrade, undefined, { onSuccess });
         }
       } catch (err) {
         setStatus(err instanceof Error ? err.message : "強制クリアに失敗しました");
@@ -1744,7 +1707,7 @@ export default function PairLinkGame() {
                               if (useLegacyMode) {
                                 initGame(settingsGridSize, settingsNumPairs, s);
                               } else {
-                                initGameByGrade(currentGrade, s, { debugReason: "ハッシュから生成" });
+                                initGameByGrade(currentGrade, s);
                               }
                             }
                           }}
@@ -2119,18 +2082,8 @@ export default function PairLinkGame() {
               <div className="shrink-0 w-full sm:w-auto flex justify-center sm:justify-start">
                 <button
                   onClick={() => {
-                    if (isDevTj && typeof window !== "undefined") {
-                      console.log("[G1調査] 次の問題 クリック直前", {
-                        currentGrade,
-                        loading,
-                        numbersLen: numbers.length,
-                        gridSize,
-                        puzzleKey,
-                        pairsLen: pairs.length,
-                      });
-                    }
                     refreshAds();
-                    initGameByGrade(currentGrade, undefined, { debugReason: "次の問題" });
+                    initGameByGrade(currentGrade);
                   }}
                   disabled={loading}
                   className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
@@ -2186,7 +2139,7 @@ export default function PairLinkGame() {
                   if (useLegacyMode) {
                     initGame(settingsGridSize, settingsNumPairs);
                   } else {
-                    initGameByGrade(currentGrade, undefined, { debugReason: "クリアオーバーレイ_次に進む" });
+                    initGameByGrade(currentGrade);
                   }
                 }}
                 className="px-6 py-3 rounded-lg bg-wit-emerald text-white font-medium hover:bg-emerald-600"
