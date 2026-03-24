@@ -22,8 +22,8 @@ export type PairLinkGradeDef = {
 
 /** 各グレードの定義（微調整用） */
 export const PAIR_LINK_GRADE_CONSTANTS: PairLinkGradeDef[] = [
-  { grade: 1, size: 4, pairs: 3, enclosureReq: { type: "any" }, scoreThreshold: -1, theme: "【超入門】まずはつないでみよう" },
-  { grade: 2, size: 4, pairs: 3, enclosureReq: { type: "eq", value: 0 }, scoreThreshold: 0, theme: "【導入】最短以外のルートを意識" },
+  { grade: 1, size: 4, pairs: 3, enclosureReq: { type: "eq", value: 0 }, scoreThreshold: -1, theme: "【超入門】まずはつないでみよう" },
+  { grade: 2, size: 4, pairs: 3, enclosureReq: { type: "gte", value: 1 }, scoreThreshold: 0, theme: "【導入】最短以外のルートを意識" },
   { grade: 3, size: 5, pairs: 4, enclosureReq: { type: "eq", value: 0 }, scoreThreshold: 100, theme: "【初級】空間を埋める楽しさ" },
   { grade: 4, size: 5, pairs: 4, enclosureReq: { type: "gte", value: 1 }, scoreThreshold: 400, theme: "【初級】回り込みの概念を知る" },
   { grade: 5, size: 6, pairs: 5, enclosureReq: { type: "eq", value: 0 }, scoreThreshold: 200, theme: "【中級】効率的なルート設計" },
