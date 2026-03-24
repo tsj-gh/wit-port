@@ -104,6 +104,170 @@ function emptyPaths(pairs: Pair[]): Record<string, PathPoint[][]> {
   return out;
 }
 
+type PairLinkBoardPaintParams = {
+  numbers: NumberCell[];
+  paths: Record<string, PathPoint[][]>;
+  gridSize: number;
+  spacing: number;
+  isDrawing: boolean;
+  activeVal: string | null;
+  activePathIdx: number | null;
+  isDebugMode: boolean;
+  debugEnclosures: EnclosureDebugItem[] | null;
+  puzzleKey: number;
+  isDevTj: boolean;
+  useLegacyMode: boolean;
+};
+
+/** canvas への実描画（ref コールバック / useLayoutEffect / rAF リトライから共通利用） */
+function drawPairLinkBoard(canvas: HTMLCanvasElement, p: PairLinkBoardPaintParams): void {
+  const g1Dbg = p.isDevTj && typeof window !== "undefined" && !p.useLegacyMode;
+  const {
+    numbers,
+    paths,
+    gridSize,
+    spacing,
+    isDrawing,
+    activeVal,
+    activePathIdx,
+    isDebugMode,
+    debugEnclosures,
+    puzzleKey,
+  } = p;
+
+  if (!numbers.length || spacing <= 0) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    if (g1Dbg) console.warn("[G1調査] canvas描画スキップ: getContext('2d') が null");
+    return;
+  }
+
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.fillStyle = "rgba(148, 163, 184, 0.4)";
+  for (let i = 0; i < gridSize; i++) {
+    for (let j = 0; j < gridSize; j++) {
+      ctx.beginPath();
+      ctx.arc(PADDING + i * spacing, PADDING + j * spacing, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  Object.entries(paths).forEach(([v, pathList]) => {
+    const color = numbers.find((n) => String(n.val) === v)?.color ?? "#10b981";
+    pathList.forEach((path, idx) => {
+      const isActive = isDrawing && activeVal === v && activePathIdx === idx;
+      ctx.strokeStyle = color;
+      ctx.lineWidth =
+        gridSize >= 9
+          ? Math.max(2, spacing * (isActive ? 0.55 : 0.45))
+          : spacing * (isActive ? 0.55 : 0.45);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.globalAlpha = isActive ? 0.7 : 1;
+      ctx.beginPath();
+      path.forEach((pt, i) => {
+        const px = PADDING + pt.x * spacing;
+        const py = PADDING + pt.y * spacing;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.2;
+      const drawEndpointCircle = (pt: PathPoint) => {
+        ctx.beginPath();
+        ctx.arc(PADDING + pt.x * spacing, PADDING + pt.y * spacing, spacing * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      drawEndpointCircle(path[path.length - 1]);
+      if (path.length > 1) drawEndpointCircle(path[0]);
+    });
+  });
+
+  ctx.globalAlpha = 1;
+  const r = spacing * 0.35;
+  ctx.font = `bold ${r}px Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  numbers.forEach((n) => {
+    const x = PADDING + n.x * spacing;
+    const y = PADDING + n.y * spacing;
+    ctx.fillStyle = n.color;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "white";
+    ctx.fillText(String(n.val), x, y);
+  });
+
+  if (isDebugMode && debugEnclosures && debugEnclosures.length > 0) {
+    ctx.save();
+    ctx.setLineDash([5, 5]);
+    ctx.lineWidth = Math.max(1.5, spacing * 0.08);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const pseudoStroke = "rgba(192, 132, 252, 0.92)";
+    const pseudoMarkFs = Math.max(7, spacing * 0.22);
+    for (const e of debugEnclosures) {
+      const isPseudo = e.pseudo === true;
+      if (e.kind === "vertical") {
+        const px = PADDING + e.col * spacing;
+        const py1 = PADDING + e.y1 * spacing;
+        const py2 = PADDING + e.y2 * spacing;
+        ctx.strokeStyle = isPseudo ? pseudoStroke : "rgba(251, 191, 36, 0.9)";
+        ctx.beginPath();
+        ctx.moveTo(px, py1);
+        ctx.lineTo(px, py2);
+        ctx.stroke();
+        if (isPseudo) {
+          ctx.font = `bold ${pseudoMarkFs}px Arial`;
+          ctx.fillStyle = pseudoStroke;
+          ctx.fillText("▼", px, py1 - spacing * 0.14);
+          ctx.fillText("▲", px, py2 + spacing * 0.14);
+        }
+      } else {
+        const py = PADDING + e.row * spacing;
+        const px1 = PADDING + e.x1 * spacing;
+        const px2 = PADDING + e.x2 * spacing;
+        ctx.strokeStyle = isPseudo ? pseudoStroke : "rgba(56, 189, 248, 0.9)";
+        ctx.beginPath();
+        ctx.moveTo(px1, py);
+        ctx.lineTo(px2, py);
+        ctx.stroke();
+        if (isPseudo) {
+          ctx.font = `bold ${pseudoMarkFs}px Arial`;
+          ctx.fillStyle = pseudoStroke;
+          ctx.fillText("◀", px1 - spacing * 0.14, py);
+          ctx.fillText("▶", px2 + spacing * 0.14, py);
+        }
+      }
+      if (!isPseudo) {
+        const mx = PADDING + e.nCol * spacing;
+        const my = PADDING + e.nRow * spacing;
+        ctx.font = `bold ${Math.max(10, spacing * 0.38)}px Arial`;
+        ctx.fillStyle = "rgba(248, 113, 113, 0.95)";
+        ctx.fillText(e.kind === "vertical" ? "▼" : "×", mx, my);
+      }
+    }
+    ctx.restore();
+  }
+
+  if (g1Dbg) {
+    console.log("[G1調査] canvas描画完了", {
+      puzzleKey,
+      canvasW: canvas.width,
+      canvasH: canvas.height,
+      gridSize,
+      spacing: Number(spacing.toFixed(4)),
+      numbersLen: numbers.length,
+      pathKeys: Object.keys(paths).length,
+    });
+  }
+}
+
 export default function PairLinkGame() {
   const [gridSize, setGridSize] = useState(6);
   const [numbers, setNumbers] = useState<NumberCell[]>([]);
@@ -233,7 +397,21 @@ export default function PairLinkGame() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeSecondsRef = useRef(0);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const paintParamsRef = useRef<PairLinkBoardPaintParams>({
+    numbers: [],
+    paths: {},
+    gridSize: 6,
+    spacing: 1,
+    isDrawing: false,
+    activeVal: null,
+    activePathIdx: null,
+    isDebugMode: false,
+    debugEnclosures: null,
+    puzzleKey: 0,
+    isDevTj: false,
+    useLegacyMode: false,
+  });
   const isDrawingRef = useRef(false);
   const activeValRef = useRef<string | null>(null);
   const activePathIdxRef = useRef<number | null>(null);
@@ -801,171 +979,50 @@ export default function PairLinkGame() {
     return () => clearTimeout(t);
   }, [showClearOverlay]);
 
-  // --- Draw canvas ---
-  // useLayoutEffect: loading 解除直後に key 付き canvas が差し替わると、useEffect だと ref がまだ null のタイミングで
-  // 一度走りスキップされ、以降 deps が変わらず再描画されないことがある（G1「次の問題」で再現）。
+  const attachCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
+    canvasRef.current = node;
+    if (!node) return;
+    const p = paintParamsRef.current;
+    if (p.numbers.length > 0 && p.spacing > 0) {
+      drawPairLinkBoard(node, p);
+    }
+  }, []);
+
+  // コールバック ref でマウント直後に描画。useLayoutEffect 時点では canvasRef が null のケースがあるため rAF でも追い描き。
   useLayoutEffect(() => {
-    const canvas = canvasRef.current;
+    if (loading || !numbers.length || spacing <= 0) return;
     const g1Dbg = isDevTj && typeof window !== "undefined" && !useLegacyMode;
-    if (g1Dbg) {
-      if (!canvas) {
-        console.warn("[G1調査] canvas描画スキップ: ref が null", {
+
+    let cancelled = false;
+    let rafId = 0;
+    let attempt = 0;
+    const run = () => {
+      if (cancelled) return;
+      const el = canvasRef.current;
+      if (el) {
+        drawPairLinkBoard(el, paintParamsRef.current);
+        return;
+      }
+      attempt += 1;
+      if (g1Dbg && attempt === 1) {
+        console.warn("[G1調査] canvas useLayout: ref が null→rAF でリトライ", {
           numbersLen: numbers.length,
-          gridSize,
-          spacing,
           puzzleKey,
         });
-      } else if (!numbers.length) {
-        console.warn("[G1調査] canvas描画スキップ: numbers が空", { gridSize, spacing, puzzleKey });
-      } else if (spacing <= 0) {
-        console.warn("[G1調査] canvas描画スキップ: spacing<=0", { gridSize, spacing, puzzleKey });
       }
-    }
-    if (!canvas || !numbers.length || spacing <= 0) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      if (g1Dbg) console.warn("[G1調査] canvas描画スキップ: getContext('2d') が null");
-      return;
-    }
-
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    ctx.fillStyle = "rgba(148, 163, 184, 0.4)";
-    for (let i = 0; i < gridSize; i++) {
-      for (let j = 0; j < gridSize; j++) {
-        ctx.beginPath();
-        ctx.arc(
-          PADDING + i * spacing,
-          PADDING + j * spacing,
-          2,
-          0,
-          Math.PI * 2
-        );
-        ctx.fill();
+      if (attempt < 24) {
+        rafId = requestAnimationFrame(run);
+      } else if (g1Dbg) {
+        console.warn("[G1調査] canvas描画: ref null の rAF リトライ打ち切り", { puzzleKey });
       }
-    }
-
-    Object.entries(paths).forEach(([v, pathList]) => {
-      const color = numbers.find((n) => String(n.val) === v)?.color ?? "#10b981";
-      pathList.forEach((path, idx) => {
-        const isActive =
-          isDrawing && activeVal === v && activePathIdx === idx;
-        ctx.strokeStyle = color;
-        ctx.lineWidth =
-          gridSize >= 9
-            ? Math.max(2, spacing * (isActive ? 0.55 : 0.45))
-            : spacing * (isActive ? 0.55 : 0.45);
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.globalAlpha = isActive ? 0.7 : 1;
-        ctx.beginPath();
-        path.forEach((p, i) => {
-          const px = PADDING + p.x * spacing;
-          const py = PADDING + p.y * spacing;
-          if (i === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        });
-        ctx.stroke();
-        ctx.fillStyle = color;
-        ctx.globalAlpha = 0.2;
-        const drawEndpointCircle = (pt: PathPoint) => {
-          ctx.beginPath();
-          ctx.arc(
-            PADDING + pt.x * spacing,
-            PADDING + pt.y * spacing,
-            spacing * 0.4,
-            0,
-            Math.PI * 2
-          );
-          ctx.fill();
-        };
-        drawEndpointCircle(path[path.length - 1]);
-        if (path.length > 1) drawEndpointCircle(path[0]);
-      });
-    });
-
-    ctx.globalAlpha = 1;
-    const r = spacing * 0.35;
-    ctx.font = `bold ${r}px Arial`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    numbers.forEach((n) => {
-      const x = PADDING + n.x * spacing;
-      const y = PADDING + n.y * spacing;
-      ctx.fillStyle = n.color;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "white";
-      ctx.fillText(String(n.val), x, y);
-    });
-
-    if (isDebugMode && debugEnclosures && debugEnclosures.length > 0) {
-      ctx.save();
-      ctx.setLineDash([5, 5]);
-      ctx.lineWidth = Math.max(1.5, spacing * 0.08);
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      const pseudoStroke = "rgba(192, 132, 252, 0.92)";
-      const pseudoMarkFs = Math.max(7, spacing * 0.22);
-      for (const e of debugEnclosures) {
-        const isPseudo = e.pseudo === true;
-        if (e.kind === "vertical") {
-          const px = PADDING + e.col * spacing;
-          const py1 = PADDING + e.y1 * spacing;
-          const py2 = PADDING + e.y2 * spacing;
-          ctx.strokeStyle = isPseudo ? pseudoStroke : "rgba(251, 191, 36, 0.9)";
-          ctx.beginPath();
-          ctx.moveTo(px, py1);
-          ctx.lineTo(px, py2);
-          ctx.stroke();
-          if (isPseudo) {
-            ctx.font = `bold ${pseudoMarkFs}px Arial`;
-            ctx.fillStyle = pseudoStroke;
-            ctx.fillText("▼", px, py1 - spacing * 0.14);
-            ctx.fillText("▲", px, py2 + spacing * 0.14);
-          }
-        } else {
-          const py = PADDING + e.row * spacing;
-          const px1 = PADDING + e.x1 * spacing;
-          const px2 = PADDING + e.x2 * spacing;
-          ctx.strokeStyle = isPseudo ? pseudoStroke : "rgba(56, 189, 248, 0.9)";
-          ctx.beginPath();
-          ctx.moveTo(px1, py);
-          ctx.lineTo(px2, py);
-          ctx.stroke();
-          if (isPseudo) {
-            ctx.font = `bold ${pseudoMarkFs}px Arial`;
-            ctx.fillStyle = pseudoStroke;
-            ctx.fillText("◀", px1 - spacing * 0.14, py);
-            ctx.fillText("▶", px2 + spacing * 0.14, py);
-          }
-        }
-        if (!isPseudo) {
-          const mx = PADDING + e.nCol * spacing;
-          const my = PADDING + e.nRow * spacing;
-          ctx.font = `bold ${Math.max(10, spacing * 0.38)}px Arial`;
-          ctx.fillStyle = "rgba(248, 113, 113, 0.95)";
-          ctx.fillText(e.kind === "vertical" ? "▼" : "×", mx, my);
-        }
-      }
-      ctx.restore();
-    }
-
-    if (g1Dbg) {
-      console.log("[G1調査] canvas描画完了", {
-        puzzleKey,
-        canvasW: canvas.width,
-        canvasH: canvas.height,
-        gridSize,
-        spacing: Number(spacing.toFixed(4)),
-        numbersLen: numbers.length,
-        pathKeys: Object.keys(paths).length,
-      });
-    }
+    };
+    run();
+    return () => {
+      cancelled = true;
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [
+    loading,
     puzzleKey,
     paths,
     numbers,
@@ -1241,6 +1298,21 @@ export default function PairLinkGame() {
       window.removeEventListener("pointercancel", onUp, { capture: true });
     };
   }, []);
+
+  paintParamsRef.current = {
+    numbers,
+    paths,
+    gridSize,
+    spacing,
+    isDrawing,
+    activeVal,
+    activePathIdx,
+    isDebugMode,
+    debugEnclosures,
+    puzzleKey,
+    isDevTj,
+    useLegacyMode,
+  };
 
   if (loading || !numbers.length) {
     const loadingText =
@@ -1866,8 +1938,7 @@ export default function PairLinkGame() {
             style={{ minHeight: canvasSize, WebkitTapHighlightColor: "transparent" }}
           >
             <canvas
-              key={puzzleKey}
-              ref={canvasRef}
+              ref={attachCanvasRef}
               width={canvasSize}
               height={canvasSize}
               className="w-full max-w-[500px] border-2 border-slate-600 rounded-xl shadow-lg cursor-crosshair block mx-auto bg-slate-900"
