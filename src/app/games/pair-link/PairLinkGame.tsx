@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import { DevLink } from "@/components/DevLink";
@@ -42,8 +42,8 @@ type PathPoint = { x: number; y: number };
 const PADDING = 50;
 const HIT_RADIUS_FACTOR = 0.55; // 数字・端点の当たり判定半径（spacing に対する倍率）
 
-/** 端点タップ時のスケールピーク（デバッグ: 1.0〜1.35 程度で調整） */
-export const TAP_SCALE_FACTOR = 1.2;
+/** 端点タップ時のスケールピーク初期値（デバッグパネルで上書き可） */
+export const DEFAULT_TAP_SCALE_FACTOR = 1.25;
 
 /** 盤面の数字円半径（canvas draw と一致） */
 const NUMBER_DOT_RADIUS_FACTOR = 0.35;
@@ -52,10 +52,24 @@ const ENDPOINT_TAP_SPRING = { type: "spring" as const, stiffness: 400, damping: 
 
 /** タップ波紋: 1回ふわっと広がる時間（秒）。大きいほどゆっくり（ソナー／空気リング風） */
 const TAP_RIPPLE_DURATION_SEC = 1.12;
-/** タップ波紋: 最大拡大倍率。大きいほど遠くまで届くが派手になる */
-const TAP_RIPPLE_MAX_SCALE = 1.48;
 /** 波紋＋数字スプリングが終わるまでオーバーレイを維持（ms） */
 const TAP_OVERLAY_CLEAR_MS = Math.round(TAP_RIPPLE_DURATION_SEC * 1000) + 480;
+
+/**
+ * 波紋の最大スケール（数字円に対する倍率）。
+ * セルが小さい／キャンバスが狭いほど指で隠れてもリングが見えるよう大きく広がる。
+ */
+function computeTapRippleMaxScale(gridSize: number, canvasSize: number): number {
+  const g = Math.max(4, Math.min(16, gridSize));
+  const w = Math.max(260, canvasSize);
+  const spacingPx = g > 1 ? (w - PADDING * 2) / (g - 1) : w * 0.2;
+  const dotRadiusPx = spacingPx * NUMBER_DOT_RADIUS_FACTOR;
+  const fingerCoverPx = 36;
+  const mobileStretch = Math.min(1.5, Math.pow(480 / w, 0.38));
+  const extraPx = fingerCoverPx * mobileStretch;
+  const raw = 1 + extraPx / Math.max(3.2, dotRadiusPx);
+  return Math.min(2.85, Math.max(1.3, raw));
+}
 /** 波紋のイージング（終端で減速して消える） */
 const TAP_RIPPLE_EASE: [number, number, number, number] = [0.2, 0.85, 0.35, 1];
 
@@ -339,11 +353,15 @@ function PairLinkEndpointTapOverlay({
   canvasSize,
   spacing,
   color,
+  tapScaleFactor,
+  rippleMaxScale,
 }: {
   tapFx: EndpointTapFxPayload;
   canvasSize: number;
   spacing: number;
   color: string;
+  tapScaleFactor: number;
+  rippleMaxScale: number;
 }) {
   const diamPct = ((2 * NUMBER_DOT_RADIUS_FACTOR * spacing) / canvasSize) * 100;
   const fontPx = Math.max(10, Math.round(spacing * 0.32));
@@ -365,7 +383,7 @@ function PairLinkEndpointTapOverlay({
           layout={false}
           className="absolute inset-0 rounded-full border border-white/12 shadow-[0_0_14px_rgba(255,255,255,0.06)]"
           initial={{ scale: 1, opacity: 0.22 }}
-          animate={{ scale: TAP_RIPPLE_MAX_SCALE, opacity: 0 }}
+          animate={{ scale: rippleMaxScale, opacity: 0 }}
           transition={{ duration: TAP_RIPPLE_DURATION_SEC, ease: TAP_RIPPLE_EASE }}
         />
       </div>
@@ -391,7 +409,7 @@ function PairLinkEndpointTapOverlay({
         <motion.div
           layout={false}
           className="absolute inset-0 flex items-center justify-center rounded-full"
-          initial={{ scale: TAP_SCALE_FACTOR }}
+          initial={{ scale: tapScaleFactor }}
           animate={{ scale: 1 }}
           transition={ENDPOINT_TAP_SPRING}
         >
@@ -461,6 +479,7 @@ export default function PairLinkGame() {
   const [debugWorkerInsuranceBudgetMs, setDebugWorkerInsuranceBudgetMs] = useState(
     DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE
   );
+  const [tapScaleFactor, setTapScaleFactor] = useState(DEFAULT_TAP_SCALE_FACTOR);
   /** Edge-Swap: 囲い込み目標件数（常時ON、定数として Edge Swap 定数内に配置） */
   const [debugTargetEnclosureCount, setDebugTargetEnclosureCount] = useState(10);
   const [scoreThresholdDraft, setScoreThresholdDraft] = useState(10);
@@ -581,6 +600,11 @@ export default function PairLinkGame() {
   const spacing =
     gridSize > 1 ? (canvasPixelSize - PADDING * 2) / (gridSize - 1) : 0;
   const canvasSize = Math.round(PADDING * 2 + (gridSize - 1) * spacing) || 420;
+
+  const tapRippleMaxScale = useMemo(
+    () => computeTapRippleMaxScale(gridSize, canvasSize),
+    [gridSize, canvasSize]
+  );
 
   const pulseEndpointTap = useCallback((valStr: string, gx: number, gy: number) => {
     const partnerCell =
@@ -1655,6 +1679,43 @@ export default function PairLinkGame() {
                       [Size/Pairs レガシー]
                     </button>
                   </div>
+                  <div className="mt-1.5 pt-1 border-t border-white/10 space-y-1">
+                    <div className="font-semibold text-slate-300 text-[10px]">端点タップ演出</div>
+                    <label className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
+                      <span className="shrink-0">TAP_SCALE_FACTOR</span>
+                      <input
+                        type="range"
+                        min={1.02}
+                        max={1.45}
+                        step={0.01}
+                        value={tapScaleFactor}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          if (!Number.isFinite(v)) return;
+                          setTapScaleFactor(Math.round(v * 100) / 100);
+                        }}
+                        className="w-[min(140px,100%)] accent-emerald-500"
+                      />
+                      <span className="tabular-nums text-slate-300 w-9 shrink-0">
+                        {tapScaleFactor.toFixed(2)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setTapScaleFactor(DEFAULT_TAP_SCALE_FACTOR)}
+                        className="px-1.5 py-0.5 rounded border border-white/20 text-slate-500 hover:bg-white/10"
+                      >
+                        既定
+                      </button>
+                    </label>
+                    <div className="text-[9px] text-slate-500 leading-snug">
+                      波紋最大スケール（自動）:{" "}
+                      <span className="tabular-nums text-slate-400">{tapRippleMaxScale.toFixed(2)}</span>
+                      <span className="text-slate-600">
+                        {" "}
+                        · G{gridSize} / {canvasSize}px
+                      </span>
+                    </div>
+                  </div>
                   {!useLegacyMode && (
                     <div className="mt-0.5 text-[10px] text-slate-500 space-y-0.5">
                       <div>
@@ -2105,6 +2166,8 @@ export default function PairLinkGame() {
                   tapFx={tapFx}
                   canvasSize={canvasSize}
                   spacing={spacing}
+                  tapScaleFactor={tapScaleFactor}
+                  rippleMaxScale={tapRippleMaxScale}
                   color={
                     numbers.find((n) => String(n.val) === tapFx.valStr)?.color ?? "#10b981"
                   }
