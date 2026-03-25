@@ -79,6 +79,14 @@ function agentSpeed(a: Agent) {
   return len(a.vx, a.vy);
 }
 
+/** バー向きは θ と θ+π で同一鏡面として扱う */
+function bumperAnglesMatch(current: number, correct: number) {
+  const a = snapAngle45(current);
+  const c = snapAngle45(correct);
+  const d = Math.abs(a - c);
+  return d < 0.06 || Math.abs(d - Math.PI) < 0.06;
+}
+
 function bumperSegmentPx(cx: number, cy: number, theta: number, half: number) {
   const c = Math.cos(theta);
   const s = Math.sin(theta);
@@ -221,8 +229,14 @@ export default function ReflecShotGame() {
         a.vx = 0;
         a.vy = 0;
         if (!clearedRef.current && len(a.x - goalX, a.y - goalY) < goalR) {
-          clearedRef.current = true;
-          setCleared(true);
+          const arr = bumperAnglesRef.current;
+          const anglesOk =
+            st.bumpers.length === 0 ||
+            st.bumpers.every((b, i) => bumperAnglesMatch(arr[i] ?? b.angleWrong, b.angleCorrect));
+          if (anglesOk) {
+            clearedRef.current = true;
+            setCleared(true);
+          }
         }
         return;
       }
@@ -701,7 +715,7 @@ export default function ReflecShotGame() {
 
       {cleared && (
         <p className="text-emerald-400 text-sm font-medium" role="status">
-          ゴール到達。バンパーの角度を整えて経路を作れたか確認してみましょう。
+          クリア：ゴール到達かつ全バンパーが正解向きです。
         </p>
       )}
 
