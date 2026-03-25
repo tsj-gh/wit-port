@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import {
+  ASPECT_PRESETS,
+  createStageRng,
+  generateStageWithFallback,
+  reflectionsForRank,
+  type GeneratedStage,
+} from "./stageGen";
 
 /** 射出時の最大速度（ピクセル/秒） */
 const MAX_POWER = 560;
@@ -13,10 +20,10 @@ const BUMPER_HIT_EXTRA = 28;
 const BUMPER_LINE_WIDTH = 10;
 const SUBSTEPS_MIN = 6;
 const SUBSTEPS_MAX = 22;
-/** これ未満の速さなら「停止扱い」で操作受付 */
 const STOP_SPEED = 14;
 const MIN_MOUSE_PULL_PX = 10;
 const TOUCH_AIM_MOVE_PX = 5;
+const GOAL_RADIUS_FR = 0.045;
 
 type Agent = { x: number; y: number; vx: number; vy: number };
 
@@ -37,6 +44,8 @@ type TouchChargeState = {
   lastX: number;
   lastY: number;
 };
+
+type BumperDragState = { x: number; y: number; pointerId: number; index: number };
 
 function clamp01(t: number) {
   return Math.max(0, Math.min(1, t));
@@ -70,31 +79,52 @@ function agentSpeed(a: Agent) {
   return len(a.vx, a.vy);
 }
 
+function bumperSegmentPx(cx: number, cy: number, theta: number, half: number) {
+  const c = Math.cos(theta);
+  const s = Math.sin(theta);
+  return { x1: cx - c * half, y1: cy - s * half, x2: cx + c * half, y2: cy + s * half };
+}
+
 export default function ReflecShotGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const agentRef = useRef<Agent | null>(null);
-  const bumperAngleRef = useRef(0);
+  const bumperAnglesRef = useRef<number[]>([]);
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
 
   const mouseSlingRef = useRef<MouseSlingState | null>(null);
   const touchChargeRef = useRef<TouchChargeState | null>(null);
-  const bumperDragRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
+  const bumperDragRef = useRef<BumperDragState | null>(null);
 
-  const getBumperGeometry = useCallback((w: number, h: number) => {
-    const cx = w / 2;
-    const cy = h / 2;
-    const half = Math.min(w, h) * BUMPER_HALF_LEN_FR;
-    const th = bumperAngleRef.current;
-    const c = Math.cos(th);
-    const s = Math.sin(th);
-    return { cx, cy, half, x1: cx - c * half, y1: cy - s * half, x2: cx + c * half, y2: cy + s * half };
+  const [rank, setRank] = useState(1);
+  const [stage, setStage] = useState<GeneratedStage | null>(null);
+  const [genSeed, setGenSeed] = useState(() => (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0);
+  const [showDebugRoute, setShowDebugRoute] = useState(false);
+  const [cleared, setCleared] = useState(false);
+  const clearedRef = useRef(false);
+
+  const rollStage = useCallback((nextRank: number, seed: number) => {
+    const rng = createStageRng(seed);
+    const aspect = ASPECT_PRESETS[Math.floor(rng() * ASPECT_PRESETS.length)]!;
+    const reflections = reflectionsForRank(nextRank);
+    const s = generateStageWithFallback(reflections, rng, aspect);
+    bumperAnglesRef.current = s.bumpers.map((b) => b.angleWrong);
+    setStage(s);
+    clearedRef.current = false;
+    setCleared(false);
+    const { w, h } = sizeRef.current;
+    if (w > 0 && h > 0) {
+      agentRef.current = {
+        x: s.start.x * w,
+        y: s.start.y * h,
+        vx: 0,
+        vy: 0,
+      };
+    }
   }, []);
 
-  const pointNearBumper = useCallback((px: number, py: number, w: number, h: number) => {
-    const g = getBumperGeometry(w, h);
-    const { qx, qy } = closestOnSegment(g.x1, g.y1, g.x2, g.y2, px, py);
-    return len(px - qx, py - qy) <= BUMPER_HIT_EXTRA + BUMPER_LINE_WIDTH / 2;
-  }, [getBumperGeometry]);
+  useEffect(() => {
+    rollStage(rank, genSeed);
+  }, [rank, genSeed, rollStage]);
 
   const resolveWall = useCallback((a: Agent, w: number, h: number) => {
     const r = AGENT_RADIUS;
@@ -114,56 +144,54 @@ export default function ReflecShotGame() {
     }
   }, []);
 
-  const tryResolveBumper = useCallback(
-    (a: Agent, w: number, h: number) => {
-      const g = getBumperGeometry(w, h);
-      const { qx, qy } = closestOnSegment(g.x1, g.y1, g.x2, g.y2, a.x, a.y);
-      const dx = a.x - qx;
-      const dy = a.y - qy;
-      const dist = len(dx, dy);
-      if (dist >= AGENT_RADIUS - 1e-4) return;
+  const tryResolveOneBumper = useCallback((a: Agent, cx: number, cy: number, theta: number, half: number) => {
+    const { x1, y1, x2, y2 } = bumperSegmentPx(cx, cy, theta, half);
+    const { qx, qy } = closestOnSegment(x1, y1, x2, y2, a.x, a.y);
+    const dx = a.x - qx;
+    const dy = a.y - qy;
+    const dist = len(dx, dy);
+    if (dist >= AGENT_RADIUS - 1e-4) return false;
 
-      const th = bumperAngleRef.current;
-      const s = Math.sin(th);
-      const c = Math.cos(th);
-      let nx: number;
-      let ny: number;
-      if (dist > 1e-5) {
-        nx = dx / dist;
-        ny = dy / dist;
+    const s = Math.sin(theta);
+    const c = Math.cos(theta);
+    let nx: number;
+    let ny: number;
+    if (dist > 1e-5) {
+      nx = dx / dist;
+      ny = dy / dist;
+    } else {
+      const n1x = -s;
+      const n1y = c;
+      const n2x = s;
+      const n2y = -c;
+      const v1 = a.vx * n1x + a.vy * n1y;
+      const v2 = a.vx * n2x + a.vy * n2y;
+      if (v1 <= v2) {
+        nx = n1x;
+        ny = n1y;
       } else {
-        const n1x = -s;
-        const n1y = c;
-        const n2x = s;
-        const n2y = -c;
-        const v1 = a.vx * n1x + a.vy * n1y;
-        const v2 = a.vx * n2x + a.vy * n2y;
-        if (v1 <= v2) {
-          nx = n1x;
-          ny = n1y;
-        } else {
-          nx = n2x;
-          ny = n2y;
-        }
+        nx = n2x;
+        ny = n2y;
       }
+    }
 
-      const vn = a.vx * nx + a.vy * ny;
-      if (vn >= 0) return;
+    const vn = a.vx * nx + a.vy * ny;
+    if (vn >= 0) return false;
 
-      a.vx -= 2 * vn * nx;
-      a.vy -= 2 * vn * ny;
-
-      const push = AGENT_RADIUS - dist + 0.5;
-      a.x += nx * push;
-      a.y += ny * push;
-    },
-    [getBumperGeometry]
-  );
+    a.vx -= 2 * vn * nx;
+    a.vy -= 2 * vn * ny;
+    const push = AGENT_RADIUS - dist + 0.5;
+    a.x += nx * push;
+    a.y += ny * push;
+    return true;
+  }, []);
 
   const tick = useCallback(
     (dt: number) => {
       const { w, h } = sizeRef.current;
       if (w <= 0 || h <= 0) return;
+      const st = stage;
+      if (!st) return;
 
       const sling = mouseSlingRef.current;
       const tc = touchChargeRef.current;
@@ -185,24 +213,44 @@ export default function ReflecShotGame() {
         return;
       }
 
+      const goalX = st.goal.x * w;
+      const goalY = st.goal.y * h;
+      const goalR = Math.max(AGENT_RADIUS + 4, Math.min(w, h) * GOAL_RADIUS_FR);
+
       if (agentSpeed(a) < STOP_SPEED) {
         a.vx = 0;
         a.vy = 0;
+        if (!clearedRef.current && len(a.x - goalX, a.y - goalY) < goalR) {
+          clearedRef.current = true;
+          setCleared(true);
+        }
         return;
       }
 
       const vmag = agentSpeed(a);
       const subs = Math.min(SUBSTEPS_MAX, Math.max(SUBSTEPS_MIN, Math.ceil((vmag * dt) / (AGENT_RADIUS * 0.55))));
       const sdt = dt / subs;
+      const half = Math.min(w, h) * BUMPER_HALF_LEN_FR;
+      const angles = bumperAnglesRef.current;
+
       for (let i = 0; i < subs; i++) {
         a.x += a.vx * sdt;
         a.y += a.vy * sdt;
-        resolveWall(a, w, h);
-        tryResolveBumper(a, w, h);
-        resolveWall(a, w, h);
+        for (let rep = 0; rep < 8; rep++) {
+          resolveWall(a, w, h);
+          let hit = false;
+          for (let bi = 0; bi < st.bumpers.length; bi++) {
+            const b = st.bumpers[bi]!;
+            const th = angles[bi] ?? b.angleWrong;
+            if (tryResolveOneBumper(a, b.x * w, b.y * h, th, half)) hit = true;
+          }
+          resolveWall(a, w, h);
+          if (!hit) break;
+        }
       }
+
     },
-    [resolveWall, tryResolveBumper]
+    [resolveWall, stage, tryResolveOneBumper]
   );
 
   const drawChargingVfx = useCallback(
@@ -211,7 +259,6 @@ export default function ReflecShotGame() {
       const pulse = 0.5 + 0.5 * Math.sin(nowMs * 0.008);
       const jitter = charge01 * 2.8 * Math.sin(nowMs * 0.045);
       const jy = charge01 * 2.2 * Math.sin(nowMs * 0.052 + 1.1);
-
       const layers = 4;
       for (let i = 0; i < layers; i++) {
         const t = i / (layers - 1 || 1);
@@ -223,7 +270,6 @@ export default function ReflecShotGame() {
         ctx.arc(ax + jitter * (0.3 + t * 0.2), ay + jy * (0.25 + t * 0.15), r, 0, Math.PI * 2);
         ctx.stroke();
       }
-
       const grd = ctx.createRadialGradient(ax, ay, AGENT_RADIUS * 0.2, ax, ay, AGENT_RADIUS + 6 + charge01 * 22);
       grd.addColorStop(0, `rgba(248, 250, 252, ${0.15 + charge01 * 0.45})`);
       grd.addColorStop(0.45, `rgba(56, 189, 248, ${0.12 + charge01 * 0.25})`);
@@ -243,6 +289,8 @@ export default function ReflecShotGame() {
     if (!ctx) return;
     const { w, h, dpr } = sizeRef.current;
     if (w <= 0 || h <= 0) return;
+    const st = stage;
+    if (!st) return;
     const nowMs = performance.now();
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -255,22 +303,51 @@ export default function ReflecShotGame() {
     ctx.lineWidth = 2;
     ctx.strokeRect(1, 1, w - 2, h - 2);
 
-    const g = getBumperGeometry(w, h);
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.95)";
-    ctx.shadowColor = "rgba(56, 189, 248, 0.6)";
-    ctx.shadowBlur = 12;
-    ctx.lineWidth = BUMPER_LINE_WIDTH;
-    ctx.lineCap = "round";
+    const goalX = st.goal.x * w;
+    const goalY = st.goal.y * h;
+    const goalR = Math.max(AGENT_RADIUS + 4, Math.min(w, h) * GOAL_RADIUS_FR);
+    ctx.strokeStyle = cleared ? "rgba(52, 211, 153, 0.85)" : "rgba(167, 139, 250, 0.75)";
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(g.x1, g.y1);
-    ctx.lineTo(g.x2, g.y2);
+    ctx.arc(goalX, goalY, goalR, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    ctx.fillStyle = "rgba(248, 250, 252, 0.15)";
-    ctx.beginPath();
-    ctx.arc(g.cx, g.cy, 6, 0, Math.PI * 2);
+    ctx.fillStyle = cleared ? "rgba(52, 211, 153, 0.12)" : "rgba(167, 139, 250, 0.08)";
     ctx.fill();
+
+    if (showDebugRoute && st.routePoints.length >= 2) {
+      ctx.strokeStyle = "rgba(248, 113, 113, 0.55)";
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(st.routePoints[0]!.x * w, st.routePoints[0]!.y * h);
+      for (let i = 1; i < st.routePoints.length; i++) {
+        ctx.lineTo(st.routePoints[i]!.x * w, st.routePoints[i]!.y * h);
+      }
+      ctx.stroke();
+    }
+
+    const half = Math.min(w, h) * BUMPER_HALF_LEN_FR;
+    const angles = bumperAnglesRef.current;
+    for (let bi = 0; bi < st.bumpers.length; bi++) {
+      const b = st.bumpers[bi]!;
+      const th = angles[bi] ?? b.angleWrong;
+      const cx = b.x * w;
+      const cy = b.y * h;
+      const { x1, y1, x2, y2 } = bumperSegmentPx(cx, cy, th, half);
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.95)";
+      ctx.shadowColor = "rgba(56, 189, 248, 0.45)";
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = BUMPER_LINE_WIDTH;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(248, 250, 252, 0.12)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     const a = agentRef.current;
     if (!a) return;
@@ -294,7 +371,6 @@ export default function ReflecShotGame() {
       aimDirY = launch.y;
       drawAx = sling.anchorX;
       drawAy = sling.anchorY;
-
       ctx.strokeStyle = "rgba(251, 191, 36, 0.55)";
       ctx.lineWidth = 3;
       ctx.lineCap = "round";
@@ -337,12 +413,11 @@ export default function ReflecShotGame() {
     ctx.arc(sx, sy, AGENT_RADIUS, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
-  }, [drawChargingVfx, getBumperGeometry]);
+  }, [cleared, drawChargingVfx, showDebugRoute, stage]);
 
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
-
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
@@ -350,7 +425,6 @@ export default function ReflecShotGame() {
       draw();
       raf = requestAnimationFrame(loop);
     };
-
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, [draw, tick]);
@@ -366,20 +440,23 @@ export default function ReflecShotGame() {
     canvas.width = Math.max(1, Math.floor(w * dpr));
     canvas.height = Math.max(1, Math.floor(h * dpr));
 
-    const ax = w / 2;
-    const ay = Math.min(h - AGENT_RADIUS - 16, h * 0.72);
+    const st = stage;
     const cur = agentRef.current;
-    if (!cur) {
-      agentRef.current = { x: ax, y: ay, vx: 0, vy: 0 };
-    } else if (agentSpeed(cur) < STOP_SPEED) {
-      cur.x = Math.max(AGENT_RADIUS, Math.min(w - AGENT_RADIUS, cur.x));
-      cur.y = Math.max(AGENT_RADIUS, Math.min(h - AGENT_RADIUS, cur.y));
-      cur.vx = 0;
-      cur.vy = 0;
+    if (st && cur) {
+      if (agentSpeed(cur) < STOP_SPEED) {
+        cur.x = st.start.x * w;
+        cur.y = st.start.y * h;
+        cur.vx = 0;
+        cur.vy = 0;
+      } else {
+        cur.x = Math.max(AGENT_RADIUS, Math.min(w - AGENT_RADIUS, cur.x));
+        cur.y = Math.max(AGENT_RADIUS, Math.min(h - AGENT_RADIUS, cur.y));
+      }
+    } else if (!cur && st) {
+      agentRef.current = { x: st.start.x * w, y: st.start.y * h, vx: 0, vy: 0 };
     }
-
     draw();
-  }, [draw]);
+  }, [draw, stage]);
 
   useEffect(() => {
     resize();
@@ -392,6 +469,31 @@ export default function ReflecShotGame() {
       window.removeEventListener("resize", resize);
     };
   }, [resize]);
+
+  const findBumperAt = useCallback(
+    (px: number, py: number, w: number, h: number): number | null => {
+      if (!stage) return null;
+      const half = Math.min(w, h) * BUMPER_HALF_LEN_FR;
+      let best: number | null = null;
+      let bestD = 1e9;
+      const angles = bumperAnglesRef.current;
+      for (let bi = 0; bi < stage.bumpers.length; bi++) {
+        const b = stage.bumpers[bi]!;
+        const th = angles[bi] ?? b.angleWrong;
+        const cx = b.x * w;
+        const cy = b.y * h;
+        const { x1, y1, x2, y2 } = bumperSegmentPx(cx, cy, th, half);
+        const { qx, qy } = closestOnSegment(x1, y1, x2, y2, px, py);
+        const d = len(px - qx, py - qy);
+        if (d <= BUMPER_HIT_EXTRA + BUMPER_LINE_WIDTH / 2 && d < bestD) {
+          bestD = d;
+          best = bi;
+        }
+      }
+      return best;
+    },
+    [stage]
+  );
 
   const canvasToLocal = (e: PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -408,22 +510,19 @@ export default function ReflecShotGame() {
 
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
     const { w, h } = sizeRef.current;
-    if (w <= 0) return;
+    if (w <= 0 || !stage) return;
     const { x, y } = canvasToLocal(e);
-
-    if (pointNearBumper(x, y, w, h)) {
+    const bIdx = findBumperAt(x, y, w, h);
+    if (bIdx != null) {
       e.currentTarget.setPointerCapture(e.pointerId);
-      bumperDragRef.current = { x, y, pointerId: e.pointerId };
+      bumperDragRef.current = { x, y, pointerId: e.pointerId, index: bIdx };
       mouseSlingRef.current = null;
       touchChargeRef.current = null;
       return;
     }
 
     bumperDragRef.current = null;
-
-    if (!canInteract()) {
-      return;
-    }
+    if (!canInteract()) return;
 
     const a = agentRef.current;
     if (!a) return;
@@ -443,9 +542,7 @@ export default function ReflecShotGame() {
       return;
     }
 
-    if (len(x - a.x, y - a.y) > GRAB_RADIUS) {
-      return;
-    }
+    if (len(x - a.x, y - a.y) > GRAB_RADIUS) return;
 
     e.currentTarget.setPointerCapture(e.pointerId);
     touchChargeRef.current = null;
@@ -460,14 +557,12 @@ export default function ReflecShotGame() {
 
   const onPointerMove = (e: PointerEvent<HTMLCanvasElement>) => {
     const { x, y } = canvasToLocal(e);
-
     const sling = mouseSlingRef.current;
     if (sling && sling.pointerId === e.pointerId) {
       sling.curX = x;
       sling.curY = y;
       return;
     }
-
     const tc = touchChargeRef.current;
     if (tc && tc.pointerId === e.pointerId) {
       const dx = x - tc.lastX;
@@ -488,7 +583,10 @@ export default function ReflecShotGame() {
       const dx = x - b.x;
       const dy = y - b.y;
       if (len(dx, dy) >= 14) {
-        bumperAngleRef.current = snapAngle45(Math.atan2(dy, dx));
+        const arr = bumperAnglesRef.current;
+        if (b.index >= 0 && b.index < arr.length) {
+          arr[b.index] = snapAngle45(Math.atan2(dy, dx));
+        }
       }
       bumperDragRef.current = null;
       try {
@@ -564,33 +662,73 @@ export default function ReflecShotGame() {
     }
   };
 
+  const aspectStyle: CSSProperties =
+    stage != null ? { aspectRatio: `${stage.aspectW} / ${stage.aspectH}` } : { aspectRatio: "4 / 5" };
+
   return (
     <div className="w-full max-w-[min(100%,560px)] mx-auto flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <label className="text-wit-muted flex items-center gap-2">
+          ランク
+          <select
+            className="bg-slate-800 border border-white/15 rounded-lg px-2 py-1 text-wit-text"
+            value={rank}
+            onChange={(e) => {
+              setRank(Number(e.target.value));
+              setGenSeed((Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0);
+            }}
+          >
+            {[1, 2, 3, 4, 5].map((r) => (
+              <option key={r} value={r}>
+                {r}
+                {r === 1 ? "（反射1回中心）" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="rounded-lg border border-white/15 bg-white/5 px-3 py-1 text-wit-text hover:bg-white/10 transition-colors"
+          onClick={() => setGenSeed((Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0)}
+        >
+          ステージ再生成
+        </button>
+        <label className="text-wit-muted flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" className="accent-sky-400" checked={showDebugRoute} onChange={(e) => setShowDebugRoute(e.target.checked)} />
+          検証用ルート表示
+        </label>
+      </div>
+
+      {cleared && (
+        <p className="text-emerald-400 text-sm font-medium" role="status">
+          ゴール到達。バンパーの角度を整えて経路を作れたか確認してみましょう。
+        </p>
+      )}
+
       <canvas
         ref={canvasRef}
-        className="w-full aspect-[4/5] rounded-2xl border border-white/10 bg-slate-900/80 touch-none cursor-grab active:cursor-grabbing select-none"
-        style={{ touchAction: "none" }}
+        className="w-full rounded-2xl border border-white/10 bg-slate-900/80 touch-none cursor-grab active:cursor-grabbing select-none max-h-[min(85vh,720px)]"
+        style={{ touchAction: "none", ...aspectStyle }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
         role="application"
-        aria-label="Reflec-Shot。マウスは球を掴んでスリングショット、タッチは長押しチャージとスワイプで狙いを付けて離して射出。中央バーはタップ後フリックで向き変更。"
+        aria-label="Reflec-Shot。自動生成ステージ。ゴールの環へ誘導。バンパーはフリックで向き変更。"
       />
+
       <ul className="text-wit-muted text-sm leading-relaxed space-y-1 list-disc pl-5">
         <li>
-          <strong className="text-wit-text font-medium">マウス</strong>
-          ：止まっている球をクリックして掴み、引いた反対向きに飛びます。引き量でパワーが増え（上限あり）、点線は飛ぶ方向の目安です。
+          ステージは<strong className="text-wit-text font-medium">逆方向トレース＋検証</strong>
+          で生成。バンパーは屈折点に配置され、初期向きは意図的にずれています（フリックで45°刻みに調整）。
         </li>
         <li>
-          <strong className="text-wit-text font-medium">タッチ</strong>
-          ：盤面のどこでも長押しで約1秒かけてチャージ。動かしている指の方向に狙いが更新され、離した瞬間に射出します（球は指に隠れない位置に固定）。
+          <strong className="text-wit-text font-medium">ランク1</strong>は反射1回が中心のシンプル構成です。
         </li>
-        <li>外枠と中央の反射バーは鏡面反射。高速時はサブステップを増やして壁抜けを抑制しています。</li>
         <li>
-          <strong className="text-wit-text font-medium">中央の反射バー</strong>
-          をタップしてからフリックすると、45度刻みで向きが変わります。
+          <strong className="text-wit-text font-medium">紫のリング</strong>がゴール。スタート地点から射出してください。
         </li>
+        <li>マウス：球を掴んでスリングショット。タッチ：長押しチャージ＆スワイプで狙い、離して射出。</li>
       </ul>
     </div>
   );
