@@ -21,7 +21,7 @@ export default function ReflecShotLabPage() {
         <p className="text-xs uppercase tracking-widest text-wit-muted mb-2">知育ラボ</p>
         <h1 className="text-2xl md:text-3xl font-bold text-wit-text tracking-tight">Reflec-Shot（リフレクショット）</h1>
         <p className="mt-2 text-wit-muted text-sm leading-relaxed">
-          プロトタイプ（MVP）。スワイプで球を射出し、壁と中央バーの反射を試せます。
+          プロトタイプ（MVP）。マウスはスリングショット、タッチは長押しチャージ＆スワイプで射出。壁と中央バーの反射を試せます。
         </p>
       </div>
       <ReflecShotGame />
