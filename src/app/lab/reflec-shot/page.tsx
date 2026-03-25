@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import ReflecShotGame from "./ReflecShotGame";
 
 export const metadata: Metadata = {
@@ -24,7 +25,9 @@ export default function ReflecShotLabPage() {
           プロトタイプ（MVP）。ステージは自動生成（ランクで反射回数が変化）。マウスはスリングショット、タッチは長押しチャージ＆スワイプで射出し、紫のゴールへ導きます。
         </p>
       </div>
-      <ReflecShotGame />
+      <Suspense fallback={<div className="text-wit-muted text-sm py-8">読み込み中…</div>}>
+        <ReflecShotGame />
+      </Suspense>
     </main>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ASPECT_PRESETS,
   createStageRng,
@@ -11,8 +12,8 @@ import {
 
 /** 射出時の最大速度（ピクセル/秒） */
 const MAX_POWER = 560;
-const AGENT_RADIUS = 8;
-const GRAB_RADIUS = AGENT_RADIUS + 22;
+const DEFAULT_AGENT_RADIUS = 16;
+const GRAB_PADDING_PX = 22;
 const MAX_DRAG_PX = 130;
 const CHARGE_DURATION_MS = 1000;
 const BUMPER_HALF_LEN_FR = 0.18;
@@ -21,9 +22,11 @@ const BUMPER_LINE_WIDTH = 10;
 const SUBSTEPS_MIN = 6;
 const SUBSTEPS_MAX = 22;
 const STOP_SPEED = 14;
-const MIN_MOUSE_PULL_PX = 10;
-const TOUCH_AIM_MOVE_PX = 5;
+const MIN_MOUSE_PULL_PX = 12;
+/** タッチ：この距離以上動かしたらスワイプ確定（ガイド表示・離しで射出） */
+const TOUCH_SWIPE_COMMIT_PX = 14;
 const GOAL_RADIUS_FR = 0.045;
+const CHARGE_FADE_MS = 260;
 
 type Agent = { x: number; y: number; vx: number; vy: number };
 
@@ -40,12 +43,16 @@ type TouchChargeState = {
   t0: number;
   anchorX: number;
   anchorY: number;
-  aimAngle: number;
-  lastX: number;
-  lastY: number;
+  originX: number;
+  originY: number;
+  curX: number;
+  curY: number;
+  hasAimed: boolean;
 };
 
 type BumperDragState = { x: number; y: number; pointerId: number; index: number };
+
+type ChargeFade = { startMs: number; initial01: number };
 
 function clamp01(t: number) {
   return Math.max(0, Math.min(1, t));
@@ -79,6 +86,11 @@ function agentSpeed(a: Agent) {
   return len(a.vx, a.vy);
 }
 
+/** スリング解除時：アンカー付近ならキャンセル（当たり判定は半径＋余裕） */
+function slingCancelRadiusPx(agentR: number) {
+  return Math.max(14, agentR + 8);
+}
+
 /** バー向きは θ と θ+π で同一鏡面として扱う */
 function bumperAnglesMatch(current: number, correct: number) {
   const a = snapAngle45(current);
@@ -94,14 +106,19 @@ function bumperSegmentPx(cx: number, cy: number, theta: number, half: number) {
 }
 
 export default function ReflecShotGame() {
+  const searchParams = useSearchParams();
+  const isDevTj = searchParams.get("devtj") === "true";
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const agentRef = useRef<Agent | null>(null);
   const bumperAnglesRef = useRef<number[]>([]);
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
+  const agentRadiusRef = useRef(DEFAULT_AGENT_RADIUS);
 
   const mouseSlingRef = useRef<MouseSlingState | null>(null);
   const touchChargeRef = useRef<TouchChargeState | null>(null);
   const bumperDragRef = useRef<BumperDragState | null>(null);
+  const chargeFadeRef = useRef<ChargeFade | null>(null);
 
   const [rank, setRank] = useState(1);
   const [stage, setStage] = useState<GeneratedStage | null>(null);
@@ -109,6 +126,14 @@ export default function ReflecShotGame() {
   const [showDebugRoute, setShowDebugRoute] = useState(false);
   const [cleared, setCleared] = useState(false);
   const clearedRef = useRef(false);
+
+  const [isDebugMode, setIsDebugMode] = useState(false);
+  const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
+  const [debugAgentRadius, setDebugAgentRadius] = useState(DEFAULT_AGENT_RADIUS);
+
+  useEffect(() => {
+    agentRadiusRef.current = debugAgentRadius;
+  }, [debugAgentRadius]);
 
   const rollStage = useCallback((nextRank: number, seed: number) => {
     const rng = createStageRng(seed);
@@ -120,6 +145,7 @@ export default function ReflecShotGame() {
     clearedRef.current = false;
     setCleared(false);
     const { w, h } = sizeRef.current;
+    const R = agentRadiusRef.current;
     if (w > 0 && h > 0) {
       agentRef.current = {
         x: s.start.x * w,
@@ -127,6 +153,9 @@ export default function ReflecShotGame() {
         vx: 0,
         vy: 0,
       };
+      const a = agentRef.current;
+      a.x = Math.max(R, Math.min(w - R, a.x));
+      a.y = Math.max(R, Math.min(h - R, a.y));
     }
   }, []);
 
@@ -134,8 +163,7 @@ export default function ReflecShotGame() {
     rollStage(rank, genSeed);
   }, [rank, genSeed, rollStage]);
 
-  const resolveWall = useCallback((a: Agent, w: number, h: number) => {
-    const r = AGENT_RADIUS;
+  const resolveWall = useCallback((a: Agent, w: number, h: number, r: number) => {
     if (a.x < r) {
       a.x = r;
       a.vx = -a.vx;
@@ -152,46 +180,53 @@ export default function ReflecShotGame() {
     }
   }, []);
 
-  const tryResolveOneBumper = useCallback((a: Agent, cx: number, cy: number, theta: number, half: number) => {
-    const { x1, y1, x2, y2 } = bumperSegmentPx(cx, cy, theta, half);
-    const { qx, qy } = closestOnSegment(x1, y1, x2, y2, a.x, a.y);
-    const dx = a.x - qx;
-    const dy = a.y - qy;
-    const dist = len(dx, dy);
-    if (dist >= AGENT_RADIUS - 1e-4) return false;
+  const tryResolveOneBumper = useCallback(
+    (a: Agent, cx: number, cy: number, theta: number, half: number, r: number) => {
+      const { x1, y1, x2, y2 } = bumperSegmentPx(cx, cy, theta, half);
+      const { qx, qy } = closestOnSegment(x1, y1, x2, y2, a.x, a.y);
+      const dx = a.x - qx;
+      const dy = a.y - qy;
+      const dist = len(dx, dy);
+      if (dist >= r - 1e-4) return false;
 
-    const s = Math.sin(theta);
-    const c = Math.cos(theta);
-    let nx: number;
-    let ny: number;
-    if (dist > 1e-5) {
-      nx = dx / dist;
-      ny = dy / dist;
-    } else {
-      const n1x = -s;
-      const n1y = c;
-      const n2x = s;
-      const n2y = -c;
-      const v1 = a.vx * n1x + a.vy * n1y;
-      const v2 = a.vx * n2x + a.vy * n2y;
-      if (v1 <= v2) {
-        nx = n1x;
-        ny = n1y;
+      const s = Math.sin(theta);
+      const c = Math.cos(theta);
+      let nx: number;
+      let ny: number;
+      if (dist > 1e-5) {
+        nx = dx / dist;
+        ny = dy / dist;
       } else {
-        nx = n2x;
-        ny = n2y;
+        const n1x = -s;
+        const n1y = c;
+        const n2x = s;
+        const n2y = -c;
+        const v1 = a.vx * n1x + a.vy * n1y;
+        const v2 = a.vx * n2x + a.vy * n2y;
+        if (v1 <= v2) {
+          nx = n1x;
+          ny = n1y;
+        } else {
+          nx = n2x;
+          ny = n2y;
+        }
       }
-    }
 
-    const vn = a.vx * nx + a.vy * ny;
-    if (vn >= 0) return false;
+      const vn = a.vx * nx + a.vy * ny;
+      if (vn >= 0) return false;
 
-    a.vx -= 2 * vn * nx;
-    a.vy -= 2 * vn * ny;
-    const push = AGENT_RADIUS - dist + 0.5;
-    a.x += nx * push;
-    a.y += ny * push;
-    return true;
+      a.vx -= 2 * vn * nx;
+      a.vy -= 2 * vn * ny;
+      const push = r - dist + 0.5;
+      a.x += nx * push;
+      a.y += ny * push;
+      return true;
+    },
+    []
+  );
+
+  const beginChargeFade = useCallback((initial01: number) => {
+    chargeFadeRef.current = { startMs: performance.now(), initial01: clamp01(initial01) };
   }, []);
 
   const tick = useCallback(
@@ -200,6 +235,7 @@ export default function ReflecShotGame() {
       if (w <= 0 || h <= 0) return;
       const st = stage;
       if (!st) return;
+      const R = agentRadiusRef.current;
 
       const sling = mouseSlingRef.current;
       const tc = touchChargeRef.current;
@@ -223,7 +259,7 @@ export default function ReflecShotGame() {
 
       const goalX = st.goal.x * w;
       const goalY = st.goal.y * h;
-      const goalR = Math.max(AGENT_RADIUS + 4, Math.min(w, h) * GOAL_RADIUS_FR);
+      const goalR = Math.max(R + 4, Math.min(w, h) * GOAL_RADIUS_FR);
 
       if (agentSpeed(a) < STOP_SPEED) {
         a.vx = 0;
@@ -242,7 +278,7 @@ export default function ReflecShotGame() {
       }
 
       const vmag = agentSpeed(a);
-      const subs = Math.min(SUBSTEPS_MAX, Math.max(SUBSTEPS_MIN, Math.ceil((vmag * dt) / (AGENT_RADIUS * 0.55))));
+      const subs = Math.min(SUBSTEPS_MAX, Math.max(SUBSTEPS_MIN, Math.ceil((vmag * dt) / (R * 0.55))));
       const sdt = dt / subs;
       const half = Math.min(w, h) * BUMPER_HALF_LEN_FR;
       const angles = bumperAnglesRef.current;
@@ -251,24 +287,23 @@ export default function ReflecShotGame() {
         a.x += a.vx * sdt;
         a.y += a.vy * sdt;
         for (let rep = 0; rep < 8; rep++) {
-          resolveWall(a, w, h);
+          resolveWall(a, w, h, R);
           let hit = false;
           for (let bi = 0; bi < st.bumpers.length; bi++) {
             const b = st.bumpers[bi]!;
             const th = angles[bi] ?? b.angleWrong;
-            if (tryResolveOneBumper(a, b.x * w, b.y * h, th, half)) hit = true;
+            if (tryResolveOneBumper(a, b.x * w, b.y * h, th, half, R)) hit = true;
           }
-          resolveWall(a, w, h);
+          resolveWall(a, w, h, R);
           if (!hit) break;
         }
       }
-
     },
     [resolveWall, stage, tryResolveOneBumper]
   );
 
   const drawChargingVfx = useCallback(
-    (ctx: CanvasRenderingContext2D, ax: number, ay: number, charge01: number, nowMs: number) => {
+    (ctx: CanvasRenderingContext2D, ax: number, ay: number, charge01: number, nowMs: number, R: number) => {
       if (charge01 < 0.02) return;
       const pulse = 0.5 + 0.5 * Math.sin(nowMs * 0.008);
       const jitter = charge01 * 2.8 * Math.sin(nowMs * 0.045);
@@ -276,21 +311,21 @@ export default function ReflecShotGame() {
       const layers = 4;
       for (let i = 0; i < layers; i++) {
         const t = i / (layers - 1 || 1);
-        const r = AGENT_RADIUS + 10 + (42 + charge01 * 28) * (1 - t) * (0.85 + 0.15 * pulse);
+        const rRing = R + 10 + (42 + charge01 * 28) * (1 - t) * (0.85 + 0.15 * pulse);
         const alpha = charge01 * (0.14 + 0.1 * (1 - t)) * pulse;
         ctx.strokeStyle = `rgba(125, 211, 252, ${alpha})`;
         ctx.lineWidth = 1.5 + charge01 * 2;
         ctx.beginPath();
-        ctx.arc(ax + jitter * (0.3 + t * 0.2), ay + jy * (0.25 + t * 0.15), r, 0, Math.PI * 2);
+        ctx.arc(ax + jitter * (0.3 + t * 0.2), ay + jy * (0.25 + t * 0.15), rRing, 0, Math.PI * 2);
         ctx.stroke();
       }
-      const grd = ctx.createRadialGradient(ax, ay, AGENT_RADIUS * 0.2, ax, ay, AGENT_RADIUS + 6 + charge01 * 22);
+      const grd = ctx.createRadialGradient(ax, ay, R * 0.2, ax, ay, R + 6 + charge01 * 22);
       grd.addColorStop(0, `rgba(248, 250, 252, ${0.15 + charge01 * 0.45})`);
       grd.addColorStop(0.45, `rgba(56, 189, 248, ${0.12 + charge01 * 0.25})`);
       grd.addColorStop(1, "rgba(56, 189, 248, 0)");
       ctx.fillStyle = grd;
       ctx.beginPath();
-      ctx.arc(ax, ay, AGENT_RADIUS + 6 + charge01 * 22, 0, Math.PI * 2);
+      ctx.arc(ax, ay, R + 6 + charge01 * 22, 0, Math.PI * 2);
       ctx.fill();
     },
     []
@@ -306,6 +341,7 @@ export default function ReflecShotGame() {
     const st = stage;
     if (!st) return;
     const nowMs = performance.now();
+    const R = agentRadiusRef.current;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
@@ -319,7 +355,7 @@ export default function ReflecShotGame() {
 
     const goalX = st.goal.x * w;
     const goalY = st.goal.y * h;
-    const goalR = Math.max(AGENT_RADIUS + 4, Math.min(w, h) * GOAL_RADIUS_FR);
+    const goalR = Math.max(R + 4, Math.min(w, h) * GOAL_RADIUS_FR);
     ctx.strokeStyle = cleared ? "rgba(52, 211, 153, 0.85)" : "rgba(167, 139, 250, 0.75)";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -368,12 +404,14 @@ export default function ReflecShotGame() {
 
     const sling = mouseSlingRef.current;
     const tc = touchChargeRef.current;
+    const fade = chargeFadeRef.current;
 
     let charge01 = 0;
     let aimDirX = 0;
     let aimDirY = -1;
     let drawAx = a.x;
     let drawAy = a.y;
+    let showGuide = false;
 
     if (sling) {
       const pdx = sling.curX - sling.anchorX;
@@ -385,6 +423,7 @@ export default function ReflecShotGame() {
       aimDirY = launch.y;
       drawAx = sling.anchorX;
       drawAy = sling.anchorY;
+      showGuide = true;
       ctx.strokeStyle = "rgba(251, 191, 36, 0.55)";
       ctx.lineWidth = 3;
       ctx.lineCap = "round";
@@ -394,14 +433,33 @@ export default function ReflecShotGame() {
       ctx.stroke();
     } else if (tc) {
       charge01 = clamp01((nowMs - tc.t0) / CHARGE_DURATION_MS);
-      aimDirX = Math.cos(tc.aimAngle);
-      aimDirY = Math.sin(tc.aimAngle);
       drawAx = tc.anchorX;
       drawAy = tc.anchorY;
+      if (tc.hasAimed) {
+        const sdx = tc.curX - tc.originX;
+        const sdy = tc.curY - tc.originY;
+        const d = len(sdx, sdy);
+        if (d > 1e-4) {
+          const dir = normalize(sdx, sdy);
+          aimDirX = dir.x;
+          aimDirY = dir.y;
+          showGuide = true;
+        }
+      }
+    } else if (fade) {
+      const elapsed = nowMs - fade.startMs;
+      const u = clamp01(elapsed / CHARGE_FADE_MS);
+      const easeOut = 1 - (1 - u) * (1 - u);
+      charge01 = fade.initial01 * (1 - easeOut);
+      drawAx = a.x;
+      drawAy = a.y;
+      if (elapsed >= CHARGE_FADE_MS) {
+        chargeFadeRef.current = null;
+      }
     }
 
     const guideLen = 36 + charge01 * 52;
-    if (sling || tc) {
+    if (showGuide) {
       ctx.save();
       ctx.setLineDash([6, 8]);
       ctx.strokeStyle = `rgba(226, 232, 240, ${0.35 + charge01 * 0.35})`;
@@ -414,9 +472,12 @@ export default function ReflecShotGame() {
       ctx.restore();
     }
 
-    drawChargingVfx(ctx, drawAx, drawAy, sling || tc ? charge01 : 0, nowMs);
+    const showChargeLayer = !!sling || !!tc || (!!fade && charge01 >= 0.02);
+    if (showChargeLayer) {
+      drawChargingVfx(ctx, drawAx, drawAy, charge01, nowMs, R);
+    }
 
-    const shake = (sling || tc ? charge01 : 0) * 1.2;
+    const shake = (showChargeLayer ? charge01 : 0) * 1.2;
     const sx = drawAx + Math.sin(nowMs * 0.09) * shake;
     const sy = drawAy + Math.cos(nowMs * 0.11) * shake;
 
@@ -424,7 +485,7 @@ export default function ReflecShotGame() {
     ctx.shadowColor = "rgba(248, 250, 252, 0.55)";
     ctx.shadowBlur = 8 + charge01 * 14;
     ctx.beginPath();
-    ctx.arc(sx, sy, AGENT_RADIUS, 0, Math.PI * 2);
+    ctx.arc(sx, sy, R, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
   }, [cleared, drawChargingVfx, showDebugRoute, stage]);
@@ -456,18 +517,26 @@ export default function ReflecShotGame() {
 
     const st = stage;
     const cur = agentRef.current;
+    const R = agentRadiusRef.current;
     if (st && cur) {
       if (agentSpeed(cur) < STOP_SPEED) {
         cur.x = st.start.x * w;
         cur.y = st.start.y * h;
         cur.vx = 0;
         cur.vy = 0;
+        cur.x = Math.max(R, Math.min(w - R, cur.x));
+        cur.y = Math.max(R, Math.min(h - R, cur.y));
       } else {
-        cur.x = Math.max(AGENT_RADIUS, Math.min(w - AGENT_RADIUS, cur.x));
-        cur.y = Math.max(AGENT_RADIUS, Math.min(h - AGENT_RADIUS, cur.y));
+        cur.x = Math.max(R, Math.min(w - R, cur.x));
+        cur.y = Math.max(R, Math.min(h - R, cur.y));
       }
     } else if (!cur && st) {
-      agentRef.current = { x: st.start.x * w, y: st.start.y * h, vx: 0, vy: 0 };
+      agentRef.current = {
+        x: Math.max(R, Math.min(w - R, st.start.x * w)),
+        y: Math.max(R, Math.min(h - R, st.start.y * h)),
+        vx: 0,
+        vy: 0,
+      };
     }
     draw();
   }, [draw, stage]);
@@ -526,6 +595,9 @@ export default function ReflecShotGame() {
     const { w, h } = sizeRef.current;
     if (w <= 0 || !stage) return;
     const { x, y } = canvasToLocal(e);
+    const R = agentRadiusRef.current;
+    const grabR = R + GRAB_PADDING_PX;
+
     const bIdx = findBumperAt(x, y, w, h);
     if (bIdx != null) {
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -542,6 +614,7 @@ export default function ReflecShotGame() {
     if (!a) return;
 
     if (e.pointerType === "touch") {
+      if (len(x - a.x, y - a.y) > R) return;
       e.currentTarget.setPointerCapture(e.pointerId);
       mouseSlingRef.current = null;
       touchChargeRef.current = {
@@ -549,14 +622,16 @@ export default function ReflecShotGame() {
         t0: performance.now(),
         anchorX: a.x,
         anchorY: a.y,
-        aimAngle: -Math.PI / 2,
-        lastX: x,
-        lastY: y,
+        originX: x,
+        originY: y,
+        curX: x,
+        curY: y,
+        hasAimed: false,
       };
       return;
     }
 
-    if (len(x - a.x, y - a.y) > GRAB_RADIUS) return;
+    if (len(x - a.x, y - a.y) > grabR) return;
 
     e.currentTarget.setPointerCapture(e.pointerId);
     touchChargeRef.current = null;
@@ -579,18 +654,19 @@ export default function ReflecShotGame() {
     }
     const tc = touchChargeRef.current;
     if (tc && tc.pointerId === e.pointerId) {
-      const dx = x - tc.lastX;
-      const dy = y - tc.lastY;
-      if (len(dx, dy) >= TOUCH_AIM_MOVE_PX) {
-        tc.aimAngle = Math.atan2(dy, dx);
-        tc.lastX = x;
-        tc.lastY = y;
+      tc.curX = x;
+      tc.curY = y;
+      if (!tc.hasAimed && len(x - tc.originX, y - tc.originY) >= TOUCH_SWIPE_COMMIT_PX) {
+        tc.hasAimed = true;
       }
     }
   };
 
   const onPointerUp = (e: PointerEvent<HTMLCanvasElement>) => {
     const { w, h } = sizeRef.current;
+    const R = agentRadiusRef.current;
+    const cancelRad = slingCancelRadiusPx(R);
+
     const b = bumperDragRef.current;
     if (b && b.pointerId === e.pointerId) {
       const { x, y } = canvasToLocal(e);
@@ -617,7 +693,10 @@ export default function ReflecShotGame() {
       const pdy = sling.curY - sling.anchorY;
       const pull = len(pdx, pdy);
       const power = clamp01(pull / MAX_DRAG_PX);
-      if (power > 0.04 && pull >= MIN_MOUSE_PULL_PX) {
+      const nearAnchor = pull <= cancelRad;
+      if (nearAnchor || pull < MIN_MOUSE_PULL_PX || power <= 0.04) {
+        beginChargeFade(power > 0.02 ? power : clamp01(pull / MAX_DRAG_PX));
+      } else {
         const dir = normalize(-pdx, -pdy);
         const spd = power * MAX_POWER;
         const a = agentRef.current;
@@ -641,13 +720,27 @@ export default function ReflecShotGame() {
     if (tc && tc.pointerId === e.pointerId && w > 0) {
       const elapsed = performance.now() - tc.t0;
       const power = clamp01(elapsed / CHARGE_DURATION_MS);
-      const spd = power * MAX_POWER;
-      const a = agentRef.current;
-      if (a && power > 0.02) {
-        a.x = tc.anchorX;
-        a.y = tc.anchorY;
-        a.vx = Math.cos(tc.aimAngle) * spd;
-        a.vy = Math.sin(tc.aimAngle) * spd;
+      if (!tc.hasAimed) {
+        beginChargeFade(power);
+      } else {
+        const sdx = tc.curX - tc.originX;
+        const sdy = tc.curY - tc.originY;
+        const swipeLen = len(sdx, sdy);
+        if (swipeLen < TOUCH_SWIPE_COMMIT_PX * 0.85) {
+          beginChargeFade(power);
+        } else {
+          const dir = normalize(sdx, sdy);
+          const spd = power * MAX_POWER;
+          const a = agentRef.current;
+          if (a && power > 0.02) {
+            a.x = tc.anchorX;
+            a.y = tc.anchorY;
+            a.vx = dir.x * spd;
+            a.vy = dir.y * spd;
+          } else if (power <= 0.02) {
+            beginChargeFade(power);
+          }
+        }
       }
       touchChargeRef.current = null;
       try {
@@ -666,6 +759,16 @@ export default function ReflecShotGame() {
   };
 
   const onPointerCancel = (e: PointerEvent<HTMLCanvasElement>) => {
+    const tc = touchChargeRef.current;
+    if (tc && tc.pointerId === e.pointerId) {
+      const power = clamp01((performance.now() - tc.t0) / CHARGE_DURATION_MS);
+      beginChargeFade(power);
+    }
+    const sling = mouseSlingRef.current;
+    if (sling && sling.pointerId === e.pointerId) {
+      const pull = len(sling.curX - sling.anchorX, sling.curY - sling.anchorY);
+      beginChargeFade(clamp01(pull / MAX_DRAG_PX));
+    }
     bumperDragRef.current = null;
     mouseSlingRef.current = null;
     touchChargeRef.current = null;
@@ -680,7 +783,79 @@ export default function ReflecShotGame() {
     stage != null ? { aspectRatio: `${stage.aspectW} / ${stage.aspectH}` } : { aspectRatio: "4 / 5" };
 
   return (
-    <div className="w-full max-w-[min(100%,560px)] mx-auto flex flex-col gap-4">
+    <div className="w-full max-w-[min(100%,560px)] mx-auto flex flex-col gap-4 relative">
+      {isDevTj && !isDebugMode && (
+        <div className="fixed right-4 top-4 z-50">
+          <button
+            type="button"
+            onClick={() => setIsDebugMode(true)}
+            className="px-2 py-1 rounded border border-white/20 text-xs font-mono"
+            style={{ background: "#334155" }}
+          >
+            DEBUG OFF
+          </button>
+        </div>
+      )}
+      {isDebugMode && (
+        <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono text-left">
+          <div className="flex items-center justify-between gap-2">
+            {isDebugPanelExpanded && <span className="font-bold text-emerald-400 shrink-0">デバッグパネル</span>}
+            <div className="flex items-center gap-1 shrink-0 ml-auto">
+              <button
+                type="button"
+                onClick={() => setIsDebugMode(false)}
+                className="px-2 py-1 rounded border border-white/20"
+                style={{ background: "#10b981" }}
+              >
+                DEBUG ON
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDebugPanelExpanded((v) => !v)}
+                className="p-1 rounded border border-white/20 hover:bg-white/10 text-white/80"
+                title={isDebugPanelExpanded ? "パネルを閉じる" : "パネルを開く"}
+              >
+                {isDebugPanelExpanded ? "▲" : "▼"}
+              </button>
+            </div>
+          </div>
+          {isDebugPanelExpanded && (
+            <div className="mt-3 space-y-3 text-slate-300">
+              <label className="flex flex-col gap-1">
+                <span className="text-[10px] text-slate-400">射出体半径 AGENT_RADIUS（px）</span>
+                <input
+                  type="range"
+                  min={6}
+                  max={40}
+                  step={1}
+                  value={debugAgentRadius}
+                  onChange={(ev) => setDebugAgentRadius(Number(ev.target.value))}
+                  className="w-full accent-emerald-500"
+                />
+                <span className="tabular-nums text-emerald-400/90">{debugAgentRadius}px</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={showDebugRoute}
+                  onChange={(e) => setShowDebugRoute(e.target.checked)}
+                  className="rounded border-white/30 accent-sky-400"
+                />
+                <span className="text-[10px]">検証用ルート表示</span>
+              </label>
+              <div className="text-[10px] text-slate-500 space-y-0.5 border-t border-white/10 pt-2">
+                <div>
+                  rank: <span className="text-slate-400">{rank}</span>
+                </div>
+                <div>
+                  seed: <span className="text-slate-400 tabular-nums">{genSeed}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <label className="text-wit-muted flex items-center gap-2">
           ランク
@@ -707,10 +882,6 @@ export default function ReflecShotGame() {
         >
           ステージ再生成
         </button>
-        <label className="text-wit-muted flex items-center gap-2 cursor-pointer select-none">
-          <input type="checkbox" className="accent-sky-400" checked={showDebugRoute} onChange={(e) => setShowDebugRoute(e.target.checked)} />
-          検証用ルート表示
-        </label>
       </div>
 
       {cleared && (
@@ -728,7 +899,7 @@ export default function ReflecShotGame() {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
         role="application"
-        aria-label="Reflec-Shot。自動生成ステージ。ゴールの環へ誘導。バンパーはフリックで向き変更。"
+        aria-label="Reflec-Shot。射出体を操作しゴールへ。バンパーはフリックで向き変更。"
       />
 
       <ul className="text-wit-muted text-sm leading-relaxed space-y-1 list-disc pl-5">
@@ -737,12 +908,17 @@ export default function ReflecShotGame() {
           で生成。バンパーは屈折点に配置され、初期向きは意図的にずれています（フリックで45°刻みに調整）。
         </li>
         <li>
-          <strong className="text-wit-text font-medium">ランク1</strong>は反射1回が中心のシンプル構成です。
+          <strong className="text-wit-text font-medium">マウス</strong>
+          ：射出体をドラッグしてスリング。離した位置が遠ければ射出。初期位置付近に戻して離すとキャンセル。
         </li>
         <li>
-          <strong className="text-wit-text font-medium">紫のリング</strong>がゴール。スタート地点から射出してください。
+          <strong className="text-wit-text font-medium">タッチ</strong>
+          ：射出体に触れて長押しでチャージ（この間は方向ガイドなし）。そのままスワイプするとガイド表示、離した方向へ射出。スワイプなしで離すとキャンセル。
         </li>
-        <li>マウス：球を掴んでスリングショット。タッチ：長押しチャージ＆スワイプで狙い、離して射出。</li>
+        <li>
+          <strong className="text-wit-text font-medium">紫のリング</strong>がゴール。開発時は URL に{" "}
+          <code className="text-slate-400">?devtj=true</code> でデバッグパネルを表示できます。
+        </li>
       </ul>
     </div>
   );
