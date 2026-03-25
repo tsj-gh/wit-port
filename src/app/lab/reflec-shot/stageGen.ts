@@ -18,7 +18,7 @@ export type GeneratedStage = {
   start: Vec2;
   goal: Vec2;
   bumpers: StageBumper[];
-  /** 正規化座標での正解ルート（S → 鏡面上の反射点… → G。中心同士の直線ではない） */
+  /** 正規化座標での正解ルート（S → B1 → … → G） */
   routePoints: Vec2[];
   /** バンパー反射の回数 */
   reflectionCount: number;
@@ -149,83 +149,6 @@ function bumperSegment(cx: number, cy: number, theta: number, halfLen: number): 
   return { ax: cx - c * halfLen, ay: cy - s * halfLen, bx: cx + c * halfLen, by: cy + s * halfLen };
 }
 
-/** 点を鏡面直線（中心 cx,cy、法線 bumperNormal(theta)）について反射した像 */
-function reflectPointAcrossMirror(px: number, py: number, cx: number, cy: number, theta: number): Vec2 {
-  const { nx, ny } = bumperNormal(theta);
-  const vx = px - cx;
-  const vy = py - cy;
-  const d = vx * nx + vy * ny;
-  return { x: px - 2 * d * nx, y: py - 2 * d * ny };
-}
-
-type PathNode = { pos: Vec2; uIn: Vec2; uOut: Vec2; theta: number };
-
-/**
- * 生成時の各バンパー入射・出射方向に沿った、セグメント上の反射点を結ぶ正解ガイド
- * （中心同士を結ぶ屈折っぽい折れ線にはしない）
- */
-function buildReflectionPolyline(start: Vec2, goal: Vec2, nodes: PathNode[], halfLen: number): Vec2[] {
-  const pts: Vec2[] = [{ ...start }];
-  let p = { ...start };
-
-  for (let bi = 0; bi < nodes.length; bi++) {
-    const n = nodes[bi]!;
-    const seg = bumperSegment(n.pos.x, n.pos.y, n.theta, halfLen);
-    const d = n.uIn;
-    const t = raySegmentHitT(p.x, p.y, d.x, d.y, seg.ax, seg.ay, seg.bx, seg.by);
-    if (t == null) {
-      pts.push({ ...n.pos });
-      const { nx, ny } = bumperNormal(n.theta);
-      let nnx = nx;
-      let nny = ny;
-      if (d.x * nnx + d.y * nny > 0) {
-        nnx = -nnx;
-        nny = -nny;
-      }
-      const outv = reflect(d.x, d.y, nnx, nny);
-      p = { x: n.pos.x + outv.x * 1e-4, y: n.pos.y + outv.y * 1e-4 };
-      continue;
-    }
-    const hx = p.x + t * d.x;
-    const hy = p.y + t * d.y;
-    pts.push({ x: hx, y: hy });
-    const { nx, ny } = bumperNormal(n.theta);
-    let nnx = nx;
-    let nny = ny;
-    if (d.x * nnx + d.y * nny > 0) {
-      nnx = -nnx;
-      nny = -nny;
-    }
-    const outv = reflect(d.x, d.y, nnx, nny);
-    p = { x: hx + outv.x * 1e-4, y: hy + outv.y * 1e-4 };
-  }
-
-  pts.push({ ...goal });
-  return pts;
-}
-
-/** 1反射：ゴールの鏡像とスタートを結び、鏡面セグメントとの交点をヒット点にする */
-function singleBumperReflectionPolyline(
-  start: Vec2,
-  goal: Vec2,
-  cx: number,
-  cy: number,
-  theta: number,
-  halfLen: number
-): Vec2[] {
-  const gRef = reflectPointAcrossMirror(goal.x, goal.y, cx, cy, theta);
-  const seg = bumperSegment(cx, cy, theta, halfLen);
-  const dx = gRef.x - start.x;
-  const dy = gRef.y - start.y;
-  const L0 = len(dx, dy);
-  if (L0 < 1e-9) return [{ ...start }, { x: cx, y: cy }, { ...goal }];
-  const d = { x: dx / L0, y: dy / L0 };
-  const t = raySegmentHitT(start.x, start.y, d.x, d.y, seg.ax, seg.ay, seg.bx, seg.by);
-  if (t == null) return [{ ...start }, { x: cx, y: cy }, { ...goal }];
-  const hit = { x: start.x + t * d.x, y: start.y + t * d.y };
-  return [{ ...start }, hit, { ...goal }];
-}
-
 /**
  * 生成したステージの幾何検証：S から順に各バンパーへ届き、最後に G へ向かうレイ順序
  */
@@ -304,7 +227,8 @@ export function generateStage(reflections: number, rng: () => number, aspect: As
       y: MARGIN + rng() * (1 - 2 * MARGIN),
     };
 
-    const nodes: PathNode[] = [];
+    type Node = { pos: Vec2; uIn: Vec2; uOut: Vec2; theta: number };
+    const nodes: Node[] = [];
     let P = { ...goal };
     let ok = true;
 
@@ -378,7 +302,7 @@ export function generateStage(reflections: number, rng: () => number, aspect: As
     }
     if (!separated) continue;
 
-    const routePoints = buildReflectionPolyline(start, goal, nodes, halfLen);
+    const routePoints: Vec2[] = [start, ...centers, goal];
     return {
       start,
       goal,
@@ -416,23 +340,22 @@ export function createStageRng(seed: number) {
 /** 自動生成が失敗したときの最低限プレイ可能な1反射ステージ */
 export function fallbackStage1(aspect: AspectPreset): GeneratedStage {
   const theta = STEP * 3;
-  const halfLen = 0.11;
-  const start = { x: 0.14, y: 0.52 };
-  const goal = { x: 0.84, y: 0.36 };
-  const bx = 0.5;
-  const by = 0.46;
   return {
-    start,
-    goal,
+    start: { x: 0.14, y: 0.52 },
+    goal: { x: 0.84, y: 0.36 },
     bumpers: [
       {
-        x: bx,
-        y: by,
+        x: 0.5,
+        y: 0.46,
         angleCorrect: theta,
         angleWrong: snap45(theta + STEP * 2),
       },
     ],
-    routePoints: singleBumperReflectionPolyline(start, goal, bx, by, theta, halfLen),
+    routePoints: [
+      { x: 0.14, y: 0.52 },
+      { x: 0.5, y: 0.46 },
+      { x: 0.84, y: 0.36 },
+    ],
     reflectionCount: 1,
     aspectW: aspect.w,
     aspectH: aspect.h,
