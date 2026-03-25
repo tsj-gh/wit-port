@@ -163,6 +163,41 @@ export default function ReflecShotGame() {
     rollStage(rank, genSeed);
   }, [rank, genSeed, rollStage]);
 
+  /** devtj 用：正解角度を適用し、正解ルート初速方向へ MAX_POWER で射出 */
+  const runAutoSolve = useCallback(() => {
+    const st = stage;
+    if (!st || st.routePoints.length < 2) return;
+    const { w, h } = sizeRef.current;
+    if (w <= 0 || h <= 0) return;
+    const a = agentRef.current;
+    if (!a || agentSpeed(a) >= STOP_SPEED) return;
+
+    mouseSlingRef.current = null;
+    touchChargeRef.current = null;
+    bumperDragRef.current = null;
+    chargeFadeRef.current = null;
+
+    for (let i = 0; i < st.bumpers.length; i++) {
+      bumperAnglesRef.current[i] = st.bumpers[i]!.angleCorrect;
+    }
+
+    const p0 = st.routePoints[0]!;
+    const p1 = st.routePoints[1]!;
+    const sx = p0.x * w;
+    const sy = p0.y * h;
+    const tx = p1.x * w;
+    const ty = p1.y * h;
+    const dir = normalize(tx - sx, ty - sy);
+    const R = agentRadiusRef.current;
+    a.x = Math.max(R, Math.min(w - R, sx));
+    a.y = Math.max(R, Math.min(h - R, sy));
+    a.vx = dir.x * MAX_POWER;
+    a.vy = dir.y * MAX_POWER;
+
+    clearedRef.current = false;
+    setCleared(false);
+  }, [stage]);
+
   const resolveWall = useCallback((a: Agent, w: number, h: number, r: number) => {
     if (a.x < r) {
       a.x = r;
@@ -882,6 +917,16 @@ export default function ReflecShotGame() {
         >
           ステージ再生成
         </button>
+        {isDevTj && (
+          <button
+            type="button"
+            className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-emerald-300 hover:bg-emerald-500/25 transition-colors text-sm"
+            onClick={runAutoSolve}
+            title="停止中のみ有効。全バンパーを正解向きにし、最大パワーで正解ルート方向へ射出"
+          >
+            自動解答
+          </button>
+        )}
       </div>
 
       {cleared && (
@@ -917,7 +962,7 @@ export default function ReflecShotGame() {
         </li>
         <li>
           <strong className="text-wit-text font-medium">紫のリング</strong>がゴール。開発時は URL に{" "}
-          <code className="text-slate-400">?devtj=true</code> でデバッグパネルを表示できます。
+          <code className="text-slate-400">?devtj=true</code> でデバッグパネルと「自動解答」ボタンが表示されます。
         </li>
       </ul>
     </div>
