@@ -39,6 +39,13 @@ function cellCenterPx(
   return { x: ox + c * cellPx + cellPx / 2, y: oy + yRow * cellPx + cellPx / 2 };
 }
 
+/** 辺の欠け長 = (マス1辺 + 射出体直径) / 2 付近にクランプ */
+function portalGapLengthPx(cellPx: number) {
+  const diam = 2 * Math.max(6, cellPx * 0.22);
+  const mid = (cellPx + diam) / 2;
+  return Math.min(cellPx * 0.92, Math.max(mid, diam * 1.05));
+}
+
 /** 最上段・最下段の「開口」（壁の一部を描かない） */
 function strokeRectWithEdgeGaps(
   ctx: CanvasRenderingContext2D,
@@ -46,10 +53,11 @@ function strokeRectWithEdgeGaps(
   y: number,
   s: number,
   gapTop: boolean,
-  gapBottom: boolean
+  gapBottom: boolean,
+  openLen: number
 ) {
   const mid = x + s / 2;
-  const gap = s * 0.3;
+  const gap = openLen;
   const lo = mid - gap / 2;
   const hi = mid + gap / 2;
   ctx.beginPath();
@@ -250,6 +258,7 @@ export default function ReflecShotGame() {
     ctx.fillRect(0, 0, wPx, hPx);
 
     const rowY = (r: number) => oy + (r - rMin) * cellPx;
+    const openLenDraw = portalGapLengthPx(cellPx);
 
     for (let r = rMin; r <= rMax; r++) {
       for (let c = 0; c < st.width; c++) {
@@ -260,29 +269,25 @@ export default function ReflecShotGame() {
         const inArr = r >= 0 && r < st.height;
         const onPadRow = r === st.launch.r || r === st.goalPad.r;
 
-        if (isLaunch) {
-          ctx.fillStyle = "rgba(56, 189, 248, 0.12)";
-          ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
-          ctx.strokeStyle = "rgba(148, 163, 184, 0.24)";
-          ctx.lineWidth = 1;
-          ctx.strokeRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
-          continue;
-        }
-        if (isGoalPad) {
-          ctx.fillStyle = "rgba(139, 92, 246, 0.12)";
-          ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
-          ctx.strokeStyle = "rgba(148, 163, 184, 0.24)";
-          ctx.lineWidth = 1;
-          ctx.strokeRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
+        // パッド行は射出／ゴールの1マスのみ描画。他はキャンバス背景と同化（マス無し）
+        if (onPadRow && !isLaunch && !isGoalPad) {
+          ctx.fillStyle = "#020617";
+          ctx.fillRect(x, y, cellPx, cellPx);
           continue;
         }
 
-        if (onPadRow) {
-          ctx.fillStyle = "#0f172a";
+        if (isLaunch) {
+          ctx.fillStyle = "#1e293b";
           ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
-          ctx.strokeStyle = "rgba(148, 163, 184, 0.22)";
           ctx.lineWidth = 1;
-          ctx.strokeRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
+          strokeRectWithEdgeGaps(ctx, x, y, cellPx, true, false, openLenDraw);
+          continue;
+        }
+        if (isGoalPad) {
+          ctx.fillStyle = "#1e293b";
+          ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
+          ctx.lineWidth = 1;
+          strokeRectWithEdgeGaps(ctx, x, y, cellPx, false, true, openLenDraw);
           continue;
         }
 
@@ -294,17 +299,13 @@ export default function ReflecShotGame() {
 
         const isStartEnt = c === st.start.c && r === st.start.r;
         const isGoalEnt = c === st.goal.c && r === st.goal.r;
-        ctx.fillStyle = isStartEnt
-          ? "rgba(59, 130, 246, 0.14)"
-          : isGoalEnt
-            ? "rgba(139, 92, 246, 0.12)"
-            : "#1e293b";
+        ctx.fillStyle = "#1e293b";
         ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
         ctx.lineWidth = 1;
         if (isStartEnt) {
-          strokeRectWithEdgeGaps(ctx, x, y, cellPx, false, true);
+          strokeRectWithEdgeGaps(ctx, x, y, cellPx, false, true, openLenDraw);
         } else if (isGoalEnt) {
-          strokeRectWithEdgeGaps(ctx, x, y, cellPx, true, false);
+          strokeRectWithEdgeGaps(ctx, x, y, cellPx, true, false, openLenDraw);
         } else {
           ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
           ctx.strokeRect(x, y, cellPx, cellPx);
