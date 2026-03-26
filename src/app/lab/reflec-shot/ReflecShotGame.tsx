@@ -6,8 +6,10 @@ import { applyBumper, swipeToBumperKind } from "./bumperRules";
 import { generateGridStageWithFallback } from "./gridStageGen";
 import {
   DIR,
+  isAgentCell,
   keyCell,
   negateDir,
+  stageRowRange,
   type BumperKind,
   type CellCoord,
   type Dir,
@@ -30,9 +32,50 @@ function cellCenterPx(
   r: number,
   cellPx: number,
   ox: number,
-  oy: number
+  oy: number,
+  rMin: number
 ) {
-  return { x: ox + c * cellPx + cellPx / 2, y: oy + r * cellPx + cellPx / 2 };
+  const yRow = r - rMin;
+  return { x: ox + c * cellPx + cellPx / 2, y: oy + yRow * cellPx + cellPx / 2 };
+}
+
+/** 最上段・最下段の「開口」（壁の一部を描かない） */
+function strokeRectWithEdgeGaps(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  s: number,
+  gapTop: boolean,
+  gapBottom: boolean
+) {
+  const mid = x + s / 2;
+  const gap = s * 0.3;
+  const lo = mid - gap / 2;
+  const hi = mid + gap / 2;
+  ctx.beginPath();
+  ctx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+  // left
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y + s);
+  // bottom
+  if (gapBottom) {
+    ctx.lineTo(lo, y + s);
+    ctx.moveTo(hi, y + s);
+    ctx.lineTo(x + s, y + s);
+  } else {
+    ctx.lineTo(x + s, y + s);
+  }
+  // right
+  ctx.lineTo(x + s, y);
+  // top
+  if (gapTop) {
+    ctx.lineTo(hi, y);
+    ctx.moveTo(lo, y);
+    ctx.lineTo(x, y);
+  } else {
+    ctx.lineTo(x, y);
+  }
+  ctx.stroke();
 }
 
 function bumperSymbol(k: BumperKind): string {
@@ -91,10 +134,10 @@ export default function ReflecShotGame() {
     setPhase("edit");
     setStatusMsg("");
     simRef.current = {
-      logicalCell: { ...st.start },
+      logicalCell: { ...st.launch },
       travelDir: DIR.U,
-      fromCell: { ...st.start },
-      toCell: { ...st.start },
+      fromCell: { ...st.launch },
+      toCell: { ...st.launch },
       lerp01: 0,
       leftStart: false,
     };
@@ -107,16 +150,11 @@ export default function ReflecShotGame() {
   const beginShot = useCallback(() => {
     const st = stage;
     if (!st || phase !== "edit") return;
-    const up = { c: st.start.c, r: st.start.r - 1 };
-    if (!pathableAt(st, up.c, up.r)) {
-      setStatusMsg("上方向にマスがありません。");
-      return;
-    }
     simRef.current = {
-      logicalCell: { ...st.start },
+      logicalCell: { ...st.launch },
       travelDir: DIR.U,
-      fromCell: { ...st.start },
-      toCell: up,
+      fromCell: { ...st.launch },
+      toCell: { ...st.start },
       lerp01: 0,
       leftStart: false,
     };
@@ -127,10 +165,10 @@ export default function ReflecShotGame() {
   const applyArrival = useCallback(
     (st: GridStage, B: CellCoord, incomingDir: Dir): { next: CellCoord; outDir: Dir } | "goal" | "lost" => {
       const sim = simRef.current;
-      if (B.c === st.goal.c && B.r === st.goal.r) return "goal";
-      if (B.c === st.start.c && B.r === st.start.r && sim.leftStart) return "lost";
+      if (B.c === st.goalPad.c && B.r === st.goalPad.r) return "goal";
+      if (B.c === st.launch.c && B.r === st.launch.r && sim.leftStart) return "lost";
 
-      if (B.c !== st.start.c || B.r !== st.start.r) sim.leftStart = true;
+      if (B.c !== st.launch.c || B.r !== st.launch.r) sim.leftStart = true;
 
       let dOut = incomingDir;
       const bk = keyCell(B.c, B.r);
@@ -138,11 +176,11 @@ export default function ReflecShotGame() {
       if (bump) dOut = applyBumper(incomingDir, bump.display);
 
       let next = { c: B.c + dOut.dx, r: B.r + dOut.dy };
-      if (!pathableAt(st, next.c, next.r)) {
+      if (!isAgentCell(st, next.c, next.r)) {
         dOut = negateDir(dOut);
         next = { c: B.c + dOut.dx, r: B.r + dOut.dy };
       }
-      if (!pathableAt(st, next.c, next.r)) return "lost";
+      if (!isAgentCell(st, next.c, next.r)) return "lost";
       return { next, outDir: dOut };
     },
     []
@@ -172,7 +210,7 @@ export default function ReflecShotGame() {
       }
       if (res === "lost") {
         setPhase("lost");
-        setStatusMsg("スタートに戻りました。バンパーを調整して再チャレンジしてください。");
+        setStatusMsg("射出位置（START）に戻りました。バンパーを調整して再チャレンジしてください。");
         sim.leftStart = false;
         return;
       }
@@ -197,33 +235,81 @@ export default function ReflecShotGame() {
     canvas.height = Math.floor(hPx * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    const { rMin, rMax } = stageRowRange(st);
+    const nRows = rMax - rMin + 1;
     const cellPx = Math.max(
       24,
-      Math.floor(Math.min(wPx / st.width, hPx / st.height) * 0.92)
+      Math.floor(Math.min(wPx / st.width, hPx / nRows) * 0.92)
     );
     const gw = cellPx * st.width;
-    const gh = cellPx * st.height;
+    const gh = cellPx * nRows;
     const ox = (wPx - gw) / 2;
     const oy = (hPx - gh) / 2;
 
     ctx.fillStyle = "#020617";
     ctx.fillRect(0, 0, wPx, hPx);
 
-    for (let c = 0; c < st.width; c++) {
-      for (let r = 0; r < st.height; r++) {
+    const rowY = (r: number) => oy + (r - rMin) * cellPx;
+    const labelPx = Math.max(9, Math.floor(cellPx * 0.14));
+
+    for (let r = rMin; r <= rMax; r++) {
+      for (let c = 0; c < st.width; c++) {
         const x = ox + c * cellPx;
-        const y = oy + r * cellPx;
-        if (!st.pathable[c]![r]) {
+        const y = rowY(r);
+        const isLaunch = c === st.launch.c && r === st.launch.r;
+        const isGoalPad = c === st.goalPad.c && r === st.goalPad.r;
+        const inArr = r >= 0 && r < st.height;
+
+        if (isLaunch) {
+          ctx.fillStyle = "rgba(56, 189, 248, 0.22)";
+          ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.45)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x, y, cellPx, cellPx);
+          ctx.fillStyle = "rgba(125, 211, 252, 0.95)";
+          ctx.font = `600 ${labelPx}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("START", x + cellPx / 2, y + cellPx / 2);
+          continue;
+        }
+        if (isGoalPad) {
+          ctx.fillStyle = "rgba(139, 92, 246, 0.28)";
+          ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
+          ctx.strokeStyle = "rgba(167, 139, 250, 0.5)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x, y, cellPx, cellPx);
+          ctx.fillStyle = "rgba(196, 181, 253, 0.95)";
+          ctx.font = `600 ${labelPx}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("GOAL", x + cellPx / 2, y + cellPx / 2);
+          continue;
+        }
+
+        if (!inArr || !st.pathable[c]![r]) {
           ctx.fillStyle = "#0f172a";
           ctx.fillRect(x, y, cellPx, cellPx);
           continue;
         }
-        const isStart = c === st.start.c && r === st.start.r;
-        const isGoal = c === st.goal.c && r === st.goal.r;
-        ctx.fillStyle = isGoal ? "rgba(139, 92, 246, 0.2)" : isStart ? "rgba(59, 130, 246, 0.15)" : "#1e293b";
+
+        const isStartEnt = c === st.start.c && r === st.start.r;
+        const isGoalEnt = c === st.goal.c && r === st.goal.r;
+        ctx.fillStyle = isStartEnt
+          ? "rgba(59, 130, 246, 0.14)"
+          : isGoalEnt
+            ? "rgba(139, 92, 246, 0.12)"
+            : "#1e293b";
         ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
-        ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
-        ctx.strokeRect(x, y, cellPx, cellPx);
+        ctx.lineWidth = 1;
+        if (isStartEnt) {
+          strokeRectWithEdgeGaps(ctx, x, y, cellPx, false, true);
+        } else if (isGoalEnt) {
+          strokeRectWithEdgeGaps(ctx, x, y, cellPx, true, false);
+        } else {
+          ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
+          ctx.strokeRect(x, y, cellPx, cellPx);
+        }
 
         const k = keyCell(c, r);
         const b = st.bumpers.get(k);
@@ -241,20 +327,24 @@ export default function ReflecShotGame() {
       ctx.strokeStyle = "rgba(244, 63, 94, 0.55)";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      const p0 = cellCenterPx(st.solutionPath[0]!.c, st.solutionPath[0]!.r, cellPx, ox, oy);
-      ctx.moveTo(p0.x, p0.y);
+      const pL = cellCenterPx(st.launch.c, st.launch.r, cellPx, ox, oy, rMin);
+      const p0 = cellCenterPx(st.solutionPath[0]!.c, st.solutionPath[0]!.r, cellPx, ox, oy, rMin);
+      ctx.moveTo(pL.x, pL.y);
+      ctx.lineTo(p0.x, p0.y);
       for (let i = 1; i < st.solutionPath.length; i++) {
-        const p = cellCenterPx(st.solutionPath[i]!.c, st.solutionPath[i]!.r, cellPx, ox, oy);
+        const p = cellCenterPx(st.solutionPath[i]!.c, st.solutionPath[i]!.r, cellPx, ox, oy, rMin);
         ctx.lineTo(p.x, p.y);
       }
+      const pG = cellCenterPx(st.goalPad.c, st.goalPad.r, cellPx, ox, oy, rMin);
+      ctx.lineTo(pG.x, pG.y);
       ctx.stroke();
     }
 
     const sim = simRef.current;
     const f = sim.fromCell;
     const t = sim.toCell;
-    const af = cellCenterPx(f.c, f.r, cellPx, ox, oy);
-    const at = cellCenterPx(t.c, t.r, cellPx, ox, oy);
+    const af = cellCenterPx(f.c, f.r, cellPx, ox, oy, rMin);
+    const at = cellCenterPx(t.c, t.r, cellPx, ox, oy, rMin);
     const u = Math.min(1, sim.lerp01);
     const ax = af.x + (at.x - af.x) * u;
     const ay = af.y + (at.y - af.y) * u;
@@ -267,6 +357,7 @@ export default function ReflecShotGame() {
     canvas.dataset.cellPx = String(cellPx);
     canvas.dataset.ox = String(ox);
     canvas.dataset.oy = String(oy);
+    canvas.dataset.rMin = String(rMin);
   }, [isDebugMode, isDevTj, showSolutionPath, stage]);
 
   useEffect(() => {
@@ -293,8 +384,9 @@ export default function ReflecShotGame() {
     const cellPx = Number(canvas.dataset.cellPx) || 32;
     const ox = Number(canvas.dataset.ox) || 0;
     const oy = Number(canvas.dataset.oy) || 0;
+    const rMin = Number(canvas.dataset.rMin) || stageRowRange(stage).rMin;
     const c = Math.floor((px - ox) / cellPx);
-    const r = Math.floor((py - oy) / cellPx);
+    const r = Math.floor((py - oy) / cellPx) + rMin;
     if (!pathableAt(stage, c, r)) return null;
     return { c, r };
   };
@@ -389,10 +481,10 @@ export default function ReflecShotGame() {
     setPhase("edit");
     setStatusMsg("");
     simRef.current = {
-      logicalCell: { ...stage.start },
+      logicalCell: { ...stage.launch },
       travelDir: DIR.U,
-      fromCell: { ...stage.start },
-      toCell: { ...stage.start },
+      fromCell: { ...stage.launch },
+      toCell: { ...stage.launch },
       lerp01: 0,
       leftStart: false,
     };
@@ -535,7 +627,7 @@ export default function ReflecShotGame() {
       <ul className="text-wit-muted text-xs leading-relaxed space-y-1 list-disc pl-5">
         <li>グリッド論理パズル：マス中心からマス中心へ等速移動。壁（外縁・Void）で180°反転。</li>
         <li>バンパーは長押し（約{CHARGE_MS}ms）後にスワイプで ／ ＼ － ｜ にスナップ。</li>
-        <li>スタートに戻ると失敗。ゴール（上端の紫系マス）でクリア。</li>
+        <li>射出位置（盤面下の START）に戻ると失敗。最上段の上のゴールエリア（GOAL）に入るとクリア。</li>
         <li>開発用: <code className="text-slate-500">?devtj=true</code> でデバッグと下部の再生成・自動解答。</li>
       </ul>
     </div>

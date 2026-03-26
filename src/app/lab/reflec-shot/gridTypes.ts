@@ -45,13 +45,31 @@ export type BumperCell = {
 export type GridStage = {
   width: number;
   height: number;
-  /** pathable[c][r] */
+  /** pathable[c][r]（盤面矩形内。r=0 が最上段） */
   pathable: boolean[][];
+  /** 最下段の入口マス（pathable）。下辺が射出ゾーンへ開く */
   start: CellCoord;
+  /** 最上段の到達マス（pathable）。上辺がゴールゾーンへ開く */
   goal: CellCoord;
+  /** 射出体の待機マス（最下段の1マス下。start の真下） */
+  launch: CellCoord;
+  /** ゴールエリア（最上段の1マス上。goal の真上） */
+  goalPad: CellCoord;
   bumpers: Map<string, BumperCell>;
   /** デバッグ用：正解経路のセル列（端点含む） */
   solutionPath: CellCoord[];
   grade: number;
   seed: number;
 };
+
+/** エージェントが存在しうるマス（pathable ∪ 射出 ∪ ゴールエリア） */
+export function isAgentCell(st: GridStage, c: number, r: number) {
+  if (c === st.launch.c && r === st.launch.r) return true;
+  if (c === st.goalPad.c && r === st.goalPad.r) return true;
+  if (c < 0 || r < 0 || c >= st.width || r >= st.height) return false;
+  return st.pathable[c]![r]!;
+}
+
+export function stageRowRange(st: GridStage) {
+  return { rMin: st.goalPad.r, rMax: st.launch.r };
+}
