@@ -210,7 +210,7 @@ export default function ReflecShotGame() {
       }
       if (res === "lost") {
         setPhase("lost");
-        setStatusMsg("射出位置（START）に戻りました。バンパーを調整して再チャレンジしてください。");
+        setStatusMsg("射出位置に戻りました。バンパーを調整して再チャレンジしてください。");
         sim.leftStart = false;
         return;
       }
@@ -250,7 +250,6 @@ export default function ReflecShotGame() {
     ctx.fillRect(0, 0, wPx, hPx);
 
     const rowY = (r: number) => oy + (r - rMin) * cellPx;
-    const labelPx = Math.max(9, Math.floor(cellPx * 0.14));
 
     for (let r = rMin; r <= rMax; r++) {
       for (let c = 0; c < st.width; c++) {
@@ -259,31 +258,31 @@ export default function ReflecShotGame() {
         const isLaunch = c === st.launch.c && r === st.launch.r;
         const isGoalPad = c === st.goalPad.c && r === st.goalPad.r;
         const inArr = r >= 0 && r < st.height;
+        const onPadRow = r === st.launch.r || r === st.goalPad.r;
 
         if (isLaunch) {
-          ctx.fillStyle = "rgba(56, 189, 248, 0.22)";
+          ctx.fillStyle = "rgba(56, 189, 248, 0.12)";
           ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
-          ctx.strokeStyle = "rgba(56, 189, 248, 0.45)";
+          ctx.strokeStyle = "rgba(148, 163, 184, 0.24)";
           ctx.lineWidth = 1;
-          ctx.strokeRect(x, y, cellPx, cellPx);
-          ctx.fillStyle = "rgba(125, 211, 252, 0.95)";
-          ctx.font = `600 ${labelPx}px sans-serif`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText("START", x + cellPx / 2, y + cellPx / 2);
+          ctx.strokeRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
           continue;
         }
         if (isGoalPad) {
-          ctx.fillStyle = "rgba(139, 92, 246, 0.28)";
+          ctx.fillStyle = "rgba(139, 92, 246, 0.12)";
           ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
-          ctx.strokeStyle = "rgba(167, 139, 250, 0.5)";
+          ctx.strokeStyle = "rgba(148, 163, 184, 0.24)";
           ctx.lineWidth = 1;
-          ctx.strokeRect(x, y, cellPx, cellPx);
-          ctx.fillStyle = "rgba(196, 181, 253, 0.95)";
-          ctx.font = `600 ${labelPx}px sans-serif`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText("GOAL", x + cellPx / 2, y + cellPx / 2);
+          ctx.strokeRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
+          continue;
+        }
+
+        if (onPadRow) {
+          ctx.fillStyle = "#0f172a";
+          ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
+          ctx.strokeStyle = "rgba(148, 163, 184, 0.22)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
           continue;
         }
 
@@ -638,7 +637,7 @@ export default function ReflecShotGame() {
       <ul className="text-wit-muted text-xs leading-relaxed space-y-1 list-disc pl-5">
         <li>グリッド論理パズル：マス中心からマス中心へ等速移動。壁（外縁・Void）で180°反転。</li>
         <li>バンパーは長押し（約{CHARGE_MS}ms）後にスワイプで ／ ＼ － ｜ にスナップ。</li>
-        <li>射出位置（盤面下の START）に戻ると失敗。最上段の上のゴールエリア（GOAL）に入るとクリア。</li>
+        <li>一段下の射出マスに戻ると失敗。最上段の一段上のゴールマスに入るとクリア。</li>
         <li>開発用: <code className="text-slate-500">?devtj=true</code> でデバッグと下部の再生成・自動解答。</li>
       </ul>
     </div>

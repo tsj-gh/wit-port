@@ -20,6 +20,32 @@ export function bumpersForGrade(grade: number): number {
   return 3;
 }
 
+/** Grade に応じた盤面の論理サイズ（キャンバス枠は UI 側で固定・セルはこれに合わせて拡大縮小） */
+export function boardSizeForGrade(grade: number): { w: number; h: number } {
+  const g = Math.max(1, Math.min(5, Math.floor(grade)));
+  switch (g) {
+    case 1:
+      return { w: 4, h: 4 };
+    case 2:
+      return { w: 5, h: 5 };
+    case 3:
+      return { w: 6, h: 7 };
+    case 4:
+      return { w: 8, h: 9 };
+    default:
+      return { w: 10, h: 11 };
+  }
+}
+
+function templatesForBoard(w: number, h: number, grade: number): (() => boolean[][])[] {
+  const g = Math.max(1, Math.min(5, Math.floor(grade)));
+  const rect = () => makeRect(w, h);
+  if (g <= 1) return [rect];
+  if (g === 2) return [rect, () => templateL(w, h)];
+  if (g === 3) return [rect, () => templateL(w, h), () => templateT(w, h)];
+  return [rect, () => templateL(w, h), () => templateT(w, h), () => templateCross(w, h)];
+}
+
 function makeRect(w: number, h: number): boolean[][] {
   return Array.from({ length: w }, () => Array<boolean>(h).fill(true));
 }
@@ -220,14 +246,8 @@ export function createStageRng(seed: number) {
 export function generateGridStage(grade: number, seed: number): GridStage | null {
   const rng = createStageRng(seed);
   const bumperN = bumpersForGrade(grade);
-  const templates = [
-    () => makeRect(9, 11),
-    () => templateL(10, 12),
-    () => templateT(11, 12),
-    () => templateCross(11, 11),
-  ];
-  const W = [9, 10, 11, 11][Math.floor(rng() * 4)]!;
-  const H = [11, 12, 12, 11][Math.floor(rng() * 4)]!;
+  const { w: W, h: H } = boardSizeForGrade(grade);
+  const templates = templatesForBoard(W, H, grade);
 
   for (let attempt = 0; attempt < 200; attempt++) {
     const tIdx = Math.floor(rng() * templates.length);
@@ -276,7 +296,8 @@ export function generateGridStage(grade: number, seed: number): GridStage | null
     if (!ok) continue;
 
     const mainKeys = new Set(path.map((p) => keyCell(p.c, p.r)));
-    addDeadEndBranches(pathable, mainKeys, rng, 14);
+    const branchBudget = Math.min(14, Math.max(2, Math.floor((w * h) / 5)));
+    addDeadEndBranches(pathable, mainKeys, rng, branchBudget);
 
     for (const { key: bk, sol } of solutionKinds) {
       const wrongPool = (["SLASH", "BACKSLASH", "HYPHEN", "PIPE"] as const).filter((x) => x !== sol);
@@ -313,16 +334,17 @@ export function generateGridStage(grade: number, seed: number): GridStage | null
 
 /** ゴール手前まで届かないフォールバック（矩形・直線＋1バンパー） */
 export function fallbackGridStage(grade: number, seed: number): GridStage {
-  const w = 7;
-  const h = 9;
+  const { w, h } = boardSizeForGrade(grade);
   const pathable = makeRect(w, h);
-  const start = { c: 3, r: h - 1 };
-  const goal = { c: 3, r: 0 };
+  const mid = Math.floor(w / 2);
+  const start = { c: mid, r: h - 1 };
+  const goal = { c: mid, r: 0 };
   const path: CellCoord[] = [];
-  for (let r = h - 1; r >= 0; r--) path.push({ c: 3, r });
-  const bumperCell = { c: 3, r: 5 };
-  const dIn = dirBetween({ c: 3, r: 6 }, bumperCell);
-  const dOut = dirBetween(bumperCell, { c: 3, r: 4 });
+  for (let r = h - 1; r >= 0; r--) path.push({ c: mid, r });
+  const bumperR = Math.min(h - 2, Math.max(1, Math.floor(h / 2)));
+  const bumperCell = { c: mid, r: bumperR };
+  const dIn = dirBetween({ c: mid, r: bumperR + 1 }, bumperCell);
+  const dOut = dirBetween(bumperCell, { c: mid, r: bumperR - 1 });
   const sol = bumperKindForTurn(dIn, dOut) ?? "PIPE";
   const bumpers = new Map<string, BumperCell>();
   bumpers.set(keyCell(bumperCell.c, bumperCell.r), { display: "HYPHEN", solution: sol });
