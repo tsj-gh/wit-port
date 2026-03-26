@@ -1,4 +1,4 @@
-import { bumperKindForTurn } from "./bumperRules";
+import { bumperKindForTurn, diagonalBumperForTurn } from "./bumperRules";
 import {
   keyCell,
   type BumperCell,
@@ -13,14 +13,22 @@ function inBounds(c: number, r: number, w: number, h: number) {
   return c >= 0 && c < w && r >= 0 && r < h;
 }
 
+/** UI 用：折れ回数目安（Grade3+ は従来のバンパー個数目安） */
+export function bendOrBumperHint(grade: number): string {
+  const g = Math.max(1, Math.min(5, Math.floor(grade)));
+  if (g === 1) return "折れ2〜4";
+  if (g === 2) return "折れ4〜6";
+  if (g <= 4) return "バンパー2";
+  return "バンパー3";
+}
+
 export function bumpersForGrade(grade: number): number {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
-  if (g <= 2) return 1;
+  if (g <= 2) return 0;
   if (g <= 4) return 2;
   return 3;
 }
 
-/** Grade に応じた盤面の論理サイズ（キャンバス枠は UI 側で固定・セルはこれに合わせて拡大縮小） */
 export function boardSizeForGrade(grade: number): { w: number; h: number } {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
   switch (g) {
@@ -50,7 +58,6 @@ function makeRect(w: number, h: number): boolean[][] {
   return Array.from({ length: w }, () => Array<boolean>(h).fill(true));
 }
 
-/** L字：右上ブロックを void */
 function templateL(w: number, h: number): boolean[][] {
   const p = makeRect(w, h);
   const c0 = Math.ceil(w * 0.5);
@@ -61,7 +68,6 @@ function templateL(w: number, h: number): boolean[][] {
   return p;
 }
 
-/** T字：中央横溝 */
 function templateT(w: number, h: number): boolean[][] {
   const p = makeRect(w, h);
   const mid = Math.floor(w / 2);
@@ -75,7 +81,6 @@ function templateT(w: number, h: number): boolean[][] {
   return p;
 }
 
-/** 十字：腕以外 void */
 function templateCross(w: number, h: number): boolean[][] {
   const p = makeRect(w, h);
   const mx = Math.floor(w / 2);
@@ -184,7 +189,6 @@ function findSimplePath(
     visited.add(keyCell(cur.c, cur.r));
     path.push(cur);
     if (cur.c === goal.c && cur.r === goal.r) return true;
-
     for (const n of neighbors(cur)) {
       const k = keyCell(n.c, n.r);
       if (visited.has(k)) continue;
@@ -199,8 +203,12 @@ function findSimplePath(
   return path;
 }
 
-/** メインパスから行き止まり枝を追加（ループなし・void を埋めるのみ） */
-function addDeadEndBranches(pathable: boolean[][], mainKeys: Set<string>, rng: () => number, budget: number) {
+function addDeadEndBranches(
+  pathable: boolean[][],
+  mainKeys: Set<string>,
+  rng: () => number,
+  budget: number
+) {
   const w = pathable.length;
   const h = pathable[0]!.length;
   let used = 0;
@@ -217,12 +225,7 @@ function addDeadEndBranches(pathable: boolean[][], mainKeys: Set<string>, rng: (
       let cc = cell.c + d.dx;
       let rr = cell.r + d.dy;
       let steps = 0;
-      while (
-        steps < 4 &&
-        inBounds(cc, rr, w, h) &&
-        !pathable[cc]![rr] &&
-        used < budget
-      ) {
+      while (steps < 4 && inBounds(cc, rr, w, h) && !pathable[cc]![rr] && used < budget) {
         pathable[cc]![rr] = true;
         used++;
         steps++;
@@ -243,7 +246,244 @@ export function createStageRng(seed: number) {
   };
 }
 
+/** target を parts 個の非零整数に分ける（和 = target）。失敗時 null */
+function randomNonZeroSplit(target: number, parts: number, rng: () => number): number[] | null {
+  if (parts === 0) return target === 0 ? [] : null;
+  if (parts === 1) return target !== 0 ? [target] : null;
+  for (let attempt = 0; attempt < 120; attempt++) {
+    const a: number[] = [];
+    let s = 0;
+    for (let i = 0; i < parts - 1; i++) {
+      const sign = rng() < 0.5 ? -1 : 1;
+      const mag = 1 + Math.floor(rng() * 10);
+      const v = sign * mag;
+      a.push(v);
+      s += v;
+    }
+    const last = target - s;
+    if (last !== 0 && Math.abs(last) >= 1) {
+      a.push(last);
+      return a;
+    }
+  }
+  return null;
+}
+
+function unitStepDir(deltaC: number, deltaR: number): Dir | null {
+  if (deltaC === 1 && deltaR === 0) return DIR.R;
+  if (deltaC === -1 && deltaR === 0) return DIR.L;
+  if (deltaC === 0 && deltaR === 1) return DIR.D;
+  if (deltaC === 0 && deltaR === -1) return DIR.U;
+  return null;
+}
+
+function orthogonalDirs(a: Dir, b: Dir): boolean {
+  return a.dx * b.dx + a.dy * b.dy === 0 && a.dx * a.dx + a.dy * a.dy === 1 && b.dx * b.dx + b.dy * b.dy === 1;
+}
+
+function bendCellsInPath(path: CellCoord[]): Set<string> {
+  const s = new Set<string>();
+  for (let i = 1; i < path.length - 1; i++) {
+    const d0 = unitStepDir(path[i]!.c - path[i - 1]!.c, path[i]!.r - path[i - 1]!.r);
+    const d1 = unitStepDir(path[i + 1]!.c - path[i]!.c, path[i + 1]!.r - path[i]!.r);
+    if (d0 && d1 && orthogonalDirs(d0, d1)) s.add(keyCell(path[i]!.c, path[i]!.r));
+  }
+  return s;
+}
+
+function grade1NoRevisit(path: CellCoord[]): boolean {
+  const seen = new Set<string>();
+  for (const p of path) {
+    const k = keyCell(p.c, p.r);
+    if (seen.has(k)) return false;
+    seen.add(k);
+  }
+  return true;
+}
+
+function grade2BendNoRevisit(path: CellCoord[], bends: Set<string>): boolean {
+  const counts = new Map<string, number>();
+  for (const p of path) {
+    const k = keyCell(p.c, p.r);
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  let bad = false;
+  counts.forEach((n, k) => {
+    if (bends.has(k) && n !== 1) bad = true;
+  });
+  return !bad;
+}
+
+function tryOrthogonalPolyline(
+  start: CellCoord,
+  goal: CellCoord,
+  bends: number,
+  firstHorizontal: boolean,
+  pathable: boolean[][],
+  rng: () => number
+): CellCoord[] | null {
+  const w = pathable.length;
+  const h = pathable[0]!.length;
+  const nSeg = bends + 1;
+  const dc = goal.c - start.c;
+  const dr = goal.r - start.r;
+  const hIdx: number[] = [];
+  const vIdx: number[] = [];
+  for (let i = 0; i < nSeg; i++) {
+    const isH = firstHorizontal ? i % 2 === 0 : i % 2 === 1;
+    if (isH) hIdx.push(i);
+    else vIdx.push(i);
+  }
+  const hs = randomNonZeroSplit(dc, hIdx.length, rng);
+  const vs = randomNonZeroSplit(dr, vIdx.length, rng);
+  if (!hs || !vs) return null;
+  const lens = new Array<number>(nSeg);
+  hIdx.forEach((idx, j) => {
+    lens[idx] = hs[j]!;
+  });
+  vIdx.forEach((idx, j) => {
+    lens[idx] = vs[j]!;
+  });
+
+  const path: CellCoord[] = [];
+  let cur: CellCoord = { ...start };
+  path.push(cur);
+
+  for (let i = 0; i < nSeg; i++) {
+    const isH = firstHorizontal ? i % 2 === 0 : i % 2 === 1;
+    let d: Dir;
+    if (isH) d = lens[i]! > 0 ? DIR.R : DIR.L;
+    else d = lens[i]! > 0 ? DIR.D : DIR.U;
+    const steps = Math.abs(lens[i]!);
+    for (let s = 0; s < steps; s++) {
+      cur = { c: cur.c + d.dx, r: cur.r + d.dy };
+      if (!inBounds(cur.c, cur.r, w, h) || !pathable[cur.c]![cur.r]) return null;
+      path.push(cur);
+    }
+  }
+  if (cur.c !== goal.c || cur.r !== goal.r) return null;
+  return path;
+}
+
+function countRightAngles(path: CellCoord[]): number {
+  let n = 0;
+  for (let i = 1; i < path.length - 1; i++) {
+    const d0 = unitStepDir(path[i]!.c - path[i - 1]!.c, path[i]!.r - path[i - 1]!.r);
+    const d1 = unitStepDir(path[i + 1]!.c - path[i]!.c, path[i + 1]!.r - path[i]!.r);
+    if (d0 && d1 && orthogonalDirs(d0, d1)) n++;
+  }
+  return n;
+}
+
+function placeDiagonalBumpers(path: CellCoord[]): {
+  bumpers: Map<string, BumperCell>;
+  ok: boolean;
+} {
+  const bumpers = new Map<string, BumperCell>();
+  for (let i = 1; i < path.length - 1; i++) {
+    const prev = path[i - 1]!;
+    const cur = path[i]!;
+    const next = path[i + 1]!;
+    const dIn = dirBetween(prev, cur);
+    const dOut = dirBetween(cur, next);
+    if (dIn.dx === 0 && dIn.dy === 0) continue;
+    if (dOut.dx === 0 && dOut.dy === 0) continue;
+    const sol = diagonalBumperForTurn(dIn, dOut);
+    if (sol == null) continue;
+    bumpers.set(keyCell(cur.c, cur.r), { display: sol, solution: sol });
+  }
+  const expected = countRightAngles(path);
+  const ok = bumpers.size === expected;
+  return { bumpers, ok };
+}
+
+function wrongDiagonal(sol: BumperKind): BumperKind {
+  return sol === "SLASH" ? "BACKSLASH" : "SLASH";
+}
+
+function shuffleWrongDisplay(bumpers: Map<string, BumperCell>, rng: () => number) {
+  let hasWrong = false;
+  bumpers.forEach((cell) => {
+    if (rng() < 0.55) {
+      cell.display = wrongDiagonal(cell.solution);
+      hasWrong = true;
+    }
+  });
+  if (!hasWrong && bumpers.size) {
+    const first = bumpers.keys().next().value!;
+    const c = bumpers.get(first)!;
+    c.display = wrongDiagonal(c.solution);
+  }
+}
+
+/** Grade1/2：矩形盤・折れ線経路・斜めバンパーのみ */
+function generatePolylineStage(grade: number, seed: number): GridStage | null {
+  const rng = createStageRng(seed);
+  const { w: W, h: H } = boardSizeForGrade(grade);
+  const pathable = makeRect(W, H);
+
+  const maxAttempts = 350;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const bottoms = bottomCandidates(pathable);
+    const tops = topCandidates(pathable);
+    if (!bottoms.length || !tops.length) return null;
+
+    const start = bottoms[Math.floor(rng() * bottoms.length)]!;
+    const goal = tops[Math.floor(rng() * tops.length)]!;
+
+    let bends: number;
+    if (grade === 1) {
+      bends = rng() < 0.5 ? 2 : 4;
+      if (bends === 2 && start.c === goal.c) bends = 4;
+    } else {
+      bends = rng() < 0.5 ? 4 : 6;
+    }
+
+    let path: CellCoord[] | null = null;
+    for (let t = 0; t < 24; t++) {
+      const firstH = rng() < 0.5;
+      path = tryOrthogonalPolyline(start, goal, bends, firstH, pathable, rng);
+      if (path) break;
+    }
+    if (!path) continue;
+
+    if (countRightAngles(path) !== bends) continue;
+
+    if (grade === 1) {
+      if (!grade1NoRevisit(path)) continue;
+    } else {
+      const bendSet = bendCellsInPath(path);
+      if (!grade2BendNoRevisit(path, bendSet)) continue;
+    }
+
+    const { bumpers, ok } = placeDiagonalBumpers(path);
+    if (!ok || bumpers.size === 0) continue;
+
+    const dup = new Map<string, BumperCell>();
+    bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+    shuffleWrongDisplay(dup, rng);
+
+    return {
+      width: W,
+      height: H,
+      pathable,
+      start,
+      goal,
+      launch: { c: start.c, r: start.r + 1 },
+      goalPad: { c: goal.c, r: goal.r - 1 },
+      bumpers: dup,
+      solutionPath: path,
+      grade,
+      seed,
+    };
+  }
+  return null;
+}
+
 export function generateGridStage(grade: number, seed: number): GridStage | null {
+  const g = Math.max(1, Math.min(5, Math.floor(grade)));
+  if (g <= 2) return generatePolylineStage(grade, seed);
+
   const rng = createStageRng(seed);
   const bumperN = bumpersForGrade(grade);
   const { w: W, h: H } = boardSizeForGrade(grade);
@@ -332,8 +572,79 @@ export function generateGridStage(grade: number, seed: number): GridStage | null
   return null;
 }
 
-/** ゴール手前まで届かないフォールバック（矩形・直線＋1バンパー） */
+/** 手組みフォールバック（Grade1/2 は折れ線、3+ は直線＋矩形） */
 export function fallbackGridStage(grade: number, seed: number): GridStage {
+  const g = Math.max(1, Math.min(5, Math.floor(grade)));
+  if (g === 1) {
+    const w = 5;
+    const h = 5;
+    const pathable = makeRect(w, h);
+    const start = { c: 1, r: 4 };
+    const goal = { c: 1, r: 0 };
+    const path: CellCoord[] = [];
+    for (let c = 1; c <= 4; c++) path.push({ c, r: 4 });
+    for (let r = 3; r >= 0; r--) path.push({ c: 4, r });
+    for (let c = 3; c >= 1; c--) path.push({ c, r: 0 });
+    const { bumpers, ok } = placeDiagonalBumpers(path);
+    const dup = new Map<string, BumperCell>();
+    if (ok) bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+    if (dup.size) shuffleWrongDisplay(dup, createStageRng(seed));
+    return {
+      width: w,
+      height: h,
+      pathable,
+      start,
+      goal,
+      launch: { c: start.c, r: start.r + 1 },
+      goalPad: { c: goal.c, r: goal.r - 1 },
+      bumpers: dup,
+      solutionPath: path,
+      grade,
+      seed,
+    };
+  }
+  if (g === 2) {
+    const w = 5;
+    const h = 5;
+    const pathable = makeRect(w, h);
+    const start = { c: 1, r: 4 };
+    const goal = { c: 3, r: 0 };
+    const path: CellCoord[] = [
+      { c: 1, r: 4 },
+      { c: 2, r: 4 },
+      { c: 3, r: 4 },
+      { c: 3, r: 3 },
+      { c: 3, r: 2 },
+      { c: 2, r: 2 },
+      { c: 1, r: 2 },
+      { c: 0, r: 2 },
+      { c: 0, r: 1 },
+      { c: 0, r: 0 },
+      { c: 1, r: 0 },
+      { c: 2, r: 0 },
+      { c: 3, r: 0 },
+    ];
+    const { bumpers, ok } = placeDiagonalBumpers(path);
+    const dup = new Map<string, BumperCell>();
+    if (ok) {
+      bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+      shuffleWrongDisplay(dup, createStageRng(seed));
+    }
+    return {
+      width: w,
+      height: h,
+      pathable,
+      start,
+      goal,
+      launch: { c: start.c, r: start.r + 1 },
+      goalPad: { c: goal.c, r: goal.r - 1 },
+      bumpers: dup,
+      solutionPath: path,
+      grade,
+      seed,
+    };
+  }
+
   const { w, h } = boardSizeForGrade(grade);
   const pathable = makeRect(w, h);
   const mid = Math.floor(w / 2);

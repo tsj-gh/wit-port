@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { applyBumper, swipeToBumperKind } from "./bumperRules";
-import { generateGridStageWithFallback } from "./gridStageGen";
+import { bendOrBumperHint, generateGridStageWithFallback } from "./gridStageGen";
 import {
   DIR,
   isAgentCell,
@@ -586,7 +586,7 @@ export default function ReflecShotGame() {
           >
             {[1, 2, 3, 4, 5].map((g) => (
               <option key={g} value={g}>
-                {g}（バンパー {g <= 2 ? 1 : g <= 4 ? 2 : 3}）
+                {g}（{bendOrBumperHint(g)}）
               </option>
             ))}
           </select>

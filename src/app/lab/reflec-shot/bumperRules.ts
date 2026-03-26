@@ -59,6 +59,14 @@ export function bumperKindForTurn(dIn: Dir, dOut: Dir): BumperKind | null {
   return null;
 }
 
+/** 折れ点用：／＼のみ（直交ターン）。該当なしなら null */
+export function diagonalBumperForTurn(dIn: Dir, dOut: Dir): "SLASH" | "BACKSLASH" | null {
+  for (const kind of ["SLASH", "BACKSLASH"] as const) {
+    if (dirsEqual(applyBumper(dIn, kind), dOut)) return kind;
+  }
+  return null;
+}
+
 /** スワイプ（画面座標系 dy 下向き正）→ 8方向セクタで種にスナップ */
 export function swipeToBumperKind(dx: number, dy: number): BumperKind {
   if (dx * dx + dy * dy < 1e-8) return "HYPHEN";
