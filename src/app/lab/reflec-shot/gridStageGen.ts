@@ -272,8 +272,8 @@ function randomNonZeroSplit(target: number, parts: number, rng: () => number): n
 function unitStepDir(deltaC: number, deltaR: number): Dir | null {
   if (deltaC === 1 && deltaR === 0) return DIR.R;
   if (deltaC === -1 && deltaR === 0) return DIR.L;
-  if (deltaC === 0 && deltaR === 1) return DIR.D;
-  if (deltaC === 0 && deltaR === -1) return DIR.U;
+  if (deltaC === 0 && deltaR === 1) return DIR.U;
+  if (deltaC === 0 && deltaR === -1) return DIR.D;
   return null;
 }
 
@@ -353,7 +353,7 @@ function tryOrthogonalPolyline(
     const isH = firstHorizontal ? i % 2 === 0 : i % 2 === 1;
     let d: Dir;
     if (isH) d = lens[i]! > 0 ? DIR.R : DIR.L;
-    else d = lens[i]! > 0 ? DIR.D : DIR.U;
+    else d = lens[i]! > 0 ? DIR.U : DIR.D;
     const steps = Math.abs(lens[i]!);
     for (let s = 0; s < steps; s++) {
       cur = { c: cur.c + d.dx, r: cur.r + d.dy };

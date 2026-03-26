@@ -8,29 +8,29 @@ const key = (d: Dir) => `${d.dx},${d.dy}`;
  * 入射方向 = エージェントの進行ベクトル（どちらへ動いているか）
  */
 const SLASH_MAP: Record<string, Dir> = {
-  [key(DIR.U)]: DIR.R,
-  [key(DIR.D)]: DIR.L,
-  [key(DIR.L)]: DIR.D,
-  [key(DIR.R)]: DIR.U,
-};
-
-const BACKSLASH_MAP: Record<string, Dir> = {
-  [key(DIR.U)]: DIR.L,
   [key(DIR.D)]: DIR.R,
+  [key(DIR.U)]: DIR.L,
   [key(DIR.L)]: DIR.U,
   [key(DIR.R)]: DIR.D,
 };
 
+const BACKSLASH_MAP: Record<string, Dir> = {
+  [key(DIR.D)]: DIR.L,
+  [key(DIR.U)]: DIR.R,
+  [key(DIR.L)]: DIR.D,
+  [key(DIR.R)]: DIR.U,
+};
+
 const HYPHEN_MAP: Record<string, Dir> = {
-  [key(DIR.U)]: DIR.D,
   [key(DIR.D)]: DIR.U,
+  [key(DIR.U)]: DIR.D,
   [key(DIR.L)]: DIR.L,
   [key(DIR.R)]: DIR.R,
 };
 
 const PIPE_MAP: Record<string, Dir> = {
-  [key(DIR.U)]: DIR.U,
   [key(DIR.D)]: DIR.D,
+  [key(DIR.U)]: DIR.U,
   [key(DIR.L)]: DIR.R,
   [key(DIR.R)]: DIR.L,
 };

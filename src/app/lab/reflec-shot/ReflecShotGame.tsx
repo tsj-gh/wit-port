@@ -137,7 +137,7 @@ export default function ReflecShotGame() {
 
   const simRef = useRef({
     logicalCell: { c: 0, r: 0 } as CellCoord,
-    travelDir: DIR.U as Dir,
+    travelDir: DIR.D as Dir,
     fromCell: { c: 0, r: 0 } as CellCoord,
     toCell: { c: 0, r: 0 } as CellCoord,
     lerp01: 0,
@@ -162,7 +162,7 @@ export default function ReflecShotGame() {
     setStatusMsg("");
     simRef.current = {
       logicalCell: { ...st.launch },
-      travelDir: DIR.U,
+      travelDir: DIR.D,
       fromCell: { ...st.launch },
       toCell: { ...st.launch },
       lerp01: 0,
@@ -179,7 +179,7 @@ export default function ReflecShotGame() {
     if (!st || phase !== "edit") return;
     simRef.current = {
       logicalCell: { ...st.launch },
-      travelDir: DIR.U,
+      travelDir: DIR.D,
       fromCell: { ...st.launch },
       toCell: { ...st.start },
       lerp01: 0,
@@ -502,7 +502,7 @@ export default function ReflecShotGame() {
     setStatusMsg("");
     simRef.current = {
       logicalCell: { ...stage.launch },
-      travelDir: DIR.U,
+      travelDir: DIR.D,
       fromCell: { ...stage.launch },
       toCell: { ...stage.launch },
       lerp01: 0,
