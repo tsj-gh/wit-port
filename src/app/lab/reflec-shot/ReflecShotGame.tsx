@@ -46,44 +46,64 @@ function portalGapLengthPx(cellPx: number) {
   return Math.min(cellPx * 0.92, Math.max(mid, diam * 1.05));
 }
 
-/** 最上段・最下段の「開口」（壁の一部を描かない） */
-function strokeRectWithEdgeGaps(
+/**
+ * マス四辺すべてで線を中央付近で分断し、欠けに fillColor（マス背景と同色）を塗る
+ */
+function drawCellGappedBorder(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   s: number,
-  gapTop: boolean,
-  gapBottom: boolean,
+  fillColor: string,
   openLen: number
 ) {
-  const mid = x + s / 2;
-  const gap = openLen;
-  const lo = mid - gap / 2;
-  const hi = mid + gap / 2;
+  const g = Math.min(openLen, s * 0.92);
+  const midX = x + s / 2;
+  const midY = y + s / 2;
+  const loX = midX - g / 2;
+  const hiX = midX + g / 2;
+  const loY = midY - g / 2;
+  const hiY = midY + g / 2;
+  const stripeW = 3.5;
+
+  ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
+  ctx.lineWidth = 1;
+
   ctx.beginPath();
-  ctx.strokeStyle = "rgba(148, 163, 184, 0.35)";
-  // left
   ctx.moveTo(x, y);
-  ctx.lineTo(x, y + s);
-  // bottom
-  if (gapBottom) {
-    ctx.lineTo(lo, y + s);
-    ctx.moveTo(hi, y + s);
-    ctx.lineTo(x + s, y + s);
-  } else {
-    ctx.lineTo(x + s, y + s);
-  }
-  // right
+  ctx.lineTo(loX, y);
+  ctx.moveTo(hiX, y);
   ctx.lineTo(x + s, y);
-  // top
-  if (gapTop) {
-    ctx.lineTo(hi, y);
-    ctx.moveTo(lo, y);
-    ctx.lineTo(x, y);
-  } else {
-    ctx.lineTo(x, y);
-  }
   ctx.stroke();
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(loX, y - stripeW / 2, hiX - loX, stripeW);
+
+  ctx.beginPath();
+  ctx.moveTo(x, y + s);
+  ctx.lineTo(loX, y + s);
+  ctx.moveTo(hiX, y + s);
+  ctx.lineTo(x + s, y + s);
+  ctx.stroke();
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(loX, y + s - stripeW / 2, hiX - loX, stripeW);
+
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, loY);
+  ctx.moveTo(x, hiY);
+  ctx.lineTo(x, y + s);
+  ctx.stroke();
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x - stripeW / 2, loY, stripeW, hiY - loY);
+
+  ctx.beginPath();
+  ctx.moveTo(x + s, y);
+  ctx.lineTo(x + s, loY);
+  ctx.moveTo(x + s, hiY);
+  ctx.lineTo(x + s, y + s);
+  ctx.stroke();
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x + s - stripeW / 2, loY, stripeW, hiY - loY);
 }
 
 function bumperSymbol(k: BumperKind): string {
@@ -282,40 +302,36 @@ export default function ReflecShotGame() {
         }
 
         if (isLaunch) {
-          // 盤面(#1e293b)よりわずかにシアン寄り（パッドであることが分かる程度）
-          ctx.fillStyle = "#1a2f3c";
+          const padFill = "#1a2f3c";
+          ctx.fillStyle = padFill;
           ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
           ctx.lineWidth = 1;
-          strokeRectWithEdgeGaps(ctx, x, y, cellPx, true, false, openLenDraw);
+          drawCellGappedBorder(ctx, x, y, cellPx, padFill, openLenDraw);
           continue;
         }
         if (isGoalPad) {
-          ctx.fillStyle = "#222038";
+          const padFill = "#222038";
+          ctx.fillStyle = padFill;
           ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
           ctx.lineWidth = 1;
-          strokeRectWithEdgeGaps(ctx, x, y, cellPx, false, true, openLenDraw);
+          drawCellGappedBorder(ctx, x, y, cellPx, padFill, openLenDraw);
           continue;
         }
 
         if (!inArr || !st.pathable[c]![r]) {
-          ctx.fillStyle = "#0f172a";
+          const voidFill = "#0f172a";
+          ctx.fillStyle = voidFill;
           ctx.fillRect(x, y, cellPx, cellPx);
+          ctx.lineWidth = 1;
+          drawCellGappedBorder(ctx, x, y, cellPx, voidFill, openLenDraw);
           continue;
         }
 
-        const isStartEnt = c === st.start.c && r === st.start.r;
-        const isGoalEnt = c === st.goal.c && r === st.goal.r;
-        ctx.fillStyle = "#1e293b";
+        const pathFill = "#1e293b";
+        ctx.fillStyle = pathFill;
         ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
         ctx.lineWidth = 1;
-        if (isStartEnt) {
-          strokeRectWithEdgeGaps(ctx, x, y, cellPx, false, true, openLenDraw);
-        } else if (isGoalEnt) {
-          strokeRectWithEdgeGaps(ctx, x, y, cellPx, true, false, openLenDraw);
-        } else {
-          ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
-          ctx.strokeRect(x, y, cellPx, cellPx);
-        }
+        drawCellGappedBorder(ctx, x, y, cellPx, pathFill, openLenDraw);
 
         const k = keyCell(c, r);
         const b = st.bumpers.get(k);
