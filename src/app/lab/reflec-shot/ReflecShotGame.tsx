@@ -8,7 +8,6 @@ import {
   DIR,
   isAgentCell,
   keyCell,
-  negateDir,
   stageRowRange,
   type BumperKind,
   type CellCoord,
@@ -203,11 +202,8 @@ export default function ReflecShotGame() {
       const bump = st.bumpers.get(bk);
       if (bump) dOut = applyBumper(incomingDir, bump.display);
 
-      let next = { c: B.c + dOut.dx, r: B.r + dOut.dy };
-      if (!isAgentCell(st, next.c, next.r)) {
-        dOut = negateDir(dOut);
-        next = { c: B.c + dOut.dx, r: B.r + dOut.dy };
-      }
+      const next = { c: B.c + dOut.dx, r: B.r + dOut.dy };
+      // 進行・跳ね返り後の隣マスが壁／盤外なら壁で追い返さず失敗（U ターンしない）
       if (!isAgentCell(st, next.c, next.r)) return "lost";
       return { next, outDir: dOut };
     },
@@ -244,7 +240,9 @@ export default function ReflecShotGame() {
         sim.toCell = { ...B };
         sim.leftStart = false;
         setPhase("lost");
-        setStatusMsg("射出位置に戻りました。バンパーを調整して再チャレンジしてください。");
+        setStatusMsg(
+          "失敗です。壁へ向かう進行・反射になったか、射出位置へ戻ってしまいました。バンパーを調整してください。"
+        );
         return;
       }
       sim.fromCell = B;
@@ -658,7 +656,7 @@ export default function ReflecShotGame() {
       )}
 
       <ul className="text-wit-muted text-xs leading-relaxed space-y-1 list-disc pl-5">
-        <li>グリッド論理パズル：マス中心からマス中心へ等速移動。壁（外縁・Void）で180°反転。</li>
+        <li>グリッド論理パズル：マス中心からマス中心へ等速移動。進行・バンパー反射の向きが壁（外縁・Void）へ向くと失敗。</li>
         <li>バンパーは長押し（約{CHARGE_MS}ms）後にスワイプで ／ ＼ － ｜ にスナップ。</li>
         <li>一段下の射出マスに戻ると失敗。最上段の一段上のゴールマスに入るとクリア。</li>
         <li>開発用: <code className="text-slate-500">?devtj=true</code> でデバッグと下部の再生成・自動解答。</li>
