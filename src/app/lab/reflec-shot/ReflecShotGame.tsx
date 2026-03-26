@@ -212,14 +212,19 @@ export default function ReflecShotGame() {
       };
       const res = applyArrival(st, B, incoming);
       if (res === "goal") {
+        // 到達フレームで lerp=0 のとき描画は fromCell を参照するため、ゴールパッドにスナップする
+        sim.fromCell = { ...B };
+        sim.toCell = { ...B };
         setPhase("won");
         setStatusMsg("ゴール到達！");
         return;
       }
       if (res === "lost") {
+        sim.fromCell = { ...B };
+        sim.toCell = { ...B };
+        sim.leftStart = false;
         setPhase("lost");
         setStatusMsg("射出位置に戻りました。バンパーを調整して再チャレンジしてください。");
-        sim.leftStart = false;
         return;
       }
       sim.fromCell = B;
@@ -277,14 +282,15 @@ export default function ReflecShotGame() {
         }
 
         if (isLaunch) {
-          ctx.fillStyle = "#1e293b";
+          // 盤面(#1e293b)よりわずかにシアン寄り（パッドであることが分かる程度）
+          ctx.fillStyle = "#1a2f3c";
           ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
           ctx.lineWidth = 1;
           strokeRectWithEdgeGaps(ctx, x, y, cellPx, true, false, openLenDraw);
           continue;
         }
         if (isGoalPad) {
-          ctx.fillStyle = "#1e293b";
+          ctx.fillStyle = "#222038";
           ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
           ctx.lineWidth = 1;
           strokeRectWithEdgeGaps(ctx, x, y, cellPx, false, true, openLenDraw);
