@@ -527,15 +527,26 @@ export default function ReflecShotGame() {
             </div>
           </div>
           {isDebugPanelExpanded && (
-            <label className="mt-2 flex items-center gap-2 text-slate-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showSolutionPath}
-                onChange={(e) => setShowSolutionPath(e.target.checked)}
-                className="accent-rose-400"
-              />
-              正解経路（メインシーケンス・直線）
-            </label>
+            <>
+              <label className="mt-2 flex items-center gap-2 text-slate-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showSolutionPath}
+                  onChange={(e) => setShowSolutionPath(e.target.checked)}
+                  className="accent-rose-400"
+                />
+                正解経路（メインシーケンス・直線）
+              </label>
+              <div className="mt-2 border-t border-white/10 pt-2 space-y-0.5 text-slate-400/90 text-[10px]">
+                <div>
+                  Build:{" "}
+                  {typeof window !== "undefined" && window.location.hostname === "localhost"
+                    ? "LOCAL"
+                    : process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "-"}
+                </div>
+                <div>Time: {process.env.NEXT_PUBLIC_BUILD_DATE || "-"}</div>
+              </div>
+            </>
           )}
         </div>
       )}
