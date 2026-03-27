@@ -1,9 +1,10 @@
-import { bumperKindForTurn, diagonalBumperForTurn } from "./bumperRules";
+import { applyBumper, bumperKindForTurn, diagonalBumperForTurn } from "./bumperRules";
 import {
   addCell,
   dirsEqual,
   gridDeltaToScreenDir,
   keyCell,
+  negateDir,
   type BumperCell,
   type CellCoord,
   type GridStage,
@@ -400,8 +401,9 @@ function grade2BendNoRevisit(path: CellCoord[], bends: Set<string>): boolean {
 }
 
 /**
- * Grade 3: ちょうど 1 マスが 2 回出現。1 回目は直進（水平／垂直）、2 回目は 90° 折れ。
- * 2 回目の入射ベクトル（直前→当該）が 1 回目と異なる。1 マス 1 バンパーと整合。
+ * Grade 3: ちょうど 1 マスが 2 回出現し、**両方とも** 90° 折れ。
+ * 2 回目の入射は 1 回目の入射の逆向き、または 1 回目の反射（出射）と同じ向き。
+ * 再訪マスの前後 4 隣接マスはいずれも異なる（上下左右からそれぞれ 1 本ずつ）。
  */
 function grade3RevisitOneCellRule(path: CellCoord[]): boolean {
   if (path.length < 4) return false;
@@ -427,14 +429,111 @@ function grade3RevisitOneCellRule(path: CellCoord[]): boolean {
   const i0 = Math.min(pair[0]!, pair[1]!);
   const i1 = Math.max(pair[0]!, pair[1]!);
   if (i0 <= 0 || i1 >= path.length - 1) return false;
-  const k0 = interiorPassageKind(path, i0);
-  if (k0 === "bend" || k0 === "invalid") return false;
+  if (interiorPassageKind(path, i0) !== "bend") return false;
   if (interiorPassageKind(path, i1) !== "bend") return false;
-  const d0 = unitStepDir(path[i0]!.c - path[i0 - 1]!.c, path[i0]!.r - path[i0 - 1]!.r);
-  const d1 = unitStepDir(path[i1]!.c - path[i1 - 1]!.c, path[i1]!.r - path[i1 - 1]!.r);
-  if (!d0 || !d1) return false;
-  if (d0.dx === d1.dx && d0.dy === d1.dy) return false;
+
+  const dIn1 = unitStepDir(path[i0]!.c - path[i0 - 1]!.c, path[i0]!.r - path[i0 - 1]!.r);
+  const dOut1 = unitStepDir(path[i0 + 1]!.c - path[i0]!.c, path[i0 + 1]!.r - path[i0]!.r);
+  const dIn2 = unitStepDir(path[i1]!.c - path[i1 - 1]!.c, path[i1]!.r - path[i1 - 1]!.r);
+  if (!dIn1 || !dOut1 || !dIn2) return false;
+  const okIn2 =
+    dirsEqual(dIn2, negateDir(dIn1)) ||
+    dirsEqual(dIn2, dOut1);
+  if (!okIn2) return false;
+
+  const nb = (p: CellCoord) => keyCell(p.c, p.r);
+  const neigh = new Set([
+    nb(path[i0 - 1]!),
+    nb(path[i0 + 1]!),
+    nb(path[i1 - 1]!),
+    nb(path[i1 + 1]!),
+  ]);
+  if (neigh.size !== 4) return false;
   return true;
+}
+
+/** 再訪点 R を挟む前後を折れ線で接合（合計折れ 6 = R で 2 + 途中 4） */
+function tryConstructGrade3Path(
+  pathable: boolean[][],
+  start: CellCoord,
+  goal: CellCoord,
+  rng: () => number
+): CellCoord[] | null {
+  const w = pathable.length;
+  const h = pathable[0]!.length;
+  const invEnter = (R: CellCoord, dIn: Dir): CellCoord => ({
+    c: R.c - dIn.dx,
+    r: R.r + dIn.dy,
+  });
+  const step = (from: CellCoord, d: Dir): CellCoord => addCell(from, d);
+
+  for (let tryR = 0; tryR < 40; tryR++) {
+    const rc = 1 + Math.floor(rng() * Math.max(1, w - 2));
+    const rr = 1 + Math.floor(rng() * Math.max(1, h - 2));
+    const R = { c: rc, r: rr };
+    if (!pathable[rc]![rr]) continue;
+
+    const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
+    for (const dIn1 of dirOrder) {
+      const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
+      for (const dOut1 of outs) {
+        const sol = diagonalBumperForTurn(dIn1, dOut1);
+        if (!sol) continue;
+        const dIn2opts = [negateDir(dIn1), dOut1];
+        for (let oi = 0; oi < dIn2opts.length; oi++) {
+          const dIn2 = dIn2opts[oi]!;
+          if (oi > 0 && dirsEqual(dIn2, dIn2opts[0]!)) continue;
+          const dOut2 = applyBumper(dIn2, sol);
+          if (!orthogonalDirs(dIn2, dOut2)) continue;
+
+          const P1 = invEnter(R, dIn1);
+          const S1 = step(R, dOut1);
+          const P2 = invEnter(R, dIn2);
+          const S2 = step(R, dOut2);
+          const pts = [P1, S1, P2, S2];
+          let okPts = true;
+          for (const q of pts) {
+            if (!inBounds(q.c, q.r, w, h) || !pathable[q.c]![q.r]) {
+              okPts = false;
+              break;
+            }
+          }
+          if (!okPts) continue;
+          const nset = new Set(pts.map((q) => keyCell(q.c, q.r)));
+          if (nset.size !== 4) continue;
+
+          const splits: [number, number, number][] = [];
+          for (let a = 0; a <= 4; a++) {
+            for (let b = 0; b <= 4 - a; b++) {
+              splits.push([a, b, 4 - a - b]);
+            }
+          }
+          for (let si = splits.length - 1; si > 0; si--) {
+            const j = Math.floor(rng() * (si + 1));
+            [splits[si], splits[j]!] = [splits[j]!, splits[si]!];
+          }
+
+          for (let t = 0; t < 8; t++) {
+            const firstH = rng() < 0.5;
+            for (const [b0, b1, b2] of splits) {
+              const seg0 = tryOrthogonalPolyline(start, P1, b0, firstH, pathable, rng);
+              if (!seg0) continue;
+              const seg1 = tryOrthogonalPolyline(S1, P2, b1, rng() < 0.5, pathable, rng);
+              if (!seg1) continue;
+              const seg2 = tryOrthogonalPolyline(S2, goal, b2, rng() < 0.5, pathable, rng);
+              if (!seg2) continue;
+
+              const path = [...seg0, R, ...seg1, R, ...seg2];
+              if (countRightAngles(path) !== 6) continue;
+              if (!grade3RevisitOneCellRule(path)) continue;
+              return path;
+            }
+          }
+        }
+      }
+    }
+  }
+  return null;
 }
 
 function findGrade3SixBendPath(
@@ -443,53 +542,7 @@ function findGrade3SixBendPath(
   goal: CellCoord,
   rng: () => number
 ): CellCoord[] | null {
-  const w = pathable.length;
-  const h = pathable[0]!.length;
-  let probed = 0;
-  const PROBE_LIMIT = 2_200_000;
-
-  function dfs(cur: CellCoord, path: CellCoord[], vmap: Map<string, number>): CellCoord[] | null {
-    if (++probed > PROBE_LIMIT) return null;
-    if (path.length >= w * h + 14) return null;
-    if (countRightAngles(path) > 6) return null;
-
-    if (cur.c === goal.c && cur.r === goal.r) {
-      if (!grade3RevisitOneCellRule(path)) return null;
-      if (countRightAngles(path) !== 6) return null;
-      return path.slice();
-    }
-
-    const opts = [DIR.U, DIR.D, DIR.L, DIR.R]
-      .map((d) => {
-        const p = addCell(cur, d);
-        return { p };
-      })
-      .filter(({ p }) => inBounds(p.c, p.r, w, h) && pathable[p.c]![p.r])
-      .sort(() => rng() - 0.5);
-
-    for (const { p } of opts) {
-      const k = keyCell(p.c, p.r);
-      const next = new Map(vmap);
-      const nv = (next.get(k) ?? 0) + 1;
-      if (nv > 2) continue;
-      next.set(k, nv);
-      let nDouble = 0;
-      for (const v of Array.from(next.values())) {
-        if (v === 2) nDouble++;
-      }
-      if (nDouble > 1) continue;
-
-      path.push(p);
-      const got = dfs(p, path, next);
-      path.pop();
-      if (got) return got;
-    }
-    return null;
-  }
-
-  const vm = new Map([[keyCell(start.c, start.r), 1]]);
-  const path: CellCoord[] = [start];
-  return dfs(start, path, vm);
+  return tryConstructGrade3Path(pathable, start, goal, rng);
 }
 
 function tryOrthogonalPolyline(
@@ -654,10 +707,13 @@ function placeDiagonalBumpersInterior(path: CellCoord[]): {
     if (!dIn || !dOut) continue;
     const sol = diagonalBumperForTurn(dIn, dOut);
     if (sol == null) continue;
-    bumpers.set(keyCell(cur.c, cur.r), { display: sol, solution: sol });
+    const k = keyCell(cur.c, cur.r);
+    const existing = bumpers.get(k);
+    if (existing && existing.solution !== sol) return { bumpers, ok: false };
+    bumpers.set(k, { display: sol, solution: sol });
   }
-  const expected = countRightAngles(path);
-  const ok = bumpers.size === expected && expected > 0;
+  const uniqBendCells = bendCellsInPath(path).size;
+  const ok = bumpers.size === uniqBendCells && uniqBendCells > 0;
   return { bumpers, ok };
 }
 
@@ -714,7 +770,8 @@ function pickGrade2OrientedStage(
     if (!opts?.relaxBendVisit && !grade2BendNoRevisit(p, bendSet)) continue;
 
     const { bumpers, ok } = placeDiagonalBumpersInterior(p);
-    if (!ok || bumpers.size !== bends) continue;
+    const needBumpers = opts?.relaxBendVisit ? bendSet.size : bends;
+    if (!ok || bumpers.size !== needBumpers) continue;
 
     winners.push({
       width: w,
@@ -732,12 +789,12 @@ function pickGrade2OrientedStage(
   return winners[Math.floor(rng() * winners.length)]!;
 }
 
-/** Grade 3: 折れ 6・1 マス再訪（直進→折れ・別入射）→ Grade 2 と同型の向き調整 */
+/** Grade 3: 折れ 6・1 マス再訪（両回折れ・入射は逆または1回目反射と同一）→ Grade 2 と同型の向き調整 */
 function generateGrade3Stage(seed: number): GridStage | null {
   const rng = createStageRng(seed);
   const { w: W, h: H } = boardSizeForGrade(3);
   const pathable = makeRect(W, H);
-  const maxAttempts = 500;
+  const maxAttempts = 160;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const bottoms = bottomCandidates(pathable);
     const tops = topCandidates(pathable);
