@@ -1,5 +1,6 @@
 import { bumperKindForTurn, diagonalBumperForTurn } from "./bumperRules";
 import {
+  dirsEqual,
   keyCell,
   type BumperCell,
   type CellCoord,
@@ -351,6 +352,34 @@ function bendCellsInPath(path: CellCoord[]): Set<string> {
   return s;
 }
 
+function pathFirstStepDir(path: CellCoord[]): Dir | null {
+  if (path.length < 2) return null;
+  return unitStepDir(path[1]!.c - path[0]!.c, path[1]!.r - path[0]!.r);
+}
+
+function isStrictlyOutsideBoard(c: number, r: number, w: number, h: number) {
+  return c < 0 || c >= w || r < 0 || r >= h;
+}
+
+/** pathable と path を同時に 90° CCW 回転（新幅=旧高、新高=旧幅） */
+function applyQuarterCCWPathable(
+  pathable: boolean[][],
+  path: CellCoord[],
+  w: number,
+  h: number
+): { path: CellCoord[]; pathable: boolean[][]; w: number; h: number } {
+  const nw = h;
+  const nh = w;
+  const newPath = path.map(({ c, r }) => ({ c: r, r: w - 1 - c }));
+  const newPathable: boolean[][] = Array.from({ length: nw }, () => Array<boolean>(nh).fill(false));
+  for (let c = 0; c < w; c++) {
+    for (let r = 0; r < h; r++) {
+      newPathable[r]![w - 1 - c] = pathable[c]![r]!;
+    }
+  }
+  return { path: newPath, pathable: newPathable, w: nw, h: nh };
+}
+
 function grade1NoRevisit(path: CellCoord[]): boolean {
   const seen = new Set<string>();
   for (const p of path) {
@@ -443,9 +472,9 @@ function unitDirBetween(a: CellCoord, b: CellCoord): Dir | null {
   return { dx, dy };
 }
 
-function portalBendAtStart(path: CellCoord[], launch: CellCoord): boolean {
+function portalBendAtStart(path: CellCoord[], startPad: CellCoord): boolean {
   if (path.length < 2) return false;
-  const dIn = unitDirBetween(launch, path[0]!);
+  const dIn = unitDirBetween(startPad, path[0]!);
   const dOut = unitDirBetween(path[0]!, path[1]!);
   return !!(dIn && dOut && orthogonalDirs(dIn, dOut));
 }
@@ -459,16 +488,16 @@ function portalBendAtGoal(path: CellCoord[], goalPad: CellCoord): boolean {
   return !!(dIn && dOut && orthogonalDirs(dIn, dOut));
 }
 
-function totalDiagonalTurnCount(path: CellCoord[], launch: CellCoord, goalPad: CellCoord): number {
+function totalDiagonalTurnCount(path: CellCoord[], startPad: CellCoord, goalPad: CellCoord): number {
   let n = countRightAngles(path);
-  if (portalBendAtStart(path, launch)) n++;
+  if (portalBendAtStart(path, startPad)) n++;
   if (portalBendAtGoal(path, goalPad)) n++;
   return n;
 }
 
-function bendCellsInPathWithPortals(path: CellCoord[], launch: CellCoord, goalPad: CellCoord): Set<string> {
+function bendCellsInPathWithPortals(path: CellCoord[], startPad: CellCoord, goalPad: CellCoord): Set<string> {
   const s = bendCellsInPath(path);
-  if (portalBendAtStart(path, launch)) s.add(keyCell(path[0]!.c, path[0]!.r));
+  if (portalBendAtStart(path, startPad)) s.add(keyCell(path[0]!.c, path[0]!.r));
   if (portalBendAtGoal(path, goalPad)) s.add(keyCell(path[path.length - 1]!.c, path[path.length - 1]!.r));
   return s;
 }
@@ -476,7 +505,7 @@ function bendCellsInPathWithPortals(path: CellCoord[], launch: CellCoord, goalPa
 /** 盤内経路＋射出→入口・出口→ゴールパッドの直交にも斜めバンパーを置く */
 function placeDiagonalBumpers(
   path: CellCoord[],
-  launch: CellCoord,
+  startPad: CellCoord,
   goalPad: CellCoord
 ): {
   bumpers: Map<string, BumperCell>;
@@ -484,8 +513,8 @@ function placeDiagonalBumpers(
 } {
   const bumpers = new Map<string, BumperCell>();
 
-  if (path.length >= 2 && portalBendAtStart(path, launch)) {
-    const dIn = unitDirBetween(launch, path[0]!)!;
+  if (path.length >= 2 && portalBendAtStart(path, startPad)) {
+    const dIn = unitDirBetween(startPad, path[0]!)!;
     const dOut = unitDirBetween(path[0]!, path[1]!)!;
     const sol = diagonalBumperForTurn(dIn, dOut);
     if (sol) bumpers.set(keyCell(path[0]!.c, path[0]!.r), { display: sol, solution: sol });
@@ -514,9 +543,103 @@ function placeDiagonalBumpers(
     if (sol) bumpers.set(keyCell(g.c, g.r), { display: sol, solution: sol });
   }
 
-  const expected = totalDiagonalTurnCount(path, launch, goalPad);
+  const expected = totalDiagonalTurnCount(path, startPad, goalPad);
   const ok = bumpers.size === expected && expected > 0;
   return { bumpers, ok };
+}
+
+/** 盤内の直角折れのみ斜めバンパー（start/goal のポータル折れは置かない） */
+function placeDiagonalBumpersInterior(path: CellCoord[]): {
+  bumpers: Map<string, BumperCell>;
+  ok: boolean;
+} {
+  const bumpers = new Map<string, BumperCell>();
+  for (let i = 1; i < path.length - 1; i++) {
+    const prev = path[i - 1]!;
+    const cur = path[i]!;
+    const next = path[i + 1]!;
+    const dIn = dirBetween(prev, cur);
+    const dOut = dirBetween(cur, next);
+    if (dIn.dx === 0 && dIn.dy === 0) continue;
+    if (dOut.dx === 0 && dOut.dy === 0) continue;
+    if (Math.abs(dIn.dx) + Math.abs(dIn.dy) !== 1 || Math.abs(dOut.dx) + Math.abs(dOut.dy) !== 1) continue;
+    const sol = diagonalBumperForTurn(dIn, dOut);
+    if (sol == null) continue;
+    bumpers.set(keyCell(cur.c, cur.r), { display: sol, solution: sol });
+  }
+  const expected = countRightAngles(path);
+  const ok = bumpers.size === expected && expected > 0;
+  return { bumpers, ok };
+}
+
+type Grade2OrientedSnapshot = {
+  width: number;
+  height: number;
+  pathable: boolean[][];
+  start: CellCoord;
+  goal: CellCoord;
+  startPad: CellCoord;
+  goalPad: CellCoord;
+  solutionPath: CellCoord[];
+  bumpers: Map<string, BumperCell>;
+};
+
+function pickGrade2OrientedStage(
+  pathable: boolean[][],
+  path: CellCoord[],
+  w0: number,
+  h0: number,
+  bends: number,
+  rng: () => number
+): Grade2OrientedSnapshot | null {
+  const winners: Grade2OrientedSnapshot[] = [];
+  for (let k = 0; k < 4; k++) {
+    let p = path.map((x) => ({ ...x }));
+    let pb = pathable.map((col) => [...col!]);
+    let w = w0;
+    let h = h0;
+    for (let i = 0; i < k; i++) {
+      const nx = applyQuarterCCWPathable(pb, p, w, h);
+      p = nx.path;
+      pb = nx.pathable;
+      w = nx.w;
+      h = nx.h;
+    }
+    const fs = pathFirstStepDir(p);
+    if (!fs || !dirsEqual(fs, DIR.U)) continue;
+
+    const start = p[0]!;
+    const goal = p[p.length - 1]!;
+    const startPad = { c: start.c, r: start.r - 1 };
+    const prev = p[p.length - 2]!;
+    const dLast = unitDirBetween(prev, goal);
+    if (!dLast) continue;
+    const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
+    if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, w, h)) continue;
+
+    const dEntry = unitDirBetween(startPad, start);
+    if (!dEntry || !dirsEqual(dEntry, DIR.U)) continue;
+
+    const bendSet = bendCellsInPath(p);
+    if (!grade2BendNoRevisit(p, bendSet)) continue;
+
+    const { bumpers, ok } = placeDiagonalBumpersInterior(p);
+    if (!ok || bumpers.size !== bends) continue;
+
+    winners.push({
+      width: w,
+      height: h,
+      pathable: pb,
+      start,
+      goal,
+      startPad,
+      goalPad,
+      solutionPath: p,
+      bumpers: new Map(bumpers),
+    });
+  }
+  if (!winners.length) return null;
+  return winners[Math.floor(rng() * winners.length)]!;
 }
 
 function wrongDiagonal(sol: BumperKind): BumperKind {
@@ -578,17 +701,35 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
 
     if (grade === 2 && !pathHasOrthogonalCrossCell(path)) continue;
 
-    const launch = { c: start.c, r: start.r + 1 };
+    if (grade === 2) {
+      const picked = pickGrade2OrientedStage(pathable, path, W, H, bends, rng);
+      if (!picked) continue;
+      const dup = new Map<string, BumperCell>();
+      picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+      shuffleWrongDisplay(dup, rng);
+      return {
+        width: picked.width,
+        height: picked.height,
+        pathable: picked.pathable,
+        start: picked.start,
+        goal: picked.goal,
+        startPad: picked.startPad,
+        goalPad: picked.goalPad,
+        bumpers: dup,
+        solutionPath: picked.solutionPath,
+        grade,
+        seed,
+      };
+    }
+
+    const startPad = { c: start.c, r: start.r + 1 };
     const goalPad = { c: goal.c, r: goal.r - 1 };
 
     if (grade === 1) {
       if (!grade1NoRevisit(path)) continue;
-    } else {
-      const bendSet = bendCellsInPathWithPortals(path, launch, goalPad);
-      if (!grade2BendNoRevisit(path, bendSet)) continue;
     }
 
-    const { bumpers, ok } = placeDiagonalBumpers(path, launch, goalPad);
+    const { bumpers, ok } = placeDiagonalBumpers(path, startPad, goalPad);
     if (!ok || bumpers.size === 0) continue;
 
     const dup = new Map<string, BumperCell>();
@@ -601,7 +742,7 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
       pathable,
       start,
       goal,
-      launch,
+      startPad,
       goalPad,
       bumpers: dup,
       solutionPath: path,
@@ -692,7 +833,7 @@ export function generateGridStage(grade: number, seed: number): GridStage | null
       pathable,
       start,
       goal,
-      launch: { c: start.c, r: start.r + 1 },
+      startPad: { c: start.c, r: start.r + 1 },
       goalPad: { c: goal.c, r: goal.r - 1 },
       bumpers,
       solutionPath: path,
@@ -717,9 +858,9 @@ export function fallbackGridStage(grade: number, seed: number): GridStage {
     for (let c = 1; c <= 4; c++) path.push({ c, r: 4 });
     for (let r = 3; r >= 0; r--) path.push({ c: 4, r });
     for (let c = 3; c >= 1; c--) path.push({ c, r: 0 });
-    const launch = { c: start.c, r: start.r + 1 };
+    const startPad = { c: start.c, r: start.r + 1 };
     const goalPad = { c: goal.c, r: goal.r - 1 };
-    const { bumpers, ok } = placeDiagonalBumpers(path, launch, goalPad);
+    const { bumpers, ok } = placeDiagonalBumpers(path, startPad, goalPad);
     const dup = new Map<string, BumperCell>();
     if (ok) bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
     if (dup.size) shuffleWrongDisplay(dup, createStageRng(seed));
@@ -729,7 +870,7 @@ export function fallbackGridStage(grade: number, seed: number): GridStage {
       pathable,
       start,
       goal,
-      launch,
+      startPad,
       goalPad,
       bumpers: dup,
       solutionPath: path,
@@ -741,8 +882,6 @@ export function fallbackGridStage(grade: number, seed: number): GridStage {
     const w = 5;
     const h = 5;
     const pathable = makeRect(w, h);
-    const start = { c: 1, r: 4 };
-    const goal = { c: 3, r: 0 };
     // 十型の直交マス (2,2) を含む（横通過・縦通過がどちらも直進）
     const path: CellCoord[] = [
       { c: 1, r: 4 },
@@ -767,24 +906,25 @@ export function fallbackGridStage(grade: number, seed: number): GridStage {
       { c: 3, r: 1 },
       { c: 3, r: 0 },
     ];
-    const launch = { c: start.c, r: start.r + 1 };
-    const goalPad = { c: goal.c, r: goal.r - 1 };
-    const { bumpers, ok } = placeDiagonalBumpers(path, launch, goalPad);
-    const dup = new Map<string, BumperCell>();
-    if (ok) {
-      bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
-      shuffleWrongDisplay(dup, createStageRng(seed));
+    const bends = countRightAngles(path);
+    const rng = createStageRng(seed);
+    const picked = pickGrade2OrientedStage(pathable, path, w, h, bends, rng);
+    if (!picked) {
+      throw new Error("fallbackGridStage(2): pickGrade2OrientedStage failed");
     }
+    const dup = new Map<string, BumperCell>();
+    picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+    shuffleWrongDisplay(dup, rng);
     return {
-      width: w,
-      height: h,
-      pathable,
-      start,
-      goal,
-      launch,
-      goalPad,
+      width: picked.width,
+      height: picked.height,
+      pathable: picked.pathable,
+      start: picked.start,
+      goal: picked.goal,
+      startPad: picked.startPad,
+      goalPad: picked.goalPad,
       bumpers: dup,
-      solutionPath: path,
+      solutionPath: picked.solutionPath,
       grade,
       seed,
     };
@@ -810,7 +950,7 @@ export function fallbackGridStage(grade: number, seed: number): GridStage {
     pathable,
     start,
     goal,
-    launch: { c: start.c, r: start.r + 1 },
+    startPad: { c: start.c, r: start.r + 1 },
     goalPad: { c: goal.c, r: goal.r - 1 },
     bumpers,
     solutionPath: path,

@@ -13,7 +13,7 @@
  * - **`DIR.U`** = `{ dx:0, dy:1 }`（`r` 増＝画面下、論理 ΔY の負方向）。**`DIR.D`** = `{ dx:0, dy:-1 }`（`r` 減＝画面上、論理 ＋Y）。
  *
  * 論理位置 (X, Y) を入口を原点にして絶対 `CellCoord` と対応させるなら:
- * `c = start.c + X`, `r = start.r - Y`（入口の一段下の射出マスは Y = -1 など）。
+ * `c = start.c + X`, `r = start.r - Y`（`startPad` はグレードにより start の真上／真下など）。
  */
 /** グリッド上の移動方向（列 c への増分 dx、行 r への増分 dy。dy が負なら r が減り画面上向き・ゴール寄り） */
 export type Dir = { dx: number; dy: number };
@@ -52,6 +52,15 @@ export function addCell(a: CellCoord, d: Dir): CellCoord {
   return { c: a.c + d.dx, r: a.r + d.dy };
 }
 
+/** 直交隣接のときのみ a→b の単位方向を返す */
+export function unitOrthoDirBetween(a: CellCoord, b: CellCoord): Dir | null {
+  const dx = Math.sign(b.c - a.c);
+  const dy = Math.sign(b.r - a.r);
+  if (dx !== 0 && dy !== 0) return null;
+  if (dx === 0 && dy === 0) return null;
+  return { dx, dy };
+}
+
 export type BumperCell = {
   /** 現在プレイヤーが設定した種類 */
   display: BumperKind;
@@ -68,9 +77,9 @@ export type GridStage = {
   start: CellCoord;
   /** 最上段の到達マス（pathable）。上辺がゴールゾーンへ開く */
   goal: CellCoord;
-  /** 射出体の待機マス（最下段の1マス下。start の真下） */
-  launch: CellCoord;
-  /** ゴールエリア（最上段の1マス上。goal の真上） */
+  /** 射出体の初期位置（Grade1: start の真下／Grade2: start の真上。盤外も可） */
+  startPad: CellCoord;
+  /** クリア判定マス（Grade1: goal の真上／Grade2: 最終進行方向に goal と隣接する盤外） */
   goalPad: CellCoord;
   bumpers: Map<string, BumperCell>;
   /** デバッグ用：正解経路のセル列（端点含む） */
@@ -79,14 +88,15 @@ export type GridStage = {
   seed: number;
 };
 
-/** エージェントが存在しうるマス（pathable ∪ 射出 ∪ ゴールエリア） */
+/** エージェントが存在しうるマス（pathable ∪ startPad ∪ ゴールエリア） */
 export function isAgentCell(st: GridStage, c: number, r: number) {
-  if (c === st.launch.c && r === st.launch.r) return true;
+  if (c === st.startPad.c && r === st.startPad.r) return true;
   if (c === st.goalPad.c && r === st.goalPad.r) return true;
   if (c < 0 || r < 0 || c >= st.width || r >= st.height) return false;
   return st.pathable[c]![r]!;
 }
 
 export function stageRowRange(st: GridStage) {
-  return { rMin: st.goalPad.r, rMax: st.launch.r };
+  const rows = [st.goalPad.r, st.startPad.r, st.start.r, st.goal.r];
+  return { rMin: Math.min(...rows), rMax: Math.max(...rows) };
 }

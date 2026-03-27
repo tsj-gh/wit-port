@@ -9,6 +9,7 @@ import {
   isAgentCell,
   keyCell,
   stageRowRange,
+  unitOrthoDirBetween,
   type BumperKind,
   type CellCoord,
   type Dir,
@@ -20,6 +21,10 @@ const CHARGE_MS = 520;
 const SWIPE_MIN = 12;
 
 type Phase = "edit" | "move" | "won" | "lost";
+
+function shotEntryDir(st: GridStage): Dir {
+  return unitOrthoDirBetween(st.startPad, st.start) ?? DIR.D;
+}
 
 function pathableAt(st: GridStage, c: number, r: number) {
   if (c < 0 || r < 0 || c >= st.width || r >= st.height) return false;
@@ -161,10 +166,10 @@ export default function ReflecShotGame() {
     setPhase("edit");
     setStatusMsg("");
     simRef.current = {
-      logicalCell: { ...st.launch },
-      travelDir: DIR.D,
-      fromCell: { ...st.launch },
-      toCell: { ...st.launch },
+      logicalCell: { ...st.startPad },
+      travelDir: shotEntryDir(st),
+      fromCell: { ...st.startPad },
+      toCell: { ...st.startPad },
       lerp01: 0,
       leftStart: false,
     };
@@ -178,9 +183,9 @@ export default function ReflecShotGame() {
     const st = stage;
     if (!st || phase !== "edit") return;
     simRef.current = {
-      logicalCell: { ...st.launch },
-      travelDir: DIR.D,
-      fromCell: { ...st.launch },
+      logicalCell: { ...st.startPad },
+      travelDir: shotEntryDir(st),
+      fromCell: { ...st.startPad },
       toCell: { ...st.start },
       lerp01: 0,
       leftStart: false,
@@ -193,9 +198,9 @@ export default function ReflecShotGame() {
     (st: GridStage, B: CellCoord, incomingDir: Dir): { next: CellCoord; outDir: Dir } | "goal" | "lost" => {
       const sim = simRef.current;
       if (B.c === st.goalPad.c && B.r === st.goalPad.r) return "goal";
-      if (B.c === st.launch.c && B.r === st.launch.r && sim.leftStart) return "lost";
+      if (B.c === st.startPad.c && B.r === st.startPad.r && sim.leftStart) return "lost";
 
-      if (B.c !== st.launch.c || B.r !== st.launch.r) sim.leftStart = true;
+      if (B.c !== st.startPad.c || B.r !== st.startPad.r) sim.leftStart = true;
 
       let dOut = incomingDir;
       const bk = keyCell(B.c, B.r);
@@ -287,19 +292,19 @@ export default function ReflecShotGame() {
       for (let c = 0; c < st.width; c++) {
         const x = ox + c * cellPx;
         const y = rowY(r);
-        const isLaunch = c === st.launch.c && r === st.launch.r;
+        const isStartPad = c === st.startPad.c && r === st.startPad.r;
         const isGoalPad = c === st.goalPad.c && r === st.goalPad.r;
         const inArr = r >= 0 && r < st.height;
-        const onPadRow = r === st.launch.r || r === st.goalPad.r;
+        const onPadRow = r === st.startPad.r || r === st.goalPad.r;
 
         // パッド行は射出／ゴールの1マスのみ描画。他はキャンバス背景と同化（マス無し）
-        if (onPadRow && !isLaunch && !isGoalPad) {
+        if (onPadRow && !isStartPad && !isGoalPad) {
           ctx.fillStyle = "#020617";
           ctx.fillRect(x, y, cellPx, cellPx);
           continue;
         }
 
-        if (isLaunch) {
+        if (isStartPad) {
           const padFill = "#1a2f3c";
           ctx.fillStyle = padFill;
           ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
@@ -347,7 +352,7 @@ export default function ReflecShotGame() {
       ctx.strokeStyle = "rgba(244, 63, 94, 0.55)";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      const pL = cellCenterPx(st.launch.c, st.launch.r, cellPx, ox, oy, rMin);
+      const pL = cellCenterPx(st.startPad.c, st.startPad.r, cellPx, ox, oy, rMin);
       const p0 = cellCenterPx(st.solutionPath[0]!.c, st.solutionPath[0]!.r, cellPx, ox, oy, rMin);
       ctx.moveTo(pL.x, pL.y);
       ctx.lineTo(p0.x, p0.y);
@@ -501,10 +506,10 @@ export default function ReflecShotGame() {
     setPhase("edit");
     setStatusMsg("");
     simRef.current = {
-      logicalCell: { ...stage.launch },
-      travelDir: DIR.D,
-      fromCell: { ...stage.launch },
-      toCell: { ...stage.launch },
+      logicalCell: { ...stage.startPad },
+      travelDir: shotEntryDir(stage),
+      fromCell: { ...stage.startPad },
+      toCell: { ...stage.startPad },
       lerp01: 0,
       leftStart: false,
     };
@@ -595,7 +600,7 @@ export default function ReflecShotGame() {
           onClick={beginShot}
           disabled={phase !== "edit" || !stage}
         >
-          射出（上方向）
+          射出（start へ）
         </button>
         {phase === "lost" && (
           <button
@@ -658,7 +663,7 @@ export default function ReflecShotGame() {
       <ul className="text-wit-muted text-xs leading-relaxed space-y-1 list-disc pl-5">
         <li>グリッド論理パズル：マス中心からマス中心へ等速移動。進行・バンパー反射の向きが壁（外縁・Void）へ向くと失敗。</li>
         <li>バンパーは長押し（約{CHARGE_MS}ms）後にスワイプで ／ ＼ － ｜ にスナップ。</li>
-        <li>一段下の射出マスに戻ると失敗。最上段の一段上のゴールマスに入るとクリア。</li>
+        <li>スタート側パッド（startPad）に戻ると失敗。ゴール側パッド（goalPad）に入るとクリア（グレードによりパッドの位置が異なります）。</li>
         <li>開発用: <code className="text-slate-500">?devtj=true</code> でデバッグと下部の再生成・自動解答。</li>
       </ul>
     </div>
