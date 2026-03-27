@@ -544,7 +544,7 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
   const { w: W, h: H } = boardSizeForGrade(grade);
   const pathable = makeRect(W, H);
 
-  const maxAttempts = 350;
+  const maxAttempts = grade === 2 ? 1200 : 350;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const bottoms = bottomCandidates(pathable);
     const tops = topCandidates(pathable);
@@ -575,6 +575,8 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
     if (!path) continue;
 
     if (countRightAngles(path) !== bends) continue;
+
+    if (grade === 2 && !pathHasOrthogonalCrossCell(path)) continue;
 
     const launch = { c: start.c, r: start.r + 1 };
     const goalPad = { c: goal.c, r: goal.r - 1 };
@@ -741,11 +743,14 @@ export function fallbackGridStage(grade: number, seed: number): GridStage {
     const pathable = makeRect(w, h);
     const start = { c: 1, r: 4 };
     const goal = { c: 3, r: 0 };
+    // 十型の直交マス (2,2) を含む（横通過・縦通過がどちらも直進）
     const path: CellCoord[] = [
       { c: 1, r: 4 },
       { c: 2, r: 4 },
       { c: 3, r: 4 },
-      { c: 3, r: 3 },
+      { c: 4, r: 4 },
+      { c: 4, r: 3 },
+      { c: 4, r: 2 },
       { c: 3, r: 2 },
       { c: 2, r: 2 },
       { c: 1, r: 2 },
@@ -754,6 +759,12 @@ export function fallbackGridStage(grade: number, seed: number): GridStage {
       { c: 0, r: 0 },
       { c: 1, r: 0 },
       { c: 2, r: 0 },
+      { c: 2, r: 1 },
+      { c: 2, r: 2 },
+      { c: 2, r: 3 },
+      { c: 3, r: 3 },
+      { c: 3, r: 2 },
+      { c: 3, r: 1 },
       { c: 3, r: 0 },
     ];
     const launch = { c: start.c, r: start.r + 1 };
