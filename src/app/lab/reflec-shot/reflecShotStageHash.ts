@@ -1,3 +1,4 @@
+import { generateGridStageWithFallback } from "./gridStageGen";
 import {
   BUMPER_KINDS,
   type BumperCell,
@@ -6,22 +7,8 @@ import {
   type GridStage,
 } from "./gridTypes";
 
-const PREFIX = "rs1.";
-
-type PayloadV1 = {
-  v: 1;
-  grade: number;
-  seed: number;
-  width: number;
-  height: number;
-  pathable: boolean[][];
-  start: CellCoord;
-  goal: CellCoord;
-  startPad: CellCoord;
-  goalPad: CellCoord;
-  solutionPath: CellCoord[];
-  bumpers: Record<string, { display: BumperKind; solution: BumperKind }>;
-};
+const PREFIX_V1 = "rs1.";
+const PREFIX_V2 = "rs2.";
 
 function toBase64Url(json: string): string {
   const b64 = btoa(unescape(encodeURIComponent(json)));
@@ -51,33 +38,9 @@ function isCellCoord(x: unknown): x is CellCoord {
   );
 }
 
-/** 盤面・パッド・経路・各バンパーの display（プレイ中）/ solution を含む再現用ハッシュ */
-export function encodeReflecStageHash(st: GridStage): string {
-  const bumpers: PayloadV1["bumpers"] = {};
-  st.bumpers.forEach((cell, k) => {
-    bumpers[k] = { display: cell.display, solution: cell.solution };
-  });
-  const payload: PayloadV1 = {
-    v: 1,
-    grade: st.grade,
-    seed: st.seed,
-    width: st.width,
-    height: st.height,
-    pathable: st.pathable,
-    start: st.start,
-    goal: st.goal,
-    startPad: st.startPad,
-    goalPad: st.goalPad,
-    solutionPath: st.solutionPath,
-    bumpers,
-  };
-  return PREFIX + toBase64Url(JSON.stringify(payload));
-}
-
-export function decodeReflecStageHash(raw: string): GridStage | null {
-  const t = raw.trim();
-  if (!t.startsWith(PREFIX)) return null;
-  const json = fromBase64Url(t.slice(PREFIX.length));
+function decodeRs1Payload(t: string): GridStage | null {
+  if (!t.startsWith(PREFIX_V1)) return null;
+  const json = fromBase64Url(t.slice(PREFIX_V1.length));
   if (!json) return null;
   let parsed: unknown;
   try {
@@ -132,4 +95,42 @@ export function decodeReflecStageHash(raw: string): GridStage | null {
     grade: gi,
     seed: si,
   };
+}
+
+function decodeRs2SeedOnly(t: string): GridStage | null {
+  const u = t.trim();
+  if (!u.toLowerCase().startsWith(PREFIX_V2)) return null;
+  const rest = u.slice(PREFIX_V2.length);
+  const dot = rest.indexOf(".");
+  if (dot < 0) return null;
+  const gradeStr = rest.slice(0, dot);
+  const hexStr = rest.slice(dot + 1).trim();
+  if (!gradeStr || !hexStr) return null;
+  const grade = Math.floor(Number(gradeStr));
+  if (!Number.isFinite(grade) || grade < 1) return null;
+  if (!/^[0-9a-f]+$/i.test(hexStr) || hexStr.length > 8) return null;
+  const seed = parseInt(hexStr, 16) >>> 0;
+  if (!Number.isFinite(seed)) return null;
+  return generateGridStageWithFallback(grade, seed);
+}
+
+/**
+ * Pair-link のシード表示に近い **グレード + seed（hex）** の短い文字列。
+ * 盤面は `generateGridStageWithFallback(grade, seed)` により復元（手動バンパー操作は含まない）。
+ */
+export function encodeReflecStageHash(st: GridStage): string {
+  const g = Math.floor(st.grade);
+  const s = st.seed >>> 0;
+  return `${PREFIX_V2}${g}.${s.toString(16)}`;
+}
+
+/**
+ * `rs2.{grade}.{uint32 hex}` は生成で初期盤を復元。旧形式 `rs1.` + Base64 JSON も解釈可能。
+ */
+export function decodeReflecStageHash(raw: string): GridStage | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const v2 = decodeRs2SeedOnly(t);
+  if (v2) return v2;
+  return decodeRs1Payload(t);
 }

@@ -18,7 +18,8 @@ import {
 } from "./gridTypes";
 import { decodeReflecStageHash, encodeReflecStageHash } from "./reflecShotStageHash";
 
-const CELL_TRAVEL_MS = 280;
+/** 1マス移動の基準時間（ms）。実効速度はこれを速度倍率で除算。 */
+const BASE_CELL_TRAVEL_MS = 280;
 const CHARGE_MS = 520;
 const SWIPE_MIN = 12;
 
@@ -141,6 +142,8 @@ export default function ReflecShotGame() {
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
   const [showSolutionPath, setShowSolutionPath] = useState(false);
+  /** デバッグ時のみスライダーで変更。非デバッグ・非 devtj 時は 2（従来の約2倍速）固定。 */
+  const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(2);
   const [hashInput, setHashInput] = useState("");
   const [layoutNonce, setLayoutNonce] = useState(0);
   const pendingRestoreRef = useRef<GridStage | null>(null);
@@ -211,7 +214,7 @@ export default function ReflecShotGame() {
 
   const currentStageHash = useMemo(
     () => (stage ? encodeReflecStageHash(stage) : ""),
-    [stage, bumperTick]
+    [stage?.grade, stage?.seed]
   );
 
   const applyStageFromHash = useCallback((raw: string) => {
@@ -267,8 +270,11 @@ export default function ReflecShotGame() {
       const st = stage;
       if (!st || phase !== "move") return;
 
+      const speedMult = isDevTj && isDebugMode ? debugBallSpeedMult : 2;
+      const cellTravelMs = BASE_CELL_TRAVEL_MS / speedMult;
+
       const sim = simRef.current;
-      sim.lerp01 += dtMs / CELL_TRAVEL_MS;
+      sim.lerp01 += dtMs / cellTravelMs;
       if (sim.lerp01 < 1) return;
 
       sim.lerp01 = 0;
@@ -301,7 +307,7 @@ export default function ReflecShotGame() {
       sim.toCell = res.next;
       sim.travelDir = res.outDir;
     },
-    [applyArrival, phase, stage]
+    [applyArrival, debugBallSpeedMult, isDebugMode, isDevTj, phase, stage]
   );
 
   const draw = useCallback(() => {
@@ -609,6 +615,19 @@ export default function ReflecShotGame() {
                 />
                 正解経路（メインシーケンス・直線）
               </label>
+              <div className="mt-2 flex items-center gap-2 text-slate-400">
+                <span className="shrink-0 text-[10px]">球の速度</span>
+                <input
+                  type="range"
+                  min={0.25}
+                  max={4}
+                  step={0.25}
+                  value={debugBallSpeedMult}
+                  onChange={(e) => setDebugBallSpeedMult(Number(e.target.value))}
+                  className="flex-1 min-w-0 accent-sky-400"
+                />
+                <span className="tabular-nums w-10 text-right text-[10px] text-sky-200/90">{debugBallSpeedMult}×</span>
+              </div>
               <div className="mt-2 border-t border-white/10 pt-2 space-y-0.5 text-slate-400/90 text-[10px]">
                 <div>
                   Build:{" "}
@@ -619,7 +638,7 @@ export default function ReflecShotGame() {
                 <div>Time: {process.env.NEXT_PUBLIC_BUILD_DATE || "-"}</div>
               </div>
               <div className="mt-2 border-t border-white/10 pt-2 space-y-1.5">
-                <div className="font-semibold text-slate-300 text-[10px]">盤面ハッシュ（再現用）</div>
+                <div className="font-semibold text-slate-300 text-[10px]">シード（初期盤再現）</div>
                 <div className="flex items-start gap-1 flex-wrap">
                   <span className="text-slate-400 shrink-0 text-[10px]">Current:</span>
                   <code
@@ -647,7 +666,7 @@ export default function ReflecShotGame() {
                     type="text"
                     value={hashInput}
                     onChange={(e) => setHashInput(e.target.value)}
-                    placeholder="rs1...."
+                    placeholder="rs2.{grade}.{hex}"
                     className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
                   />
                   <button
@@ -663,7 +682,8 @@ export default function ReflecShotGame() {
                   </button>
                 </div>
                 <p className="text-[9px] text-slate-500 leading-snug">
-                  pathable・パッド・正解経路・各バンパーの display / solution を含みます（不正解の表示状態も再現）。
+                  <code className="text-slate-400">rs2.</code> はグレードと seed のみ（生成と同じ初期盤）。旧{" "}
+                  <code className="text-slate-400">rs1.</code> 長形式も解釈します。
                 </p>
               </div>
             </>
