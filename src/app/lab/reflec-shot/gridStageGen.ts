@@ -510,7 +510,9 @@ function tryConstructGrade3Path(
           }
           for (let si = splits.length - 1; si > 0; si--) {
             const j = Math.floor(rng() * (si + 1));
-            [splits[si], splits[j]!] = [splits[j]!, splits[si]!];
+            const tmp = splits[si]!;
+            splits[si] = splits[j]!;
+            splits[j] = tmp;
           }
 
           for (let t = 0; t < 8; t++) {
