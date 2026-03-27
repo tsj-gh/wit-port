@@ -492,6 +492,8 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
 
     const start = bottoms[Math.floor(rng() * bottoms.length)]!;
     const goal = tops[Math.floor(rng() * tops.length)]!;
+    const dc = goal.c - start.c;
+    const dr = goal.r - start.r;
 
     let bends: number;
     if (grade === 1) {
@@ -499,11 +501,14 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
       if (bends === 2 && start.c === goal.c) bends = 4;
     } else {
       bends = rng() < 0.5 ? 4 : 6;
+      // 折れ4: 列差・行差の両方が非零（両軸に直交ターンが必ず現れる経路のみ）
+      if (bends === 4 && (dc === 0 || dr === 0)) continue;
     }
 
     let path: CellCoord[] | null = null;
-    for (let t = 0; t < 24; t++) {
-      const firstH = rng() < 0.5;
+    const polyTries = grade === 2 && bends === 4 ? 40 : 24;
+    for (let t = 0; t < polyTries; t++) {
+      const firstH = grade === 2 && bends === 4 && t < 2 ? t % 2 === 0 : rng() < 0.5;
       path = tryOrthogonalPolyline(start, goal, bends, firstH, pathable, rng);
       if (path) break;
     }
