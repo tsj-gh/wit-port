@@ -1,4 +1,3 @@
-import { generateGridStageWithFallback } from "./gridStageGen";
 import {
   BUMPER_KINDS,
   type BumperCell,
@@ -9,6 +8,10 @@ import {
 
 const PREFIX_V1 = "rs1.";
 const PREFIX_V2 = "rs2.";
+
+export type ParsedReflecHashRs1 = { kind: "rs1"; fullInput: string };
+export type ParsedReflecHashRs2 = { kind: "rs2"; grade: number; seed: number };
+export type ParsedReflecHash = ParsedReflecHashRs1 | ParsedReflecHashRs2;
 
 function toBase64Url(json: string): string {
   const b64 = btoa(unescape(encodeURIComponent(json)));
@@ -36,6 +39,30 @@ function isCellCoord(x: unknown): x is CellCoord {
     typeof (x as CellCoord).c === "number" &&
     typeof (x as CellCoord).r === "number"
   );
+}
+
+/** `rs2.{grade}.{hex}` または `rs1....` を判別（生成は行わない） */
+export function parseReflecHash(raw: string): ParsedReflecHash | null {
+  const t = raw.trim();
+  if (!t) return null;
+  if (t.toLowerCase().startsWith(PREFIX_V2)) {
+    const rest = t.slice(PREFIX_V2.length);
+    const dot = rest.indexOf(".");
+    if (dot < 0) return null;
+    const gradeStr = rest.slice(0, dot);
+    const hexStr = rest.slice(dot + 1).trim();
+    if (!gradeStr || !hexStr) return null;
+    const grade = Math.floor(Number(gradeStr));
+    if (!Number.isFinite(grade) || grade < 1) return null;
+    if (!/^[0-9a-f]+$/i.test(hexStr) || hexStr.length > 8) return null;
+    const seed = parseInt(hexStr, 16) >>> 0;
+    if (!Number.isFinite(seed)) return null;
+    return { kind: "rs2", grade, seed };
+  }
+  if (t.startsWith(PREFIX_V1)) {
+    return { kind: "rs1", fullInput: t };
+  }
+  return null;
 }
 
 function decodeRs1Payload(t: string): GridStage | null {
@@ -97,26 +124,9 @@ function decodeRs1Payload(t: string): GridStage | null {
   };
 }
 
-function decodeRs2SeedOnly(t: string): GridStage | null {
-  const u = t.trim();
-  if (!u.toLowerCase().startsWith(PREFIX_V2)) return null;
-  const rest = u.slice(PREFIX_V2.length);
-  const dot = rest.indexOf(".");
-  if (dot < 0) return null;
-  const gradeStr = rest.slice(0, dot);
-  const hexStr = rest.slice(dot + 1).trim();
-  if (!gradeStr || !hexStr) return null;
-  const grade = Math.floor(Number(gradeStr));
-  if (!Number.isFinite(grade) || grade < 1) return null;
-  if (!/^[0-9a-f]+$/i.test(hexStr) || hexStr.length > 8) return null;
-  const seed = parseInt(hexStr, 16) >>> 0;
-  if (!Number.isFinite(seed)) return null;
-  return generateGridStageWithFallback(grade, seed);
-}
-
 /**
  * Pair-link のシード表示に近い **グレード + seed（hex）** の短い文字列。
- * 盤面は `generateGridStageWithFallback(grade, seed)` により復元（手動バンパー操作は含まない）。
+ * 盤面復元（rs2）は Worker 側の `generateGridStageWithFallback` を利用すること。
  */
 export function encodeReflecStageHash(st: GridStage): string {
   const g = Math.floor(st.grade);
@@ -125,12 +135,11 @@ export function encodeReflecStageHash(st: GridStage): string {
 }
 
 /**
- * `rs2.{grade}.{uint32 hex}` は生成で初期盤を復元。旧形式 `rs1.` + Base64 JSON も解釈可能。
+ * `rs1.` + Base64 JSON のみ同期的に復号。`rs2.` は `parseReflecHash` + Worker 生成を利用。
  */
 export function decodeReflecStageHash(raw: string): GridStage | null {
-  const t = raw.trim();
-  if (!t) return null;
-  const v2 = decodeRs2SeedOnly(t);
-  if (v2) return v2;
-  return decodeRs1Payload(t);
+  const p = parseReflecHash(raw);
+  if (!p) return null;
+  if (p.kind === "rs1") return decodeRs1Payload(p.fullInput);
+  return null;
 }

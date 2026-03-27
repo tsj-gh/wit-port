@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { applyBumper, swipeToBumperKind } from "./bumperRules";
-import { bendOrBumperHint, generateGridStageWithFallback } from "./gridStageGen";
+import { useReflectShotWorker } from "@/hooks/useReflectShotWorker";
+import { bendOrBumperHint } from "./gridStageGen";
 import {
   addCell,
   DIR,
@@ -16,7 +17,7 @@ import {
   type Dir,
   type GridStage,
 } from "./gridTypes";
-import { decodeReflecStageHash, encodeReflecStageHash } from "./reflecShotStageHash";
+import { decodeReflecStageHash, encodeReflecStageHash, parseReflecHash } from "./reflecShotStageHash";
 
 /** 1マス移動の基準時間（ms）。実効速度はこれを速度倍率で除算。 */
 const BASE_CELL_TRAVEL_MS = 280;
@@ -113,6 +114,17 @@ function drawCellGappedBorder(
   ctx.fillRect(x + s - stripeW / 2, loY, stripeW, hiY - loY);
 }
 
+function cloneGridStageForRestore(st: GridStage): GridStage {
+  return {
+    ...st,
+    pathable: st.pathable.map((col) => [...col!]),
+    bumpers: new Map(
+      Array.from(st.bumpers.entries()).map(([k, v]) => [k, { display: v.display, solution: v.solution }])
+    ),
+    solutionPath: st.solutionPath.map((p) => ({ ...p })),
+  };
+}
+
 function bumperSymbol(k: BumperKind): string {
   switch (k) {
     case "SLASH":
@@ -147,6 +159,7 @@ export default function ReflecShotGame() {
   const [hashInput, setHashInput] = useState("");
   const [layoutNonce, setLayoutNonce] = useState(0);
   const pendingRestoreRef = useRef<GridStage | null>(null);
+  const { generate: generateStageInWorker, isGenerating, lastMetrics } = useReflectShotWorker();
 
   const simRef = useRef({
     logicalCell: { c: 0, r: 0 } as CellCoord,
@@ -168,33 +181,11 @@ export default function ReflecShotGame() {
     hasSwipe: boolean;
   } | null>(null);
 
-  const roll = useCallback((g: number, s: number) => {
-    const st = generateGridStageWithFallback(g, s);
-    setStage(st);
-    setPhase("edit");
-    setStatusMsg("");
-    simRef.current = {
-      logicalCell: { ...st.startPad },
-      travelDir: shotEntryDir(st),
-      fromCell: { ...st.startPad },
-      toCell: { ...st.startPad },
-      lerp01: 0,
-      leftStart: false,
-    };
-  }, []);
-
   useEffect(() => {
     const pending = pendingRestoreRef.current;
     if (pending) {
       pendingRestoreRef.current = null;
-      const cloned: GridStage = {
-        ...pending,
-        pathable: pending.pathable.map((col) => [...col!]),
-        bumpers: new Map(
-          Array.from(pending.bumpers.entries()).map(([k, v]) => [k, { display: v.display, solution: v.solution }])
-        ),
-        solutionPath: pending.solutionPath.map((p) => ({ ...p })),
-      };
+      const cloned = cloneGridStageForRestore(pending);
       setStage(cloned);
       setPhase("edit");
       setStatusMsg("");
@@ -209,25 +200,72 @@ export default function ReflecShotGame() {
       };
       return;
     }
-    roll(grade, seed);
-  }, [grade, seed, layoutNonce, roll]);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { stage } = await generateStageInWorker(grade, seed);
+        if (cancelled) return;
+        setStage(stage);
+        setPhase("edit");
+        setStatusMsg("");
+        setBumperTick((t) => t + 1);
+        simRef.current = {
+          logicalCell: { ...stage.startPad },
+          travelDir: shotEntryDir(stage),
+          fromCell: { ...stage.startPad },
+          toCell: { ...stage.startPad },
+          lerp01: 0,
+          leftStart: false,
+        };
+      } catch {
+        if (!cancelled) setStatusMsg("盤面の生成に失敗しました（Worker）");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [grade, seed, layoutNonce, generateStageInWorker]);
 
   const currentStageHash = useMemo(
     () => (stage ? encodeReflecStageHash(stage) : ""),
     [stage?.grade, stage?.seed]
   );
 
-  const applyStageFromHash = useCallback((raw: string) => {
-    const st = decodeReflecStageHash(raw);
-    if (!st) {
-      setStatusMsg("ハッシュの解析に失敗しました");
-      return;
-    }
-    pendingRestoreRef.current = st;
-    setGrade(st.grade);
-    setSeed(st.seed >>> 0);
-    setLayoutNonce((n) => n + 1);
-  }, []);
+  const applyStageFromHash = useCallback(
+    (raw: string) => {
+      const t = raw.trim();
+      const parsed = parseReflecHash(t);
+      if (!parsed) {
+        setStatusMsg("ハッシュの解析に失敗しました");
+        return;
+      }
+      if (parsed.kind === "rs1") {
+        const st = decodeReflecStageHash(t);
+        if (!st) {
+          setStatusMsg("ハッシュの解析に失敗しました");
+          return;
+        }
+        pendingRestoreRef.current = st;
+        setGrade(st.grade);
+        setSeed(st.seed >>> 0);
+        setLayoutNonce((n) => n + 1);
+        return;
+      }
+      void (async () => {
+        try {
+          const { stage } = await generateStageInWorker(parsed.grade, parsed.seed);
+          pendingRestoreRef.current = cloneGridStageForRestore(stage);
+          setGrade(stage.grade);
+          setSeed(stage.seed >>> 0);
+          setLayoutNonce((n) => n + 1);
+        } catch {
+          setStatusMsg("ハッシュからの生成に失敗しました");
+        }
+      })();
+    },
+    [generateStageInWorker]
+  );
 
   const beginShot = useCallback(() => {
     const st = stage;
@@ -636,6 +674,14 @@ export default function ReflecShotGame() {
                     : process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "-"}
                 </div>
                 <div>Time: {process.env.NEXT_PUBLIC_BUILD_DATE || "-"}</div>
+                <div>
+                  盤面 Worker:{" "}
+                  {isGenerating
+                    ? "RUNNING"
+                    : lastMetrics
+                      ? `${lastMetrics.totalMs.toFixed(1)} ms`
+                      : "—"}
+                </div>
               </div>
               <div className="mt-2 border-t border-white/10 pt-2 space-y-1.5">
                 <div className="font-semibold text-slate-300 text-[10px]">シード（初期盤再現）</div>
@@ -675,7 +721,7 @@ export default function ReflecShotGame() {
                       const s = hashInput.trim();
                       if (s) applyStageFromHash(s);
                     }}
-                    disabled={!hashInput.trim()}
+                    disabled={!hashInput.trim() || isGenerating}
                     className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-40"
                   >
                     ハッシュから生成
@@ -697,6 +743,7 @@ export default function ReflecShotGame() {
           <select
             className="bg-slate-800 border border-white/15 rounded-lg px-2 py-1 text-wit-text"
             value={grade}
+            disabled={isGenerating}
             onChange={(e) => {
               setGrade(Number(e.target.value));
               setSeed((Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0);
@@ -748,7 +795,8 @@ export default function ReflecShotGame() {
         <div className="flex flex-wrap gap-2 justify-center pb-2">
           <button
             type="button"
-            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10"
+            disabled={isGenerating}
+            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
             onClick={regen}
           >
             ステージ再生成
@@ -767,7 +815,8 @@ export default function ReflecShotGame() {
         <div className="flex justify-center pb-2">
           <button
             type="button"
-            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10"
+            disabled={isGenerating}
+            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
             onClick={regen}
           >
             ステージ再生成
