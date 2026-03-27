@@ -11,15 +11,15 @@ const key = (d: Dir) => `${d.dx},${d.dy}`;
 const SLASH_MAP: Record<string, Dir> = {
   [key(DIR.U)]: DIR.R,
   [key(DIR.D)]: DIR.L,
-  [key(DIR.L)]: DIR.U,
-  [key(DIR.R)]: DIR.D,
+  [key(DIR.L)]: DIR.D,
+  [key(DIR.R)]: DIR.U,
 };
 
 const BACKSLASH_MAP: Record<string, Dir> = {
   [key(DIR.U)]: DIR.L,
   [key(DIR.D)]: DIR.R,
-  [key(DIR.L)]: DIR.D,
-  [key(DIR.R)]: DIR.U,
+  [key(DIR.L)]: DIR.U,
+  [key(DIR.R)]: DIR.D,
 };
 
 const HYPHEN_MAP: Record<string, Dir> = {

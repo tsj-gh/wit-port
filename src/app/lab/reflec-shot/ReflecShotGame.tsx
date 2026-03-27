@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { applyBumper, swipeToBumperKind } from "./bumperRules";
 import { bendOrBumperHint, generateGridStageWithFallback } from "./gridStageGen";
@@ -16,6 +16,7 @@ import {
   type Dir,
   type GridStage,
 } from "./gridTypes";
+import { decodeReflecStageHash, encodeReflecStageHash } from "./reflecShotStageHash";
 
 const CELL_TRAVEL_MS = 280;
 const CHARGE_MS = 520;
@@ -140,6 +141,9 @@ export default function ReflecShotGame() {
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
   const [showSolutionPath, setShowSolutionPath] = useState(false);
+  const [hashInput, setHashInput] = useState("");
+  const [layoutNonce, setLayoutNonce] = useState(0);
+  const pendingRestoreRef = useRef<GridStage | null>(null);
 
   const simRef = useRef({
     logicalCell: { c: 0, r: 0 } as CellCoord,
@@ -177,8 +181,50 @@ export default function ReflecShotGame() {
   }, []);
 
   useEffect(() => {
+    const pending = pendingRestoreRef.current;
+    if (pending) {
+      pendingRestoreRef.current = null;
+      const cloned: GridStage = {
+        ...pending,
+        pathable: pending.pathable.map((col) => [...col!]),
+        bumpers: new Map(
+          Array.from(pending.bumpers.entries()).map(([k, v]) => [k, { display: v.display, solution: v.solution }])
+        ),
+        solutionPath: pending.solutionPath.map((p) => ({ ...p })),
+      };
+      setStage(cloned);
+      setPhase("edit");
+      setStatusMsg("");
+      setBumperTick((t) => t + 1);
+      simRef.current = {
+        logicalCell: { ...cloned.startPad },
+        travelDir: shotEntryDir(cloned),
+        fromCell: { ...cloned.startPad },
+        toCell: { ...cloned.startPad },
+        lerp01: 0,
+        leftStart: false,
+      };
+      return;
+    }
     roll(grade, seed);
-  }, [grade, seed, roll]);
+  }, [grade, seed, layoutNonce, roll]);
+
+  const currentStageHash = useMemo(
+    () => (stage ? encodeReflecStageHash(stage) : ""),
+    [stage, bumperTick]
+  );
+
+  const applyStageFromHash = useCallback((raw: string) => {
+    const st = decodeReflecStageHash(raw);
+    if (!st) {
+      setStatusMsg("ハッシュの解析に失敗しました");
+      return;
+    }
+    pendingRestoreRef.current = st;
+    setGrade(st.grade);
+    setSeed(st.seed >>> 0);
+    setLayoutNonce((n) => n + 1);
+  }, []);
 
   const beginShot = useCallback(() => {
     const st = stage;
@@ -571,6 +617,54 @@ export default function ReflecShotGame() {
                     : process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "-"}
                 </div>
                 <div>Time: {process.env.NEXT_PUBLIC_BUILD_DATE || "-"}</div>
+              </div>
+              <div className="mt-2 border-t border-white/10 pt-2 space-y-1.5">
+                <div className="font-semibold text-slate-300 text-[10px]">盤面ハッシュ（再現用）</div>
+                <div className="flex items-start gap-1 flex-wrap">
+                  <span className="text-slate-400 shrink-0 text-[10px]">Current:</span>
+                  <code
+                    className="text-[9px] break-all flex-1 min-w-0 bg-black/40 px-1 rounded text-emerald-200/90 max-h-20 overflow-y-auto"
+                    title={currentStageHash || "—"}
+                  >
+                    {currentStageHash || "—"}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentStageHash && navigator.clipboard) {
+                        navigator.clipboard.writeText(currentStageHash);
+                      }
+                    }}
+                    disabled={!currentStageHash}
+                    className="px-1.5 py-0.5 rounded text-[9px] border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-40 shrink-0"
+                  >
+                    コピー
+                  </button>
+                </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-slate-400 shrink-0 text-[10px]">入力:</span>
+                  <input
+                    type="text"
+                    value={hashInput}
+                    onChange={(e) => setHashInput(e.target.value)}
+                    placeholder="rs1...."
+                    className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const s = hashInput.trim();
+                      if (s) applyStageFromHash(s);
+                    }}
+                    disabled={!hashInput.trim()}
+                    className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-40"
+                  >
+                    ハッシュから生成
+                  </button>
+                </div>
+                <p className="text-[9px] text-slate-500 leading-snug">
+                  pathable・パッド・正解経路・各バンパーの display / solution を含みます（不正解の表示状態も再現）。
+                </p>
               </div>
             </>
           )}
