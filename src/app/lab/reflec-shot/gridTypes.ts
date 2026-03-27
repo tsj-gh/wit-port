@@ -98,7 +98,15 @@ export function isAgentCell(st: GridStage, c: number, r: number) {
   return st.pathable[c]![r]!;
 }
 
+/**
+ * キャンバスで描く行の範囲 `[rMin, rMax]`（グリッド行 `r`）。列は常に `0..width-1` を走査するが、
+ * 行方向は **スタート／ゴール／両パッド** に加え、**正解経路 `solutionPath` が通るすべてのマス**の行を含める。
+ * `start`・`goal` が一辺に寄っていても、経路が別の行を使う場合はそこが欠けず描画される。
+ */
 export function stageRowRange(st: GridStage) {
-  const rows = [st.goalPad.r, st.startPad.r, st.start.r, st.goal.r];
+  const rows: number[] = [st.goalPad.r, st.startPad.r, st.start.r, st.goal.r];
+  for (const p of st.solutionPath) {
+    rows.push(p.r);
+  }
   return { rMin: Math.min(...rows), rMax: Math.max(...rows) };
 }
