@@ -281,6 +281,66 @@ function orthogonalDirs(a: Dir, b: Dir): boolean {
   return a.dx * b.dx + a.dy * b.dy === 0 && a.dx * a.dx + a.dy * a.dy === 1 && b.dx * b.dx + b.dy * b.dy === 1;
 }
 
+type InteriorPassage = "horizontal" | "vertical" | "bend" | "invalid";
+
+/** 経路添字 i（両端除く）での通過: 直進（同軸・反対向き同軸含む）／90°折れ／非隣接など無効 */
+function interiorPassageKind(path: CellCoord[], i: number): InteriorPassage {
+  if (i <= 0 || i >= path.length - 1) return "invalid";
+  const d0 = unitStepDir(path[i]!.c - path[i - 1]!.c, path[i]!.r - path[i - 1]!.r);
+  const d1 = unitStepDir(path[i + 1]!.c - path[i]!.c, path[i + 1]!.r - path[i]!.r);
+  if (!d0 || !d1) return "invalid";
+  if (orthogonalDirs(d0, d1)) return "bend";
+  if (d0.dx === 0 && d1.dx === 0) return "vertical";
+  if (d0.dy === 0 && d1.dy === 0) return "horizontal";
+  return "invalid";
+}
+
+/**
+ * 直交マス（十）が経路上に存在するか。
+ *
+ * 定義: そのマスは経路中に2回以上通過し、かつ両端を除く各通過で 90° に折れない（直進）こと。
+ * さらに、内部通過のうち列方向（東西）の直進が1回以上、行方向（南北）の直進が1回以上あること。
+ * （経路を描くと当該マスで「十」字に交差して見える。）
+ */
+export function pathHasOrthogonalCrossCell(path: CellCoord[]): boolean {
+  if (path.length < 3) return false;
+
+  const visitCount = new Map<string, number>();
+  for (const p of path) {
+    const k = keyCell(p.c, p.r);
+    visitCount.set(k, (visitCount.get(k) ?? 0) + 1);
+  }
+
+  const acc = new Map<
+    string,
+    {
+      horizontal: boolean;
+      vertical: boolean;
+      hasBendOrInvalid: boolean;
+    }
+  >();
+
+  for (let i = 1; i <= path.length - 2; i++) {
+    const k = keyCell(path[i]!.c, path[i]!.r);
+    const kind = interiorPassageKind(path, i);
+    let r = acc.get(k);
+    if (!r) {
+      r = { horizontal: false, vertical: false, hasBendOrInvalid: false };
+      acc.set(k, r);
+    }
+    if (kind === "bend" || kind === "invalid") r.hasBendOrInvalid = true;
+    if (kind === "horizontal") r.horizontal = true;
+    if (kind === "vertical") r.vertical = true;
+  }
+
+  for (const [k, r] of Array.from(acc.entries())) {
+    if ((visitCount.get(k) ?? 0) < 2) continue;
+    if (r.hasBendOrInvalid) continue;
+    if (r.horizontal && r.vertical) return true;
+  }
+  return false;
+}
+
 function bendCellsInPath(path: CellCoord[]): Set<string> {
   const s = new Set<string>();
   for (let i = 1; i < path.length - 1; i++) {
