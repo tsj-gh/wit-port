@@ -45,17 +45,17 @@
 ### Grade 1
 
 - **盤面**: 4×4 矩形（全体 `pathable`）。
-- **経路**: `start` を `bottomCandidates`、`goal` を `topCandidates` から乱択。折れ数は **2 または 4**（ただし `start` と `goal` が同列なら 4 のみ）。
+- **経路**: `start` を `bottomCandidates`、`goal` を `topCandidates` から乱択。折れ数は **1〜4** を乱択。
 - **制約**: 折れ数どおりの直角。**同一マス再訪なし**（`grade1NoRevisit`）。
-- **バンパー**: 盤内の直角折れに加え、**射出入力で `startPad→start` と経路第 1 辺が直交する場合は `start` にバンパー**。同様に **出口で直交折れなら `goal` にバンパー**（`placeDiagonalBumpers`）。
+- **バンパー**: 盤内の直角折れに加え、**射出入力で `startPad→start` と経路第 1 辺が直交する場合は `start` にバンパー**。同様に **出口で直交折れなら `goal` にバンパー**（`placeDiagonalBumpers`）。**配置後のバンパー合計が 5 以上**の経路は採用しない（リトライ）。
 - **パッド**: 上記「Grade 1」の `startPad` / `goalPad`。
 
 ### Grade 2
 
 - **盤面**: 5×5 矩形（全体 `pathable`）。
 - **経路**: `start` / `goal` の選び方は Grade 1 と同型。折れ数は **4 または 6**。折れ 4 のときは列差・行差が両方非零（両軸にターン必須）。
-- **直交マス**: 経路上に「十」字交差セルが存在すること（`pathHasOrthogonalCrossCell`）。
-- **再訪**: 折れマス以外で同じマスを二度通らない（`grade2BendNoRevisit`）。ポータル用の仮想折れは **使わない**（内角折れ集合は `bendCellsInPath` のみ）。
+- **直交マス**: 折れ **4** のときのみ、経路上に「十」字交差セルが存在すること（`pathHasOrthogonalCrossCell`）。折れ **6** のときは**全マス同一再訪なし**（`grade1NoRevisit` と同等）。
+- **再訪（折れ 4）**: 折れマス以外で同じマスを二度通らない（`grade2BendNoRevisit`）。ポータル用の仮想折れは **使わない**（内角折れ集合は `bendCellsInPath` のみ）。折れ **6** では上記に加え経路全体でマスの重複なし。
 - **向きと回転**: 経路決定後、**盤面と経路を 90° 単位で回転**し、**経路の第 1 歩が必ず `DIR.U`** になる向きだけを採用。複数候補があれば乱択。
 - **パッド**: `startPad` / `goalPad` は上記 Grade 2 定義。
 - **バンパー**: **盤内の直角折れのセルのみ**（`placeDiagonalBumpersInterior`）。**`start` / `goal` にはポータル用バンパーを置かない**。バンパー個数は **折れ数と常に一致**（例: 6 折れで 8 個にはならない）。

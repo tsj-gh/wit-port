@@ -20,7 +20,7 @@ function inBounds(c: number, r: number, w: number, h: number) {
 /** UI 用：折れ回数目安（Grade3+ は従来のバンパー個数目安） */
 export function bendOrBumperHint(grade: number): string {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
-  if (g === 1) return "折れ2〜4";
+  if (g === 1) return "折れ1〜4";
   if (g === 2) return "折れ4〜6";
   if (g <= 4) return "バンパー2";
   return "バンパー3";
@@ -673,8 +673,7 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
 
     let bends: number;
     if (grade === 1) {
-      bends = rng() < 0.5 ? 2 : 4;
-      if (bends === 2 && start.c === goal.c) bends = 4;
+      bends = Math.floor(rng() * 4) + 1;
     } else {
       bends = rng() < 0.5 ? 4 : 6;
       // 折れ4: 列差・行差の両方が非零（両軸に直交ターンが必ず現れる経路のみ）
@@ -692,7 +691,13 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
 
     if (countRightAngles(path) !== bends) continue;
 
-    if (grade === 2 && !pathHasOrthogonalCrossCell(path)) continue;
+    if (grade === 2) {
+      if (bends === 6) {
+        if (!grade1NoRevisit(path)) continue;
+      } else if (!pathHasOrthogonalCrossCell(path)) {
+        continue;
+      }
+    }
 
     if (grade === 2) {
       const picked = pickGrade2OrientedStage(pathable, path, W, H, bends, rng);
@@ -724,6 +729,7 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
 
     const { bumpers, ok } = placeDiagonalBumpers(path, startPad, goalPad);
     if (!ok || bumpers.size === 0) continue;
+    if (bumpers.size >= 5) continue;
 
     const dup = new Map<string, BumperCell>();
     bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
