@@ -17,19 +17,21 @@ function inBounds(c: number, r: number, w: number, h: number) {
   return c >= 0 && c < w && r >= 0 && r < h;
 }
 
-/** UI 用：折れ回数目安（Grade3+ は従来のバンパー個数目安） */
+/** UI 用：折れ回数目安・バンパー目安 */
 export function bendOrBumperHint(grade: number): string {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
   if (g === 1) return "折れ1〜4";
   if (g === 2) return "折れ4〜6";
-  if (g <= 4) return "バンパー2";
+  if (g === 3) return "折れ6・再訪1";
+  if (g === 4) return "バンパー2";
   return "バンパー3";
 }
 
 export function bumpersForGrade(grade: number): number {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
   if (g <= 2) return 0;
-  if (g <= 4) return 2;
+  if (g === 3) return 0;
+  if (g === 4) return 2;
   return 3;
 }
 
@@ -54,7 +56,8 @@ function templatesForBoard(w: number, h: number, grade: number): (() => boolean[
   const rect = () => makeRect(w, h);
   if (g <= 1) return [rect];
   if (g === 2) return [rect, () => templateL(w, h)];
-  if (g === 3) return [rect, () => templateL(w, h), () => templateT(w, h)];
+  if (g === 3) return [rect];
+  if (g === 4) return [rect, () => templateL(w, h), () => templateT(w, h)];
   return [rect, () => templateL(w, h), () => templateT(w, h), () => templateCross(w, h)];
 }
 
@@ -396,6 +399,99 @@ function grade2BendNoRevisit(path: CellCoord[], bends: Set<string>): boolean {
   return !bad;
 }
 
+/**
+ * Grade 3: ちょうど 1 マスが 2 回出現。1 回目は直進（水平／垂直）、2 回目は 90° 折れ。
+ * 2 回目の入射ベクトル（直前→当該）が 1 回目と異なる。1 マス 1 バンパーと整合。
+ */
+function grade3RevisitOneCellRule(path: CellCoord[]): boolean {
+  if (path.length < 4) return false;
+  const keyToIndices = new Map<string, number[]>();
+  path.forEach((p, i) => {
+    const k = keyCell(p.c, p.r);
+    let arr = keyToIndices.get(k);
+    if (!arr) {
+      arr = [];
+      keyToIndices.set(k, arr);
+    }
+    arr.push(i);
+  });
+  let doubleKey: string | null = null;
+  for (const [k, arr] of Array.from(keyToIndices.entries())) {
+    if (arr.length === 2) {
+      if (doubleKey !== null) return false;
+      doubleKey = k;
+    } else if (arr.length !== 1) return false;
+  }
+  if (!doubleKey) return false;
+  const pair = keyToIndices.get(doubleKey)!;
+  const i0 = Math.min(pair[0]!, pair[1]!);
+  const i1 = Math.max(pair[0]!, pair[1]!);
+  if (i0 <= 0 || i1 >= path.length - 1) return false;
+  const k0 = interiorPassageKind(path, i0);
+  if (k0 === "bend" || k0 === "invalid") return false;
+  if (interiorPassageKind(path, i1) !== "bend") return false;
+  const d0 = unitStepDir(path[i0]!.c - path[i0 - 1]!.c, path[i0]!.r - path[i0 - 1]!.r);
+  const d1 = unitStepDir(path[i1]!.c - path[i1 - 1]!.c, path[i1]!.r - path[i1 - 1]!.r);
+  if (!d0 || !d1) return false;
+  if (d0.dx === d1.dx && d0.dy === d1.dy) return false;
+  return true;
+}
+
+function findGrade3SixBendPath(
+  pathable: boolean[][],
+  start: CellCoord,
+  goal: CellCoord,
+  rng: () => number
+): CellCoord[] | null {
+  const w = pathable.length;
+  const h = pathable[0]!.length;
+  let probed = 0;
+  const PROBE_LIMIT = 2_200_000;
+
+  function dfs(cur: CellCoord, path: CellCoord[], vmap: Map<string, number>): CellCoord[] | null {
+    if (++probed > PROBE_LIMIT) return null;
+    if (path.length >= w * h + 14) return null;
+    if (countRightAngles(path) > 6) return null;
+
+    if (cur.c === goal.c && cur.r === goal.r) {
+      if (!grade3RevisitOneCellRule(path)) return null;
+      if (countRightAngles(path) !== 6) return null;
+      return path.slice();
+    }
+
+    const opts = [DIR.U, DIR.D, DIR.L, DIR.R]
+      .map((d) => {
+        const p = addCell(cur, d);
+        return { p };
+      })
+      .filter(({ p }) => inBounds(p.c, p.r, w, h) && pathable[p.c]![p.r])
+      .sort(() => rng() - 0.5);
+
+    for (const { p } of opts) {
+      const k = keyCell(p.c, p.r);
+      const next = new Map(vmap);
+      const nv = (next.get(k) ?? 0) + 1;
+      if (nv > 2) continue;
+      next.set(k, nv);
+      let nDouble = 0;
+      for (const v of Array.from(next.values())) {
+        if (v === 2) nDouble++;
+      }
+      if (nDouble > 1) continue;
+
+      path.push(p);
+      const got = dfs(p, path, next);
+      path.pop();
+      if (got) return got;
+    }
+    return null;
+  }
+
+  const vm = new Map([[keyCell(start.c, start.r), 1]]);
+  const path: CellCoord[] = [start];
+  return dfs(start, path, vm);
+}
+
 function tryOrthogonalPolyline(
   start: CellCoord,
   goal: CellCoord,
@@ -583,7 +679,8 @@ function pickGrade2OrientedStage(
   w0: number,
   h0: number,
   bends: number,
-  rng: () => number
+  rng: () => number,
+  opts?: { relaxBendVisit?: boolean }
 ): Grade2OrientedSnapshot | null {
   const winners: Grade2OrientedSnapshot[] = [];
   for (let k = 0; k < 4; k++) {
@@ -614,7 +711,7 @@ function pickGrade2OrientedStage(
     if (!dEntry || !dirsEqual(dEntry, DIR.U)) continue;
 
     const bendSet = bendCellsInPath(p);
-    if (!grade2BendNoRevisit(p, bendSet)) continue;
+    if (!opts?.relaxBendVisit && !grade2BendNoRevisit(p, bendSet)) continue;
 
     const { bumpers, ok } = placeDiagonalBumpersInterior(p);
     if (!ok || bumpers.size !== bends) continue;
@@ -633,6 +730,42 @@ function pickGrade2OrientedStage(
   }
   if (!winners.length) return null;
   return winners[Math.floor(rng() * winners.length)]!;
+}
+
+/** Grade 3: 折れ 6・1 マス再訪（直進→折れ・別入射）→ Grade 2 と同型の向き調整 */
+function generateGrade3Stage(seed: number): GridStage | null {
+  const rng = createStageRng(seed);
+  const { w: W, h: H } = boardSizeForGrade(3);
+  const pathable = makeRect(W, H);
+  const maxAttempts = 500;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const bottoms = bottomCandidates(pathable);
+    const tops = topCandidates(pathable);
+    if (!bottoms.length || !tops.length) return null;
+    const start = bottoms[Math.floor(rng() * bottoms.length)]!;
+    const goal = tops[Math.floor(rng() * tops.length)]!;
+    const path = findGrade3SixBendPath(pathable, start, goal, rng);
+    if (!path) continue;
+    const picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
+    if (!picked) continue;
+    const dup = new Map<string, BumperCell>();
+    picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+    shuffleWrongDisplay(dup, rng);
+    return {
+      width: picked.width,
+      height: picked.height,
+      pathable: picked.pathable,
+      start: picked.start,
+      goal: picked.goal,
+      startPad: picked.startPad,
+      goalPad: picked.goalPad,
+      bumpers: dup,
+      solutionPath: picked.solutionPath,
+      grade: 3,
+      seed,
+    };
+  }
+  return null;
 }
 
 function wrongDiagonal(sol: BumperKind): BumperKind {
@@ -755,6 +888,7 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
 export function generateGridStage(grade: number, seed: number): GridStage | null {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
   if (g <= 2) return generatePolylineStage(grade, seed);
+  if (g === 3) return generateGrade3Stage(seed);
 
   const rng = createStageRng(seed);
   const bumperN = bumpersForGrade(grade);
@@ -848,7 +982,7 @@ export function generateGridStage(grade: number, seed: number): GridStage | null
   return null;
 }
 
-/** 手組みフォールバック（Grade1/2 は折れ線、3+ は直線＋矩形） */
+/** 手組みフォールバック（G1/2 折れ線、G3 折れ6再訪、G4+ 直線＋矩形） */
 export function fallbackGridStage(grade: number, seed: number): GridStage {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
   if (g === 1) {
@@ -931,6 +1065,13 @@ export function fallbackGridStage(grade: number, seed: number): GridStage {
       grade,
       seed,
     };
+  }
+  if (g === 3) {
+    for (let t = 0; t < 80; t++) {
+      const st = generateGrade3Stage((seed + t * 130051) >>> 0);
+      if (st) return { ...st, grade: g, seed };
+    }
+    throw new Error("fallbackGridStage(3): generateGrade3Stage failed");
   }
 
   const { w, h } = boardSizeForGrade(grade);
