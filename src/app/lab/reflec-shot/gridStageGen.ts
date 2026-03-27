@@ -1,6 +1,8 @@
 import { bumperKindForTurn, diagonalBumperForTurn } from "./bumperRules";
 import {
+  addCell,
   dirsEqual,
+  gridDeltaToScreenDir,
   keyCell,
   type BumperCell,
   type CellCoord,
@@ -8,6 +10,7 @@ import {
   type BumperKind,
   DIR,
   type Dir,
+  unitOrthoDirBetween,
 } from "./gridTypes";
 
 function inBounds(c: number, r: number, w: number, h: number) {
@@ -109,8 +112,7 @@ function connected(pathable: boolean[][], a: CellCoord, b: CellCoord): boolean {
     const u = q.shift()!;
     if (u.c === b.c && u.r === b.r) return true;
     for (const d of dirs) {
-      const nc = u.c + d.dx;
-      const nr = u.r + d.dy;
+      const { c: nc, r: nr } = addCell(u, d);
       if (!inBounds(nc, nr, w, h) || !pathable[nc]![nr]) continue;
       const k = keyCell(nc, nr);
       if (vis.has(k)) continue;
@@ -155,10 +157,6 @@ function topCandidates(pathable: boolean[][]): CellCoord[] {
   return out.length ? out : [];
 }
 
-function dirBetween(from: CellCoord, to: CellCoord): Dir {
-  return { dx: to.c - from.c, dy: to.r - from.r };
-}
-
 function findSimplePath(
   pathable: boolean[][],
   start: CellCoord,
@@ -174,8 +172,7 @@ function findSimplePath(
   function neighbors(cell: CellCoord): CellCoord[] {
     const n: CellCoord[] = [];
     for (const d of [DIR.U, DIR.D, DIR.L, DIR.R]) {
-      const nc = cell.c + d.dx;
-      const nr = cell.r + d.dy;
+      const { c: nc, r: nr } = addCell(cell, d);
       if (inBounds(nc, nr, w, h) && pathable[nc]![nr]) n.push({ c: nc, r: nr });
     }
     for (let i = n.length - 1; i > 0; i--) {
@@ -223,16 +220,14 @@ function addDeadEndBranches(
     if (rng() > 0.4) continue;
     const dirs = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
     for (const d of dirs) {
-      let cc = cell.c + d.dx;
-      let rr = cell.r + d.dy;
+      let cur = addCell(cell, d);
       let steps = 0;
-      while (steps < 4 && inBounds(cc, rr, w, h) && !pathable[cc]![rr] && used < budget) {
-        pathable[cc]![rr] = true;
+      while (steps < 4 && inBounds(cur.c, cur.r, w, h) && !pathable[cur.c]![cur.r] && used < budget) {
+        pathable[cur.c]![cur.r] = true;
         used++;
         steps++;
         if (rng() < 0.35) break;
-        cc += d.dx;
-        rr += d.dy;
+        cur = addCell(cur, d);
       }
       if (steps) break;
     }
@@ -270,12 +265,10 @@ function randomNonZeroSplit(target: number, parts: number, rng: () => number): n
   return null;
 }
 
+/** グリッド差分 (Δc, Δr) から画面上の隣接 1 歩の `Dir` */
 function unitStepDir(deltaC: number, deltaR: number): Dir | null {
-  if (deltaC === 1 && deltaR === 0) return DIR.R;
-  if (deltaC === -1 && deltaR === 0) return DIR.L;
-  if (deltaC === 0 && deltaR === 1) return DIR.U;
-  if (deltaC === 0 && deltaR === -1) return DIR.D;
-  return null;
+  if (!((Math.abs(deltaC) === 1 && deltaR === 0) || (deltaC === 0 && Math.abs(deltaR) === 1))) return null;
+  return gridDeltaToScreenDir({ dx: deltaC, dy: deltaR });
 }
 
 function orthogonalDirs(a: Dir, b: Dir): boolean {
@@ -442,10 +435,10 @@ function tryOrthogonalPolyline(
     const isH = firstHorizontal ? i % 2 === 0 : i % 2 === 1;
     let d: Dir;
     if (isH) d = lens[i]! > 0 ? DIR.R : DIR.L;
-    else d = lens[i]! > 0 ? DIR.U : DIR.D;
+    else d = lens[i]! > 0 ? DIR.D : DIR.U;
     const steps = Math.abs(lens[i]!);
     for (let s = 0; s < steps; s++) {
-      cur = { c: cur.c + d.dx, r: cur.r + d.dy };
+      cur = addCell(cur, d);
       if (!inBounds(cur.c, cur.r, w, h) || !pathable[cur.c]![cur.r]) return null;
       path.push(cur);
     }
@@ -514,8 +507,10 @@ function placeDiagonalBumpers(
   const bumpers = new Map<string, BumperCell>();
 
   if (path.length >= 2 && portalBendAtStart(path, startPad)) {
-    const dIn = unitDirBetween(startPad, path[0]!)!;
-    const dOut = unitDirBetween(path[0]!, path[1]!)!;
+    const gIn = unitDirBetween(startPad, path[0]!)!;
+    const gOut = unitDirBetween(path[0]!, path[1]!)!;
+    const dIn = unitStepDir(gIn.dx, gIn.dy)!;
+    const dOut = unitStepDir(gOut.dx, gOut.dy)!;
     const sol = diagonalBumperForTurn(dIn, dOut);
     if (sol) bumpers.set(keyCell(path[0]!.c, path[0]!.r), { display: sol, solution: sol });
   }
@@ -524,11 +519,9 @@ function placeDiagonalBumpers(
     const prev = path[i - 1]!;
     const cur = path[i]!;
     const next = path[i + 1]!;
-    const dIn = dirBetween(prev, cur);
-    const dOut = dirBetween(cur, next);
-    if (dIn.dx === 0 && dIn.dy === 0) continue;
-    if (dOut.dx === 0 && dOut.dy === 0) continue;
-    if (Math.abs(dIn.dx) + Math.abs(dIn.dy) !== 1 || Math.abs(dOut.dx) + Math.abs(dOut.dy) !== 1) continue;
+    const dIn = unitStepDir(cur.c - prev.c, cur.r - prev.r);
+    const dOut = unitStepDir(next.c - cur.c, next.r - cur.r);
+    if (!dIn || !dOut) continue;
     const sol = diagonalBumperForTurn(dIn, dOut);
     if (sol == null) continue;
     bumpers.set(keyCell(cur.c, cur.r), { display: sol, solution: sol });
@@ -537,8 +530,10 @@ function placeDiagonalBumpers(
   if (path.length >= 2 && portalBendAtGoal(path, goalPad)) {
     const g = path[path.length - 1]!;
     const prev = path[path.length - 2]!;
-    const dIn = unitDirBetween(prev, g)!;
-    const dOut = unitDirBetween(g, goalPad)!;
+    const gIn = unitDirBetween(prev, g)!;
+    const gOut = unitDirBetween(g, goalPad)!;
+    const dIn = unitStepDir(gIn.dx, gIn.dy)!;
+    const dOut = unitStepDir(gOut.dx, gOut.dy)!;
     const sol = diagonalBumperForTurn(dIn, dOut);
     if (sol) bumpers.set(keyCell(g.c, g.r), { display: sol, solution: sol });
   }
@@ -558,11 +553,9 @@ function placeDiagonalBumpersInterior(path: CellCoord[]): {
     const prev = path[i - 1]!;
     const cur = path[i]!;
     const next = path[i + 1]!;
-    const dIn = dirBetween(prev, cur);
-    const dOut = dirBetween(cur, next);
-    if (dIn.dx === 0 && dIn.dy === 0) continue;
-    if (dOut.dx === 0 && dOut.dy === 0) continue;
-    if (Math.abs(dIn.dx) + Math.abs(dIn.dy) !== 1 || Math.abs(dOut.dx) + Math.abs(dOut.dy) !== 1) continue;
+    const dIn = unitStepDir(cur.c - prev.c, cur.r - prev.r);
+    const dOut = unitStepDir(next.c - cur.c, next.r - cur.r);
+    if (!dIn || !dOut) continue;
     const sol = diagonalBumperForTurn(dIn, dOut);
     if (sol == null) continue;
     bumpers.set(keyCell(cur.c, cur.r), { display: sol, solution: sol });
@@ -610,14 +603,14 @@ function pickGrade2OrientedStage(
 
     const start = p[0]!;
     const goal = p[p.length - 1]!;
-    const startPad = { c: start.c, r: start.r - 1 };
+    const startPad = { c: start.c, r: start.r + 1 };
     const prev = p[p.length - 2]!;
     const dLast = unitDirBetween(prev, goal);
     if (!dLast) continue;
     const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
     if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, w, h)) continue;
 
-    const dEntry = unitDirBetween(startPad, start);
+    const dEntry = unitOrthoDirBetween(startPad, start);
     if (!dEntry || !dirsEqual(dEntry, DIR.U)) continue;
 
     const bendSet = bendCellsInPath(p);
@@ -795,8 +788,12 @@ export function generateGridStage(grade: number, seed: number): GridStage | null
       const prev = path[idx - 1]!;
       const cur = path[idx]!;
       const next = path[idx + 1]!;
-      const dIn = dirBetween(prev, cur);
-      const dOut = dirBetween(cur, next);
+      const dIn = unitStepDir(cur.c - prev.c, cur.r - prev.r);
+      const dOut = unitStepDir(next.c - cur.c, next.r - cur.r);
+      if (!dIn || !dOut) {
+        ok = false;
+        break;
+      }
       const sol = bumperKindForTurn(dIn, dOut);
       if (sol == null) {
         ok = false;
@@ -939,8 +936,8 @@ export function fallbackGridStage(grade: number, seed: number): GridStage {
   for (let r = h - 1; r >= 0; r--) path.push({ c: mid, r });
   const bumperR = Math.min(h - 2, Math.max(1, Math.floor(h / 2)));
   const bumperCell = { c: mid, r: bumperR };
-  const dIn = dirBetween({ c: mid, r: bumperR + 1 }, bumperCell);
-  const dOut = dirBetween(bumperCell, { c: mid, r: bumperR - 1 });
+  const dIn = unitStepDir(0, -1)!;
+  const dOut = unitStepDir(0, -1)!;
   const sol = bumperKindForTurn(dIn, dOut) ?? "PIPE";
   const bumpers = new Map<string, BumperCell>();
   bumpers.set(keyCell(bumperCell.c, bumperCell.r), { display: "HYPHEN", solution: sol });

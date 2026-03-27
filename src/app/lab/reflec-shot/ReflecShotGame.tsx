@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { applyBumper, swipeToBumperKind } from "./bumperRules";
 import { bendOrBumperHint, generateGridStageWithFallback } from "./gridStageGen";
 import {
+  addCell,
   DIR,
   isAgentCell,
   keyCell,
@@ -207,7 +208,7 @@ export default function ReflecShotGame() {
       const bump = st.bumpers.get(bk);
       if (bump) dOut = applyBumper(incomingDir, bump.display);
 
-      const next = { c: B.c + dOut.dx, r: B.r + dOut.dy };
+      const next = addCell(B, dOut);
       // 進行・跳ね返り後の隣マスが壁／盤外なら壁で追い返さず失敗（U ターンしない）
       if (!isAgentCell(st, next.c, next.r)) return "lost";
       return { next, outDir: dOut };
@@ -229,7 +230,7 @@ export default function ReflecShotGame() {
       sim.logicalCell = B;
       const incoming: Dir = {
         dx: B.c - sim.fromCell.c,
-        dy: B.r - sim.fromCell.r,
+        dy: sim.fromCell.r - B.r,
       };
       const res = applyArrival(st, B, incoming);
       if (res === "goal") {

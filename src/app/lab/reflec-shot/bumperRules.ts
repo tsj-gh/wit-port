@@ -7,16 +7,17 @@ const key = (d: Dir) => `${d.dx},${d.dy}`;
  * バンパー仕様（マス中心・4種）
  * 入射方向 = エージェントの進行ベクトル（どちらへ動いているか）
  */
+/** `Dir` は画面座標（y 上向き正）。入射も出射も同じ基準 */
 const SLASH_MAP: Record<string, Dir> = {
-  [key(DIR.D)]: DIR.R,
-  [key(DIR.U)]: DIR.L,
+  [key(DIR.U)]: DIR.R,
+  [key(DIR.D)]: DIR.L,
   [key(DIR.L)]: DIR.U,
   [key(DIR.R)]: DIR.D,
 };
 
 const BACKSLASH_MAP: Record<string, Dir> = {
-  [key(DIR.D)]: DIR.L,
-  [key(DIR.U)]: DIR.R,
+  [key(DIR.U)]: DIR.L,
+  [key(DIR.D)]: DIR.R,
   [key(DIR.L)]: DIR.D,
   [key(DIR.R)]: DIR.U,
 };
@@ -67,10 +68,10 @@ export function diagonalBumperForTurn(dIn: Dir, dOut: Dir): "SLASH" | "BACKSLASH
   return null;
 }
 
-/** スワイプ（画面座標系 dy 下向き正）→ 8方向セクタで種にスナップ */
+/** スワイプ（キャンバス: x 右+, y **下**+）→ 画面上 y 上+ に直して 8 方向セクタで種にスナップ */
 export function swipeToBumperKind(dx: number, dy: number): BumperKind {
   if (dx * dx + dy * dy < 1e-8) return "HYPHEN";
-  const deg = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+  const deg = ((Math.atan2(-dy, dx) * 180) / Math.PI + 360) % 360;
   const sector = Math.floor((deg + 22.5) / 45) % 8;
   const map: BumperKind[] = [
     "PIPE",

@@ -1,21 +1,18 @@
 /**
- * Reflec-Shot の座標系（仕様・論理）
+ * Reflec-Shot の座標系
  *
- * - **論理原点**: スタート位置（入口マス `start`、または説明上の基準点）を (0, 0) とする。
- * - **+X**: 画面の右方向。
- * - **+Y**: 画面の上方向（ゴール側）。
+ * - **画面**: 上下左右は画面上のそのまま。**x は右が正、y は上が正**（数学座標系と同じ）。
+ * - **グリッド**: `CellCoord` の **`c`** は左からの列（= 画面 x と増加方向が一致）、**`r`** は上からの行番号（**下にいくほど `r` が増える**）。
  *
- * 例: 論理で「ΔX = -3, ΔY = +4」は、画面上で**左へ 3 マス・上へ 4 マス**の変位（対角成分の足し合わせとして読む場合は同じ向きの移動量）。
+ * **`Dir`（移動・進行ベクトル）** は常に **画面 xy** に対応する:
+ * - **`DIR.R`**: `dx = +1`（右）／**`DIR.L`**: `dx = -1`（左）
+ * - **`DIR.U`**: `dy = +1`（**上**）／**`DIR.D`**: `dy = -1`（**下**）
  *
- * **実装との対応**（`CellCoord` の `c` = 左からの列、`r` = 上からの行。`r` が増えるほど画面下）:
- * - 1 マス進むときの `Dir` は `{ dx, dy }` で `c += dx`, `r += dy`。
- * - 論理変位 (ΔX, ΔY) と `Dir` の関係: **`dx = ΔX`**, **`dy = -ΔY`**（＋Y〈ゴール側・画面上〉への移動は `dy` が負 → **`DIR.D`**）。
- * - **`DIR.U`** = `{ dx:0, dy:1 }`（`r` 増＝画面下、論理 ΔY の負方向）。**`DIR.D`** = `{ dx:0, dy:-1 }`（`r` 減＝画面上、論理 ＋Y）。
+ * グリッド上の次マスは **`addCell`** で計算: `c' = c + dx`, **`r' = r - dy`**（`r` が下向き正なので、画面上へ動く `dy>0` は `r` が減る）。
  *
- * 論理位置 (X, Y) を入口を原点にして絶対 `CellCoord` と対応させるなら:
- * `c = start.c + X`, `r = start.r - Y`（`startPad` はグレードにより start の真上／真下など）。
+ * 隣接マス間の **グリッド差分** `(Δc, Δr)` を `Dir` に直すときは **`gridDeltaToScreenDir({ dx:Δc, dy:Δr })`**（内部は `(Δc, -Δr)`）。
  */
-/** グリッド上の移動方向（列 c への増分 dx、行 r への増分 dy。dy が負なら r が減り画面上向き・ゴール寄り） */
+/** 画面上の移動方向（x=右+、y=上+）。グリッド進行には `addCell` を使う */
 export type Dir = { dx: number; dy: number };
 
 export const DIR = {
@@ -49,16 +46,21 @@ export function negateDir(d: Dir): Dir {
 }
 
 export function addCell(a: CellCoord, d: Dir): CellCoord {
-  return { c: a.c + d.dx, r: a.r + d.dy };
+  return { c: a.c + d.dx, r: a.r - d.dy };
 }
 
-/** 直交隣接のときのみ a→b の単位方向を返す */
+/** `dirBetween` 等のグリッド差分 `(dx=Δc, dy=Δr)` を画面 `Dir` へ */
+export function gridDeltaToScreenDir(grid: Dir): Dir {
+  return { dx: grid.dx, dy: -grid.dy };
+}
+
+/** 直交隣接のときのみ、隣接 a→b の進行方向を**画面**`Dir`で返す */
 export function unitOrthoDirBetween(a: CellCoord, b: CellCoord): Dir | null {
-  const dx = Math.sign(b.c - a.c);
-  const dy = Math.sign(b.r - a.r);
-  if (dx !== 0 && dy !== 0) return null;
-  if (dx === 0 && dy === 0) return null;
-  return { dx, dy };
+  const dc = Math.sign(b.c - a.c);
+  const dr = Math.sign(b.r - a.r);
+  if (dc !== 0 && dr !== 0) return null;
+  if (dc === 0 && dr === 0) return null;
+  return gridDeltaToScreenDir({ dx: dc, dy: dr });
 }
 
 export type BumperCell = {
@@ -77,7 +79,7 @@ export type GridStage = {
   start: CellCoord;
   /** 最上段の到達マス（pathable）。上辺がゴールゾーンへ開く */
   goal: CellCoord;
-  /** 射出体の初期位置（Grade1: start の真下／Grade2: start の真上。盤外も可） */
+  /** 射出体の初期位置（Grade1・2 いずれも主に start の真下。盤外も可） */
   startPad: CellCoord;
   /** クリア判定マス（Grade1: goal の真上／Grade2: 最終進行方向に goal と隣接する盤外） */
   goalPad: CellCoord;

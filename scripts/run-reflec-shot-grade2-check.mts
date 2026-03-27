@@ -12,11 +12,8 @@ const { DIR, dirsEqual, keyCell, unitOrthoDirBetween } = GT;
 type CellCoord = GT.CellCoord;
 
 function unitStepDir(dc: number, dr: number) {
-  if (dc === 1 && dr === 0) return DIR.R;
-  if (dc === -1 && dr === 0) return DIR.L;
-  if (dc === 0 && dr === 1) return DIR.U;
-  if (dc === 0 && dr === -1) return DIR.D;
-  return null;
+  if (!((Math.abs(dc) === 1 && dr === 0) || (dc === 0 && Math.abs(dr) === 1))) return null;
+  return GT.gridDeltaToScreenDir({ dx: dc, dy: dr });
 }
 
 function orthogonalDirs(a: { dx: number; dy: number }, b: { dx: number; dy: number }) {
