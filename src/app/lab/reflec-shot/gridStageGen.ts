@@ -1036,7 +1036,7 @@ export type Grade2Bend6PathTrace = {
   S2?: CellCoord;
   G1?: CellCoord;
   G2?: CellCoord;
-  /** A: S2 から goal まで（端点含む）/ B: DFS で G2 から start まで（反転前 `mid` 上の順） */
+  /** A: `S2` から `goal` まで（水平フックが 1 歩区間のとき `full.slice(horiz.length)`）/ B: `mid` 上で `G2` から `start` まで（`mid.slice(horizG.length)`） */
   tailPolyline: CellCoord[];
   /** 最終折れ線の goal 直前マス */
   Q: CellCoord;
@@ -1046,6 +1046,31 @@ export type Grade2Bend6PathTrace = {
  * 直近の Grade2・折れ6 成功生成のフック情報（折れ6で return した直後のみ）。検証用。
  */
 export let lastGrade2Bend6Trace: { trace: Grade2Bend6PathTrace; rawPath: CellCoord[] } | null = null;
+
+/** 同一行上で `a` から `b` まで直交隣接 1 歩ずつ（両端含む）。`|b.c - a.c|` が歩数。 */
+function horizontalRunSameRowInclusive(a: CellCoord, b: CellCoord): CellCoord[] | null {
+  if (a.r !== b.r) return null;
+  if (a.c === b.c) return [{ ...a }];
+  const step = Math.sign(b.c - a.c);
+  const out: CellCoord[] = [];
+  for (let c = a.c; ; c += step) {
+    out.push({ c, r: a.r });
+    if (c === b.c) break;
+  }
+  return out;
+}
+
+function horizontalRunPathable(
+  run: CellCoord[],
+  pathable: boolean[][],
+  w: number,
+  h: number
+): boolean {
+  for (const cell of run) {
+    if (!inBounds(cell.c, cell.r, w, h) || !pathable[cell.c]![cell.r]) return false;
+  }
+  return true;
+}
 
 /** Grade2・折れ6（高速化）: フック＋DFS 尾で経路を生成 */
 export function tryGrade2Bend6Path(
@@ -1125,19 +1150,20 @@ export function tryGrade2Bend6Path(
 
     if (variantA) {
       const S1 = { c: start.c + ds, r: start.r };
-      if (!inBounds(S1.c, S1.r, w, h) || !pathable[S1.c]![S1.r]) continue;
-      if (S1.c === start.c && S1.r === start.r) continue;
+      const horiz = horizontalRunSameRowInclusive(start, S1);
+      if (!horiz || !horizontalRunPathable(horiz, pathable, w, h)) continue;
+
       const S2 = { c: S1.c, r: S1.r - 1 };
       if (!inBounds(S2.c, S2.r, w, h) || !pathable[S2.c]![S2.r]) continue;
 
-      const preHook: CellCoord[] = [start, S1, S2];
+      const preHook: CellCoord[] = [...horiz, S2];
       const preBends = countRightAngles(preHook);
       if (preBends > targetBends) continue;
       const bendsLeft = targetBends - preBends;
       if (bendsLeft < 0) continue;
 
-      const visited = new Set<string>([keyCell(start.c, start.r), keyCell(S1.c, S1.r)]);
-      const stack: CellCoord[] = [start, S1];
+      const visited = new Set<string>(horiz.map((cell) => keyCell(cell.c, cell.r)));
+      const stack: CellCoord[] = [...horiz];
       if (!dfsTail(goal, S2, S1, bendsLeft, visited, stack)) continue;
       const full = stack;
       if (!grade1NoRevisit(full)) continue;
@@ -1152,7 +1178,7 @@ export function tryGrade2Bend6Path(
           ds,
           S1: { ...S1 },
           S2: { ...S2 },
-          tailPolyline: full.slice(2).map((x) => ({ ...x })),
+          tailPolyline: full.slice(horiz.length).map((x) => ({ ...x })),
           Q: { ...Q },
         } satisfies Grade2Bend6PathTrace);
       }
@@ -1160,19 +1186,20 @@ export function tryGrade2Bend6Path(
     }
 
     const G1 = { c: goal.c + ds, r: goal.r };
-    if (!inBounds(G1.c, G1.r, w, h) || !pathable[G1.c]![G1.r]) continue;
+    const horizG = horizontalRunSameRowInclusive(goal, G1);
+    if (!horizG || !horizontalRunPathable(horizG, pathable, w, h)) continue;
     if (G1.c === goal.c && G1.r === goal.r) continue;
     const G2 = { c: G1.c, r: G1.r + 1 };
     if (!inBounds(G2.c, G2.r, w, h) || !pathable[G2.c]![G2.r]) continue;
 
-    const preHookB: CellCoord[] = [goal, G1, G2];
+    const preHookB: CellCoord[] = [...horizG, G2];
     const preBendsB = countRightAngles(preHookB);
     if (preBendsB > targetBends) continue;
     const bendsLeftB = targetBends - preBendsB;
     if (bendsLeftB < 0) continue;
 
-    const visited = new Set<string>([keyCell(goal.c, goal.r), keyCell(G1.c, G1.r)]);
-    const hookStack: CellCoord[] = [goal, G1];
+    const visited = new Set<string>(horizG.map((cell) => keyCell(cell.c, cell.r)));
+    const hookStack: CellCoord[] = [...horizG];
     if (!dfsTail(start, G2, G1, bendsLeftB, visited, hookStack)) continue;
     const mid = hookStack;
     if (mid[mid.length - 1]!.c !== start.c || mid[mid.length - 1]!.r !== start.r) continue;
@@ -1181,7 +1208,7 @@ export function tryGrade2Bend6Path(
     const crb = countRightAngles(full);
     if (crb < 6 || crb > 8) continue;
     if (traceOut) {
-      const tailForward = mid.slice(2).map((x) => ({ ...x }));
+      const tailForward = mid.slice(horizG.length).map((x) => ({ ...x }));
       const Q = full[full.length - 2]!;
       Object.assign(traceOut, {
         outerAttempt: outerAttempt ?? -1,
@@ -1689,7 +1716,7 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
         Q: { c: -1, r: -1 },
       };
       path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng, bend6Trace, attempt);
-      if (!path) continue;
+      if (!path || !pathOrthStepValid(path, pathable, W, H)) continue;
     } else {
       const polyTries = grade === 2 && bends === 4 ? 40 : 24;
       for (let t = 0; t < polyTries; t++) {

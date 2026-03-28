@@ -861,6 +861,23 @@
     return winners[Math.floor(rng() * winners.length)];
   }
   var lastGrade2Bend6Trace = null;
+  function horizontalRunSameRowInclusive(a, b) {
+    if (a.r !== b.r) return null;
+    if (a.c === b.c) return [__spreadValues({}, a)];
+    const step = Math.sign(b.c - a.c);
+    const out = [];
+    for (let c = a.c; ; c += step) {
+      out.push({ c, r: a.r });
+      if (c === b.c) break;
+    }
+    return out;
+  }
+  function horizontalRunPathable(run, pathable, w, h) {
+    for (const cell of run) {
+      if (!inBounds(cell.c, cell.r, w, h) || !pathable[cell.c][cell.r]) return false;
+    }
+    return true;
+  }
   function tryGrade2Bend6Path(pathable, w, h, start, goal, rng, traceOut, outerAttempt) {
     const pickSignedMag = (maxMag) => {
       const m = Math.max(1, Math.min(maxMag, 4));
@@ -917,17 +934,17 @@
       const targetBends = 6 + Math.floor(rng() * 3);
       if (variantA) {
         const S1 = { c: start.c + ds, r: start.r };
-        if (!inBounds(S1.c, S1.r, w, h) || !pathable[S1.c][S1.r]) continue;
-        if (S1.c === start.c && S1.r === start.r) continue;
+        const horiz = horizontalRunSameRowInclusive(start, S1);
+        if (!horiz || !horizontalRunPathable(horiz, pathable, w, h)) continue;
         const S2 = { c: S1.c, r: S1.r - 1 };
         if (!inBounds(S2.c, S2.r, w, h) || !pathable[S2.c][S2.r]) continue;
-        const preHook = [start, S1, S2];
+        const preHook = [...horiz, S2];
         const preBends = countRightAngles(preHook);
         if (preBends > targetBends) continue;
         const bendsLeft = targetBends - preBends;
         if (bendsLeft < 0) continue;
-        const visited2 = /* @__PURE__ */ new Set([keyCell(start.c, start.r), keyCell(S1.c, S1.r)]);
-        const stack = [start, S1];
+        const visited2 = new Set(horiz.map((cell) => keyCell(cell.c, cell.r)));
+        const stack = [...horiz];
         if (!dfsTail(goal, S2, S1, bendsLeft, visited2, stack)) continue;
         const full2 = stack;
         if (!grade1NoRevisit(full2)) continue;
@@ -942,24 +959,25 @@
             ds,
             S1: __spreadValues({}, S1),
             S2: __spreadValues({}, S2),
-            tailPolyline: full2.slice(2).map((x) => __spreadValues({}, x)),
+            tailPolyline: full2.slice(horiz.length).map((x) => __spreadValues({}, x)),
             Q: __spreadValues({}, Q)
           });
         }
         return full2;
       }
       const G1 = { c: goal.c + ds, r: goal.r };
-      if (!inBounds(G1.c, G1.r, w, h) || !pathable[G1.c][G1.r]) continue;
+      const horizG = horizontalRunSameRowInclusive(goal, G1);
+      if (!horizG || !horizontalRunPathable(horizG, pathable, w, h)) continue;
       if (G1.c === goal.c && G1.r === goal.r) continue;
       const G2 = { c: G1.c, r: G1.r + 1 };
       if (!inBounds(G2.c, G2.r, w, h) || !pathable[G2.c][G2.r]) continue;
-      const preHookB = [goal, G1, G2];
+      const preHookB = [...horizG, G2];
       const preBendsB = countRightAngles(preHookB);
       if (preBendsB > targetBends) continue;
       const bendsLeftB = targetBends - preBendsB;
       if (bendsLeftB < 0) continue;
-      const visited = /* @__PURE__ */ new Set([keyCell(goal.c, goal.r), keyCell(G1.c, G1.r)]);
-      const hookStack = [goal, G1];
+      const visited = new Set(horizG.map((cell) => keyCell(cell.c, cell.r)));
+      const hookStack = [...horizG];
       if (!dfsTail(start, G2, G1, bendsLeftB, visited, hookStack)) continue;
       const mid = hookStack;
       if (mid[mid.length - 1].c !== start.c || mid[mid.length - 1].r !== start.r) continue;
@@ -968,7 +986,7 @@
       const crb = countRightAngles(full);
       if (crb < 6 || crb > 8) continue;
       if (traceOut) {
-        const tailForward = mid.slice(2).map((x) => __spreadValues({}, x));
+        const tailForward = mid.slice(horizG.length).map((x) => __spreadValues({}, x));
         const Q = full[full.length - 2];
         Object.assign(traceOut, {
           outerAttempt: outerAttempt != null ? outerAttempt : -1,
@@ -1141,7 +1159,7 @@
           Q: { c: -1, r: -1 }
         };
         path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng, bend6Trace, attempt);
-        if (!path) continue;
+        if (!path || !pathOrthStepValid(path, pathable, W, H)) continue;
       } else {
         const polyTries = grade === 2 && bends === 4 ? 40 : 24;
         for (let t = 0; t < polyTries; t++) {
