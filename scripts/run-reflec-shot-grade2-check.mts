@@ -63,19 +63,40 @@ function validateGrade2(st: ReturnType<typeof generateGridStage>, label: string)
   }
   const prev = path[path.length - 2]!;
   const goal = path[path.length - 1]!;
-  const dx = Math.sign(goal.c - prev.c);
-  const dy = Math.sign(goal.r - prev.r);
-  const expectedPad = { c: goal.c + dx, r: goal.r + dy };
-  if (expectedPad.c !== st.goalPad.c || expectedPad.r !== st.goalPad.r) {
-    console.error(label, "goalPad mismatch", expectedPad, st.goalPad);
+  const bends = countRightAngles(path);
+  const sk = keyCell(st.start.c, st.start.r);
+  const gk = keyCell(st.goal.c, st.goal.r);
+  const fixedPad = { c: goal.c, r: goal.r - 1 };
+  const extPad = {
+    c: goal.c + Math.sign(goal.c - prev.c),
+    r: goal.r + Math.sign(goal.r - prev.r),
+  };
+  const coheresFixed =
+    st.goalPad.c === fixedPad.c && st.goalPad.r === fixedPad.r;
+  const coheresExt = st.goalPad.c === extPad.c && st.goalPad.r === extPad.r;
+  if (!coheresFixed && !coheresExt) {
+    console.error(label, "goalPad mismatch", { fixedPad, extPad }, st.goalPad);
     return false;
   }
+  /** 延長パッドのみ → 折れ4。真上のみ → 折れ6。真上＝延長が同座標のときは折れ数・端点バンパーで判別 */
+  let bend6Like: boolean;
+  if (coheresExt && !coheresFixed) bend6Like = false;
+  else if (coheresFixed && !coheresExt) bend6Like = true;
+  else
+    bend6Like =
+      bends >= 6 ||
+      st.bumpers.has(sk) ||
+      st.bumpers.has(gk) ||
+      st.bumpers.size !== bends;
   if (!isStrictlyOutside(st.goalPad.c, st.goalPad.r, st.width, st.height)) {
     console.error(label, "goalPad not strictly outside board");
     return false;
   }
-  const bends = countRightAngles(path);
-  if (bends === 6) {
+  if (bend6Like) {
+    if (bends < 6 || bends > 8) {
+      console.error(label, "bend count for bend6 expects 6..8", bends);
+      return false;
+    }
     const exp = totalDiagonalTurnCount(path, st.startPad, st.goalPad);
     if (st.bumpers.size !== exp) {
       console.error(label, "bumper count", st.bumpers.size, "!= totalDiagonalTurnCount", exp);
@@ -90,8 +111,6 @@ function validateGrade2(st: ReturnType<typeof generateGridStage>, label: string)
       console.error(label, "bumper count", st.bumpers.size, "!= bends", bends);
       return false;
     }
-    const sk = keyCell(st.start.c, st.start.r);
-    const gk = keyCell(st.goal.c, st.goal.r);
     if (st.bumpers.has(sk) || st.bumpers.has(gk)) {
       console.error(label, "bumper on start or goal");
       return false;

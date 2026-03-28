@@ -710,6 +710,9 @@
   function grade2GoalPadIsGridAboveGoal(goal, prevOnPath) {
     return goal.r < prevOnPath.r;
   }
+  function grade2Bend6GoalPad(goal) {
+    return { c: goal.c, r: goal.r - 1 };
+  }
   function pathOrthStepValid(path, pathable, w, h) {
     for (const cell of path) {
       if (!inBounds(cell.c, cell.r, w, h) || !pathable[cell.c][cell.r]) return false;
@@ -719,29 +722,37 @@
     }
     return true;
   }
-  function validateGrade2RotatedPorts(p, w, h) {
+  function validateGrade2RotatedPorts(p, w, h, opts) {
     const fs = pathFirstStepDir(p);
     if (!fs || !dirsEqual(fs, DIR.U)) return false;
     const start = p[0];
     const goal = p[p.length - 1];
     const startPad = { c: start.c, r: start.r + 1 };
-    const prev = p[p.length - 2];
-    const dLast = unitDirBetween(prev, goal);
-    if (!dLast) return false;
-    const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
-    if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, w, h)) return false;
+    const goalPad = (opts == null ? void 0 : opts.bend6GoalPadAbove) ? { c: goal.c, r: goal.r - 1 } : (() => {
+      const prev = p[p.length - 2];
+      const dLast = unitDirBetween(prev, goal);
+      if (!dLast) return null;
+      return { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
+    })();
+    if (!goalPad || !isStrictlyOutsideBoard(goalPad.c, goalPad.r, w, h)) return false;
     const dEntry = unitOrthoDirBetween(startPad, start);
     if (!dEntry || !dirsEqual(dEntry, DIR.U)) return false;
     return true;
   }
-  function normalizeGrade2OppositePadPolyline(p, pathable, w, h) {
+  function normalizeGrade2OppositePadPolyline(p, pathable, w, h, opts) {
     const start = p[0];
     const goal = p[p.length - 1];
     const startPad = { c: start.c, r: start.r + 1 };
-    const prev = p[p.length - 2];
-    const dLast = unitDirBetween(prev, goal);
-    if (!dLast) return { kind: "ok", path: p };
-    const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
+    const goalPad = (opts == null ? void 0 : opts.grade2Bend6FixedGoalPad) ? { c: goal.c, r: goal.r - 1 } : (() => {
+      const prev = p[p.length - 2];
+      const dLast = unitDirBetween(prev, goal);
+      if (!dLast) return null;
+      return { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
+    })();
+    if (!goalPad) return { kind: "ok", path: p };
+    if ((opts == null ? void 0 : opts.grade2Bend6FixedGoalPad) && !isStrictlyOutsideBoard(goalPad.c, goalPad.r, w, h)) {
+      return { kind: "ok", path: p };
+    }
     const dStart = unitOrthoDirBetween(startPad, start);
     const dGoal = unitOrthoDirBetween(goalPad, goal);
     if (!dStart || !dGoal) return { kind: "ok", path: p };
@@ -758,12 +769,13 @@
     if (!revisitP) {
       for (const pivotR of grade2VerticalFlipPivotCandidates(pCell.r, goal.r)) {
         const p2 = flipSubpathVerticalR(p, pIdx, p.length - 1, pivotR);
-        if (!pathOrthStepValid(p2, pathable, w, h) || !validateGrade2RotatedPorts(p2, w, h)) {
+        if (!pathOrthStepValid(p2, pathable, w, h) || !validateGrade2RotatedPorts(p2, w, h, { bend6GoalPadAbove: !!(opts == null ? void 0 : opts.grade2Bend6FixedGoalPad) })) {
           continue;
         }
         const gN = p2[p2.length - 1];
         const prevN = p2[p2.length - 2];
-        if (!grade2GoalPadIsGridAboveGoal(gN, prevN)) continue;
+        const padAboveOk = (opts == null ? void 0 : opts.grade2Bend6FixedGoalPad) ? isStrictlyOutsideBoard(gN.c, gN.r - 1, w, h) : grade2GoalPadIsGridAboveGoal(gN, prevN);
+        if (!padAboveOk) continue;
         const k = keyCell(p2[pIdx].c, p2[pIdx].r);
         return { kind: "ok", path: p2, label: "goal->upside down", swapSlashKey: k };
       }
@@ -776,12 +788,13 @@
       const p2 = flipSubpathVerticalR(p, 0, qIdx, pivotR);
       if (!pathOrthStepValid(p2, pathable, w, h)) continue;
       const p3 = p2.slice().reverse();
-      if (!pathOrthStepValid(p3, pathable, w, h) || !validateGrade2RotatedPorts(p3, w, h)) {
+      if (!pathOrthStepValid(p3, pathable, w, h) || !validateGrade2RotatedPorts(p3, w, h, { bend6GoalPadAbove: !!(opts == null ? void 0 : opts.grade2Bend6FixedGoalPad) })) {
         continue;
       }
       const gN = p3[p3.length - 1];
       const prevN = p3[p3.length - 2];
-      if (!grade2GoalPadIsGridAboveGoal(gN, prevN)) continue;
+      const padAboveOk3 = (opts == null ? void 0 : opts.grade2Bend6FixedGoalPad) ? isStrictlyOutsideBoard(gN.c, gN.r - 1, w, h) : grade2GoalPadIsGridAboveGoal(gN, prevN);
+      if (!padAboveOk3) continue;
       const k = keyCell(p3[p3.length - 1 - qIdx].c, p3[p3.length - 1 - qIdx].r);
       return { kind: "ok", path: p3, label: "start->upside down", swapSlashKey: k };
     }
@@ -854,10 +867,10 @@
       const mag = 1 + Math.floor(rng() * m);
       return rng() < 0.5 ? mag : -mag;
     };
-    const dfsTail = (cur, prev, bendsLeft, visited, stack) => {
+    const dfsTail = (tailTarget, cur, prev, bendsLeft, visited, stack) => {
       stack.push(cur);
       visited.add(keyCell(cur.c, cur.r));
-      if (cur.c === goal.c && cur.r === goal.r) {
+      if (cur.c === tailTarget.c && cur.r === tailTarget.r) {
         if (bendsLeft === 0) return true;
         stack.pop();
         visited.delete(keyCell(cur.c, cur.r));
@@ -886,11 +899,11 @@
           newBL -= 1;
         }
         if (newBL < 0) continue;
-        const mh = Math.abs(next.c - goal.c) + Math.abs(next.r - goal.r);
+        const mh = Math.abs(next.c - tailTarget.c) + Math.abs(next.r - tailTarget.r);
         if (newBL > mh + 4) {
           continue;
         }
-        if (dfsTail(next, cur, newBL, visited, stack)) return true;
+        if (dfsTail(tailTarget, next, cur, newBL, visited, stack)) return true;
       }
       stack.pop();
       visited.delete(keyCell(cur.c, cur.r));
@@ -901,18 +914,25 @@
       const maxHorizA = Math.max(start.c, w - 1 - start.c) || 1;
       const maxHorizB = Math.max(goal.c, w - 1 - goal.c) || 1;
       const ds = variantA ? pickSignedMag(maxHorizA) : pickSignedMag(maxHorizB);
+      const targetBends = 6 + Math.floor(rng() * 3);
       if (variantA) {
         const S1 = { c: start.c + ds, r: start.r };
         if (!inBounds(S1.c, S1.r, w, h) || !pathable[S1.c][S1.r]) continue;
         if (S1.c === start.c && S1.r === start.r) continue;
         const S2 = { c: S1.c, r: S1.r - 1 };
         if (!inBounds(S2.c, S2.r, w, h) || !pathable[S2.c][S2.r]) continue;
+        const preHook = [start, S1, S2];
+        const preBends = countRightAngles(preHook);
+        if (preBends > targetBends) continue;
+        const bendsLeft = targetBends - preBends;
+        if (bendsLeft < 0) continue;
         const visited2 = /* @__PURE__ */ new Set([keyCell(start.c, start.r), keyCell(S1.c, S1.r)]);
         const stack = [start, S1];
-        if (!dfsTail(S2, S1, 5, visited2, stack)) continue;
+        if (!dfsTail(goal, S2, S1, bendsLeft, visited2, stack)) continue;
         const full2 = stack;
         if (!grade1NoRevisit(full2)) continue;
-        if (countRightAngles(full2) !== 6) continue;
+        const cra = countRightAngles(full2);
+        if (cra < 6 || cra > 8) continue;
         if (traceOut) {
           const Q = full2[full2.length - 2];
           Object.assign(traceOut, {
@@ -933,14 +953,20 @@
       if (G1.c === goal.c && G1.r === goal.r) continue;
       const G2 = { c: G1.c, r: G1.r + 1 };
       if (!inBounds(G2.c, G2.r, w, h) || !pathable[G2.c][G2.r]) continue;
+      const preHookB = [goal, G1, G2];
+      const preBendsB = countRightAngles(preHookB);
+      if (preBendsB > targetBends) continue;
+      const bendsLeftB = targetBends - preBendsB;
+      if (bendsLeftB < 0) continue;
       const visited = /* @__PURE__ */ new Set([keyCell(goal.c, goal.r), keyCell(G1.c, G1.r)]);
       const hookStack = [goal, G1];
-      if (!dfsTail(G2, G1, 5, visited, hookStack)) continue;
+      if (!dfsTail(start, G2, G1, bendsLeftB, visited, hookStack)) continue;
       const mid = hookStack;
       if (mid[mid.length - 1].c !== start.c || mid[mid.length - 1].r !== start.r) continue;
       const full = mid.slice().reverse();
       if (!grade1NoRevisit(full)) continue;
-      if (countRightAngles(full) !== 6) continue;
+      const crb = countRightAngles(full);
+      if (crb < 6 || crb > 8) continue;
       if (traceOut) {
         const tailForward = mid.slice(2).map((x) => __spreadValues({}, x));
         const Q = full[full.length - 2];
@@ -959,15 +985,14 @@
     }
     return null;
   }
-  function placeGrade2Bend6Bumpers(path, _w, _h) {
-    if (countRightAngles(path) !== 6) return null;
+  function placeGrade2Bend6Bumpers(path, w, h) {
+    const cra = countRightAngles(path);
+    if (cra < 6 || cra > 8) return null;
     const start = path[0];
     const goal = path[path.length - 1];
     const startPad = { c: start.c, r: start.r + 1 };
-    const prev = path[path.length - 2];
-    const dLast = unitDirBetween(prev, goal);
-    if (!dLast) return null;
-    const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
+    const goalPad = grade2Bend6GoalPad(goal);
+    if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, w, h)) return null;
     const { bumpers, ok } = placeDiagonalBumpers(path, startPad, goalPad);
     if (!ok) return null;
     return bumpers;
@@ -988,7 +1013,9 @@
       }
       const fs = pathFirstStepDir(p);
       if (!fs) continue;
-      const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h);
+      const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h, {
+        grade2Bend6FixedGoalPad: true
+      });
       if (norm.kind === "retry") continue;
       p = norm.path;
       const padAdjustLabel = norm.label;
@@ -1005,10 +1032,7 @@
       const start = p[0];
       const goal = p[p.length - 1];
       const startPad = { c: start.c, r: start.r + 1 };
-      const prev = p[p.length - 2];
-      const dLast = unitDirBetween(prev, goal);
-      if (!dLast) continue;
-      const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
+      const goalPad = grade2Bend6GoalPad(goal);
       if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, w, h)) continue;
       const dEntry = unitOrthoDirBetween(startPad, start);
       if (!dEntry || !dirsEqual(dEntry, DIR.U)) continue;
@@ -1127,7 +1151,12 @@
         }
         if (!path) continue;
       }
-      if (countRightAngles(path) !== bends) continue;
+      const pathCr = countRightAngles(path);
+      if (bends === 6) {
+        if (pathCr < 6 || pathCr > 8) continue;
+      } else {
+        if (pathCr !== bends) continue;
+      }
       if (grade === 2) {
         if (bends === 6) {
           if (!grade1NoRevisit(path)) continue;

@@ -84,7 +84,7 @@ export type GridStage = {
   goal: CellCoord;
   /** 射出体の初期位置（Grade1・2 いずれも主に start の真下。盤外も可） */
   startPad: CellCoord;
-  /** クリア判定マス（Grade1: goal の真上／Grade2: 最終進行方向に goal と隣接する盤外） */
+  /** クリア判定マス（G1: goal 真上／G2 折れ4・G3: 最終進行延長上の盤外／G2 折れ6: 常に goal の真上） */
   goalPad: CellCoord;
   bumpers: Map<string, BumperCell>;
   /** デバッグ用：正解経路のセル列（端点含む） */
