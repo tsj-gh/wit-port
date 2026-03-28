@@ -692,6 +692,24 @@
     }
     return out;
   }
+  function grade2VerticalFlipPivotCandidates(bendR, endR) {
+    const s = /* @__PURE__ */ new Set();
+    const add = (v) => {
+      if (Number.isFinite(v)) s.add(Math.trunc(v));
+    };
+    add(bendR);
+    add(Math.floor(endR / 2));
+    add(Math.ceil(endR / 2));
+    add(bendR + endR >> 1);
+    add(bendR + endR + 1 >> 1);
+    const lo = Math.min(bendR, endR);
+    const hi = Math.max(bendR, endR);
+    for (let t = lo; t <= hi; t++) add(t);
+    return Array.from(s.values()).sort((a, b) => a - b);
+  }
+  function grade2GoalPadIsGridAboveGoal(goal, prevOnPath) {
+    return goal.r < prevOnPath.r;
+  }
   function pathOrthStepValid(path, pathable, w, h) {
     for (const cell of path) {
       if (!inBounds(cell.c, cell.r, w, h) || !pathable[cell.c][cell.r]) return false;
@@ -738,23 +756,36 @@
     const qCell = p[qIdx];
     const revisitP = pathVisitCount(p, pCell.c, pCell.r) >= 2;
     if (!revisitP) {
-      const p22 = flipSubpathVerticalR(p, pIdx, p.length - 1, pCell.r);
-      if (!pathOrthStepValid(p22, pathable, w, h) || !validateGrade2RotatedPorts(p22, w, h)) {
-        return { kind: "retry" };
+      for (const pivotR of grade2VerticalFlipPivotCandidates(pCell.r, goal.r)) {
+        const p2 = flipSubpathVerticalR(p, pIdx, p.length - 1, pivotR);
+        if (!pathOrthStepValid(p2, pathable, w, h) || !validateGrade2RotatedPorts(p2, w, h)) {
+          continue;
+        }
+        const gN = p2[p2.length - 1];
+        const prevN = p2[p2.length - 2];
+        if (!grade2GoalPadIsGridAboveGoal(gN, prevN)) continue;
+        const k = keyCell(p2[pIdx].c, p2[pIdx].r);
+        return { kind: "ok", path: p2, label: "goal->upside down", swapSlashKey: k };
       }
-      const k2 = keyCell(p22[pIdx].c, p22[pIdx].r);
-      return { kind: "ok", path: p22, label: "goal->upside down", swapSlashKey: k2 };
+      return { kind: "retry" };
     }
     const revisitQ = pathVisitCount(p, qCell.c, qCell.r) >= 2;
     if (revisitQ) return { kind: "retry" };
-    const p2 = flipSubpathVerticalR(p, 0, qIdx, qCell.r);
-    if (!pathOrthStepValid(p2, pathable, w, h)) return { kind: "retry" };
-    const p3 = p2.slice().reverse();
-    if (!pathOrthStepValid(p3, pathable, w, h) || !validateGrade2RotatedPorts(p3, w, h)) {
-      return { kind: "retry" };
+    const startR = start.r;
+    for (const pivotR of grade2VerticalFlipPivotCandidates(qCell.r, startR)) {
+      const p2 = flipSubpathVerticalR(p, 0, qIdx, pivotR);
+      if (!pathOrthStepValid(p2, pathable, w, h)) continue;
+      const p3 = p2.slice().reverse();
+      if (!pathOrthStepValid(p3, pathable, w, h) || !validateGrade2RotatedPorts(p3, w, h)) {
+        continue;
+      }
+      const gN = p3[p3.length - 1];
+      const prevN = p3[p3.length - 2];
+      if (!grade2GoalPadIsGridAboveGoal(gN, prevN)) continue;
+      const k = keyCell(p3[p3.length - 1 - qIdx].c, p3[p3.length - 1 - qIdx].r);
+      return { kind: "ok", path: p3, label: "start->upside down", swapSlashKey: k };
     }
-    const k = keyCell(p3[p3.length - 1 - qIdx].c, p3[p3.length - 1 - qIdx].r);
-    return { kind: "ok", path: p3, label: "start->upside down", swapSlashKey: k };
+    return { kind: "retry" };
   }
   function pickGrade2OrientedStage(pathable, path, w0, h0, bends, rng, opts) {
     const winners = [];
