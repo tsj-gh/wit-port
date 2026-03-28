@@ -110,3 +110,15 @@ export function stageRowRange(st: GridStage) {
   }
   return { rMin: Math.min(...rows), rMax: Math.max(...rows) };
 }
+
+/** 復元・ストック取り出し用のディープコピー（`setStage` 後にプレイヤー操作で汚染されないよう） */
+export function cloneGridStageForRestore(st: GridStage): GridStage {
+  return {
+    ...st,
+    pathable: st.pathable.map((col) => [...col!]),
+    bumpers: new Map(
+      Array.from(st.bumpers.entries()).map(([k, v]) => [k, { display: v.display, solution: v.solution }])
+    ),
+    solutionPath: st.solutionPath.map((p) => ({ ...p })),
+  };
+}

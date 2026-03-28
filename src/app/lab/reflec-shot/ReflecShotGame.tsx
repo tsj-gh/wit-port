@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { applyBumper, swipeToBumperKind } from "./bumperRules";
+import {
+  MAX_STOCK_SIZE,
+  REFLECT_SHOT_STOCK_GRADES,
+  useReflectShotBoardStock,
+} from "@/hooks/useReflectShotBoardStock";
 import { useReflectShotWorker } from "@/hooks/useReflectShotWorker";
 import { bendOrBumperHint } from "./gridStageGen";
 import {
@@ -16,6 +21,7 @@ import {
   type CellCoord,
   type Dir,
   type GridStage,
+  cloneGridStageForRestore,
 } from "./gridTypes";
 import { decodeReflecStageHash, encodeReflecStageHash, parseReflecHash } from "./reflecShotStageHash";
 
@@ -114,17 +120,6 @@ function drawCellGappedBorder(
   ctx.fillRect(x + s - stripeW / 2, loY, stripeW, hiY - loY);
 }
 
-function cloneGridStageForRestore(st: GridStage): GridStage {
-  return {
-    ...st,
-    pathable: st.pathable.map((col) => [...col!]),
-    bumpers: new Map(
-      Array.from(st.bumpers.entries()).map(([k, v]) => [k, { display: v.display, solution: v.solution }])
-    ),
-    solutionPath: st.solutionPath.map((p) => ({ ...p })),
-  };
-}
-
 function bumperSymbol(k: BumperKind): string {
   switch (k) {
     case "SLASH":
@@ -160,6 +155,8 @@ export default function ReflecShotGame() {
   const [layoutNonce, setLayoutNonce] = useState(0);
   const pendingRestoreRef = useRef<GridStage | null>(null);
   const { generate: generateStageInWorker, isGenerating, lastMetrics } = useReflectShotWorker();
+  const { stockCounts, takeBoardForGrade } = useReflectShotBoardStock(generateStageInWorker);
+  const [boardLoadWait, setBoardLoadWait] = useState(false);
 
   const simRef = useRef({
     logicalCell: { c: 0, r: 0 } as CellCoord,
@@ -201,31 +198,44 @@ export default function ReflecShotGame() {
       return;
     }
 
+    const fromStock = takeBoardForGrade(grade);
+    if (fromStock) {
+      pendingRestoreRef.current = fromStock;
+      setSeed(fromStock.seed >>> 0);
+      setLayoutNonce((n) => n + 1);
+      return;
+    }
+
     let cancelled = false;
+    setBoardLoadWait(true);
+    setStatusMsg("盤面を準備中…");
     (async () => {
       try {
         const { stage } = await generateStageInWorker(grade, seed);
         if (cancelled) return;
-        setStage(stage);
+        const cloned = cloneGridStageForRestore(stage);
+        setStage(cloned);
         setPhase("edit");
         setStatusMsg("");
         setBumperTick((t) => t + 1);
         simRef.current = {
-          logicalCell: { ...stage.startPad },
-          travelDir: shotEntryDir(stage),
-          fromCell: { ...stage.startPad },
-          toCell: { ...stage.startPad },
+          logicalCell: { ...cloned.startPad },
+          travelDir: shotEntryDir(cloned),
+          fromCell: { ...cloned.startPad },
+          toCell: { ...cloned.startPad },
           lerp01: 0,
           leftStart: false,
         };
       } catch {
         if (!cancelled) setStatusMsg("盤面の生成に失敗しました（Worker）");
+      } finally {
+        if (!cancelled) setBoardLoadWait(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [grade, seed, layoutNonce, generateStageInWorker]);
+  }, [grade, seed, layoutNonce, generateStageInWorker, takeBoardForGrade]);
 
   const currentStageHash = useMemo(
     () => (stage ? encodeReflecStageHash(stage) : ""),
@@ -266,6 +276,35 @@ export default function ReflecShotGame() {
     },
     [generateStageInWorker]
   );
+
+  const goNextProblem = useCallback(() => {
+    if (phase !== "won") return;
+    const next = takeBoardForGrade(grade);
+    if (next) {
+      pendingRestoreRef.current = next;
+      setSeed(next.seed >>> 0);
+      setLayoutNonce((n) => n + 1);
+      return;
+    }
+    setBoardLoadWait(true);
+    setStatusMsg("ストックが空のため盤面を生成しています…");
+    void (async () => {
+      try {
+        const { stage: st } = await generateStageInWorker(
+          grade,
+          (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0
+        );
+        pendingRestoreRef.current = cloneGridStageForRestore(st);
+        setSeed(st.seed >>> 0);
+        setLayoutNonce((n) => n + 1);
+        setStatusMsg("");
+      } catch {
+        setStatusMsg("次の盤面の生成に失敗しました（Worker）");
+      } finally {
+        setBoardLoadWait(false);
+      }
+    })();
+  }, [phase, grade, takeBoardForGrade, generateStageInWorker]);
 
   const beginShot = useCallback(() => {
     const st = stage;
@@ -721,7 +760,7 @@ export default function ReflecShotGame() {
                       const s = hashInput.trim();
                       if (s) applyStageFromHash(s);
                     }}
-                    disabled={!hashInput.trim() || isGenerating}
+                    disabled={!hashInput.trim() || isGenerating || boardLoadWait}
                     className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-40"
                   >
                     ハッシュから生成
@@ -743,7 +782,7 @@ export default function ReflecShotGame() {
           <select
             className="bg-slate-800 border border-white/15 rounded-lg px-2 py-1 text-wit-text"
             value={grade}
-            disabled={isGenerating}
+            disabled={isGenerating || boardLoadWait}
             onChange={(e) => {
               setGrade(Number(e.target.value));
               setSeed((Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0);
@@ -764,6 +803,16 @@ export default function ReflecShotGame() {
         >
           射出（start へ）
         </button>
+        {phase === "won" && (
+          <button
+            type="button"
+            className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-40"
+            onClick={goNextProblem}
+            disabled={boardLoadWait}
+          >
+            次の問題へ
+          </button>
+        )}
         {phase === "lost" && (
           <button
             type="button"
@@ -775,9 +824,19 @@ export default function ReflecShotGame() {
         )}
       </div>
 
-      {statusMsg && (
-        <p className={`text-sm ${phase === "won" ? "text-emerald-400" : phase === "lost" ? "text-amber-300" : "text-wit-muted"}`}>
-          {statusMsg}
+      {(statusMsg || boardLoadWait) && (
+        <p
+          className={`text-sm ${
+            phase === "won"
+              ? "text-emerald-400"
+              : phase === "lost"
+                ? "text-amber-300"
+                : boardLoadWait
+                  ? "text-sky-300"
+                  : "text-wit-muted"
+          }`}
+        >
+          {boardLoadWait && !statusMsg ? "盤面を準備中…" : statusMsg}
         </p>
       )}
 
@@ -795,7 +854,7 @@ export default function ReflecShotGame() {
         <div className="flex flex-wrap gap-2 justify-center pb-2">
           <button
             type="button"
-            disabled={isGenerating}
+            disabled={isGenerating || boardLoadWait}
             className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
             onClick={regen}
           >
@@ -815,7 +874,7 @@ export default function ReflecShotGame() {
         <div className="flex justify-center pb-2">
           <button
             type="button"
-            disabled={isGenerating}
+            disabled={isGenerating || boardLoadWait}
             className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
             onClick={regen}
           >

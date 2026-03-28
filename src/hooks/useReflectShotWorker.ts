@@ -11,9 +11,12 @@ import {
 
 const DEFAULT_SCRIPT = "/workers/reflect-shot-worker.js";
 
+export type ReflectShotGenerateSource = "user" | "prefetch";
+
 type Pending = {
   resolve: (v: ReflectShotGenerateResult) => void;
   reject: (e: Error) => void;
+  source: ReflectShotGenerateSource;
 };
 
 export type ReflectShotGenerateResult = {
@@ -28,7 +31,7 @@ export type ReflectShotGenerateResult = {
 export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
   const workerRef = useRef<Worker | null>(null);
   const pendingByIdRef = useRef(new Map<string, Pending>());
-  const inFlightRef = useRef(0);
+  const userInFlightRef = useRef(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [lastMetrics, setLastMetrics] = useState<ReflectShotGenMetrics | null>(null);
   const reqIdRef = useRef(0);
@@ -46,8 +49,10 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
       const pending = pendingMap.get(data.requestId);
       if (!pending) return;
       pendingMap.delete(data.requestId);
-      inFlightRef.current = Math.max(0, inFlightRef.current - 1);
-      if (inFlightRef.current === 0) setIsGenerating(false);
+      if (pending.source === "user") {
+        userInFlightRef.current = Math.max(0, userInFlightRef.current - 1);
+        if (userInFlightRef.current === 0) setIsGenerating(false);
+      }
 
       if (data.type === "SUCCESS") {
         setLastMetrics(data.metrics);
@@ -63,32 +68,43 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
     return () => {
       pendingMap.forEach((p) => p.reject(new Error("Reflect-Shot Worker を終了しました")));
       pendingMap.clear();
-      inFlightRef.current = 0;
+      userInFlightRef.current = 0;
       setIsGenerating(false);
       w.terminate();
       workerRef.current = null;
     };
   }, [workerScriptUrl]);
 
-  const generate = useCallback((grade: number, seed: number): Promise<ReflectShotGenerateResult> => {
-    const w = workerRef.current;
-    if (!w) {
-      return Promise.reject(new Error("Reflect-Shot Worker が未初期化です"));
-    }
-    if (inFlightRef.current > 0) {
-      return Promise.reject(new Error("Reflect-Shot: 生成は既に実行中です"));
-    }
+  const generate = useCallback(
+    (
+      grade: number,
+      seed: number,
+      opts?: { source?: ReflectShotGenerateSource }
+    ): Promise<ReflectShotGenerateResult> => {
+      const w = workerRef.current;
+      if (!w) {
+        return Promise.reject(new Error("Reflect-Shot Worker が未初期化です"));
+      }
 
-    const requestId = `rs-${Date.now()}-${++reqIdRef.current}`;
-    inFlightRef.current += 1;
-    setIsGenerating(true);
+      const source: ReflectShotGenerateSource = opts?.source ?? "user";
+      if (source === "user" && userInFlightRef.current > 0) {
+        return Promise.reject(new Error("Reflect-Shot: ユーザー向け生成は既に実行中です"));
+      }
 
-    return new Promise((resolve, reject) => {
-      pendingByIdRef.current.set(requestId, { resolve, reject });
-      const payload: ReflectShotMainToWorkerGenerate = { type: "GENERATE", requestId, grade, seed };
-      w.postMessage(payload);
-    });
-  }, []);
+      const requestId = `rs-${Date.now()}-${++reqIdRef.current}`;
+      if (source === "user") {
+        userInFlightRef.current += 1;
+        setIsGenerating(true);
+      }
+
+      return new Promise((resolve, reject) => {
+        pendingByIdRef.current.set(requestId, { resolve, reject, source });
+        const payload: ReflectShotMainToWorkerGenerate = { type: "GENERATE", requestId, grade, seed };
+        w.postMessage(payload);
+      });
+    },
+    []
+  );
 
   return { generate, isGenerating, lastMetrics };
 }
