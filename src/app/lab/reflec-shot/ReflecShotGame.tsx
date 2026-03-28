@@ -153,6 +153,8 @@ export default function ReflecShotGame() {
   const [showSolutionPath, setShowSolutionPath] = useState(false);
   /** デバッグ時のみスライダーで変更。非デバッグ・非 devtj 時は 3.5 固定。 */
   const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(3.5);
+  /** devtj+DEBUG ON・G2 のみ Worker に渡す。2〜4 → 全体目標折れ 6〜8（`+4`）。 */
+  const [debugGrade2Bend6MidSlider, setDebugGrade2Bend6MidSlider] = useState(3);
   const [hashInput, setHashInput] = useState("");
   const [layoutNonce, setLayoutNonce] = useState(0);
   const [stockPrefetchPaused, setStockPrefetchPaused] = useState(false);
@@ -186,6 +188,19 @@ export default function ReflecShotGame() {
     hasSwipe: boolean;
   } | null>(null);
 
+  const workerGrade2Bend6Total = useMemo((): 6 | 7 | 8 | undefined => {
+    if (grade !== 2 || !isDevTj || !isDebugMode) return undefined;
+    const n = debugGrade2Bend6MidSlider + 4;
+    if (n === 6 || n === 7 || n === 8) return n;
+    return 7;
+  }, [grade, isDevTj, isDebugMode, debugGrade2Bend6MidSlider]);
+
+  const workerGenOpts = useMemo(
+    () =>
+      workerGrade2Bend6Total != null ? { grade2Bend6TotalBends: workerGrade2Bend6Total } : undefined,
+    [workerGrade2Bend6Total]
+  );
+
   useEffect(() => {
     const pending = pendingRestoreRef.current;
     if (pending) {
@@ -209,7 +224,8 @@ export default function ReflecShotGame() {
       return;
     }
 
-    const fromStock = takeBoardForGrade(grade);
+    const skipStockForG2Debug = grade === 2 && isDevTj && isDebugMode;
+    const fromStock = skipStockForG2Debug ? null : takeBoardForGrade(grade);
     if (fromStock) {
       nextBoardSourceRef.current = "stock";
       pendingRestoreRef.current = fromStock;
@@ -223,7 +239,7 @@ export default function ReflecShotGame() {
     setStatusMsg("盤面を準備中…");
     (async () => {
       try {
-        const { stage } = await generateStageInWorker(grade, seed);
+        const { stage } = await generateStageInWorker(grade, seed, workerGenOpts);
         if (cancelled) return;
         const cloned = cloneGridStageForRestore(stage);
         setBoardDisplaySource("generated");
@@ -248,7 +264,16 @@ export default function ReflecShotGame() {
     return () => {
       cancelled = true;
     };
-  }, [grade, seed, layoutNonce, generateStageInWorker, takeBoardForGrade]);
+  }, [
+    grade,
+    seed,
+    layoutNonce,
+    generateStageInWorker,
+    takeBoardForGrade,
+    workerGenOpts,
+    isDevTj,
+    isDebugMode,
+  ]);
 
   const currentStageHash = useMemo(
     () => (stage ? encodeReflecStageHash(stage) : ""),
@@ -278,7 +303,11 @@ export default function ReflecShotGame() {
       }
       void (async () => {
         try {
-          const { stage } = await generateStageInWorker(parsed.grade, parsed.seed);
+          const { stage } = await generateStageInWorker(
+            parsed.grade,
+            parsed.seed,
+            parsed.grade === 2 ? workerGenOpts : undefined
+          );
           nextBoardSourceRef.current = "generated";
           pendingRestoreRef.current = cloneGridStageForRestore(stage);
           setGrade(stage.grade);
@@ -289,12 +318,13 @@ export default function ReflecShotGame() {
         }
       })();
     },
-    [generateStageInWorker]
+    [generateStageInWorker, workerGenOpts]
   );
 
   const goNextProblem = useCallback(() => {
     if (phase !== "won") return;
-    const next = takeBoardForGrade(grade);
+    const skipStockForG2Debug = grade === 2 && isDevTj && isDebugMode;
+    const next = skipStockForG2Debug ? null : takeBoardForGrade(grade);
     if (next) {
       nextBoardSourceRef.current = "stock";
       pendingRestoreRef.current = next;
@@ -308,7 +338,8 @@ export default function ReflecShotGame() {
       try {
         const { stage: st } = await generateStageInWorker(
           grade,
-          (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0
+          (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0,
+          workerGenOpts
         );
         nextBoardSourceRef.current = "generated";
         pendingRestoreRef.current = cloneGridStageForRestore(st);
@@ -321,7 +352,7 @@ export default function ReflecShotGame() {
         setBoardLoadWait(false);
       }
     })();
-  }, [phase, grade, takeBoardForGrade, generateStageInWorker]);
+  }, [phase, grade, takeBoardForGrade, generateStageInWorker, workerGenOpts, isDevTj, isDebugMode]);
 
   const beginShot = useCallback(() => {
     const st = stage;
@@ -722,6 +753,27 @@ export default function ReflecShotGame() {
                 />
                 <span className="tabular-nums w-10 text-right text-[10px] text-sky-200/90">{debugBallSpeedMult}×</span>
               </div>
+              {grade === 2 && (
+                <div className="mt-2 flex flex-col gap-0.5 text-slate-400">
+                  <span className="text-[10px] leading-tight">
+                    Grade2 折れ6の中間探索（全体目標 {debugGrade2Bend6MidSlider + 4} 折れ・尾はフック差し引き）
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={2}
+                      max={4}
+                      step={1}
+                      value={debugGrade2Bend6MidSlider}
+                      onChange={(e) => setDebugGrade2Bend6MidSlider(Number(e.target.value))}
+                      className="flex-1 min-w-0 accent-amber-400"
+                    />
+                    <span className="tabular-nums w-8 text-right text-[10px] text-amber-200/90">
+                      {debugGrade2Bend6MidSlider}
+                    </span>
+                  </div>
+                </div>
+              )}
               <div className="mt-2 border-t border-white/10 pt-2 space-y-0.5 text-slate-400/90 text-[10px]">
                 <div>
                   Build:{" "}

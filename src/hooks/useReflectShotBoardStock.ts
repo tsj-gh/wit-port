@@ -27,7 +27,7 @@ export function useReflectShotBoardStock(
   generate: (
     grade: number,
     seed: number,
-    opts?: { source?: "user" | "prefetch" }
+    opts?: { source?: "user" | "prefetch"; grade2Bend6TotalBends?: 6 | 7 | 8 }
   ) => Promise<ReflectShotGenerateResult>,
   enabled: boolean = true
 ) {

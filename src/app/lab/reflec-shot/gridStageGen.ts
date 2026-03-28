@@ -1072,6 +1072,15 @@ function horizontalRunPathable(
   return true;
 }
 
+/** Grade2・折れ6 生成時の上書き（開発者デバッグなど） */
+export type ReflectShotPolylineGenOpts = {
+  /**
+   * 経路全体の目標直角折れ数（内角数 `countRightAngles`）。未指定時は各内側試行で 6/7/8 を乱択。
+   * 尾 DFS の折れ予算は `targetBends - countRightAngles(フック多角形)`（3 固定・4 固定ではない）。
+   */
+  grade2Bend6TotalBends?: 6 | 7 | 8;
+};
+
 /** Grade2・折れ6（高速化）: フック＋DFS 尾で経路を生成 */
 export function tryGrade2Bend6Path(
   pathable: boolean[][],
@@ -1081,7 +1090,8 @@ export function tryGrade2Bend6Path(
   goal: CellCoord,
   rng: () => number,
   traceOut?: Grade2Bend6PathTrace | null,
-  outerAttempt?: number
+  outerAttempt?: number,
+  genOpts?: ReflectShotPolylineGenOpts
 ): CellCoord[] | null {
   const pickSignedMag = (maxMag: number): number => {
     const m = Math.max(1, Math.min(maxMag, 4));
@@ -1146,7 +1156,10 @@ export function tryGrade2Bend6Path(
     const maxHorizA = Math.max(start.c, w - 1 - start.c) || 1;
     const maxHorizB = Math.max(goal.c, w - 1 - goal.c) || 1;
     const ds = variantA ? pickSignedMag(maxHorizA) : pickSignedMag(maxHorizB);
-    const targetBends = 6 + Math.floor(rng() * 3);
+    const targetBends =
+      genOpts?.grade2Bend6TotalBends != null
+        ? Math.max(6, Math.min(8, genOpts.grade2Bend6TotalBends))
+        : 6 + Math.floor(rng() * 3);
 
     if (variantA) {
       const S1 = { c: start.c + ds, r: start.r };
@@ -1678,7 +1691,11 @@ function shuffleWrongDisplay(bumpers: Map<string, BumperCell>, rng: () => number
 }
 
 /** Grade1/2：矩形盤・折れ線経路・斜めバンパーのみ */
-function generatePolylineStage(grade: number, seed: number): GridStage | null {
+function generatePolylineStage(
+  grade: number,
+  seed: number,
+  polyOpts?: ReflectShotPolylineGenOpts
+): GridStage | null {
   const rng = createStageRng(seed);
   const { w: W, h: H } = boardSizeForGrade(grade);
   const pathable = makeRect(W, H);
@@ -1715,7 +1732,7 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
         tailPolyline: [],
         Q: { c: -1, r: -1 },
       };
-      path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng, bend6Trace, attempt);
+      path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng, bend6Trace, attempt, polyOpts);
       if (!path || !pathOrthStepValid(path, pathable, W, H)) continue;
     } else {
       const polyTries = grade === 2 && bends === 4 ? 40 : 24;
@@ -1802,9 +1819,13 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
   return null;
 }
 
-export function generateGridStage(grade: number, seed: number): GridStage | null {
+export function generateGridStage(
+  grade: number,
+  seed: number,
+  polyOpts?: ReflectShotPolylineGenOpts
+): GridStage | null {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
-  if (g <= 2) return generatePolylineStage(grade, seed);
+  if (g <= 2) return generatePolylineStage(grade, seed, polyOpts);
   if (g === 3) return generateGrade3Stage(seed);
 
   const rng = createStageRng(seed);
@@ -2021,6 +2042,10 @@ export function fallbackGridStage(grade: number, seed: number): GridStage {
   };
 }
 
-export function generateGridStageWithFallback(grade: number, seed: number): GridStage {
-  return generateGridStage(grade, seed) ?? fallbackGridStage(grade, seed);
+export function generateGridStageWithFallback(
+  grade: number,
+  seed: number,
+  polyOpts?: ReflectShotPolylineGenOpts
+): GridStage {
+  return generateGridStage(grade, seed, polyOpts) ?? fallbackGridStage(grade, seed);
 }

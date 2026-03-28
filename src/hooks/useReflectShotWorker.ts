@@ -79,7 +79,7 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
     (
       grade: number,
       seed: number,
-      opts?: { source?: ReflectShotGenerateSource }
+      opts?: { source?: ReflectShotGenerateSource; grade2Bend6TotalBends?: 6 | 7 | 8 }
     ): Promise<ReflectShotGenerateResult> => {
       const w = workerRef.current;
       if (!w) {
@@ -99,7 +99,15 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
 
       return new Promise((resolve, reject) => {
         pendingByIdRef.current.set(requestId, { resolve, reject, source });
-        const payload: ReflectShotMainToWorkerGenerate = { type: "GENERATE", requestId, grade, seed };
+        const payload: ReflectShotMainToWorkerGenerate = {
+          type: "GENERATE",
+          requestId,
+          grade,
+          seed,
+          ...(opts?.grade2Bend6TotalBends != null
+            ? { grade2Bend6TotalBends: opts.grade2Bend6TotalBends }
+            : {}),
+        };
         w.postMessage(payload);
       });
     },

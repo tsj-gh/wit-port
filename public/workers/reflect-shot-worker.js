@@ -878,7 +878,7 @@
     }
     return true;
   }
-  function tryGrade2Bend6Path(pathable, w, h, start, goal, rng, traceOut, outerAttempt) {
+  function tryGrade2Bend6Path(pathable, w, h, start, goal, rng, traceOut, outerAttempt, genOpts) {
     const pickSignedMag = (maxMag) => {
       const m = Math.max(1, Math.min(maxMag, 4));
       const mag = 1 + Math.floor(rng() * m);
@@ -931,7 +931,7 @@
       const maxHorizA = Math.max(start.c, w - 1 - start.c) || 1;
       const maxHorizB = Math.max(goal.c, w - 1 - goal.c) || 1;
       const ds = variantA ? pickSignedMag(maxHorizA) : pickSignedMag(maxHorizB);
-      const targetBends = 6 + Math.floor(rng() * 3);
+      const targetBends = (genOpts == null ? void 0 : genOpts.grade2Bend6TotalBends) != null ? Math.max(6, Math.min(8, genOpts.grade2Bend6TotalBends)) : 6 + Math.floor(rng() * 3);
       if (variantA) {
         const S1 = { c: start.c + ds, r: start.r };
         const horiz = horizontalRunSameRowInclusive(start, S1);
@@ -1126,7 +1126,7 @@
       c.display = wrongDiagonal(c.solution);
     }
   }
-  function generatePolylineStage(grade, seed) {
+  function generatePolylineStage(grade, seed, polyOpts) {
     const rng = createStageRng(seed);
     const { w: W, h: H } = boardSizeForGrade(grade);
     const pathable = makeRect(W, H);
@@ -1158,7 +1158,7 @@
           tailPolyline: [],
           Q: { c: -1, r: -1 }
         };
-        path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng, bend6Trace, attempt);
+        path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng, bend6Trace, attempt, polyOpts);
         if (!path || !pathOrthStepValid(path, pathable, W, H)) continue;
       } else {
         const polyTries = grade === 2 && bends === 4 ? 40 : 24;
@@ -1233,10 +1233,10 @@
     }
     return null;
   }
-  function generateGridStage(grade, seed) {
+  function generateGridStage(grade, seed, polyOpts) {
     var _a, _b, _c;
     const g = Math.max(1, Math.min(5, Math.floor(grade)));
-    if (g <= 2) return generatePolylineStage(grade, seed);
+    if (g <= 2) return generatePolylineStage(grade, seed, polyOpts);
     if (g === 3) return generateGrade3Stage(seed);
     const rng = createStageRng(seed);
     const bumperN = bumpersForGrade(grade);
@@ -1438,9 +1438,9 @@
       seed
     };
   }
-  function generateGridStageWithFallback(grade, seed) {
+  function generateGridStageWithFallback(grade, seed, polyOpts) {
     var _a;
-    return (_a = generateGridStage(grade, seed)) != null ? _a : fallbackGridStage(grade, seed);
+    return (_a = generateGridStage(grade, seed, polyOpts)) != null ? _a : fallbackGridStage(grade, seed);
   }
 
   // src/app/lab/reflec-shot/reflectShotWorkerTypes.ts
@@ -1457,11 +1457,15 @@
   self.onmessage = (ev) => {
     const msg = ev.data;
     if (!msg || msg.type !== "GENERATE") return;
-    const { requestId, grade, seed } = msg;
+    const { requestId, grade, seed, grade2Bend6TotalBends } = msg;
     post({ type: "STATUS", status: "RUNNING", requestId });
     try {
       const t0 = performance.now();
-      const board = generateGridStageWithFallback(grade, seed);
+      const board = generateGridStageWithFallback(
+        grade,
+        seed,
+        grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : void 0
+      );
       const totalMs = performance.now() - t0;
       post({
         type: "SUCCESS",

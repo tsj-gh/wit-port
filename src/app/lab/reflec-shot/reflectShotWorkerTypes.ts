@@ -14,6 +14,8 @@ export type ReflectShotMainToWorkerGenerate = {
   requestId: string;
   grade: number;
   seed: number;
+  /** Grade2・折れ6 のみ。全体目標折れ 6/7/8 を Worker 生成に反映（未指定時は算法どおり乱択） */
+  grade2Bend6TotalBends?: 6 | 7 | 8;
 };
 
 export type ReflectShotWorkerToMain =
