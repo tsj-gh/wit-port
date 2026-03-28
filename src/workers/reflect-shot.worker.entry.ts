@@ -22,7 +22,7 @@ self.onmessage = (ev: MessageEvent<ReflectShotMainToWorkerGenerate>) => {
     const board = generateGridStageWithFallback(
       grade,
       seed,
-      grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : undefined
+      grade === 4 && grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : undefined
     );
     const totalMs = performance.now() - t0;
     post({

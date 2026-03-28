@@ -64,19 +64,19 @@ function fmt(p: { c: number; r: number }) {
   return `(${p.c},${p.r})`;
 }
 
-const raw = process.argv[2] ?? "rs2.2.3bb3e6ed";
+const raw = process.argv[2] ?? "rs2.4.3bb3e6ed";
 const parsed = HASH.parseReflecHash(raw);
-if (!parsed || parsed.kind !== "rs2" || parsed.grade !== 2) {
-  console.error("Grade 2 の rs2 ハッシュが必要です:", raw);
+if (!parsed || parsed.kind !== "rs2") {
+  console.error("rs2 ハッシュが必要です:", raw);
   process.exit(1);
 }
 const seed = parsed.seed;
 console.log("input:", raw);
 console.log("seed uint32:", seed, "0x" + seed.toString(16));
 
-const st = generateGridStage(2, seed);
+const st = generateGridStage(parsed.grade, seed);
 if (!st) {
-  console.error("generateGridStage(2) が null");
+  console.error("generateGridStage(", parsed.grade, ") が null");
   process.exit(1);
 }
 

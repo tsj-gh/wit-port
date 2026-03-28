@@ -104,7 +104,7 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
           requestId,
           grade,
           seed,
-          ...(opts?.grade2Bend6TotalBends != null
+          ...(grade === 4 && opts?.grade2Bend6TotalBends != null
             ? { grade2Bend6TotalBends: opts.grade2Bend6TotalBends }
             : {}),
         };

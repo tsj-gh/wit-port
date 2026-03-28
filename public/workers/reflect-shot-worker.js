@@ -92,12 +92,6 @@
         return inDir;
     }
   }
-  function bumperKindForTurn(dIn, dOut) {
-    for (const kind of ["SLASH", "BACKSLASH", "HYPHEN", "PIPE"]) {
-      if (dirsEqual(applyBumper(dIn, kind), dOut)) return kind;
-    }
-    return null;
-  }
   function diagonalBumperForTurn(dIn, dOut) {
     for (const kind of ["SLASH", "BACKSLASH"]) {
       if (dirsEqual(applyBumper(dIn, kind), dOut)) return kind;
@@ -109,97 +103,21 @@
   function inBounds(c, r, w, h) {
     return c >= 0 && c < w && r >= 0 && r < h;
   }
-  function bumpersForGrade(grade) {
-    const g = Math.max(1, Math.min(5, Math.floor(grade)));
-    if (g <= 2) return 0;
-    if (g === 3) return 0;
-    if (g === 4) return 2;
-    return 3;
-  }
   function boardSizeForGrade(grade) {
     const g = Math.max(1, Math.min(5, Math.floor(grade)));
     switch (g) {
       case 1:
-        return { w: 4, h: 4 };
       case 2:
-        return { w: 5, h: 5 };
+        return { w: 4, h: 4 };
       case 3:
-        return { w: 6, h: 7 };
       case 4:
-        return { w: 8, h: 9 };
+        return { w: 5, h: 5 };
       default:
-        return { w: 10, h: 11 };
+        return { w: 6, h: 6 };
     }
-  }
-  function templatesForBoard(w, h, grade) {
-    const g = Math.max(1, Math.min(5, Math.floor(grade)));
-    const rect = () => makeRect(w, h);
-    if (g <= 1) return [rect];
-    if (g === 2) return [rect, () => templateL(w, h)];
-    if (g === 3) return [rect];
-    if (g === 4) return [rect, () => templateL(w, h), () => templateT(w, h)];
-    return [rect, () => templateL(w, h), () => templateT(w, h), () => templateCross(w, h)];
   }
   function makeRect(w, h) {
     return Array.from({ length: w }, () => Array(h).fill(true));
-  }
-  function templateL(w, h) {
-    const p = makeRect(w, h);
-    const c0 = Math.ceil(w * 0.5);
-    const r1 = Math.floor(h * 0.45);
-    for (let c = c0; c < w; c++) {
-      for (let r = 0; r < r1; r++) p[c][r] = false;
-    }
-    return p;
-  }
-  function templateT(w, h) {
-    const p = makeRect(w, h);
-    const mid = Math.floor(w / 2);
-    const arm = Math.max(2, Math.floor(w * 0.22));
-    const r0 = Math.floor(h * 0.38);
-    const r2 = Math.floor(h * 0.62);
-    for (let c = 0; c < w; c++) {
-      if (Math.abs(c - mid) <= arm) continue;
-      for (let r = r0; r <= r2; r++) p[c][r] = false;
-    }
-    return p;
-  }
-  function templateCross(w, h) {
-    const p = makeRect(w, h);
-    const mx = Math.floor(w / 2);
-    const my = Math.floor(h / 2);
-    const arm = Math.max(2, Math.min(mx, my) - 1);
-    for (let c = 0; c < w; c++) {
-      for (let r = 0; r < h; r++) {
-        const onH = Math.abs(r - my) <= 1;
-        const onV = Math.abs(c - mx) <= 1;
-        if (onH || onV) continue;
-        p[c][r] = false;
-      }
-    }
-    return p;
-  }
-  function connected(pathable, a, b) {
-    var _a, _b;
-    const w = pathable.length;
-    const h = (_b = (_a = pathable[0]) == null ? void 0 : _a.length) != null ? _b : 0;
-    const vis = /* @__PURE__ */ new Set();
-    const q = [a];
-    vis.add(keyCell(a.c, a.r));
-    const dirs = [DIR.U, DIR.D, DIR.L, DIR.R];
-    while (q.length) {
-      const u = q.shift();
-      if (u.c === b.c && u.r === b.r) return true;
-      for (const d of dirs) {
-        const { c: nc, r: nr } = addCell(u, d);
-        if (!inBounds(nc, nr, w, h) || !pathable[nc][nr]) continue;
-        const k = keyCell(nc, nr);
-        if (vis.has(k)) continue;
-        vis.add(k);
-        q.push({ c: nc, r: nr });
-      }
-    }
-    return false;
   }
   function bottomCandidates(pathable) {
     var _a, _b;
@@ -234,66 +152,6 @@
       if (minR + 1 < h && pathable[c][minR + 1]) out.push({ c, r: minR });
     }
     return out.length ? out : [];
-  }
-  function findSimplePath(pathable, start, goal, rng, maxLen) {
-    const w = pathable.length;
-    const h = pathable[0].length;
-    const path = [];
-    const visited = /* @__PURE__ */ new Set();
-    function neighbors(cell) {
-      const n = [];
-      for (const d of [DIR.U, DIR.D, DIR.L, DIR.R]) {
-        const { c: nc, r: nr } = addCell(cell, d);
-        if (inBounds(nc, nr, w, h) && pathable[nc][nr]) n.push({ c: nc, r: nr });
-      }
-      for (let i = n.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        [n[i], n[j]] = [n[j], n[i]];
-      }
-      return n;
-    }
-    function dfs(cur) {
-      if (path.length > maxLen) return false;
-      visited.add(keyCell(cur.c, cur.r));
-      path.push(cur);
-      if (cur.c === goal.c && cur.r === goal.r) return true;
-      for (const n of neighbors(cur)) {
-        const k = keyCell(n.c, n.r);
-        if (visited.has(k)) continue;
-        if (dfs(n)) return true;
-      }
-      path.pop();
-      visited.delete(keyCell(cur.c, cur.r));
-      return false;
-    }
-    if (!dfs(start)) return null;
-    return path;
-  }
-  function addDeadEndBranches(pathable, mainKeys, rng, budget) {
-    const w = pathable.length;
-    const h = pathable[0].length;
-    let used = 0;
-    const mainCells = Array.from(mainKeys).map((k) => {
-      const [c, r] = k.split(",").map(Number);
-      return { c, r };
-    });
-    for (const cell of mainCells.sort(() => rng() - 0.5)) {
-      if (used >= budget) break;
-      if (rng() > 0.4) continue;
-      const dirs = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
-      for (const d of dirs) {
-        let cur = addCell(cell, d);
-        let steps = 0;
-        while (steps < 4 && inBounds(cur.c, cur.r, w, h) && !pathable[cur.c][cur.r] && used < budget) {
-          pathable[cur.c][cur.r] = true;
-          used++;
-          steps++;
-          if (rng() < 0.35) break;
-          cur = addCell(cur, d);
-        }
-        if (steps) break;
-      }
-    }
   }
   function createStageRng(seed) {
     let s = seed >>> 0;
@@ -1075,11 +933,11 @@
     if (!winners.length) return null;
     return winners[Math.floor(rng() * winners.length)];
   }
-  function generateGrade3Stage(seed) {
+  function generateBoardLv4Stage(seed) {
     const rng = createStageRng(seed);
-    const { w: W, h: H } = boardSizeForGrade(3);
+    const { w: W, h: H } = boardSizeForGrade(5);
     const pathable = makeRect(W, H);
-    const maxAttempts = 160;
+    const maxAttempts = 220;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const bottoms = bottomCandidates(pathable);
       const tops = topCandidates(pathable);
@@ -1103,8 +961,9 @@
         goalPad: picked.goalPad,
         bumpers: dup,
         solutionPath: picked.solutionPath,
-        grade: 3,
-        seed
+        grade: 5,
+        seed,
+        grade2PadAdjustLabel: picked.grade2PadAdjustLabel
       };
     }
     return null;
@@ -1126,94 +985,34 @@
       c.display = wrongDiagonal(c.solution);
     }
   }
-  function generatePolylineStage(grade, seed, polyOpts) {
+  function generateBoardLv1Stage(consumerGrade, seed) {
     const rng = createStageRng(seed);
-    const { w: W, h: H } = boardSizeForGrade(grade);
+    const { w: W, h: H } = boardSizeForGrade(consumerGrade);
     const pathable = makeRect(W, H);
-    if (grade === 2) lastGrade2Bend6Trace = null;
-    const maxAttempts = grade === 2 ? 1200 : 350;
+    const maxAttempts = consumerGrade === 2 ? 3500 : 1500;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const bottoms = bottomCandidates(pathable);
       const tops = topCandidates(pathable);
       if (!bottoms.length || !tops.length) return null;
       const start = bottoms[Math.floor(rng() * bottoms.length)];
       const goal = tops[Math.floor(rng() * tops.length)];
-      const dc = goal.c - start.c;
-      const dr = goal.r - start.r;
-      let bends;
-      if (grade === 1) {
-        bends = Math.floor(rng() * 4) + 1;
-      } else {
-        bends = rng() < 0.5 ? 4 : 6;
-        if (bends === 4 && (dc === 0 || dr === 0)) continue;
-      }
+      const bends = Math.floor(rng() * 4) + 1;
       let path = null;
-      let bend6Trace = null;
-      if (grade === 2 && bends === 6) {
-        bend6Trace = {
-          outerAttempt: attempt,
-          innerAttempt: -1,
-          variantA: true,
-          ds: 0,
-          tailPolyline: [],
-          Q: { c: -1, r: -1 }
-        };
-        path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng, bend6Trace, attempt, polyOpts);
-        if (!path || !pathOrthStepValid(path, pathable, W, H)) continue;
-      } else {
-        const polyTries = grade === 2 && bends === 4 ? 40 : 24;
-        for (let t = 0; t < polyTries; t++) {
-          const firstH = grade === 2 && bends === 4 && t < 2 ? t % 2 === 0 : rng() < 0.5;
-          path = tryOrthogonalPolyline(start, goal, bends, firstH, pathable, rng);
-          if (path) break;
-        }
-        if (!path) continue;
+      for (let t = 0; t < 24; t++) {
+        const firstH = rng() < 0.5;
+        path = tryOrthogonalPolyline(start, goal, bends, firstH, pathable, rng);
+        if (path) break;
       }
-      const pathCr = countRightAngles(path);
-      if (bends === 6) {
-        if (pathCr < 6 || pathCr > 8) continue;
-      } else {
-        if (pathCr !== bends) continue;
-      }
-      if (grade === 2) {
-        if (bends === 6) {
-          if (!grade1NoRevisit(path)) continue;
-        } else if (!pathHasOrthogonalCrossCell(path)) {
-          continue;
-        }
-      }
-      if (grade === 2) {
-        const picked = bends === 6 ? pickGrade2Bend6OrientedStage(pathable, path, W, H, rng) : pickGrade2OrientedStage(pathable, path, W, H, bends, rng);
-        if (!picked) continue;
-        const dup2 = /* @__PURE__ */ new Map();
-        picked.bumpers.forEach((v, k) => dup2.set(k, { display: v.display, solution: v.solution }));
-        if (bends === 6 && bend6Trace && path) {
-          lastGrade2Bend6Trace = { trace: bend6Trace, rawPath: path.map((x) => __spreadValues({}, x)) };
-        }
-        shuffleWrongDisplay(dup2, rng);
-        return {
-          width: picked.width,
-          height: picked.height,
-          pathable: picked.pathable,
-          start: picked.start,
-          goal: picked.goal,
-          startPad: picked.startPad,
-          goalPad: picked.goalPad,
-          bumpers: dup2,
-          solutionPath: picked.solutionPath,
-          grade,
-          seed,
-          grade2PadAdjustLabel: picked.grade2PadAdjustLabel
-        };
-      }
+      if (!path) continue;
+      if (countRightAngles(path) !== bends) continue;
+      if (!grade1NoRevisit(path)) continue;
       const startPad = { c: start.c, r: start.r + 1 };
       const goalPad = { c: goal.c, r: goal.r - 1 };
-      if (grade === 1) {
-        if (!grade1NoRevisit(path)) continue;
-      }
       const { bumpers, ok } = placeDiagonalBumpers(path, startPad, goalPad);
       if (!ok || bumpers.size === 0) continue;
-      if (bumpers.size >= 5) continue;
+      if (consumerGrade === 1) {
+        if (bumpers.size !== 2) continue;
+      } else if (bumpers.size < 4) continue;
       const dup = /* @__PURE__ */ new Map();
       bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       shuffleWrongDisplay(dup, rng);
@@ -1227,164 +1026,39 @@
         goalPad,
         bumpers: dup,
         solutionPath: path,
-        grade,
+        grade: consumerGrade,
         seed
       };
     }
     return null;
   }
-  function generateGridStage(grade, seed, polyOpts) {
-    var _a, _b, _c;
-    const g = Math.max(1, Math.min(5, Math.floor(grade)));
-    if (g <= 2) return generatePolylineStage(grade, seed, polyOpts);
-    if (g === 3) return generateGrade3Stage(seed);
+  function generateBoardLv2Stage(seed) {
     const rng = createStageRng(seed);
-    const bumperN = bumpersForGrade(grade);
-    const { w: W, h: H } = boardSizeForGrade(grade);
-    const templates = templatesForBoard(W, H, grade);
-    for (let attempt = 0; attempt < 200; attempt++) {
-      const tIdx = Math.floor(rng() * templates.length);
-      let pathable = templates[tIdx]();
-      const w = pathable.length;
-      const h = (_b = (_a = pathable[0]) == null ? void 0 : _a.length) != null ? _b : 0;
+    const W = 5;
+    const H = 5;
+    const pathable = makeRect(W, H);
+    const maxAttempts = 1200;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const bottoms = bottomCandidates(pathable);
       const tops = topCandidates(pathable);
-      if (!bottoms.length || !tops.length) continue;
+      if (!bottoms.length || !tops.length) return null;
       const start = bottoms[Math.floor(rng() * bottoms.length)];
       const goal = tops[Math.floor(rng() * tops.length)];
-      if (!connected(pathable, start, goal)) continue;
-      const maxLen = w * h + 5;
-      const path = findSimplePath(pathable, start, goal, rng, maxLen);
-      if (!path || path.length < bumperN + 2) continue;
-      const innerIndices = [];
-      for (let i = 1; i < path.length - 1; i++) innerIndices.push(i);
-      for (let i = innerIndices.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        [innerIndices[i], innerIndices[j]] = [innerIndices[j], innerIndices[i]];
+      const dc = goal.c - start.c;
+      const dr = goal.r - start.r;
+      const bends = 4;
+      if (dc === 0 || dr === 0) continue;
+      let path = null;
+      for (let t = 0; t < 40; t++) {
+        const firstH = t < 2 ? t % 2 === 0 : rng() < 0.5;
+        path = tryOrthogonalPolyline(start, goal, bends, firstH, pathable, rng);
+        if (path) break;
       }
-      const chosen = innerIndices.slice(0, bumperN).sort((a, b) => a - b);
-      const bumpers = /* @__PURE__ */ new Map();
-      const solutionKinds = [];
-      let ok = true;
-      for (const idx of chosen) {
-        const prev = path[idx - 1];
-        const cur = path[idx];
-        const next = path[idx + 1];
-        const dIn = unitStepDir(cur.c - prev.c, cur.r - prev.r);
-        const dOut = unitStepDir(next.c - cur.c, next.r - cur.r);
-        if (!dIn || !dOut) {
-          ok = false;
-          break;
-        }
-        const sol = bumperKindForTurn(dIn, dOut);
-        if (sol == null) {
-          ok = false;
-          break;
-        }
-        const k = keyCell(cur.c, cur.r);
-        solutionKinds.push({ key: k, sol });
-        bumpers.set(k, { display: sol, solution: sol });
-      }
-      if (!ok) continue;
-      const mainKeys = new Set(path.map((p) => keyCell(p.c, p.r)));
-      const branchBudget = Math.min(14, Math.max(2, Math.floor(w * h / 5)));
-      addDeadEndBranches(pathable, mainKeys, rng, branchBudget);
-      for (const { key: bk, sol } of solutionKinds) {
-        const wrongPool = ["SLASH", "BACKSLASH", "HYPHEN", "PIPE"].filter((x) => x !== sol);
-        const display = (_c = wrongPool[Math.floor(rng() * wrongPool.length)]) != null ? _c : sol;
-        bumpers.set(bk, { display, solution: sol });
-      }
-      let hasWrong = false;
-      for (const { key: bk, sol } of solutionKinds) {
-        if (bumpers.get(bk).display !== sol) hasWrong = true;
-      }
-      if (!hasWrong && solutionKinds.length) {
-        const first = solutionKinds[0];
-        const alts = ["SLASH", "BACKSLASH", "HYPHEN", "PIPE"].filter((x) => x !== first.sol);
-        bumpers.set(first.key, { display: alts[0], solution: first.sol });
-      }
-      return {
-        width: w,
-        height: h,
-        pathable,
-        start,
-        goal,
-        startPad: { c: start.c, r: start.r + 1 },
-        goalPad: { c: goal.c, r: goal.r - 1 },
-        bumpers,
-        solutionPath: path,
-        grade,
-        seed
-      };
-    }
-    return null;
-  }
-  function fallbackGridStage(grade, seed) {
-    var _a;
-    const g = Math.max(1, Math.min(5, Math.floor(grade)));
-    if (g === 1) {
-      const w2 = 5;
-      const h2 = 5;
-      const pathable2 = makeRect(w2, h2);
-      const start2 = { c: 1, r: 4 };
-      const goal2 = { c: 1, r: 0 };
-      const path2 = [];
-      for (let c = 1; c <= 4; c++) path2.push({ c, r: 4 });
-      for (let r = 3; r >= 0; r--) path2.push({ c: 4, r });
-      for (let c = 3; c >= 1; c--) path2.push({ c, r: 0 });
-      const startPad = { c: start2.c, r: start2.r + 1 };
-      const goalPad = { c: goal2.c, r: goal2.r - 1 };
-      const { bumpers: bumpers2, ok } = placeDiagonalBumpers(path2, startPad, goalPad);
-      const dup = /* @__PURE__ */ new Map();
-      if (ok) bumpers2.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
-      if (dup.size) shuffleWrongDisplay(dup, createStageRng(seed));
-      return {
-        width: w2,
-        height: h2,
-        pathable: pathable2,
-        start: start2,
-        goal: goal2,
-        startPad,
-        goalPad,
-        bumpers: dup,
-        solutionPath: path2,
-        grade,
-        seed
-      };
-    }
-    if (g === 2) {
-      const w2 = 5;
-      const h2 = 5;
-      const pathable2 = makeRect(w2, h2);
-      const path2 = [
-        { c: 1, r: 4 },
-        { c: 2, r: 4 },
-        { c: 3, r: 4 },
-        { c: 4, r: 4 },
-        { c: 4, r: 3 },
-        { c: 4, r: 2 },
-        { c: 3, r: 2 },
-        { c: 2, r: 2 },
-        { c: 1, r: 2 },
-        { c: 0, r: 2 },
-        { c: 0, r: 1 },
-        { c: 0, r: 0 },
-        { c: 1, r: 0 },
-        { c: 2, r: 0 },
-        { c: 2, r: 1 },
-        { c: 2, r: 2 },
-        { c: 2, r: 3 },
-        { c: 3, r: 3 },
-        { c: 3, r: 2 },
-        { c: 3, r: 1 },
-        { c: 3, r: 0 }
-      ];
-      const bends = countRightAngles(path2);
-      const rng = createStageRng(seed);
-      const picked = pickGrade2OrientedStage(pathable2, path2, w2, h2, bends, rng);
-      if (!picked) {
-        throw new Error("fallbackGridStage(2): pickGrade2OrientedStage failed");
-      }
+      if (!path) continue;
+      if (countRightAngles(path) !== bends) continue;
+      if (!pathHasOrthogonalCrossCell(path)) continue;
+      const picked = pickGrade2OrientedStage(pathable, path, W, H, bends, rng);
+      if (!picked) continue;
       const dup = /* @__PURE__ */ new Map();
       picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       shuffleWrongDisplay(dup, rng);
@@ -1398,45 +1072,104 @@
         goalPad: picked.goalPad,
         bumpers: dup,
         solutionPath: picked.solutionPath,
-        grade,
+        grade: 3,
         seed,
         grade2PadAdjustLabel: picked.grade2PadAdjustLabel
       };
     }
-    if (g === 3) {
-      for (let t = 0; t < 80; t++) {
-        const st = generateGrade3Stage(seed + t * 130051 >>> 0);
+    return null;
+  }
+  function generateBoardLv3Stage(seed, polyOpts) {
+    const rng = createStageRng(seed);
+    const W = 5;
+    const H = 5;
+    const pathable = makeRect(W, H);
+    lastGrade2Bend6Trace = null;
+    const maxAttempts = 1200;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const bottoms = bottomCandidates(pathable);
+      const tops = topCandidates(pathable);
+      if (!bottoms.length || !tops.length) return null;
+      const start = bottoms[Math.floor(rng() * bottoms.length)];
+      const goal = tops[Math.floor(rng() * tops.length)];
+      const bend6Trace = {
+        outerAttempt: attempt,
+        innerAttempt: -1,
+        variantA: true,
+        ds: 0,
+        tailPolyline: [],
+        Q: { c: -1, r: -1 }
+      };
+      const path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng, bend6Trace, attempt, polyOpts);
+      if (!path || !pathOrthStepValid(path, pathable, W, H)) continue;
+      const pathCr = countRightAngles(path);
+      if (pathCr < 6 || pathCr > 8) continue;
+      if (!grade1NoRevisit(path)) continue;
+      const picked = pickGrade2Bend6OrientedStage(pathable, path, W, H, rng);
+      if (!picked) continue;
+      const dup = /* @__PURE__ */ new Map();
+      picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+      lastGrade2Bend6Trace = { trace: bend6Trace, rawPath: path.map((x) => __spreadValues({}, x)) };
+      shuffleWrongDisplay(dup, rng);
+      return {
+        width: picked.width,
+        height: picked.height,
+        pathable: picked.pathable,
+        start: picked.start,
+        goal: picked.goal,
+        startPad: picked.startPad,
+        goalPad: picked.goalPad,
+        bumpers: dup,
+        solutionPath: picked.solutionPath,
+        grade: 4,
+        seed,
+        grade2PadAdjustLabel: picked.grade2PadAdjustLabel
+      };
+    }
+    return null;
+  }
+  function generateGridStage(grade, seed, polyOpts) {
+    const g = Math.max(1, Math.min(5, Math.floor(grade)));
+    if (g === 1 || g === 2) return generateBoardLv1Stage(g, seed);
+    if (g === 3) return generateBoardLv2Stage(seed);
+    if (g === 4) return generateBoardLv3Stage(seed, polyOpts);
+    return generateBoardLv4Stage(seed);
+  }
+  function fallbackGridStage(grade, seed) {
+    const g = Math.max(1, Math.min(5, Math.floor(grade)));
+    if (g === 1) {
+      for (let t = 0; t < 500; t++) {
+        const st = generateBoardLv1Stage(1, seed + t * 2654435769 >>> 0);
         if (st) return __spreadProps(__spreadValues({}, st), { grade: g, seed });
       }
-      throw new Error("fallbackGridStage(3): generateGrade3Stage failed");
+      throw new Error("fallbackGridStage(1): Lv.1\u30FB\u30D0\u30F3\u30D1\u30FC2 \u306E\u751F\u6210\u306B\u5931\u6557");
     }
-    const { w, h } = boardSizeForGrade(grade);
-    const pathable = makeRect(w, h);
-    const mid = Math.floor(w / 2);
-    const start = { c: mid, r: h - 1 };
-    const goal = { c: mid, r: 0 };
-    const path = [];
-    for (let r = h - 1; r >= 0; r--) path.push({ c: mid, r });
-    const bumperR = Math.min(h - 2, Math.max(1, Math.floor(h / 2)));
-    const bumperCell = { c: mid, r: bumperR };
-    const dIn = unitStepDir(0, -1);
-    const dOut = unitStepDir(0, -1);
-    const sol = (_a = bumperKindForTurn(dIn, dOut)) != null ? _a : "PIPE";
-    const bumpers = /* @__PURE__ */ new Map();
-    bumpers.set(keyCell(bumperCell.c, bumperCell.r), { display: "HYPHEN", solution: sol });
-    return {
-      width: w,
-      height: h,
-      pathable,
-      start,
-      goal,
-      startPad: { c: start.c, r: start.r + 1 },
-      goalPad: { c: goal.c, r: goal.r - 1 },
-      bumpers,
-      solutionPath: path,
-      grade,
-      seed
-    };
+    if (g === 2) {
+      for (let t = 0; t < 500; t++) {
+        const st = generateBoardLv1Stage(2, seed + t * 2654435769 >>> 0);
+        if (st) return __spreadProps(__spreadValues({}, st), { grade: g, seed });
+      }
+      throw new Error("fallbackGridStage(2): Lv.1\u30FB\u30D0\u30F3\u30D1\u30FC4+ \u306E\u751F\u6210\u306B\u5931\u6557");
+    }
+    if (g === 3) {
+      for (let t = 0; t < 200; t++) {
+        const st = generateBoardLv2Stage(seed + t * 130051 >>> 0);
+        if (st) return __spreadProps(__spreadValues({}, st), { grade: g, seed });
+      }
+      throw new Error("fallbackGridStage(3): Lv.2 \u306E\u751F\u6210\u306B\u5931\u6557");
+    }
+    if (g === 4) {
+      for (let t = 0; t < 200; t++) {
+        const st = generateBoardLv3Stage(seed + t * 130051 >>> 0);
+        if (st) return __spreadProps(__spreadValues({}, st), { grade: g, seed });
+      }
+      throw new Error("fallbackGridStage(4): Lv.3 \u306E\u751F\u6210\u306B\u5931\u6557");
+    }
+    for (let t = 0; t < 200; t++) {
+      const st = generateBoardLv4Stage(seed + t * 130051 >>> 0);
+      if (st) return __spreadProps(__spreadValues({}, st), { grade: g, seed });
+    }
+    throw new Error("fallbackGridStage(5): Lv.4 \u306E\u751F\u6210\u306B\u5931\u6557");
   }
   function generateGridStageWithFallback(grade, seed, polyOpts) {
     var _a;
@@ -1464,7 +1197,7 @@
       const board = generateGridStageWithFallback(
         grade,
         seed,
-        grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : void 0
+        grade === 4 && grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : void 0
       );
       const totalMs = performance.now() - t0;
       post({

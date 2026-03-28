@@ -189,7 +189,7 @@ export default function ReflecShotGame() {
   } | null>(null);
 
   const workerGrade2Bend6Total = useMemo((): 6 | 7 | 8 | undefined => {
-    if (grade !== 2 || !isDevTj || !isDebugMode) return undefined;
+    if (grade !== 4 || !isDevTj || !isDebugMode) return undefined;
     const n = debugGrade2Bend6MidSlider + 4;
     if (n === 6 || n === 7 || n === 8) return n;
     return 7;
@@ -224,7 +224,7 @@ export default function ReflecShotGame() {
       return;
     }
 
-    const skipStockForG2Debug = grade === 2 && isDevTj && isDebugMode;
+    const skipStockForG2Debug = grade === 4 && isDevTj && isDebugMode;
     const fromStock = skipStockForG2Debug ? null : takeBoardForGrade(grade);
     if (fromStock) {
       nextBoardSourceRef.current = "stock";
@@ -306,7 +306,7 @@ export default function ReflecShotGame() {
           const { stage } = await generateStageInWorker(
             parsed.grade,
             parsed.seed,
-            parsed.grade === 2 ? workerGenOpts : undefined
+            parsed.grade === 4 ? workerGenOpts : undefined
           );
           nextBoardSourceRef.current = "generated";
           pendingRestoreRef.current = cloneGridStageForRestore(stage);
@@ -323,7 +323,7 @@ export default function ReflecShotGame() {
 
   const goNextProblem = useCallback(() => {
     if (phase !== "won") return;
-    const skipStockForG2Debug = grade === 2 && isDevTj && isDebugMode;
+    const skipStockForG2Debug = grade === 4 && isDevTj && isDebugMode;
     const next = skipStockForG2Debug ? null : takeBoardForGrade(grade);
     if (next) {
       nextBoardSourceRef.current = "stock";
@@ -753,7 +753,7 @@ export default function ReflecShotGame() {
                 />
                 <span className="tabular-nums w-10 text-right text-[10px] text-sky-200/90">{debugBallSpeedMult}×</span>
               </div>
-              {grade === 2 && (
+              {grade === 4 && (
                 <div className="mt-2 flex flex-col gap-0.5 text-slate-400">
                   <span className="text-[10px] leading-tight">
                     Grade2 折れ6の中間探索（全体目標 {debugGrade2Bend6MidSlider + 4} 折れ・尾はフック差し引き）
@@ -805,7 +805,7 @@ export default function ReflecShotGame() {
                     : boardDisplaySource === "generated"
                       ? "Generated"
                       : "—"}
-                  {stage?.grade === 2 && stage.grade2PadAdjustLabel && (
+                  {(stage?.grade === 3 || stage?.grade === 4) && stage.grade2PadAdjustLabel && (
                     <span className="text-yellow-300"> {stage.grade2PadAdjustLabel}</span>
                   )}
                 </div>

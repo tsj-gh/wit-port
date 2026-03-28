@@ -120,16 +120,22 @@ function validateGrade2(st: ReturnType<typeof generateGridStage>, label: string)
 }
 
 let ok = true;
-ok = validateGrade2(fallbackGridStage(2, 0), "fallback(2,0)") && ok;
+ok = validateGrade2(fallbackGridStage(3, 0), "fallback(3,0)") && ok;
+ok = validateGrade2(fallbackGridStage(4, 0), "fallback(4,0)") && ok;
 
-let genOk = 0;
+let genOk3 = 0;
+let genOk4 = 0;
 for (let i = 0; i < 30; i++) {
-  const st = generateGridStage(2, (i + 1) * 999983);
-  if (!st) continue;
-  if (validateGrade2(st, `gen seed ${(i + 1) * 999983}`)) genOk++;
-  else ok = false;
+  const seed = (i + 1) * 999983;
+  const st3 = generateGridStage(3, seed);
+  if (st3 && validateGrade2(st3, `G3 seed ${seed}`)) genOk3++;
+  else if (st3) ok = false;
+  const st4 = generateGridStage(4, seed);
+  if (st4 && validateGrade2(st4, `G4 seed ${seed}`)) genOk4++;
+  else if (st4) ok = false;
 }
-console.log("Grade2 generateGridStage valid trials:", genOk, "/ 30");
+console.log("Grade3 (Lv.2) generateGridStage valid trials:", genOk3, "/ 30");
+console.log("Grade4 (Lv.3) generateGridStage valid trials:", genOk4, "/ 30");
 
 if (!ok) process.exit(1);
 console.log("All checks passed.");
