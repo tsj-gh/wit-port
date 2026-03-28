@@ -70,6 +70,9 @@ export type BumperCell = {
   solution: BumperKind;
 };
 
+/** Grade 2: 同一パッド向きだが端が最下／最上に居ないときの経路上下反転の区分（デバッグ表示用） */
+export type Grade2PadAdjustLabel = "goal->upside down" | "start->upside down";
+
 export type GridStage = {
   width: number;
   height: number;
@@ -88,6 +91,8 @@ export type GridStage = {
   solutionPath: CellCoord[];
   grade: number;
   seed: number;
+  /** Grade 2 生成時のみ: パッド整合のため経路を上下反転したときのラベル */
+  grade2PadAdjustLabel?: Grade2PadAdjustLabel;
 };
 
 /** エージェントが存在しうるマス（pathable ∪ startPad ∪ ゴールエリア） */

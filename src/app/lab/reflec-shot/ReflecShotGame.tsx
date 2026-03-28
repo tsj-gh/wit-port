@@ -753,6 +753,9 @@ export default function ReflecShotGame() {
                     : boardDisplaySource === "generated"
                       ? "Generated"
                       : "—"}
+                  {stage?.grade === 2 && stage.grade2PadAdjustLabel && (
+                    <span className="text-yellow-300"> {stage.grade2PadAdjustLabel}</span>
+                  )}
                 </div>
                 <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
                   <input
