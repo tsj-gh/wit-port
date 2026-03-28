@@ -847,7 +847,8 @@
     if (!winners.length) return null;
     return winners[Math.floor(rng() * winners.length)];
   }
-  function tryGrade2Bend6Path(pathable, w, h, start, goal, rng) {
+  var lastGrade2Bend6Trace = null;
+  function tryGrade2Bend6Path(pathable, w, h, start, goal, rng, traceOut, outerAttempt) {
     const pickSignedMag = (maxMag) => {
       const m = Math.max(1, Math.min(maxMag, 4));
       const mag = 1 + Math.floor(rng() * m);
@@ -912,6 +913,19 @@
         const full2 = stack;
         if (!grade1NoRevisit(full2)) continue;
         if (countRightAngles(full2) !== 6) continue;
+        if (traceOut) {
+          const Q = full2[full2.length - 2];
+          Object.assign(traceOut, {
+            outerAttempt: outerAttempt != null ? outerAttempt : -1,
+            innerAttempt: attempt,
+            variantA: true,
+            ds,
+            S1: __spreadValues({}, S1),
+            S2: __spreadValues({}, S2),
+            tailPolyline: full2.slice(2).map((x) => __spreadValues({}, x)),
+            Q: __spreadValues({}, Q)
+          });
+        }
         return full2;
       }
       const G1 = { c: goal.c + ds, r: goal.r };
@@ -927,6 +941,20 @@
       const full = mid.slice().reverse();
       if (!grade1NoRevisit(full)) continue;
       if (countRightAngles(full) !== 6) continue;
+      if (traceOut) {
+        const tailForward = mid.slice(2).map((x) => __spreadValues({}, x));
+        const Q = full[full.length - 2];
+        Object.assign(traceOut, {
+          outerAttempt: outerAttempt != null ? outerAttempt : -1,
+          innerAttempt: attempt,
+          variantA: false,
+          ds,
+          G1: __spreadValues({}, G1),
+          G2: __spreadValues({}, G2),
+          tailPolyline: tailForward,
+          Q: __spreadValues({}, Q)
+        });
+      }
       return full;
     }
     return null;
@@ -1060,6 +1088,7 @@
     const rng = createStageRng(seed);
     const { w: W, h: H } = boardSizeForGrade(grade);
     const pathable = makeRect(W, H);
+    if (grade === 2) lastGrade2Bend6Trace = null;
     const maxAttempts = grade === 2 ? 1200 : 350;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const bottoms = bottomCandidates(pathable);
@@ -1077,8 +1106,17 @@
         if (bends === 4 && (dc === 0 || dr === 0)) continue;
       }
       let path = null;
+      let bend6Trace = null;
       if (grade === 2 && bends === 6) {
-        path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng);
+        bend6Trace = {
+          outerAttempt: attempt,
+          innerAttempt: -1,
+          variantA: true,
+          ds: 0,
+          tailPolyline: [],
+          Q: { c: -1, r: -1 }
+        };
+        path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng, bend6Trace, attempt);
         if (!path) continue;
       } else {
         const polyTries = grade === 2 && bends === 4 ? 40 : 24;
@@ -1102,6 +1140,9 @@
         if (!picked) continue;
         const dup2 = /* @__PURE__ */ new Map();
         picked.bumpers.forEach((v, k) => dup2.set(k, { display: v.display, solution: v.solution }));
+        if (bends === 6 && bend6Trace && path) {
+          lastGrade2Bend6Trace = { trace: bend6Trace, rawPath: path.map((x) => __spreadValues({}, x)) };
+        }
         shuffleWrongDisplay(dup2, rng);
         return {
           width: picked.width,

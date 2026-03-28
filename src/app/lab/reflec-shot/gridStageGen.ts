@@ -990,14 +990,38 @@ export function debugTryGrade2Bend6PathOnce(seed: number): {
   };
 }
 
+/** `tryGrade2Bend6Path` 成否時のフック・尾の記録（検証・デバッグ用） */
+export type Grade2Bend6PathTrace = {
+  outerAttempt: number;
+  innerAttempt: number;
+  /** true: start 側フック A / false: goal 側フック B */
+  variantA: boolean;
+  ds: number;
+  S1?: CellCoord;
+  S2?: CellCoord;
+  G1?: CellCoord;
+  G2?: CellCoord;
+  /** A: S2 から goal まで（端点含む）/ B: DFS で G2 から start まで（反転前 `mid` 上の順） */
+  tailPolyline: CellCoord[];
+  /** 最終折れ線の goal 直前マス */
+  Q: CellCoord;
+};
+
+/**
+ * 直近の Grade2・折れ6 成功生成のフック情報（折れ6で return した直後のみ）。検証用。
+ */
+export let lastGrade2Bend6Trace: { trace: Grade2Bend6PathTrace; rawPath: CellCoord[] } | null = null;
+
 /** Grade2・折れ6（高速化）: フック＋DFS 尾で経路を生成 */
-function tryGrade2Bend6Path(
+export function tryGrade2Bend6Path(
   pathable: boolean[][],
   w: number,
   h: number,
   start: CellCoord,
   goal: CellCoord,
-  rng: () => number
+  rng: () => number,
+  traceOut?: Grade2Bend6PathTrace | null,
+  outerAttempt?: number
 ): CellCoord[] | null {
   const pickSignedMag = (maxMag: number): number => {
     const m = Math.max(1, Math.min(maxMag, 4));
@@ -1075,6 +1099,19 @@ function tryGrade2Bend6Path(
       const full = stack;
       if (!grade1NoRevisit(full)) continue;
       if (countRightAngles(full) !== 6) continue;
+      if (traceOut) {
+        const Q = full[full.length - 2]!;
+        Object.assign(traceOut, {
+          outerAttempt: outerAttempt ?? -1,
+          innerAttempt: attempt,
+          variantA: true,
+          ds,
+          S1: { ...S1 },
+          S2: { ...S2 },
+          tailPolyline: full.slice(2).map((x) => ({ ...x })),
+          Q: { ...Q },
+        } satisfies Grade2Bend6PathTrace);
+      }
       return full;
     }
 
@@ -1092,6 +1129,20 @@ function tryGrade2Bend6Path(
     const full = mid.slice().reverse();
     if (!grade1NoRevisit(full)) continue;
     if (countRightAngles(full) !== 6) continue;
+    if (traceOut) {
+      const tailForward = mid.slice(2).map((x) => ({ ...x }));
+      const Q = full[full.length - 2]!;
+      Object.assign(traceOut, {
+        outerAttempt: outerAttempt ?? -1,
+        innerAttempt: attempt,
+        variantA: false,
+        ds,
+        G1: { ...G1 },
+        G2: { ...G2 },
+        tailPolyline: tailForward,
+        Q: { ...Q },
+      } satisfies Grade2Bend6PathTrace);
+    }
     return full;
   }
   return null;
@@ -1543,6 +1594,7 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
   const rng = createStageRng(seed);
   const { w: W, h: H } = boardSizeForGrade(grade);
   const pathable = makeRect(W, H);
+  if (grade === 2) lastGrade2Bend6Trace = null;
 
   const maxAttempts = grade === 2 ? 1200 : 350;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -1565,8 +1617,17 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
     }
 
     let path: CellCoord[] | null = null;
+    let bend6Trace: Grade2Bend6PathTrace | null = null;
     if (grade === 2 && bends === 6) {
-      path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng);
+      bend6Trace = {
+        outerAttempt: attempt,
+        innerAttempt: -1,
+        variantA: true,
+        ds: 0,
+        tailPolyline: [],
+        Q: { c: -1, r: -1 },
+      };
+      path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng, bend6Trace, attempt);
       if (!path) continue;
     } else {
       const polyTries = grade === 2 && bends === 4 ? 40 : 24;
@@ -1596,6 +1657,9 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
       if (!picked) continue;
       const dup = new Map<string, BumperCell>();
       picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+      if (bends === 6 && bend6Trace && path) {
+        lastGrade2Bend6Trace = { trace: bend6Trace, rawPath: path.map((x) => ({ ...x })) };
+      }
       shuffleWrongDisplay(dup, rng);
       return {
         width: picked.width,
