@@ -72,9 +72,20 @@ export function useReflectShotBoardStock(
     }
   }, [enabled, generate, bumpUi]);
 
+  /**
+   * 親コンポーネントで、このフックより後に登録された useEffect（初期盤面の user 生成など）が
+   * 先に postMessage されるよう、補充ループは同ティックの末尾（マイクロタスク）へ逃がす。
+   * さもないと単一 Worker のキュー先頭にプリフェッチが数十件溜まり、初回表示が事実上ブロックされる。
+   */
   useEffect(() => {
     if (!enabled) return;
-    scheduleReplenish();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) scheduleReplenish();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [enabled, scheduleReplenish]);
 
   /**
