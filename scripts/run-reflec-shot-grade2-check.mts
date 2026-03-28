@@ -1,12 +1,18 @@
 /**
  * Grade2 生成の仕様チェック（約30試行）
  * 実行: npx --yes tsx scripts/run-reflec-shot-grade2-check.mts
+ *
+ * `import.meta.url` 基準で `src` を解決する（tsx の実行時パス差で `../src` がずれるのを避ける）
  */
-import {
-  fallbackGridStage,
-  generateGridStage,
-} from "../src/app/lab/reflec-shot/gridStageGen";
-import * as GT from "../src/app/lab/reflec-shot/gridTypes";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const gridStageGen = await import(
+  pathToFileURL(join(__dirname, "../src/app/lab/reflec-shot/gridStageGen.ts")).href
+);
+const { fallbackGridStage, generateGridStage } = gridStageGen;
+const GT = await import(pathToFileURL(join(__dirname, "../src/app/lab/reflec-shot/gridTypes.ts")).href);
 
 const { DIR, dirsEqual, keyCell, unitOrthoDirBetween } = GT;
 type CellCoord = GT.CellCoord;

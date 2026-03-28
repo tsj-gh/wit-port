@@ -956,6 +956,503 @@ function pickGrade2OrientedStage(
   return winners[Math.floor(rng() * winners.length)]!;
 }
 
+/** @internal 開発用 */
+export function debugTryGrade2Bend6PathOnce(seed: number): {
+  path: CellCoord[] | null;
+  bends: number;
+  bumpers: number;
+} {
+  const rng = createStageRng(seed >>> 0);
+  const { w: W, h: H } = boardSizeForGrade(2);
+  const pathable = makeRect(W, H);
+  const start = { c: 2, r: 4 };
+  const goal = { c: 2, r: 0 };
+  if (!pathable[start.c]![start.r] || !pathable[goal.c]![goal.r])
+    return { path: null, bends: -1, bumpers: -1 };
+  const path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng);
+  const b = path ? placeGrade2Bend6Bumpers(path, W, H) : null;
+  return {
+    path,
+    bends: path ? countRightAngles(path) : -1,
+    bumpers: b?.size ?? -1,
+  };
+}
+
+/** Grade2・折れ6（高速化）: フック＋DFS 尾で経路を生成 */
+function tryGrade2Bend6Path(
+  pathable: boolean[][],
+  w: number,
+  h: number,
+  start: CellCoord,
+  goal: CellCoord,
+  rng: () => number
+): CellCoord[] | null {
+  const pickSignedMag = (maxMag: number): number => {
+    const m = Math.max(1, Math.min(maxMag, 4));
+    const mag = 1 + Math.floor(rng() * m);
+    return rng() < 0.5 ? mag : -mag;
+  };
+
+  const dfsTail = (
+    cur: CellCoord,
+    prev: CellCoord,
+    bendsLeft: number,
+    visited: Set<string>,
+    stack: CellCoord[]
+  ): boolean => {
+    stack.push(cur);
+    visited.add(keyCell(cur.c, cur.r));
+    if (cur.c === goal.c && cur.r === goal.r) {
+      if (bendsLeft === 0) return true;
+      stack.pop();
+      visited.delete(keyCell(cur.c, cur.r));
+      return false;
+    }
+    const dPrev = unitStepDir(cur.c - prev.c, cur.r - prev.r);
+    if (!dPrev) {
+      stack.pop();
+      visited.delete(keyCell(cur.c, cur.r));
+      return false;
+    }
+
+    const opts: Dir[] = [DIR.U, DIR.D, DIR.L, DIR.R];
+    for (let i = opts.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [opts[i], opts[j]] = [opts[j]!, opts[i]!];
+    }
+
+    for (const d of opts) {
+      const next = addCell(cur, d);
+      if (next.c === prev.c && next.r === prev.r) continue;
+      if (!inBounds(next.c, next.r, w, h) || !pathable[next.c]![next.r]) continue;
+      const nk = keyCell(next.c, next.r);
+      if (visited.has(nk)) continue;
+      let newBL = bendsLeft;
+      if (!dirsEqual(dPrev, d)) {
+        if (!orthogonalDirs(dPrev, d)) continue;
+        newBL -= 1;
+      }
+      if (newBL < 0) continue;
+      const mh = Math.abs(next.c - goal.c) + Math.abs(next.r - goal.r);
+      if (newBL > mh + 4) {
+        continue;
+      }
+      if (dfsTail(next, cur, newBL, visited, stack)) return true;
+    }
+    stack.pop();
+    visited.delete(keyCell(cur.c, cur.r));
+    return false;
+  };
+
+  for (let attempt = 0; attempt < 48; attempt++) {
+    const variantA = rng() < 0.5;
+    const maxHorizA = Math.max(start.c, w - 1 - start.c) || 1;
+    const maxHorizB = Math.max(goal.c, w - 1 - goal.c) || 1;
+    const ds = variantA ? pickSignedMag(maxHorizA) : pickSignedMag(maxHorizB);
+
+    if (variantA) {
+      const S1 = { c: start.c + ds, r: start.r };
+      if (!inBounds(S1.c, S1.r, w, h) || !pathable[S1.c]![S1.r]) continue;
+      if (S1.c === start.c && S1.r === start.r) continue;
+      const S2 = { c: S1.c, r: S1.r - 1 };
+      if (!inBounds(S2.c, S2.r, w, h) || !pathable[S2.c]![S2.r]) continue;
+
+      const visited = new Set<string>([keyCell(start.c, start.r), keyCell(S1.c, S1.r)]);
+      const stack: CellCoord[] = [start, S1];
+      if (!dfsTail(S2, S1, 5, visited, stack)) continue;
+      const full = stack;
+      if (!grade1NoRevisit(full)) continue;
+      if (countRightAngles(full) !== 6) continue;
+      return full;
+    }
+
+    const G1 = { c: goal.c + ds, r: goal.r };
+    if (!inBounds(G1.c, G1.r, w, h) || !pathable[G1.c]![G1.r]) continue;
+    if (G1.c === goal.c && G1.r === goal.r) continue;
+    const G2 = { c: G1.c, r: G1.r + 1 };
+    if (!inBounds(G2.c, G2.r, w, h) || !pathable[G2.c]![G2.r]) continue;
+
+    const visited = new Set<string>([keyCell(goal.c, goal.r), keyCell(G1.c, G1.r)]);
+    const hookStack: CellCoord[] = [goal, G1];
+    if (!dfsTail(G2, G1, 5, visited, hookStack)) continue;
+    const mid = hookStack;
+    if (mid[mid.length - 1]!.c !== start.c || mid[mid.length - 1]!.r !== start.r) continue;
+    const full = mid.slice().reverse();
+    if (!grade1NoRevisit(full)) continue;
+    if (countRightAngles(full) !== 6) continue;
+    return full;
+  }
+  return null;
+}
+
+/**
+ * 折れ6フック経路のバンパーは Grade 2 共通と同じく **経路上の内角折れのみ**（`placeDiagonalBumpersInterior`）。
+ * start / goal へのポータル用バンパーは置かず、個数は `countRightAngles(path)`（＝6）と一致させる。
+ */
+function placeGrade2Bend6Bumpers(path: CellCoord[], _w: number, _h: number): Map<string, BumperCell> | null {
+  const bends = countRightAngles(path);
+  if (bends !== 6) return null;
+  const { bumpers, ok } = placeDiagonalBumpersInterior(path);
+  if (!ok || bumpers.size !== 6) return null;
+  return bumpers;
+}
+
+function rotateBumperMapQuarterCCW(
+  bumpers: Map<string, BumperCell>,
+  w: number,
+  h: number
+): Map<string, BumperCell> {
+  const out = new Map<string, BumperCell>();
+  bumpers.forEach((cell, k) => {
+    const { c, r } = ((): CellCoord => {
+      const [a, b] = k.split(",").map(Number);
+      return { c: a!, r: b! };
+    })();
+    const nc = r;
+    const nr = w - 1 - c;
+    out.set(keyCell(nc, nr), { display: cell.display, solution: cell.solution });
+  });
+  return out;
+}
+
+/** プリバンプ経路を 90° と `normalizeGrade2OppositePadPolyline` で向き調整（折れ6専用） */
+function pickGrade2Bend6OrientedStage(
+  pathable: boolean[][],
+  path: CellCoord[],
+  w0: number,
+  h0: number,
+  rng: () => number
+): Grade2OrientedSnapshot | null {
+  const winners: Grade2OrientedSnapshot[] = [];
+  const bends = 6;
+  for (let k = 0; k < 4; k++) {
+    let p = path.map((x) => ({ ...x }));
+    let pb = pathable.map((col) => [...col!]);
+    let w = w0;
+    let h = h0;
+    let bumpers = placeGrade2Bend6Bumpers(p, w, h);
+    if (!bumpers) continue;
+
+    for (let i = 0; i < k; i++) {
+      const nx = applyQuarterCCWPathable(pb, p, w, h);
+      p = nx.path;
+      pb = nx.pathable;
+      bumpers = rotateBumperMapQuarterCCW(bumpers, w, h);
+      w = nx.w;
+      h = nx.h;
+    }
+
+    const fs = pathFirstStepDir(p);
+    if (!fs || !dirsEqual(fs, DIR.U)) continue;
+
+    const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h);
+    if (norm.kind === "retry") continue;
+    p = norm.path;
+    const padAdjustLabel = norm.label;
+    const swapSlashKey = norm.swapSlashKey;
+
+    bumpers = placeGrade2Bend6Bumpers(p, w, h);
+    if (!bumpers) continue;
+
+    if (swapSlashKey) {
+      const c = bumpers.get(swapSlashKey);
+      if (c && (c.solution === "SLASH" || c.solution === "BACKSLASH")) {
+        const sol = wrongDiagonal(c.solution);
+        bumpers.set(swapSlashKey, { display: sol, solution: sol });
+      }
+    }
+
+    const start = p[0]!;
+    const goal = p[p.length - 1]!;
+    const startPad = { c: start.c, r: start.r + 1 };
+    const prev = p[p.length - 2]!;
+    const dLast = unitDirBetween(prev, goal);
+    if (!dLast) continue;
+    const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
+    if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, w, h)) continue;
+
+    const dEntry = unitOrthoDirBetween(startPad, start);
+    if (!dEntry || !dirsEqual(dEntry, DIR.U)) continue;
+
+    const bendSet = bendCellsInPath(p);
+    if (!grade2BendNoRevisit(p, bendSet)) continue;
+
+    if (bumpers.size !== bends) continue;
+
+    const bumpDup = new Map(bumpers);
+    winners.push({
+      width: w,
+      height: h,
+      pathable: pb,
+      start,
+      goal,
+      startPad,
+      goalPad,
+      solutionPath: p,
+      bumpers: bumpDup,
+      grade2PadAdjustLabel: padAdjustLabel,
+    });
+  }
+  if (!winners.length) return null;
+  return winners[Math.floor(rng() * winners.length)]!;
+}
+
+/** 開発用: Grade2 で折れ数を固定した単発試行の棄却理由を集計する */
+export type Grade2ForcedBendDiag = {
+  trials: number;
+  successes: number;
+  /** 1 試行あたり最終的な結果（ok / polyline_exhausted など） */
+  trialOutcome: Record<string, number>;
+  /** `pickGrade2OrientedStage` 相当の各回転で、最初に落ちたチェック（試行内で複数回転を評価） */
+  rotationFail: Record<string, number>;
+};
+
+export function diagnoseGrade2ForcedBendAttempts(
+  trials: number,
+  seedBase: number,
+  bends: 4 | 6
+): Grade2ForcedBendDiag {
+  const trialOutcome: Record<string, number> = {};
+  const rotationFail: Record<string, number> = {};
+  const inc = (m: Record<string, number>, k: string) => {
+    m[k] = (m[k] ?? 0) + 1;
+  };
+
+  let successes = 0;
+  const { w: W, h: H } = boardSizeForGrade(2);
+
+  for (let t = 0; t < trials; t++) {
+    const rng = createStageRng((seedBase + t * 0x9e3779b9) >>> 0);
+    const pathable = makeRect(W, H);
+    const bottoms = bottomCandidates(pathable);
+    const tops = topCandidates(pathable);
+    if (!bottoms.length || !tops.length) {
+      inc(trialOutcome, "no_bottom_or_top");
+      continue;
+    }
+    const start = bottoms[Math.floor(rng() * bottoms.length)]!;
+    const goal = tops[Math.floor(rng() * tops.length)]!;
+    const dc = goal.c - start.c;
+    const dr = goal.r - start.r;
+    if (bends === 4 && (dc === 0 || dr === 0)) {
+      inc(trialOutcome, "g2_collinear_endpoints");
+      continue;
+    }
+
+    let path: CellCoord[] | null = null;
+    const polyTries = bends === 4 ? 40 : 24;
+    for (let pt = 0; pt < polyTries; pt++) {
+      const firstH = bends === 4 && pt < 2 ? pt % 2 === 0 : rng() < 0.5;
+      path = tryOrthogonalPolyline(start, goal, bends, firstH, pathable, rng);
+      if (path) break;
+    }
+    if (!path) {
+      inc(trialOutcome, "polyline_exhausted");
+      continue;
+    }
+
+    if (countRightAngles(path) !== bends) {
+      inc(trialOutcome, "bend_count_mismatch");
+      continue;
+    }
+
+    if (bends === 6) {
+      if (!grade1NoRevisit(path)) {
+        inc(trialOutcome, "path_cell_revisit");
+        continue;
+      }
+    } else {
+      if (!pathHasOrthogonalCrossCell(path)) {
+        inc(trialOutcome, "no_orth_cross");
+        continue;
+      }
+    }
+
+    let anyWinner = false;
+    for (let k = 0; k < 4; k++) {
+      let p = path.map((x) => ({ ...x }));
+      let pb = pathable.map((col) => [...col!]);
+      let w = W;
+      let h = H;
+      for (let i = 0; i < k; i++) {
+        const nx = applyQuarterCCWPathable(pb, p, w, h);
+        p = nx.path;
+        pb = nx.pathable;
+        w = nx.w;
+        h = nx.h;
+      }
+      const fs = pathFirstStepDir(p);
+      if (!fs || !dirsEqual(fs, DIR.U)) {
+        inc(rotationFail, "rot_first_step_not_u");
+        continue;
+      }
+      const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h);
+      if (norm.kind === "retry") {
+        inc(rotationFail, "norm_retry");
+        continue;
+      }
+      p = norm.path;
+      const startP = p[0]!;
+      const goalP = p[p.length - 1]!;
+      const startPad = { c: startP.c, r: startP.r + 1 };
+      const prev = p[p.length - 2]!;
+      const dLast = unitDirBetween(prev, goalP);
+      if (!dLast) {
+        inc(rotationFail, "goal_prev_not_axis_adjacent");
+        continue;
+      }
+      const goalPad = { c: goalP.c + dLast.dx, r: goalP.r + dLast.dy };
+      if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, w, h)) {
+        inc(rotationFail, "goalpad_not_strictly_outside");
+        continue;
+      }
+      const dEntry = unitOrthoDirBetween(startPad, startP);
+      if (!dEntry || !dirsEqual(dEntry, DIR.U)) {
+        inc(rotationFail, "startpad_entry_not_u");
+        continue;
+      }
+      const bendSet = bendCellsInPath(p);
+      if (!grade2BendNoRevisit(p, bendSet)) {
+        inc(rotationFail, "bend_vertex_revisit_path");
+        continue;
+      }
+      const { bumpers, ok } = placeDiagonalBumpersInterior(p);
+      if (!ok || bumpers.size !== bends) {
+        inc(rotationFail, "interior_bumper_mismatch");
+        continue;
+      }
+      anyWinner = true;
+      break;
+    }
+
+    if (!anyWinner) {
+      inc(trialOutcome, "pick_no_valid_rotation");
+    } else {
+      successes++;
+      inc(trialOutcome, "ok");
+    }
+  }
+
+  return { trials, successes, trialOutcome, rotationFail };
+}
+
+/** `generatePolylineStage(2)` と同型の外側ループで折れ 6 固定したときの棄却分布（1 シード分） */
+export type Grade2Bend6SessionDiag = {
+  seed: number;
+  ok: boolean;
+  outerAttemptsUsed: number;
+  outerBucket: Record<string, number>;
+  rotationFail: Record<string, number>;
+};
+
+export function diagnoseGrade2Bend6Session(seed: number, maxAttempts = 1200): Grade2Bend6SessionDiag {
+  const rng = createStageRng(seed);
+  const { w: W, h: H } = boardSizeForGrade(2);
+  const outerBucket: Record<string, number> = {};
+  const rotationFail: Record<string, number> = {};
+  const inc = (m: Record<string, number>, k: string) => {
+    m[k] = (m[k] ?? 0) + 1;
+  };
+
+  let attempt = 0;
+  for (; attempt < maxAttempts; attempt++) {
+    const pathable = makeRect(W, H);
+    const bottoms = bottomCandidates(pathable);
+    const tops = topCandidates(pathable);
+    if (!bottoms.length || !tops.length) {
+      inc(outerBucket, "no_bottom_or_top");
+      return { seed, ok: false, outerAttemptsUsed: attempt + 1, outerBucket, rotationFail };
+    }
+    const start = bottoms[Math.floor(rng() * bottoms.length)]!;
+    const goal = tops[Math.floor(rng() * tops.length)]!;
+    const bends = 6;
+
+    const path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng);
+    if (!path) {
+      inc(outerBucket, "bend6_path_null");
+      continue;
+    }
+
+    if (countRightAngles(path) !== bends) {
+      inc(outerBucket, "bend_count_mismatch");
+      continue;
+    }
+    if (!grade1NoRevisit(path)) {
+      inc(outerBucket, "path_cell_revisit");
+      continue;
+    }
+
+    const picked = pickGrade2Bend6OrientedStage(pathable, path, W, H, rng);
+    if (!picked) {
+      inc(outerBucket, "pick_grade2_oriented_null");
+      for (let k = 0; k < 4; k++) {
+        let p = path.map((x) => ({ ...x }));
+        let pb = pathable.map((col) => [...col!]);
+        let w = W;
+        let h = H;
+        for (let i = 0; i < k; i++) {
+          const nx = applyQuarterCCWPathable(pb, p, w, h);
+          p = nx.path;
+          pb = nx.pathable;
+          w = nx.w;
+          h = nx.h;
+        }
+        const fs = pathFirstStepDir(p);
+        if (!fs || !dirsEqual(fs, DIR.U)) {
+          inc(rotationFail, "rot_first_step_not_u");
+          continue;
+        }
+        const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h);
+        if (norm.kind === "retry") {
+          inc(rotationFail, "norm_retry");
+          continue;
+        }
+        p = norm.path;
+        const startP = p[0]!;
+        const goalP = p[p.length - 1]!;
+        const startPad = { c: startP.c, r: startP.r + 1 };
+        const prev = p[p.length - 2]!;
+        const dLast = unitDirBetween(prev, goalP);
+        if (!dLast) {
+          inc(rotationFail, "goal_prev_not_axis_adjacent");
+          continue;
+        }
+        const goalPad = { c: goalP.c + dLast.dx, r: goalP.r + dLast.dy };
+        if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, w, h)) {
+          inc(rotationFail, "goalpad_not_strictly_outside");
+          continue;
+        }
+        const dEntry = unitOrthoDirBetween(startPad, startP);
+        if (!dEntry || !dirsEqual(dEntry, DIR.U)) {
+          inc(rotationFail, "startpad_entry_not_u");
+          continue;
+        }
+        const bendSet = bendCellsInPath(p);
+        if (!grade2BendNoRevisit(p, bendSet)) {
+          inc(rotationFail, "bend_vertex_revisit_path");
+          continue;
+        }
+        const { bumpers, ok } = placeDiagonalBumpersInterior(p);
+        if (!ok || bumpers.size !== bends) {
+          inc(rotationFail, "interior_bumper_mismatch");
+          continue;
+        }
+      }
+      continue;
+    }
+
+    return {
+      seed,
+      ok: true,
+      outerAttemptsUsed: attempt + 1,
+      outerBucket,
+      rotationFail,
+    };
+  }
+
+  return { seed, ok: false, outerAttemptsUsed: maxAttempts, outerBucket, rotationFail };
+}
+
 /** Grade 3: 折れ 6・1 マス再訪（両回折れ・入射は逆または1回目反射と同一）→ Grade 2 と同型の向き調整 */
 function generateGrade3Stage(seed: number): GridStage | null {
   const rng = createStageRng(seed);
@@ -1038,13 +1535,18 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
     }
 
     let path: CellCoord[] | null = null;
-    const polyTries = grade === 2 && bends === 4 ? 40 : 24;
-    for (let t = 0; t < polyTries; t++) {
-      const firstH = grade === 2 && bends === 4 && t < 2 ? t % 2 === 0 : rng() < 0.5;
-      path = tryOrthogonalPolyline(start, goal, bends, firstH, pathable, rng);
-      if (path) break;
+    if (grade === 2 && bends === 6) {
+      path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng);
+      if (!path) continue;
+    } else {
+      const polyTries = grade === 2 && bends === 4 ? 40 : 24;
+      for (let t = 0; t < polyTries; t++) {
+        const firstH = grade === 2 && bends === 4 && t < 2 ? t % 2 === 0 : rng() < 0.5;
+        path = tryOrthogonalPolyline(start, goal, bends, firstH, pathable, rng);
+        if (path) break;
+      }
+      if (!path) continue;
     }
-    if (!path) continue;
 
     if (countRightAngles(path) !== bends) continue;
 
@@ -1057,7 +1559,10 @@ function generatePolylineStage(grade: number, seed: number): GridStage | null {
     }
 
     if (grade === 2) {
-      const picked = pickGrade2OrientedStage(pathable, path, W, H, bends, rng);
+      const picked =
+        bends === 6
+          ? pickGrade2Bend6OrientedStage(pathable, path, W, H, rng)
+          : pickGrade2OrientedStage(pathable, path, W, H, bends, rng);
       if (!picked) continue;
       const dup = new Map<string, BumperCell>();
       picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
