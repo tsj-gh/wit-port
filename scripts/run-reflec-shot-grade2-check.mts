@@ -11,7 +11,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const gridStageGen = await import(
   pathToFileURL(join(__dirname, "../src/app/lab/reflec-shot/gridStageGen.ts")).href
 );
-const { fallbackGridStage, generateGridStage } = gridStageGen;
+const { fallbackGridStage, generateGridStage, totalDiagonalTurnCount } = gridStageGen;
 const GT = await import(pathToFileURL(join(__dirname, "../src/app/lab/reflec-shot/gridTypes.ts")).href);
 
 const { DIR, dirsEqual, keyCell, unitOrthoDirBetween } = GT;
@@ -53,8 +53,8 @@ function validateGrade2(st: ReturnType<typeof generateGridStage>, label: string)
   const path = st.solutionPath;
   const fs = pathFirstStepDir(path);
   const entry = unitOrthoDirBetween(st.startPad, st.start);
-  if (!fs || !dirsEqual(fs, DIR.U)) {
-    console.error(label, "first step not DIR.U", fs);
+  if (!fs) {
+    console.error(label, "first step undefined");
     return false;
   }
   if (!entry || !dirsEqual(entry, DIR.U)) {
@@ -75,15 +75,27 @@ function validateGrade2(st: ReturnType<typeof generateGridStage>, label: string)
     return false;
   }
   const bends = countRightAngles(path);
-  if (st.bumpers.size !== bends) {
-    console.error(label, "bumper count", st.bumpers.size, "!= bends", bends);
-    return false;
-  }
-  const sk = keyCell(st.start.c, st.start.r);
-  const gk = keyCell(st.goal.c, st.goal.r);
-  if (st.bumpers.has(sk) || st.bumpers.has(gk)) {
-    console.error(label, "bumper on start or goal");
-    return false;
+  if (bends === 6) {
+    const exp = totalDiagonalTurnCount(path, st.startPad, st.goalPad);
+    if (st.bumpers.size !== exp) {
+      console.error(label, "bumper count", st.bumpers.size, "!= totalDiagonalTurnCount", exp);
+      return false;
+    }
+  } else {
+    if (!dirsEqual(fs, DIR.U)) {
+      console.error(label, "first step not DIR.U", fs);
+      return false;
+    }
+    if (st.bumpers.size !== bends) {
+      console.error(label, "bumper count", st.bumpers.size, "!= bends", bends);
+      return false;
+    }
+    const sk = keyCell(st.start.c, st.start.r);
+    const gk = keyCell(st.goal.c, st.goal.r);
+    if (st.bumpers.has(sk) || st.bumpers.has(gk)) {
+      console.error(label, "bumper on start or goal");
+      return false;
+    }
   }
   return true;
 }

@@ -932,51 +932,40 @@
     return null;
   }
   function placeGrade2Bend6Bumpers(path, _w, _h) {
-    const bends = countRightAngles(path);
-    if (bends !== 6) return null;
-    const { bumpers, ok } = placeDiagonalBumpersInterior(path);
-    if (!ok || bumpers.size !== 6) return null;
+    if (countRightAngles(path) !== 6) return null;
+    const start = path[0];
+    const goal = path[path.length - 1];
+    const startPad = { c: start.c, r: start.r + 1 };
+    const prev = path[path.length - 2];
+    const dLast = unitDirBetween(prev, goal);
+    if (!dLast) return null;
+    const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
+    const { bumpers, ok } = placeDiagonalBumpers(path, startPad, goalPad);
+    if (!ok) return null;
     return bumpers;
-  }
-  function rotateBumperMapQuarterCCW(bumpers, w, h) {
-    const out = /* @__PURE__ */ new Map();
-    bumpers.forEach((cell, k) => {
-      const { c, r } = (() => {
-        const [a, b] = k.split(",").map(Number);
-        return { c: a, r: b };
-      })();
-      const nc = r;
-      const nr = w - 1 - c;
-      out.set(keyCell(nc, nr), { display: cell.display, solution: cell.solution });
-    });
-    return out;
   }
   function pickGrade2Bend6OrientedStage(pathable, path, w0, h0, rng) {
     const winners = [];
-    const bends = 6;
     for (let k = 0; k < 4; k++) {
       let p = path.map((x) => __spreadValues({}, x));
       let pb = pathable.map((col) => [...col]);
       let w = w0;
       let h = h0;
-      let bumpers = placeGrade2Bend6Bumpers(p, w, h);
-      if (!bumpers) continue;
       for (let i = 0; i < k; i++) {
         const nx = applyQuarterCCWPathable(pb, p, w, h);
         p = nx.path;
         pb = nx.pathable;
-        bumpers = rotateBumperMapQuarterCCW(bumpers, w, h);
         w = nx.w;
         h = nx.h;
       }
       const fs = pathFirstStepDir(p);
-      if (!fs || !dirsEqual(fs, DIR.U)) continue;
+      if (!fs) continue;
       const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h);
       if (norm.kind === "retry") continue;
       p = norm.path;
       const padAdjustLabel = norm.label;
       const swapSlashKey = norm.swapSlashKey;
-      bumpers = placeGrade2Bend6Bumpers(p, w, h);
+      let bumpers = placeGrade2Bend6Bumpers(p, w, h);
       if (!bumpers) continue;
       if (swapSlashKey) {
         const c = bumpers.get(swapSlashKey);
@@ -997,7 +986,8 @@
       if (!dEntry || !dirsEqual(dEntry, DIR.U)) continue;
       const bendSet = bendCellsInPath(p);
       if (!grade2BendNoRevisit(p, bendSet)) continue;
-      if (bumpers.size !== bends) continue;
+      const expectedBumpers = totalDiagonalTurnCount(p, startPad, goalPad);
+      if (bumpers.size !== expectedBumpers) continue;
       const bumpDup = new Map(bumpers);
       winners.push({
         width: w,

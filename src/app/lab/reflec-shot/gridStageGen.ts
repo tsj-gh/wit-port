@@ -633,7 +633,8 @@ function portalBendAtGoal(path: CellCoord[], goalPad: CellCoord): boolean {
   return !!(dIn && dOut && orthogonalDirs(dIn, dOut));
 }
 
-function totalDiagonalTurnCount(path: CellCoord[], startPad: CellCoord, goalPad: CellCoord): number {
+/** 経路＋ Grade2 パッド幾何に対する斜めバンパー本数（内角＋入口／出口の直交折れ） */
+export function totalDiagonalTurnCount(path: CellCoord[], startPad: CellCoord, goalPad: CellCoord): number {
   let n = countRightAngles(path);
   if (portalBendAtStart(path, startPad)) n++;
   if (portalBendAtGoal(path, goalPad)) n++;
@@ -961,6 +962,7 @@ export function debugTryGrade2Bend6PathOnce(seed: number): {
   path: CellCoord[] | null;
   bends: number;
   bumpers: number;
+  expectedBumpers: number;
 } {
   const rng = createStageRng(seed >>> 0);
   const { w: W, h: H } = boardSizeForGrade(2);
@@ -968,13 +970,23 @@ export function debugTryGrade2Bend6PathOnce(seed: number): {
   const start = { c: 2, r: 4 };
   const goal = { c: 2, r: 0 };
   if (!pathable[start.c]![start.r] || !pathable[goal.c]![goal.r])
-    return { path: null, bends: -1, bumpers: -1 };
+    return { path: null, bends: -1, bumpers: -1, expectedBumpers: -1 };
   const path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng);
-  const b = path ? placeGrade2Bend6Bumpers(path, W, H) : null;
+  if (!path) return { path: null, bends: -1, bumpers: -1, expectedBumpers: -1 };
+  const st = path[0]!;
+  const gl = path[path.length - 1]!;
+  const startPad = { c: st.c, r: st.r + 1 };
+  const prev = path[path.length - 2]!;
+  const dL = unitDirBetween(prev, gl);
+  if (!dL) return { path, bends: countRightAngles(path), bumpers: -1, expectedBumpers: -1 };
+  const goalPad = { c: gl.c + dL.dx, r: gl.r + dL.dy };
+  const exp = totalDiagonalTurnCount(path, startPad, goalPad);
+  const b = placeGrade2Bend6Bumpers(path, W, H);
   return {
     path,
-    bends: path ? countRightAngles(path) : -1,
+    bends: countRightAngles(path),
     bumpers: b?.size ?? -1,
+    expectedBumpers: exp,
   };
 }
 
@@ -1086,14 +1098,21 @@ function tryGrade2Bend6Path(
 }
 
 /**
- * 折れ6フック経路のバンパーは Grade 2 共通と同じく **経路上の内角折れのみ**（`placeDiagonalBumpersInterior`）。
- * start / goal へのポータル用バンパーは置かず、個数は `countRightAngles(path)`（＝6）と一致させる。
+ * 折れ 6：**Grade 2・折れ 4 とは異なり** `start` / `goal` にも斜めバンパーを置いてよい。
+ * `placeDiagonalBumpers`（`startPad→start`・`goalPad→goal` の直交折れを含む）で一括配置し、
+ * 本数は `totalDiagonalTurnCount(path, startPad, goalPad)` と一致する。
  */
 function placeGrade2Bend6Bumpers(path: CellCoord[], _w: number, _h: number): Map<string, BumperCell> | null {
-  const bends = countRightAngles(path);
-  if (bends !== 6) return null;
-  const { bumpers, ok } = placeDiagonalBumpersInterior(path);
-  if (!ok || bumpers.size !== 6) return null;
+  if (countRightAngles(path) !== 6) return null;
+  const start = path[0]!;
+  const goal = path[path.length - 1]!;
+  const startPad = { c: start.c, r: start.r + 1 };
+  const prev = path[path.length - 2]!;
+  const dLast = unitDirBetween(prev, goal);
+  if (!dLast) return null;
+  const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
+  const { bumpers, ok } = placeDiagonalBumpers(path, startPad, goalPad);
+  if (!ok) return null;
   return bumpers;
 }
 
@@ -1124,26 +1143,22 @@ function pickGrade2Bend6OrientedStage(
   rng: () => number
 ): Grade2OrientedSnapshot | null {
   const winners: Grade2OrientedSnapshot[] = [];
-  const bends = 6;
   for (let k = 0; k < 4; k++) {
     let p = path.map((x) => ({ ...x }));
     let pb = pathable.map((col) => [...col!]);
     let w = w0;
     let h = h0;
-    let bumpers = placeGrade2Bend6Bumpers(p, w, h);
-    if (!bumpers) continue;
 
     for (let i = 0; i < k; i++) {
       const nx = applyQuarterCCWPathable(pb, p, w, h);
       p = nx.path;
       pb = nx.pathable;
-      bumpers = rotateBumperMapQuarterCCW(bumpers, w, h);
       w = nx.w;
       h = nx.h;
     }
 
     const fs = pathFirstStepDir(p);
-    if (!fs || !dirsEqual(fs, DIR.U)) continue;
+    if (!fs) continue;
 
     const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h);
     if (norm.kind === "retry") continue;
@@ -1151,7 +1166,7 @@ function pickGrade2Bend6OrientedStage(
     const padAdjustLabel = norm.label;
     const swapSlashKey = norm.swapSlashKey;
 
-    bumpers = placeGrade2Bend6Bumpers(p, w, h);
+    let bumpers = placeGrade2Bend6Bumpers(p, w, h);
     if (!bumpers) continue;
 
     if (swapSlashKey) {
@@ -1177,7 +1192,8 @@ function pickGrade2Bend6OrientedStage(
     const bendSet = bendCellsInPath(p);
     if (!grade2BendNoRevisit(p, bendSet)) continue;
 
-    if (bumpers.size !== bends) continue;
+    const expectedBumpers = totalDiagonalTurnCount(p, startPad, goalPad);
+    if (bumpers.size !== expectedBumpers) continue;
 
     const bumpDup = new Map(bumpers);
     winners.push({
@@ -1282,7 +1298,11 @@ export function diagnoseGrade2ForcedBendAttempts(
         h = nx.h;
       }
       const fs = pathFirstStepDir(p);
-      if (!fs || !dirsEqual(fs, DIR.U)) {
+      if (!fs) {
+        inc(rotationFail, "rot_first_step_undef");
+        continue;
+      }
+      if (bends === 4 && !dirsEqual(fs, DIR.U)) {
         inc(rotationFail, "rot_first_step_not_u");
         continue;
       }
@@ -1316,10 +1336,19 @@ export function diagnoseGrade2ForcedBendAttempts(
         inc(rotationFail, "bend_vertex_revisit_path");
         continue;
       }
-      const { bumpers, ok } = placeDiagonalBumpersInterior(p);
-      if (!ok || bumpers.size !== bends) {
-        inc(rotationFail, "interior_bumper_mismatch");
-        continue;
+      if (bends === 6) {
+        const bump6 = placeGrade2Bend6Bumpers(p, w, h);
+        const expB = totalDiagonalTurnCount(p, startPad, goalPad);
+        if (!bump6 || bump6.size !== expB) {
+          inc(rotationFail, "bend6_bumper_mismatch");
+          continue;
+        }
+      } else {
+        const { bumpers, ok } = placeDiagonalBumpersInterior(p);
+        if (!ok || bumpers.size !== bends) {
+          inc(rotationFail, "interior_bumper_mismatch");
+          continue;
+        }
       }
       anyWinner = true;
       break;
@@ -1398,8 +1427,8 @@ export function diagnoseGrade2Bend6Session(seed: number, maxAttempts = 1200): Gr
           h = nx.h;
         }
         const fs = pathFirstStepDir(p);
-        if (!fs || !dirsEqual(fs, DIR.U)) {
-          inc(rotationFail, "rot_first_step_not_u");
+        if (!fs) {
+          inc(rotationFail, "rot_first_step_undef");
           continue;
         }
         const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h);
@@ -1432,9 +1461,10 @@ export function diagnoseGrade2Bend6Session(seed: number, maxAttempts = 1200): Gr
           inc(rotationFail, "bend_vertex_revisit_path");
           continue;
         }
-        const { bumpers, ok } = placeDiagonalBumpersInterior(p);
-        if (!ok || bumpers.size !== bends) {
-          inc(rotationFail, "interior_bumper_mismatch");
+        const bump6 = placeGrade2Bend6Bumpers(p, w, h);
+        const expBump = totalDiagonalTurnCount(p, startPad, goalPad);
+        if (!bump6 || bump6.size !== expBump) {
+          inc(rotationFail, "bend6_bumper_mismatch");
           continue;
         }
       }
