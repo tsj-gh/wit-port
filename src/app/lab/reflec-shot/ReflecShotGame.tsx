@@ -32,6 +32,8 @@ const SWIPE_MIN = 12;
 
 type Phase = "edit" | "move" | "won" | "lost";
 
+type BoardSurfaceSource = "stock" | "generated";
+
 function shotEntryDir(st: GridStage): Dir {
   return unitOrthoDirBetween(st.startPad, st.start) ?? DIR.D;
 }
@@ -149,13 +151,19 @@ export default function ReflecShotGame() {
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
   const [showSolutionPath, setShowSolutionPath] = useState(false);
-  /** デバッグ時のみスライダーで変更。非デバッグ・非 devtj 時は 2（従来の約2倍速）固定。 */
-  const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(2);
+  /** デバッグ時のみスライダーで変更。非デバッグ・非 devtj 時は 3.5 固定。 */
+  const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(3.5);
   const [hashInput, setHashInput] = useState("");
   const [layoutNonce, setLayoutNonce] = useState(0);
+  const [stockPrefetchPaused, setStockPrefetchPaused] = useState(false);
+  const nextBoardSourceRef = useRef<BoardSurfaceSource | null>(null);
+  const [boardDisplaySource, setBoardDisplaySource] = useState<BoardSurfaceSource | null>(null);
   const pendingRestoreRef = useRef<GridStage | null>(null);
   const { generate: generateStageInWorker, isGenerating, lastMetrics } = useReflectShotWorker();
-  const { stockCounts, takeBoardForGrade } = useReflectShotBoardStock(generateStageInWorker);
+  const { stockCounts, takeBoardForGrade } = useReflectShotBoardStock(
+    generateStageInWorker,
+    !stockPrefetchPaused
+  );
   const [boardLoadWait, setBoardLoadWait] = useState(false);
 
   const simRef = useRef({
@@ -182,6 +190,9 @@ export default function ReflecShotGame() {
     const pending = pendingRestoreRef.current;
     if (pending) {
       pendingRestoreRef.current = null;
+      const src: BoardSurfaceSource = nextBoardSourceRef.current ?? "generated";
+      nextBoardSourceRef.current = null;
+      setBoardDisplaySource(src);
       const cloned = cloneGridStageForRestore(pending);
       setStage(cloned);
       setPhase("edit");
@@ -200,6 +211,7 @@ export default function ReflecShotGame() {
 
     const fromStock = takeBoardForGrade(grade);
     if (fromStock) {
+      nextBoardSourceRef.current = "stock";
       pendingRestoreRef.current = fromStock;
       setSeed(fromStock.seed >>> 0);
       setLayoutNonce((n) => n + 1);
@@ -214,6 +226,7 @@ export default function ReflecShotGame() {
         const { stage } = await generateStageInWorker(grade, seed);
         if (cancelled) return;
         const cloned = cloneGridStageForRestore(stage);
+        setBoardDisplaySource("generated");
         setStage(cloned);
         setPhase("edit");
         setStatusMsg("");
@@ -256,6 +269,7 @@ export default function ReflecShotGame() {
           setStatusMsg("ハッシュの解析に失敗しました");
           return;
         }
+        nextBoardSourceRef.current = "generated";
         pendingRestoreRef.current = st;
         setGrade(st.grade);
         setSeed(st.seed >>> 0);
@@ -265,6 +279,7 @@ export default function ReflecShotGame() {
       void (async () => {
         try {
           const { stage } = await generateStageInWorker(parsed.grade, parsed.seed);
+          nextBoardSourceRef.current = "generated";
           pendingRestoreRef.current = cloneGridStageForRestore(stage);
           setGrade(stage.grade);
           setSeed(stage.seed >>> 0);
@@ -281,6 +296,7 @@ export default function ReflecShotGame() {
     if (phase !== "won") return;
     const next = takeBoardForGrade(grade);
     if (next) {
+      nextBoardSourceRef.current = "stock";
       pendingRestoreRef.current = next;
       setSeed(next.seed >>> 0);
       setLayoutNonce((n) => n + 1);
@@ -294,6 +310,7 @@ export default function ReflecShotGame() {
           grade,
           (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0
         );
+        nextBoardSourceRef.current = "generated";
         pendingRestoreRef.current = cloneGridStageForRestore(st);
         setSeed(st.seed >>> 0);
         setLayoutNonce((n) => n + 1);
@@ -347,7 +364,7 @@ export default function ReflecShotGame() {
       const st = stage;
       if (!st || phase !== "move") return;
 
-      const speedMult = isDevTj && isDebugMode ? debugBallSpeedMult : 2;
+      const speedMult = isDevTj && isDebugMode ? debugBallSpeedMult : 3.5;
       const cellTravelMs = BASE_CELL_TRAVEL_MS / speedMult;
 
       const sim = simRef.current;
@@ -721,6 +738,31 @@ export default function ReflecShotGame() {
                       ? `${lastMetrics.totalMs.toFixed(1)} ms`
                       : "—"}
                 </div>
+                <div className="text-sky-200/80">
+                  Stock:{" "}
+                  {REFLECT_SHOT_STOCK_GRADES.map((g) => (
+                    <span key={g} className="mr-1.5">
+                      G{g} {stockCounts[g]}/{MAX_STOCK_SIZE}
+                    </span>
+                  ))}
+                </div>
+                <div className="text-slate-300">
+                  Source:{" "}
+                  {boardDisplaySource === "stock"
+                    ? "Stock"
+                    : boardDisplaySource === "generated"
+                      ? "Generated"
+                      : "—"}
+                </div>
+                <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={stockPrefetchPaused}
+                    onChange={(e) => setStockPrefetchPaused(e.target.checked)}
+                    className="accent-amber-400"
+                  />
+                  Stockの生成を停止
+                </label>
               </div>
               <div className="mt-2 border-t border-white/10 pt-2 space-y-1.5">
                 <div className="font-semibold text-slate-300 text-[10px]">シード（初期盤再現）</div>

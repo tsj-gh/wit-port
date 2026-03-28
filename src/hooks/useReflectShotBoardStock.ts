@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef } from "react";
 import type { GridStage } from "@/app/lab/reflec-shot/gridTypes";
 import { cloneGridStageForRestore } from "@/app/lab/reflec-shot/gridTypes";
 import type { ReflectShotGenerateResult } from "@/hooks/useReflectShotWorker";
@@ -33,6 +33,10 @@ export function useReflectShotBoardStock(
 ) {
   const stockRef = useRef<StockRef>(emptyStock());
   const inFlightByGradeRef = useRef<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+  const enabledRef = useRef(enabled);
+  useLayoutEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
   const [, bumpUi] = useReducer((x: number) => x + 1, 0);
 
   const getStockCounts = useCallback((): Record<number, number> => {
@@ -47,7 +51,7 @@ export function useReflectShotBoardStock(
   }, []);
 
   const scheduleReplenish = useCallback(() => {
-    if (!enabled) return;
+    if (!enabledRef.current) return;
 
     for (const g of REFLECT_SHOT_STOCK_GRADES) {
       const q = stockRef.current[g]!;
@@ -70,7 +74,7 @@ export function useReflectShotBoardStock(
           });
       }
     }
-  }, [enabled, generate, bumpUi]);
+  }, [generate, bumpUi]);
 
   /**
    * 親コンポーネントで、このフックより後に登録された useEffect（初期盤面の user 生成など）が
