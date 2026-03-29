@@ -122,6 +122,30 @@ function drawCellGappedBorder(
   ctx.fillRect(x + s - stripeW / 2, loY, stripeW, hiY - loY);
 }
 
+/**
+ * Worker に渡す生成オプション。`consumerGrade` は盤として再生産する Grade（1〜5）で、
+ * UI のドロップダウン値に依存させない（rs2 パース結果などと一致させる）。
+ */
+function reflectShotWorkerGenOptsForConsumerGrade(
+  consumerGrade: number,
+  isDevTj: boolean,
+  isDebugMode: boolean,
+  debugGrade2Bend6MidSlider: number
+): { grade2Bend6TotalBends?: 6 | 7 | 8; debugReflecShotConsole?: boolean } | undefined {
+  const o: {
+    grade2Bend6TotalBends?: 6 | 7 | 8;
+    debugReflecShotConsole?: boolean;
+  } = {};
+  if (consumerGrade === 4 && isDevTj && isDebugMode) {
+    const n = debugGrade2Bend6MidSlider + 4;
+    o.grade2Bend6TotalBends = n === 6 || n === 7 || n === 8 ? n : 7;
+  }
+  if (isDevTj && isDebugMode) {
+    o.debugReflecShotConsole = true;
+  }
+  return Object.keys(o).length ? o : undefined;
+}
+
 function bumperSymbol(k: BumperKind): string {
   switch (k) {
     case "SLASH":
@@ -161,6 +185,11 @@ export default function ReflecShotGame() {
   const nextBoardSourceRef = useRef<BoardSurfaceSource | null>(null);
   const [boardDisplaySource, setBoardDisplaySource] = useState<BoardSurfaceSource | null>(null);
   const pendingRestoreRef = useRef<GridStage | null>(null);
+  /**
+   * rs2 ハッシュの Worker 非同期生成の入り重なり用（複数クリック時は完了ごとにデクリメント）。
+   * >0 のあいだメイン effect はストック／seed 再生成をスキップする。
+   */
+  const hashRs2GenerationInFlightCountRef = useRef(0);
   const { generate: generateStageInWorker, isGenerating, lastMetrics } = useReflectShotWorker();
   const { stockCounts, takeBoardForGrade } = useReflectShotBoardStock(
     generateStageInWorker,
@@ -188,26 +217,10 @@ export default function ReflecShotGame() {
     hasSwipe: boolean;
   } | null>(null);
 
-  const workerGrade2Bend6Total = useMemo((): 6 | 7 | 8 | undefined => {
-    if (grade !== 4 || !isDevTj || !isDebugMode) return undefined;
-    const n = debugGrade2Bend6MidSlider + 4;
-    if (n === 6 || n === 7 || n === 8) return n;
-    return 7;
-  }, [grade, isDevTj, isDebugMode, debugGrade2Bend6MidSlider]);
-
-  const workerGenOpts = useMemo(() => {
-    const o: {
-      grade2Bend6TotalBends?: 6 | 7 | 8;
-      debugReflecShotConsole?: boolean;
-    } = {};
-    if (grade === 4 && workerGrade2Bend6Total != null) {
-      o.grade2Bend6TotalBends = workerGrade2Bend6Total;
-    }
-    if (isDevTj && isDebugMode) {
-      o.debugReflecShotConsole = true;
-    }
-    return Object.keys(o).length ? o : undefined;
-  }, [grade, workerGrade2Bend6Total, isDevTj, isDebugMode]);
+  const workerGenOpts = useMemo(
+    () => reflectShotWorkerGenOptsForConsumerGrade(grade, isDevTj, isDebugMode, debugGrade2Bend6MidSlider),
+    [grade, isDevTj, isDebugMode, debugGrade2Bend6MidSlider]
+  );
 
   useEffect(() => {
     const pending = pendingRestoreRef.current;
@@ -229,6 +242,10 @@ export default function ReflecShotGame() {
         lerp01: 0,
         leftStart: false,
       };
+      return;
+    }
+
+    if (hashRs2GenerationInFlightCountRef.current > 0) {
       return;
     }
 
@@ -309,25 +326,37 @@ export default function ReflecShotGame() {
         setLayoutNonce((n) => n + 1);
         return;
       }
+      hashRs2GenerationInFlightCountRef.current += 1;
+      setGrade(parsed.grade);
+      setSeed(parsed.seed >>> 0);
+      setBoardLoadWait(true);
+      setStatusMsg("盤面を準備中…");
       void (async () => {
         try {
-          const { stage } = await generateStageInWorker(parsed.grade, parsed.seed, {
-            ...(parsed.grade === 4 && workerGrade2Bend6Total != null
-              ? { grade2Bend6TotalBends: workerGrade2Bend6Total }
-              : {}),
-            ...(isDevTj && isDebugMode ? { debugReflecShotConsole: true as const } : {}),
-          });
+          const workerOpts = reflectShotWorkerGenOptsForConsumerGrade(
+            parsed.grade,
+            isDevTj,
+            isDebugMode,
+            debugGrade2Bend6MidSlider
+          );
+          const { stage } = await generateStageInWorker(parsed.grade, parsed.seed >>> 0, workerOpts);
           nextBoardSourceRef.current = "generated";
           pendingRestoreRef.current = cloneGridStageForRestore(stage);
           setGrade(stage.grade);
           setSeed(stage.seed >>> 0);
           setLayoutNonce((n) => n + 1);
+          setStatusMsg("");
         } catch {
           setStatusMsg("ハッシュからの生成に失敗しました");
+        } finally {
+          hashRs2GenerationInFlightCountRef.current = Math.max(0, hashRs2GenerationInFlightCountRef.current - 1);
+          if (hashRs2GenerationInFlightCountRef.current === 0) {
+            setBoardLoadWait(false);
+          }
         }
       })();
     },
-    [generateStageInWorker, workerGrade2Bend6Total, isDevTj, isDebugMode]
+    [generateStageInWorker, isDevTj, isDebugMode, debugGrade2Bend6MidSlider]
   );
 
   const goNextProblem = useCallback(() => {
