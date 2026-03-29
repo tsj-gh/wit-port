@@ -190,6 +190,11 @@ export default function ReflecShotGame() {
    * >0 のあいだメイン effect はストック／seed 再生成をスキップする。
    */
   const hashRs2GenerationInFlightCountRef = useRef(0);
+  /** デバッグパネル「Previous:」用：直前に確定していた grade・seed（初回は null） */
+  const debugPrevBoardRef = useRef<{ grade: number; seed: number } | null>(null);
+  const [debugPreviousBoard, setDebugPreviousBoard] = useState<{ grade: number; seed: number } | null>(
+    null
+  );
   const { generate: generateStageInWorker, isGenerating, lastMetrics } = useReflectShotWorker();
   const { stockCounts, takeBoardForGrade } = useReflectShotBoardStock(
     generateStageInWorker,
@@ -221,6 +226,17 @@ export default function ReflecShotGame() {
     () => reflectShotWorkerGenOptsForConsumerGrade(grade, isDevTj, isDebugMode, debugGrade2Bend6MidSlider),
     [grade, isDevTj, isDebugMode, debugGrade2Bend6MidSlider]
   );
+
+  useEffect(() => {
+    const prev = debugPrevBoardRef.current;
+    debugPrevBoardRef.current = { grade, seed };
+    if (!prev) {
+      setDebugPreviousBoard(null);
+      return;
+    }
+    if (prev.grade === grade && prev.seed === seed) return;
+    setDebugPreviousBoard(prev);
+  }, [grade, seed]);
 
   useEffect(() => {
     const pending = pendingRestoreRef.current;
@@ -862,6 +878,14 @@ export default function ReflecShotGame() {
               </div>
               <div className="mt-2 border-t border-white/10 pt-2 space-y-1.5">
                 <div className="font-semibold text-slate-300 text-[10px]">シード（初期盤再現）</div>
+                <div className="flex items-start gap-1 flex-wrap">
+                  <span className="text-slate-400 shrink-0 text-[10px]">Previous:</span>
+                  <code className="text-[9px] break-all flex-1 min-w-0 bg-black/40 px-1 rounded text-amber-200/90 max-h-20 overflow-y-auto">
+                    {debugPreviousBoard
+                      ? `rs2.${debugPreviousBoard.grade}.${(debugPreviousBoard.seed >>> 0).toString(16)}`
+                      : "-"}
+                  </code>
+                </div>
                 <div className="flex items-start gap-1 flex-wrap">
                   <span className="text-slate-400 shrink-0 text-[10px]">Current:</span>
                   <code
