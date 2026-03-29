@@ -303,9 +303,11 @@ export default function ReflecShotGame() {
       }
       void (async () => {
         try {
-          // rs2 は grade + seed のみ表す。デバッグ用の折れ6固定は UI の grade に依存する
-          // workerGenOpts を渡すと、初回（setGrade 前は grade≠4）と再入力時で別盤になるため渡さない。
-          const { stage } = await generateStageInWorker(parsed.grade, parsed.seed);
+          const { stage } = await generateStageInWorker(
+            parsed.grade,
+            parsed.seed,
+            parsed.grade === 4 ? workerGenOpts : undefined
+          );
           nextBoardSourceRef.current = "generated";
           pendingRestoreRef.current = cloneGridStageForRestore(stage);
           setGrade(stage.grade);
@@ -316,7 +318,7 @@ export default function ReflecShotGame() {
         }
       })();
     },
-    [generateStageInWorker]
+    [generateStageInWorker, workerGenOpts]
   );
 
   const goNextProblem = useCallback(() => {
@@ -473,16 +475,11 @@ export default function ReflecShotGame() {
         const inArr = r >= 0 && r < st.height;
         const onPadRow = r === st.startPad.r || r === st.goalPad.r;
 
-        // パッド行は（主に盤外の）射出／ゴール延長で、パッド以外を背景に溶かす。
-        // ただし向き調整後に startPad が盤内 pathable と同じ r に載ることがあり、
-        // その行の経路マスまで消してしまうため pathable なら経路タイルとして描画する。
+        // パッド行は射出／ゴールの1マスのみ描画。他はキャンバス背景と同化（マス無し）
         if (onPadRow && !isStartPad && !isGoalPad) {
-          const isPlayablePathCell = inArr && st.pathable[c]![r];
-          if (!isPlayablePathCell) {
-            ctx.fillStyle = "#020617";
-            ctx.fillRect(x, y, cellPx, cellPx);
-            continue;
-          }
+          ctx.fillStyle = "#020617";
+          ctx.fillRect(x, y, cellPx, cellPx);
+          continue;
         }
 
         if (isStartPad) {
