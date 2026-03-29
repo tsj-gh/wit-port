@@ -825,11 +825,12 @@ function validateGrade2RotatedPorts(
 }
 
 type Grade2PadNormResult =
-  | { kind: "ok"; path: CellCoord[]; label?: Grade2PadAdjustLabel; swapSlashKey?: string }
+  | { kind: "ok"; path: CellCoord[]; label?: Grade2PadAdjustLabel }
   | { kind: "retry" };
 
 /**
- * startPad→start と goalPad→goal が反対向きだが、端が最下段／最上段に無い場合の経路上下反転と斜めバンパー入替候補。
+ * startPad→start と goalPad→goal が反対向きだが、端が最下段／最上段に無い場合の経路上下反転（鏡映）。
+ * 斜めバンパーは反転後の経路に対する `placeDiagonalBumpers*` のみで決め、`solution` は常に `applyBumper` と整合する。
  */
 function normalizeGrade2OppositePadPolyline(
   p: CellCoord[],
@@ -887,8 +888,7 @@ function normalizeGrade2OppositePadPolyline(
         ? isStrictlyOutsideBoard(gN.c, gN.r - 1, w, h)
         : grade2GoalPadIsGridAboveGoal(gN, prevN);
       if (!padAboveOk) continue;
-      const k = keyCell(p2[pIdx]!.c, p2[pIdx]!.r);
-      return { kind: "ok", path: p2, label: "goal->upside down", swapSlashKey: k };
+      return { kind: "ok", path: p2, label: "goal->upside down" };
     }
     return { kind: "retry" };
   }
@@ -913,8 +913,7 @@ function normalizeGrade2OppositePadPolyline(
       ? isStrictlyOutsideBoard(gN.c, gN.r - 1, w, h)
       : grade2GoalPadIsGridAboveGoal(gN, prevN);
     if (!padAboveOk3) continue;
-    const k = keyCell(p3[p3.length - 1 - qIdx]!.c, p3[p3.length - 1 - qIdx]!.r);
-    return { kind: "ok", path: p3, label: "start->upside down", swapSlashKey: k };
+    return { kind: "ok", path: p3, label: "start->upside down" };
   }
   return { kind: "retry" };
 }
@@ -1031,7 +1030,6 @@ function pickGrade2OrientedStage(
     if (norm.kind === "retry") continue;
     p = norm.path;
     const padAdjustLabel = norm.label;
-    const swapSlashKey = norm.swapSlashKey;
 
     const start = p[0]!;
     const goal = p[p.length - 1]!;
@@ -1052,15 +1050,6 @@ function pickGrade2OrientedStage(
     const needBumpers = opts?.relaxBendVisit ? bendSet.size : bends;
     if (!ok || bumpers.size !== needBumpers) continue;
 
-    const bumpDup = new Map(bumpers);
-    if (swapSlashKey) {
-      const cell = bumpDup.get(swapSlashKey);
-      if (cell && (cell.solution === "SLASH" || cell.solution === "BACKSLASH")) {
-        const sol = wrongDiagonal(cell.solution);
-        bumpDup.set(swapSlashKey, { display: sol, solution: sol });
-      }
-    }
-
     winners.push({
       width: w,
       height: h,
@@ -1070,7 +1059,7 @@ function pickGrade2OrientedStage(
       startPad,
       goalPad,
       solutionPath: p,
-      bumpers: bumpDup,
+      bumpers: new Map(bumpers),
       grade2PadAdjustLabel: padAdjustLabel,
     });
   }
@@ -1394,18 +1383,9 @@ function pickGrade2Bend6OrientedStage(
     if (norm.kind === "retry") continue;
     p = norm.path;
     const padAdjustLabel = norm.label;
-    const swapSlashKey = norm.swapSlashKey;
 
-    let bumpers = placeGrade2Bend6Bumpers(p, w, h);
+    const bumpers = placeGrade2Bend6Bumpers(p, w, h);
     if (!bumpers) continue;
-
-    if (swapSlashKey) {
-      const c = bumpers.get(swapSlashKey);
-      if (c && (c.solution === "SLASH" || c.solution === "BACKSLASH")) {
-        const sol = wrongDiagonal(c.solution);
-        bumpers.set(swapSlashKey, { display: sol, solution: sol });
-      }
-    }
 
     const start = p[0]!;
     const goal = p[p.length - 1]!;
@@ -1422,7 +1402,6 @@ function pickGrade2Bend6OrientedStage(
     const expectedBumpers = totalDiagonalTurnCount(p, startPad, goalPad);
     if (bumpers.size !== expectedBumpers) continue;
 
-    const bumpDup = new Map(bumpers);
     winners.push({
       width: w,
       height: h,
@@ -1432,7 +1411,7 @@ function pickGrade2Bend6OrientedStage(
       startPad,
       goalPad,
       solutionPath: p,
-      bumpers: bumpDup,
+      bumpers: new Map(bumpers),
       grade2PadAdjustLabel: padAdjustLabel,
     });
   }

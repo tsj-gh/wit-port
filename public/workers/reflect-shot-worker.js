@@ -634,8 +634,7 @@
         const prevN = p2[p2.length - 2];
         const padAboveOk = (opts == null ? void 0 : opts.grade2Bend6FixedGoalPad) ? isStrictlyOutsideBoard(gN.c, gN.r - 1, w, h) : grade2GoalPadIsGridAboveGoal(gN, prevN);
         if (!padAboveOk) continue;
-        const k = keyCell(p2[pIdx].c, p2[pIdx].r);
-        return { kind: "ok", path: p2, label: "goal->upside down", swapSlashKey: k };
+        return { kind: "ok", path: p2, label: "goal->upside down" };
       }
       return { kind: "retry" };
     }
@@ -653,8 +652,7 @@
       const prevN = p3[p3.length - 2];
       const padAboveOk3 = (opts == null ? void 0 : opts.grade2Bend6FixedGoalPad) ? isStrictlyOutsideBoard(gN.c, gN.r - 1, w, h) : grade2GoalPadIsGridAboveGoal(gN, prevN);
       if (!padAboveOk3) continue;
-      const k = keyCell(p3[p3.length - 1 - qIdx].c, p3[p3.length - 1 - qIdx].r);
-      return { kind: "ok", path: p3, label: "start->upside down", swapSlashKey: k };
+      return { kind: "ok", path: p3, label: "start->upside down" };
     }
     return { kind: "retry" };
   }
@@ -735,7 +733,6 @@
       if (norm.kind === "retry") continue;
       p = norm.path;
       const padAdjustLabel = norm.label;
-      const swapSlashKey = norm.swapSlashKey;
       const start = p[0];
       const goal = p[p.length - 1];
       const startPad = { c: start.c, r: start.r + 1 };
@@ -751,14 +748,6 @@
       const { bumpers, ok } = placeDiagonalBumpersInterior(p);
       const needBumpers = (opts == null ? void 0 : opts.relaxBendVisit) ? bendSet.size : bends;
       if (!ok || bumpers.size !== needBumpers) continue;
-      const bumpDup = new Map(bumpers);
-      if (swapSlashKey) {
-        const cell = bumpDup.get(swapSlashKey);
-        if (cell && (cell.solution === "SLASH" || cell.solution === "BACKSLASH")) {
-          const sol = wrongDiagonal(cell.solution);
-          bumpDup.set(swapSlashKey, { display: sol, solution: sol });
-        }
-      }
       winners.push({
         width: w,
         height: h,
@@ -768,7 +757,7 @@
         startPad,
         goalPad,
         solutionPath: p,
-        bumpers: bumpDup,
+        bumpers: new Map(bumpers),
         grade2PadAdjustLabel: padAdjustLabel
       });
     }
@@ -952,16 +941,8 @@
       if (norm.kind === "retry") continue;
       p = norm.path;
       const padAdjustLabel = norm.label;
-      const swapSlashKey = norm.swapSlashKey;
-      let bumpers = placeGrade2Bend6Bumpers(p, w, h);
+      const bumpers = placeGrade2Bend6Bumpers(p, w, h);
       if (!bumpers) continue;
-      if (swapSlashKey) {
-        const c = bumpers.get(swapSlashKey);
-        if (c && (c.solution === "SLASH" || c.solution === "BACKSLASH")) {
-          const sol = wrongDiagonal(c.solution);
-          bumpers.set(swapSlashKey, { display: sol, solution: sol });
-        }
-      }
       const start = p[0];
       const goal = p[p.length - 1];
       const startPad = { c: start.c, r: start.r + 1 };
@@ -973,7 +954,6 @@
       if (!grade2BendNoRevisit(p, bendSet)) continue;
       const expectedBumpers = totalDiagonalTurnCount(p, startPad, goalPad);
       if (bumpers.size !== expectedBumpers) continue;
-      const bumpDup = new Map(bumpers);
       winners.push({
         width: w,
         height: h,
@@ -983,7 +963,7 @@
         startPad,
         goalPad,
         solutionPath: p,
-        bumpers: bumpDup,
+        bumpers: new Map(bumpers),
         grade2PadAdjustLabel: padAdjustLabel
       });
     }

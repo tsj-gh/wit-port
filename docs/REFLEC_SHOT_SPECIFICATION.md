@@ -60,7 +60,7 @@
 - **`dStart`**：`startPad → start`。Grade 3〜5 の整合候補では基本 **`DIR.U`**。
 - **`dGoal`**：`goalPad → goal`。Lv.3（Grade 4）では真上固定のため **`DIR.D`** に一致。Lv.2 / Lv.4 では最終直線延長上の盤外。
 
-**`padsOpposite`**（`dStart` と `dGoal` が逆向き）かつ **典型端でない**とき、`normalizeGrade2OppositePadPolyline` により鏡映・経路反転・`swapSlashKey` 等を試す。失敗時は `retry`。詳細は従来どおり（縦鏡映ピボット、`goal->upside down` / `start->upside down` ラベル等）。
+**`padsOpposite`**（`dStart` と `dGoal` が逆向き）かつ **典型端でない**とき、`normalizeGrade2OppositePadPolyline` により鏡映・経路反転を試す。失敗時は `retry`。詳細は従来どおり（縦鏡映ピボット、`goal->upside down` / `start->upside down` ラベル等）。鏡映後の斜めバンパーは **`placeDiagonalBumpers` / `placeDiagonalBumpersInterior`** による幾何決定のみとし、**`solution` は常に `applyBumper`（画面座標の `/`・`\` 定義）と解経路で両立する**。
 
 ### `goal->upside down` 時の start 延長（経路がスタートより「下」に潜る場合）
 
@@ -117,6 +117,38 @@ Grade 5 でも経路決定後は **`pickGrade2OrientedStage`**（`relaxBendVisit
 - **盤面**: 6×6 全域 `pathable`。
 - **経路**: **折れ数 6**・**ちょうど 1 マスが 2 回通る**（両回 90° 折れ）。再訪の入射・出射ルールは旧 Grade3 と同じ。
 - **バンパー**: 盤内の直角折れ（再訪セルは 1 セルで両ターンに整合）。**バンパーが置かれるマス数は 5**。
+
+---
+
+## ステージ識別子 `rs2` と生成オプション（再現性の注意）
+
+**`rs2.{grade}.{hex}` に含まれる情報**は、実装上 **`grade`（プレイ Grade 1〜5）と 32-bit `seed`（hex）**のみである。  
+Worker へ渡しうる **任意の生成オプション**（以下）は **ハッシュにエンコードされない**。
+
+| オプション | 主な効き先 | UI / 条件の例 |
+|------------|------------|----------------|
+| **`grade2Bend6TotalBends`** | Grade 4（Lv.3・折れ6）の `tryGrade2Bend6Path` 内 **`targetBends` 固定** | `?devtj=true` かつデバッグ ON のとき、`debugGrade2Bend6MidSlider + 4` として **6 / 7 / 8** を Worker に渡す |
+| **`debugReflecShotConsole`** | `maybeExtendStartForGoalUpsideDown` 等の棄却理由を **`console`** に出すか | 同上デバッグ ON で `true` |
+
+### 同じ `rs2` でも盤が変わりうる理由（ビット同一性の落とし穴）
+
+1. **`grade2Bend6TotalBends` の有無で RNG がずれる**  
+   未指定時は `tryGrade2Bend6Path` の各内側試行で `6 + floor(rng()*3)` として **折れ目標を乱択**するため **`rng()` の消費回数が変わる**。指定時はその乱択が省略され、**同じ `seed` でも乱数列の分岐が最初からずれ、別盤になる**。
+
+2. **`generateGridStageWithFallback` のフォールバック**  
+   初回 `generateGridStage(grade, seed, opts)` が `null` のとき、実装は **`seed` をずらした別シードで最大約 200 回**再試行する。ハッシュ上は「元の seed」しか分からないため、**フォールバックに入った盤は `rs2` だけからは一意に言えない**（成功した内部試行のシードは UI に必ずしも表示されない）。
+
+3. **プリフェッチストックと「ユーザー生成」の違い**  
+   ストック補充は **`grade2Bend6TotalBends` / `debugReflecShotConsole` なし**で Worker を呼ぶ。デバッグ Grade4 は **ストックをスキップしてフルオプション生成**する分岐があり、**見えている `seed` が同じでも呼び出しパスが違う**と結果が一致しないことがある。
+
+### 厳密に同じ盤を言い切るときの条件（推奨）
+
+- **同じ** `grade`・**同じ** `seed` に加え、**同じ** `ReflectShotPolylineGenOpts`（少なくとも Grade4 なら `grade2Bend6TotalBends` の有無・値と `debugReflecShotConsole`）で **`generateGridStage` または `generateGridStageWithFallback` を直接呼ぶ**。
+- 将来、完全なビット再現が必要なら **オプションを含む新しい識別子**（別プレフィックスや Base64 ペイロード等）を定義するか、**`rs1`（盤スナップショット）**で共有する、のいずれかを検討する。
+
+### ユーザー向け簡易ルール（仕様メモ）
+
+- **`rs2` は「その Grade・そのシードで、通常オプションに近い生成」を指す**とみなすのが無難で、**開発者デバッグ（折れ固定・コンソール）ON の Grade4 では、同じ文字列でも一般プレイ時のストック盤とは一致しないことがある**旨を認識する。
 
 ---
 
