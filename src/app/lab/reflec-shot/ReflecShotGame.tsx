@@ -303,7 +303,11 @@ export default function ReflecShotGame() {
       }
       void (async () => {
         try {
-          const { stage } = await generateStageInWorker(parsed.grade, parsed.seed);
+          const { stage } = await generateStageInWorker(
+            parsed.grade,
+            parsed.seed,
+            parsed.grade === 4 ? workerGenOpts : undefined
+          );
           nextBoardSourceRef.current = "generated";
           pendingRestoreRef.current = cloneGridStageForRestore(stage);
           setGrade(stage.grade);
@@ -314,7 +318,7 @@ export default function ReflecShotGame() {
         }
       })();
     },
-    [generateStageInWorker]
+    [generateStageInWorker, workerGenOpts]
   );
 
   const goNextProblem = useCallback(() => {
@@ -803,14 +807,6 @@ export default function ReflecShotGame() {
                       : "—"}
                   {(stage?.grade === 3 || stage?.grade === 4) && stage.grade2PadAdjustLabel && (
                     <span className="text-yellow-300"> {stage.grade2PadAdjustLabel}</span>
-                  )}
-                  {stage?.padExtentKind && (
-                    <>
-                      <span> start/goal extended </span>
-                      <span className="text-yellow-300">
-                        {stage.padExtentKind === "both" ? "start+goal" : stage.padExtentKind}
-                      </span>
-                    </>
                   )}
                 </div>
                 <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
