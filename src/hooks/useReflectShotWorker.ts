@@ -79,7 +79,11 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
     (
       grade: number,
       seed: number,
-      opts?: { source?: ReflectShotGenerateSource; grade2Bend6TotalBends?: 6 | 7 | 8 }
+      opts?: {
+        source?: ReflectShotGenerateSource;
+        grade2Bend6TotalBends?: 6 | 7 | 8;
+        debugReflecShotConsole?: boolean;
+      }
     ): Promise<ReflectShotGenerateResult> => {
       const w = workerRef.current;
       if (!w) {
@@ -107,6 +111,7 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
           ...(grade === 4 && opts?.grade2Bend6TotalBends != null
             ? { grade2Bend6TotalBends: opts.grade2Bend6TotalBends }
             : {}),
+          ...(opts?.debugReflecShotConsole ? { debugReflecShotConsole: true } : {}),
         };
         w.postMessage(payload);
       });

@@ -16,6 +16,8 @@ export type ReflectShotMainToWorkerGenerate = {
   seed: number;
   /** Grade4（Lv.3・折れ6）のみ。全体目標折れ 6/7/8 を Worker に反映（未指定時は乱択） */
   grade2Bend6TotalBends?: 6 | 7 | 8;
+  /** デバッグ UI オン時: start 延長の棄却理由を Worker の console に出す */
+  debugReflecShotConsole?: boolean;
 };
 
 export type ReflectShotWorkerToMain =

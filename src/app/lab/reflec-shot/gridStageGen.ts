@@ -919,6 +919,89 @@ function normalizeGrade2OppositePadPolyline(
   return { kind: "retry" };
 }
 
+type GoalUpsideDownStartExt =
+  | { kind: "unchanged" }
+  | { kind: "extended"; path: CellCoord[]; start: CellCoord; startPad: CellCoord }
+  | { kind: "discard"; reason: string };
+
+/**
+ * `goal->upside down` のとき、経路の最深行 B（画面上最も下）に合わせて start / startPad を r 方向に延長する。
+ * 仕様: `docs/REFLEC_SHOT_SPECIFICATION.md`（`goal->upside down` 時の start 延長）
+ */
+function maybeExtendStartForGoalUpsideDown(
+  path0: CellCoord[],
+  start: CellCoord,
+  startPad: CellCoord,
+  label: Grade2PadAdjustLabel | undefined,
+  pathable: boolean[][],
+  w: number,
+  h: number,
+  debugLog?: boolean
+): GoalUpsideDownStartExt {
+  if (label !== "goal->upside down" || path0.length < 2) return { kind: "unchanged" };
+
+  let B = path0[0]!;
+  let maxR = B.r;
+  for (const p of path0) {
+    if (p.r > maxR) {
+      maxR = p.r;
+      B = p;
+    }
+  }
+
+  const S0 = { ...start };
+  const y_b = B.r - S0.r;
+  if (y_b <= 0) return { kind: "unchanged" };
+
+  const newStart = { c: S0.c, r: S0.r + y_b };
+  const newStartPad = { c: startPad.c, r: startPad.r + y_b };
+
+  if (!inBounds(newStart.c, newStart.r, w, h) || !pathable[newStart.c]![newStart.r]) {
+    if (debugLog) {
+      console.warn(
+        "[ReflecShot] goal->upside down start extend: 破棄 extended start が盤外／非 pathable",
+        { newStart, S0, y_b }
+      );
+    }
+    return { kind: "discard", reason: "extended_start_not_pathable" };
+  }
+
+  const pathKeys = new Set(path0.map((p) => keyCell(p.c, p.r)));
+  const pathS: CellCoord[] = [];
+  for (let r = newStart.r; r >= S0.r; r--) {
+    const cell = { c: S0.c, r };
+    if (!inBounds(cell.c, cell.r, w, h) || !pathable[cell.c]![cell.r]) {
+      if (debugLog) {
+        console.warn("[ReflecShot] goal->upside down start extend: 破棄 Path_S が pathable でない", {
+          cell,
+          S0,
+          y_b,
+        });
+      }
+      return { kind: "discard", reason: "path_s_not_pathable" };
+    }
+    pathS.push(cell);
+  }
+
+  for (let i = 0; i < pathS.length - 1; i++) {
+    const c = pathS[i]!;
+    const k = keyCell(c.c, c.r);
+    if (pathKeys.has(k)) {
+      if (debugLog) {
+        console.warn("[ReflecShot] goal->upside down start extend: 破棄 Path_S が Path_0 と再訪", {
+          cell: c,
+          S0,
+          y_b,
+        });
+      }
+      return { kind: "discard", reason: "path_s_revisit" };
+    }
+  }
+
+  const merged = pathS.concat(path0.slice(1));
+  return { kind: "extended", path: merged, start: newStart, startPad: newStartPad };
+}
+
 function pickGrade2OrientedStage(
   pathable: boolean[][],
   path: CellCoord[],
@@ -1080,6 +1163,8 @@ export type ReflectShotPolylineGenOpts = {
    * 尾 DFS の折れ予算は `targetBends - countRightAngles(フック多角形)`（3 固定・4 固定ではない）。
    */
   grade2Bend6TotalBends?: 6 | 7 | 8;
+  /** `true` のとき Worker 側で `goal->upside down` start 延長の棄却を `console` に出す */
+  debugReflecShotConsole?: boolean;
 };
 
 /** Grade2・折れ6（高速化）: フック＋DFS 尾で経路を生成 */
@@ -1639,7 +1724,7 @@ export function diagnoseGrade2Bend6Session(seed: number, maxAttempts = 1200): Gr
 }
 
 /** 盤面生成 Lv.4（旧 Grade3）：6×6・折れ6・1 マス再訪 → `pickGrade2OrientedStage` */
-function generateBoardLv4Stage(seed: number): GridStage | null {
+function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpts): GridStage | null {
   const rng = createStageRng(seed);
   const { w: W, h: H } = boardSizeForGrade(5);
   const pathable = makeRect(W, H);
@@ -1648,12 +1733,69 @@ function generateBoardLv4Stage(seed: number): GridStage | null {
     const bottoms = bottomCandidates(pathable);
     const tops = topCandidates(pathable);
     if (!bottoms.length || !tops.length) return null;
-    const start = bottoms[Math.floor(rng() * bottoms.length)]!;
-    const goal = tops[Math.floor(rng() * tops.length)]!;
-    const path = findGrade3SixBendPath(pathable, start, goal, rng);
+    const botStart = bottoms[Math.floor(rng() * bottoms.length)]!;
+    const topGoal = tops[Math.floor(rng() * tops.length)]!;
+    const path = findGrade3SixBendPath(pathable, botStart, topGoal, rng);
     if (!path) continue;
     const picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
     if (!picked) continue;
+
+    let solutionPath = picked.solutionPath;
+    let start = picked.start;
+    let startPad = picked.startPad;
+    const goal = picked.goal;
+
+    const ge = maybeExtendStartForGoalUpsideDown(
+      solutionPath,
+      start,
+      startPad,
+      picked.grade2PadAdjustLabel,
+      picked.pathable,
+      picked.width,
+      picked.height,
+      genOpts?.debugReflecShotConsole
+    );
+    if (ge.kind === "discard") continue;
+
+    if (ge.kind === "extended") {
+      solutionPath = ge.path;
+      start = ge.start;
+      startPad = ge.startPad;
+      if (!pathOrthStepValid(solutionPath, picked.pathable, picked.width, picked.height)) continue;
+      if (!grade3RevisitOneCellRule(solutionPath)) continue;
+      const fs = pathFirstStepDir(solutionPath);
+      if (!fs || !dirsEqual(fs, DIR.U)) continue;
+      if (countRightAngles(solutionPath) !== 6) continue;
+      const prev = solutionPath[solutionPath.length - 2]!;
+      const dLast = unitDirBetween(prev, goal);
+      if (!dLast) continue;
+      const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
+      if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, picked.width, picked.height)) continue;
+      const dEntry = unitOrthoDirBetween(startPad, start);
+      if (!dEntry || !dirsEqual(dEntry, DIR.U)) continue;
+      const bendSet = bendCellsInPath(solutionPath);
+      const { bumpers, ok } = placeDiagonalBumpersInterior(solutionPath);
+      if (!ok || bumpers.size !== bendSet.size) continue;
+      const dup = new Map<string, BumperCell>();
+      bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+      shuffleWrongDisplay(dup, rng);
+      return {
+        width: picked.width,
+        height: picked.height,
+        pathable: picked.pathable,
+        start,
+        goal,
+        startPad,
+        goalPad,
+        bumpers: dup,
+        solutionPath,
+        grade: 5,
+        seed,
+        grade2PadAdjustLabel: picked.grade2PadAdjustLabel,
+        reflecSourceStartExtended: true,
+      };
+    }
+
     const dup = new Map<string, BumperCell>();
     picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
     shuffleWrongDisplay(dup, rng);
@@ -1750,7 +1892,7 @@ function generateBoardLv1Stage(consumerGrade: 1 | 2, seed: number): GridStage | 
 }
 
 /** 盤面生成 Lv.2（旧 Grade2・折れ4）：5×5 */
-function generateBoardLv2Stage(seed: number): GridStage | null {
+function generateBoardLv2Stage(seed: number, genOpts?: ReflectShotPolylineGenOpts): GridStage | null {
   const rng = createStageRng(seed);
   const W = 5;
   const H = 5;
@@ -1761,17 +1903,17 @@ function generateBoardLv2Stage(seed: number): GridStage | null {
     const tops = topCandidates(pathable);
     if (!bottoms.length || !tops.length) return null;
 
-    const start = bottoms[Math.floor(rng() * bottoms.length)]!;
-    const goal = tops[Math.floor(rng() * tops.length)]!;
-    const dc = goal.c - start.c;
-    const dr = goal.r - start.r;
+    const polyStart = bottoms[Math.floor(rng() * bottoms.length)]!;
+    const polyGoal = tops[Math.floor(rng() * tops.length)]!;
+    const dc = polyGoal.c - polyStart.c;
+    const dr = polyGoal.r - polyStart.r;
     const bends = 4;
     if (dc === 0 || dr === 0) continue;
 
     let path: CellCoord[] | null = null;
     for (let t = 0; t < 40; t++) {
       const firstH = t < 2 ? t % 2 === 0 : rng() < 0.5;
-      path = tryOrthogonalPolyline(start, goal, bends, firstH, pathable, rng);
+      path = tryOrthogonalPolyline(polyStart, polyGoal, bends, firstH, pathable, rng);
       if (path) break;
     }
     if (!path) continue;
@@ -1780,6 +1922,56 @@ function generateBoardLv2Stage(seed: number): GridStage | null {
 
     const picked = pickGrade2OrientedStage(pathable, path, W, H, bends, rng);
     if (!picked) continue;
+
+    let solutionPath = picked.solutionPath;
+    let start = picked.start;
+    let startPad = picked.startPad;
+    let reflecSourceStartExtended = false;
+
+    const ge = maybeExtendStartForGoalUpsideDown(
+      solutionPath,
+      start,
+      startPad,
+      picked.grade2PadAdjustLabel,
+      picked.pathable,
+      picked.width,
+      picked.height,
+      genOpts?.debugReflecShotConsole
+    );
+    if (ge.kind === "discard") continue;
+
+    if (ge.kind === "extended") {
+      solutionPath = ge.path;
+      start = ge.start;
+      startPad = ge.startPad;
+      reflecSourceStartExtended = true;
+      if (!pathOrthStepValid(solutionPath, picked.pathable, picked.width, picked.height)) continue;
+      if (countRightAngles(solutionPath) !== bends) continue;
+      if (!pathHasOrthogonalCrossCell(solutionPath)) continue;
+      const bendSet = bendCellsInPath(solutionPath);
+      if (!grade2BendNoRevisit(solutionPath, bendSet)) continue;
+      const { bumpers, ok } = placeDiagonalBumpersInterior(solutionPath);
+      if (!ok || bumpers.size !== bends) continue;
+      const dup = new Map<string, BumperCell>();
+      bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+      shuffleWrongDisplay(dup, rng);
+      return {
+        width: picked.width,
+        height: picked.height,
+        pathable: picked.pathable,
+        start,
+        goal: picked.goal,
+        startPad,
+        goalPad: picked.goalPad,
+        bumpers: dup,
+        solutionPath,
+        grade: 3,
+        seed,
+        grade2PadAdjustLabel: picked.grade2PadAdjustLabel,
+        reflecSourceStartExtended: true,
+      };
+    }
+
     const dup = new Map<string, BumperCell>();
     picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
     shuffleWrongDisplay(dup, rng);
@@ -1814,8 +2006,8 @@ function generateBoardLv3Stage(seed: number, polyOpts?: ReflectShotPolylineGenOp
     const tops = topCandidates(pathable);
     if (!bottoms.length || !tops.length) return null;
 
-    const start = bottoms[Math.floor(rng() * bottoms.length)]!;
-    const goal = tops[Math.floor(rng() * tops.length)]!;
+    const bend6Start = bottoms[Math.floor(rng() * bottoms.length)]!;
+    const bend6Goal = tops[Math.floor(rng() * tops.length)]!;
 
     const bend6Trace: Grade2Bend6PathTrace = {
       outerAttempt: attempt,
@@ -1825,7 +2017,7 @@ function generateBoardLv3Stage(seed: number, polyOpts?: ReflectShotPolylineGenOp
       tailPolyline: [],
       Q: { c: -1, r: -1 },
     };
-    const path = tryGrade2Bend6Path(pathable, W, H, start, goal, rng, bend6Trace, attempt, polyOpts);
+    const path = tryGrade2Bend6Path(pathable, W, H, bend6Start, bend6Goal, rng, bend6Trace, attempt, polyOpts);
     if (!path || !pathOrthStepValid(path, pathable, W, H)) continue;
 
     const pathCr = countRightAngles(path);
@@ -1834,6 +2026,59 @@ function generateBoardLv3Stage(seed: number, polyOpts?: ReflectShotPolylineGenOp
 
     const picked = pickGrade2Bend6OrientedStage(pathable, path, W, H, rng);
     if (!picked) continue;
+
+    let solutionPath = picked.solutionPath;
+    let start = picked.start;
+    let startPad = picked.startPad;
+    const goal = picked.goal;
+
+    const ge = maybeExtendStartForGoalUpsideDown(
+      solutionPath,
+      start,
+      startPad,
+      picked.grade2PadAdjustLabel,
+      picked.pathable,
+      picked.width,
+      picked.height,
+      polyOpts?.debugReflecShotConsole
+    );
+    if (ge.kind === "discard") continue;
+
+    if (ge.kind === "extended") {
+      solutionPath = ge.path;
+      start = ge.start;
+      startPad = ge.startPad;
+      if (!pathOrthStepValid(solutionPath, picked.pathable, W, H)) continue;
+      const pcra = countRightAngles(solutionPath);
+      if (pcra < 6 || pcra > 8) continue;
+      if (!grade1NoRevisit(solutionPath)) continue;
+      const bendSet = bendCellsInPath(solutionPath);
+      if (!grade2BendNoRevisit(solutionPath, bendSet)) continue;
+      const goalPad = grade2Bend6GoalPad(goal);
+      const bump6 = placeGrade2Bend6Bumpers(solutionPath, picked.width, picked.height);
+      if (!bump6 || bump6.size !== totalDiagonalTurnCount(solutionPath, startPad, goalPad)) continue;
+
+      const dup = new Map<string, BumperCell>();
+      bump6.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+      lastGrade2Bend6Trace = { trace: bend6Trace, rawPath: path.map((x) => ({ ...x })) };
+      shuffleWrongDisplay(dup, rng);
+      return {
+        width: picked.width,
+        height: picked.height,
+        pathable: picked.pathable,
+        start,
+        goal,
+        startPad,
+        goalPad,
+        bumpers: dup,
+        solutionPath,
+        grade: 4,
+        seed,
+        grade2PadAdjustLabel: picked.grade2PadAdjustLabel,
+        reflecSourceStartExtended: true,
+      };
+    }
+
     const dup = new Map<string, BumperCell>();
     picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
     lastGrade2Bend6Trace = { trace: bend6Trace, rawPath: path.map((x) => ({ ...x })) };
@@ -1863,9 +2108,9 @@ export function generateGridStage(
 ): GridStage | null {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
   if (g === 1 || g === 2) return generateBoardLv1Stage(g, seed);
-  if (g === 3) return generateBoardLv2Stage(seed);
+  if (g === 3) return generateBoardLv2Stage(seed, polyOpts);
   if (g === 4) return generateBoardLv3Stage(seed, polyOpts);
-  return generateBoardLv4Stage(seed);
+  return generateBoardLv4Stage(seed, polyOpts);
 }
 
 /** 乱数シードをずらして `generateGridStage` と同型の生成を再試行 */

@@ -62,6 +62,21 @@
 
 **`padsOpposite`**（`dStart` と `dGoal` が逆向き）かつ **典型端でない**とき、`normalizeGrade2OppositePadPolyline` により鏡映・経路反転・`swapSlashKey` 等を試す。失敗時は `retry`。詳細は従来どおり（縦鏡映ピボット、`goal->upside down` / `start->upside down` ラベル等）。
 
+### `goal->upside down` 時の start 延長（経路がスタートより「下」に潜る場合）
+
+`grade2PadAdjustLabel === "goal->upside down"` が付いた盤だけ、次を実行する（実装: `gridStageGen.ts` の `maybeExtendStartForGoalUpsideDown`）。
+
+1. **点 B**：正規化後の経路 `Path_0` 上で **行 `r` が最大**のマス（画面上最も下。同率は先に現れる順で代表点）。
+2. **`y_b = B.r - start.r`**。`y_b <= 0` なら何もしない。
+3. **`y_b > 0` のとき**  
+   - 延長前の `start` を **S0** とする。  
+   - `start` と `startPad` の **グリッド行 `r` をそれぞれ `y_b` だけ増やす**（画面下方向。`startPad = (start.c, start.r + 1)` の関係を保つ）。  
+   - 新 `start` から **S0** へ、`c = S0.c` 固定で **1 マスずつ `r` を減じる**直列を **Path\_S** とする（セル列は `r = S0.r + y_b, S0.r + y_b - 1, …, S0.r`）。  
+   - **Path\_S のうち S0 以外**の各マスが、元の `Path_0` のいずれかのセルと一致（再訪）する場合は **この生成試行を破棄**しリトライする。開発者がデバッグモードをオンにしているとき、Worker 側で `console` に棄却理由を出す。  
+   - それ以外は **最終経路 = Path\_S と Path\_0 を連結**（`Path_S` の終端と `Path_0` の始端はともに S0 のため、`Path_S.concat(Path_0.slice(1))` で S0 を二重にしない）。  
+   - 延長後にグレードごとのバンパー整合（折れ6は `placeGrade2Bend6Bumpers` と `totalDiagonalTurnCount` 等）を **再検証**する。  
+4. 延長が実際に行われた盤は **`GridStage.reflecSourceStartExtended`** を立て、デバッグパネルの **Source** 行末に **`start extended`**（黄色）を付ける。
+
 ### Grade 5（Lv.4）との関係
 
 Grade 5 でも経路決定後は **`pickGrade2OrientedStage`**（`relaxBendVisit: true`）を通すため、**上記正規化**が適用される（再訪 1 マスなど経路の形によっては `goal->upside down` / `start->upside down` が選ばれうる）。

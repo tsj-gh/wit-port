@@ -93,6 +93,8 @@ export type GridStage = {
   seed: number;
   /** Grade 2 生成時のみ: パッド整合のため経路を上下反転したときのラベル */
   grade2PadAdjustLabel?: Grade2PadAdjustLabel;
+  /** `goal->upside down` 後に start を経路の最深行に合わせて延長した（デバッグ Source 用） */
+  reflecSourceStartExtended?: boolean;
 };
 
 /** エージェントが存在しうるマス（pathable ∪ startPad ∪ ゴールエリア） */

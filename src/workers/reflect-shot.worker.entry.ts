@@ -15,15 +15,18 @@ function post(data: ReflectShotWorkerToMain) {
 self.onmessage = (ev: MessageEvent<ReflectShotMainToWorkerGenerate>) => {
   const msg = ev.data;
   if (!msg || msg.type !== "GENERATE") return;
-  const { requestId, grade, seed, grade2Bend6TotalBends } = msg;
+  const { requestId, grade, seed, grade2Bend6TotalBends, debugReflecShotConsole } = msg;
   post({ type: "STATUS", status: "RUNNING", requestId });
   try {
     const t0 = performance.now();
-    const board = generateGridStageWithFallback(
-      grade,
-      seed,
-      grade === 4 && grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : undefined
-    );
+    const genOpts =
+      (grade === 4 && grade2Bend6TotalBends != null) || debugReflecShotConsole
+        ? {
+            ...(grade === 4 && grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : {}),
+            ...(debugReflecShotConsole ? { debugReflecShotConsole: true as const } : {}),
+          }
+        : undefined;
+    const board = generateGridStageWithFallback(grade, seed, genOpts);
     const totalMs = performance.now() - t0;
     post({
       type: "SUCCESS",

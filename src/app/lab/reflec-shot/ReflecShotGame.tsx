@@ -195,11 +195,19 @@ export default function ReflecShotGame() {
     return 7;
   }, [grade, isDevTj, isDebugMode, debugGrade2Bend6MidSlider]);
 
-  const workerGenOpts = useMemo(
-    () =>
-      workerGrade2Bend6Total != null ? { grade2Bend6TotalBends: workerGrade2Bend6Total } : undefined,
-    [workerGrade2Bend6Total]
-  );
+  const workerGenOpts = useMemo(() => {
+    const o: {
+      grade2Bend6TotalBends?: 6 | 7 | 8;
+      debugReflecShotConsole?: boolean;
+    } = {};
+    if (grade === 4 && workerGrade2Bend6Total != null) {
+      o.grade2Bend6TotalBends = workerGrade2Bend6Total;
+    }
+    if (isDevTj && isDebugMode) {
+      o.debugReflecShotConsole = true;
+    }
+    return Object.keys(o).length ? o : undefined;
+  }, [grade, workerGrade2Bend6Total, isDevTj, isDebugMode]);
 
   useEffect(() => {
     const pending = pendingRestoreRef.current;
@@ -303,11 +311,12 @@ export default function ReflecShotGame() {
       }
       void (async () => {
         try {
-          const { stage } = await generateStageInWorker(
-            parsed.grade,
-            parsed.seed,
-            parsed.grade === 4 ? workerGenOpts : undefined
-          );
+          const { stage } = await generateStageInWorker(parsed.grade, parsed.seed, {
+            ...(parsed.grade === 4 && workerGrade2Bend6Total != null
+              ? { grade2Bend6TotalBends: workerGrade2Bend6Total }
+              : {}),
+            ...(isDevTj && isDebugMode ? { debugReflecShotConsole: true as const } : {}),
+          });
           nextBoardSourceRef.current = "generated";
           pendingRestoreRef.current = cloneGridStageForRestore(stage);
           setGrade(stage.grade);
@@ -318,7 +327,7 @@ export default function ReflecShotGame() {
         }
       })();
     },
-    [generateStageInWorker, workerGenOpts]
+    [generateStageInWorker, workerGrade2Bend6Total, isDevTj, isDebugMode]
   );
 
   const goNextProblem = useCallback(() => {
@@ -807,6 +816,9 @@ export default function ReflecShotGame() {
                       : "—"}
                   {(stage?.grade === 3 || stage?.grade === 4) && stage.grade2PadAdjustLabel && (
                     <span className="text-yellow-300"> {stage.grade2PadAdjustLabel}</span>
+                  )}
+                  {stage?.reflecSourceStartExtended && (
+                    <span className="text-yellow-300"> start extended</span>
                   )}
                 </div>
                 <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
