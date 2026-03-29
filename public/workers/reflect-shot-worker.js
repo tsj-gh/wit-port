@@ -946,27 +946,81 @@
       const goal = tops[Math.floor(rng() * tops.length)];
       const path = findGrade3SixBendPath(pathable, start, goal, rng);
       if (!path) continue;
-      const picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
+      const ext = tryPadVerticalPathExtent(path, W, H, pathable);
+      if (!ext) continue;
+      const picked = pickGrade2OrientedStage(pathable, ext.path, W, H, 6, rng, { relaxBendVisit: true });
       if (!picked) continue;
+      const p = picked.solutionPath;
+      if (!pathOrthStepValid(p, picked.pathable, picked.width, picked.height)) continue;
+      if (!grade3RevisitOneCellRule(p)) continue;
+      const fs = pathFirstStepDir(p);
+      if (!fs || !dirsEqual(fs, DIR.U)) continue;
+      const startPad = { c: picked.start.c, r: picked.start.r + 1 };
+      const goalPad = { c: picked.goal.c, r: picked.goal.r - 1 };
+      const dEntry = unitOrthoDirBetween(startPad, picked.start);
+      if (!dEntry || !dirsEqual(dEntry, DIR.U)) continue;
+      if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, picked.width, picked.height)) continue;
+      if (countRightAngles(p) !== 6) continue;
+      const bendSet = bendCellsInPath(p);
+      const { bumpers, ok } = placeDiagonalBumpersInterior(p);
+      if (!ok || bumpers.size !== bendSet.size) continue;
       const dup = /* @__PURE__ */ new Map();
-      picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+      bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       shuffleWrongDisplay(dup, rng);
-      return {
+      return __spreadValues({
         width: picked.width,
         height: picked.height,
         pathable: picked.pathable,
         start: picked.start,
         goal: picked.goal,
-        startPad: picked.startPad,
-        goalPad: picked.goalPad,
+        startPad,
+        goalPad,
         bumpers: dup,
-        solutionPath: picked.solutionPath,
+        solutionPath: p,
         grade: 5,
         seed,
         grade2PadAdjustLabel: picked.grade2PadAdjustLabel
-      };
+      }, ext.padExtentKind ? { padExtentKind: ext.padExtentKind } : {});
     }
     return null;
+  }
+  function tryPadVerticalPathExtent(path, w, h, pathable) {
+    if (path.length < 2) return null;
+    const Ymin = Math.min(...path.map((p) => p.r));
+    const Ymax = Math.max(...path.map((p) => p.r));
+    const st0 = path[0];
+    const gl0 = path[path.length - 1];
+    const occ = new Set(path.map((p) => keyCell(p.c, p.r)));
+    const pre = [];
+    for (let r = Ymin; r < st0.r; r++) {
+      const cell = { c: st0.c, r };
+      if (!inBounds(cell.c, cell.r, w, h) || !pathable[cell.c][cell.r]) return null;
+      const k = keyCell(cell.c, cell.r);
+      if (occ.has(k)) return null;
+      occ.add(k);
+      pre.push(cell);
+    }
+    let newPath = pre.length ? [...pre, ...path] : path.map((x) => __spreadValues({}, x));
+    const gCell = newPath[newPath.length - 1];
+    const post2 = [];
+    for (let r = gCell.r + 1; r <= Ymax; r++) {
+      const cell = { c: gCell.c, r };
+      if (!inBounds(cell.c, cell.r, w, h) || !pathable[cell.c][cell.r]) return null;
+      const k = keyCell(cell.c, cell.r);
+      if (occ.has(k)) return null;
+      occ.add(k);
+      post2.push(cell);
+    }
+    if (post2.length) newPath = [...newPath, ...post2];
+    let padExtentKind;
+    if (pre.length && post2.length) padExtentKind = "both";
+    else if (pre.length) padExtentKind = "start";
+    else if (post2.length) padExtentKind = "goal";
+    const start = __spreadValues({}, newPath[0]);
+    const goal = __spreadValues({}, newPath[newPath.length - 1]);
+    const out = { path: newPath, start, goal };
+    if (padExtentKind) out.padExtentKind = padExtentKind;
+    return out;
   }
   function wrongDiagonal(sol) {
     return sol === "SLASH" ? "BACKSLASH" : "SLASH";
@@ -1006,9 +1060,11 @@
       if (!path) continue;
       if (countRightAngles(path) !== bends) continue;
       if (!grade1NoRevisit(path)) continue;
-      const startPad = { c: start.c, r: start.r + 1 };
-      const goalPad = { c: goal.c, r: goal.r - 1 };
-      const { bumpers, ok } = placeDiagonalBumpers(path, startPad, goalPad);
+      const ext = tryPadVerticalPathExtent(path, W, H, pathable);
+      if (!ext) continue;
+      const startPad = { c: ext.start.c, r: ext.start.r + 1 };
+      const goalPad = { c: ext.goal.c, r: ext.goal.r - 1 };
+      const { bumpers, ok } = placeDiagonalBumpers(ext.path, startPad, goalPad);
       if (!ok || bumpers.size === 0) continue;
       if (consumerGrade === 1) {
         if (bumpers.size !== 2) continue;
@@ -1016,19 +1072,19 @@
       const dup = /* @__PURE__ */ new Map();
       bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       shuffleWrongDisplay(dup, rng);
-      return {
+      return __spreadValues({
         width: W,
         height: H,
         pathable,
-        start,
-        goal,
+        start: ext.start,
+        goal: ext.goal,
         startPad,
         goalPad,
         bumpers: dup,
-        solutionPath: path,
+        solutionPath: ext.path,
         grade: consumerGrade,
         seed
-      };
+      }, ext.padExtentKind ? { padExtentKind: ext.padExtentKind } : {});
     }
     return null;
   }
@@ -1057,25 +1113,42 @@
       if (!path) continue;
       if (countRightAngles(path) !== bends) continue;
       if (!pathHasOrthogonalCrossCell(path)) continue;
-      const picked = pickGrade2OrientedStage(pathable, path, W, H, bends, rng);
+      const ext = tryPadVerticalPathExtent(path, W, H, pathable);
+      if (!ext) continue;
+      const picked = pickGrade2OrientedStage(pathable, ext.path, W, H, bends, rng);
       if (!picked) continue;
+      const p = picked.solutionPath;
+      if (!pathOrthStepValid(p, picked.pathable, picked.width, picked.height)) continue;
+      const fs = pathFirstStepDir(p);
+      if (!fs || !dirsEqual(fs, DIR.U)) continue;
+      const startPad = { c: picked.start.c, r: picked.start.r + 1 };
+      const goalPad = { c: picked.goal.c, r: picked.goal.r - 1 };
+      const dEntry = unitOrthoDirBetween(startPad, picked.start);
+      if (!dEntry || !dirsEqual(dEntry, DIR.U)) continue;
+      if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, picked.width, picked.height)) continue;
+      if (countRightAngles(p) !== bends) continue;
+      if (!pathHasOrthogonalCrossCell(p)) continue;
+      const bendSet = bendCellsInPath(p);
+      if (!grade2BendNoRevisit(p, bendSet)) continue;
+      const { bumpers, ok } = placeDiagonalBumpersInterior(p);
+      if (!ok || bumpers.size !== bends) continue;
       const dup = /* @__PURE__ */ new Map();
-      picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+      bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       shuffleWrongDisplay(dup, rng);
-      return {
+      return __spreadValues({
         width: picked.width,
         height: picked.height,
         pathable: picked.pathable,
         start: picked.start,
         goal: picked.goal,
-        startPad: picked.startPad,
-        goalPad: picked.goalPad,
+        startPad,
+        goalPad,
         bumpers: dup,
-        solutionPath: picked.solutionPath,
+        solutionPath: p,
         grade: 3,
         seed,
         grade2PadAdjustLabel: picked.grade2PadAdjustLabel
-      };
+      }, ext.padExtentKind ? { padExtentKind: ext.padExtentKind } : {});
     }
     return null;
   }
@@ -1105,26 +1178,38 @@
       const pathCr = countRightAngles(path);
       if (pathCr < 6 || pathCr > 8) continue;
       if (!grade1NoRevisit(path)) continue;
-      const picked = pickGrade2Bend6OrientedStage(pathable, path, W, H, rng);
+      const ext = tryPadVerticalPathExtent(path, W, H, pathable);
+      if (!ext) continue;
+      const picked = pickGrade2Bend6OrientedStage(pathable, ext.path, W, H, rng);
       if (!picked) continue;
+      const p = picked.solutionPath;
+      if (!pathOrthStepValid(p, picked.pathable, picked.width, picked.height)) continue;
+      const pcra = countRightAngles(p);
+      if (pcra < 6 || pcra > 8) continue;
+      if (!grade1NoRevisit(p)) continue;
+      const startPad = { c: picked.start.c, r: picked.start.r + 1 };
+      const goalPad = grade2Bend6GoalPad(picked.goal);
+      const bump6 = placeGrade2Bend6Bumpers(p, picked.width, picked.height);
+      if (!bump6) continue;
+      if (bump6.size !== totalDiagonalTurnCount(p, startPad, goalPad)) continue;
       const dup = /* @__PURE__ */ new Map();
-      picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+      bump6.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       lastGrade2Bend6Trace = { trace: bend6Trace, rawPath: path.map((x) => __spreadValues({}, x)) };
       shuffleWrongDisplay(dup, rng);
-      return {
+      return __spreadValues({
         width: picked.width,
         height: picked.height,
         pathable: picked.pathable,
         start: picked.start,
         goal: picked.goal,
-        startPad: picked.startPad,
-        goalPad: picked.goalPad,
+        startPad,
+        goalPad,
         bumpers: dup,
-        solutionPath: picked.solutionPath,
+        solutionPath: p,
         grade: 4,
         seed,
         grade2PadAdjustLabel: picked.grade2PadAdjustLabel
-      };
+      }, ext.padExtentKind ? { padExtentKind: ext.padExtentKind } : {});
     }
     return null;
   }

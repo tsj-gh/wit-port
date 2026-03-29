@@ -93,6 +93,8 @@ export type GridStage = {
   seed: number;
   /** Grade 2 生成時のみ: パッド整合のため経路を上下反転したときのラベル */
   grade2PadAdjustLabel?: Grade2PadAdjustLabel;
+  /** [Pad延伸チェック] で start / goal / 両方を Y（グリッド r）方向に延長した場合 */
+  padExtentKind?: "start" | "goal" | "both";
 };
 
 /** エージェントが存在しうるマス（pathable ∪ startPad ∪ ゴールエリア） */
