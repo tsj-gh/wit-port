@@ -757,27 +757,6 @@ function tryOrthogonalPolyline(
   return path;
 }
 
-/**
- * 直角折れ数が少ない方から順に `tryOrthogonalPolyline` を試す（各折れ数あたり複数乱択）。
- * R-First（Lv.4）の「区間ごと折れ 0〜maxBends」用。
- */
-function tryOrthogonalPolylineMinBends(
-  start: CellCoord,
-  goal: CellCoord,
-  pathable: boolean[][],
-  rng: () => number,
-  maxBends: number
-): CellCoord[] | null {
-  for (let bends = 0; bends <= maxBends; bends++) {
-    for (let t = 0; t < 36; t++) {
-      const firstH = rng() < 0.5;
-      const p = tryOrthogonalPolyline(start, goal, bends, firstH, pathable, rng);
-      if (p) return p;
-    }
-  }
-  return null;
-}
-
 function countRightAngles(path: CellCoord[]): number {
   let n = 0;
   for (let i = 1; i < path.length - 1; i++) {
