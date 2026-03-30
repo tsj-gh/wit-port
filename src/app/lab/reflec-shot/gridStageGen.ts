@@ -248,6 +248,41 @@ export function createStageRng(seed: number) {
   };
 }
 
+/** 直交配列で a→b に最低何回の直角折れが必要か（端点のみを見た下界） */
+function minOrthoBends(a: CellCoord, b: CellCoord): number {
+  if (a.c === b.c && a.r === b.r) return 0;
+  if (a.c === b.c || a.r === b.r) return 0;
+  return 1;
+}
+
+/**
+ * `tryOrthogonalPolyline` が分割段階で必ず失敗する組み合わせを弾く（RNG を使わない）。
+ * 水平セグメント本数・垂直セグメント本数と (dc,dr) の関係は `tryOrthogonalPolyline` と同一。
+ */
+function orthoPolylineSplitImpossible(
+  start: CellCoord,
+  goal: CellCoord,
+  bends: number,
+  firstHorizontal: boolean
+): boolean {
+  if (bends < minOrthoBends(start, goal)) return true;
+  const dc = goal.c - start.c;
+  const dr = goal.r - start.r;
+  const nSeg = bends + 1;
+  let hCount = 0;
+  let vCount = 0;
+  for (let i = 0; i < nSeg; i++) {
+    const isH = firstHorizontal ? i % 2 === 0 : i % 2 === 1;
+    if (isH) hCount++;
+    else vCount++;
+  }
+  if (hCount === 0 && dc !== 0) return true;
+  if (vCount === 0 && dr !== 0) return true;
+  if (hCount === 1 && dc === 0) return true;
+  if (vCount === 1 && dr === 0) return true;
+  return false;
+}
+
 /** target を parts 個の非零整数に分ける（和 = target）。失敗時 null */
 function randomNonZeroSplit(target: number, parts: number, rng: () => number): number[] | null {
   if (parts === 0) return target === 0 ? [] : null;
@@ -576,6 +611,9 @@ function findGrade3SixBendPath(
  *
  * **RF4-1**: `R` が最下行（`r === h-1`）のときは入射を **盤外真下**（`dIn1 === DIR.U`）に限定し、
  * `start = R`・経路先頭は `R`（`startPad→R` は盤外）。`grade3RevisitOneCellRule` は `implicitBeforeFirstR: P1` で検証する。
+ *
+ * **補助**: `orthoPolylineSplitImpossible` でポリライン前に分割不能を棄却。折れ配分は最大区間折れ次に `minOrthoBends` との差が小さい順。
+ * 外側ループでは `topGoal` を試行ごとに中央列寄りへローテーション（`generateBoardLv4Stage`）。
  */
 function tryConstructGrade3PathRFirstN1(
   pathable: boolean[][],
@@ -600,12 +638,31 @@ function tryConstructGrade3PathRFirstN1(
     }
   }
 
-  const shuffleSplitsPreferLowMax = (arr: [number, number, number][]) => {
+  /** 折れ配分は最大区間折れが小さい順。二次キーは各区間の所要最小折れとのギャップが小さい順（対策2・RNG 消費は tryOrthogonal 前で増えない） */
+  const shuffleSplitsPreferLowMax = (
+    arr: [number, number, number][],
+    start: CellCoord,
+    p1: CellCoord,
+    s1: CellCoord,
+    p2: CellCoord,
+    s2: CellCoord,
+    g: CellCoord,
+    onBottomRow: boolean
+  ) => {
     const copy = [...arr];
     copy.sort((u, v) => {
       const mu = Math.max(u[0], u[1], u[2]);
       const mv = Math.max(v[0], v[1], v[2]);
       if (mu !== mv) return mu - mv;
+      const du =
+        Math.abs(u[1] - minOrthoBends(s1, p2)) +
+        Math.abs(u[2] - minOrthoBends(s2, g)) +
+        (onBottomRow ? 0 : Math.abs(u[0] - minOrthoBends(start, p1)));
+      const dv =
+        Math.abs(v[1] - minOrthoBends(s1, p2)) +
+        Math.abs(v[2] - minOrthoBends(s2, g)) +
+        (onBottomRow ? 0 : Math.abs(v[0] - minOrthoBends(start, p1)));
+      if (du !== dv) return du - dv;
       return u[0] + u[1] + u[2] - (v[0] + v[1] + v[2]);
     });
     for (let si = copy.length - 1; si > 0; si--) {
@@ -668,7 +725,16 @@ function tryConstructGrade3PathRFirstN1(
 
             const splitsBase = onBottomRow ? splitsAll.filter(([b0]) => b0 === 0) : splitsAll;
             if (!splitsBase.length) continue;
-            const splits = shuffleSplitsPreferLowMax(splitsBase);
+            const splits = shuffleSplitsPreferLowMax(
+              splitsBase,
+              start,
+              P1,
+              S1,
+              P2,
+              S2,
+              goal,
+              onBottomRow
+            );
 
             for (let pass = 0; pass < 6; pass++) {
               const firstH0 = pass % 2 === 0;
@@ -677,13 +743,22 @@ function tryConstructGrade3PathRFirstN1(
                 if (onBottomRow) {
                   if (b0 !== 0) continue;
                 } else {
+                  if (orthoPolylineSplitImpossible(start, P1, b0, firstH0)) continue;
                   seg0 = tryOrthogonalPolyline(start, P1, b0, firstH0, pathable, rng);
                   if (!seg0) continue;
                 }
 
-                const seg1 = tryOrthogonalPolyline(S1, P2, b1, rng() < 0.5, pathable, rng);
+                let firstH1 = rng() < 0.5;
+                if (orthoPolylineSplitImpossible(S1, P2, b1, firstH1)) firstH1 = !firstH1;
+                if (orthoPolylineSplitImpossible(S1, P2, b1, firstH1)) continue;
+
+                let firstH2 = rng() < 0.5;
+                if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) firstH2 = !firstH2;
+                if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) continue;
+
+                const seg1 = tryOrthogonalPolyline(S1, P2, b1, firstH1, pathable, rng);
                 if (!seg1) continue;
-                const seg2 = tryOrthogonalPolyline(S2, goal, b2, rng() < 0.5, pathable, rng);
+                const seg2 = tryOrthogonalPolyline(S2, goal, b2, firstH2, pathable, rng);
                 if (!seg2) continue;
 
                 let path: CellCoord[];
@@ -1303,6 +1378,20 @@ function horizontalRunPathable(
   return true;
 }
 
+/** `ReflectShotPolylineGenOpts.lv4BenchStats` 用（`scripts/bench-reflec-g5-rfirst.mts` 等） */
+export type ReflectShotLv4BenchStats = {
+  /** 成功時は 1〜220 の試行番号。失敗（null）時は試行上限 */
+  outerAttemptsUsed: number;
+  /** `tryConstructGrade3PathRFirstN1` / `findGrade3SixBendPath` が null の回数 */
+  rejectedNoPath: number;
+  /** `pickGrade2OrientedStage` が不採用の回数 */
+  rejectedPickOrient: number;
+  /** `maybeExtendStartForGoalUpsideDown` が discard の回数 */
+  rejectedExtendDiscard: number;
+  /** start 延長後の再検証で不採用の回数 */
+  rejectedAfterExtend: number;
+};
+
 /** Grade2・折れ6 生成時の上書き（開発者デバッグなど） */
 export type ReflectShotPolylineGenOpts = {
   /**
@@ -1317,6 +1406,10 @@ export type ReflectShotPolylineGenOpts = {
    * 未指定・`default` は従来の `tryConstructGrade3Path`。
    */
   lv4GenMode?: "default" | "rFirst";
+  /**
+   * ベンチ・診断用: 参照が渡されたときのみ、`generateBoardLv4Stage` の 1 呼び出し内で集計を書き込む。
+   */
+  lv4BenchStats?: ReflectShotLv4BenchStats;
 };
 
 /** Grade2・折れ6（高速化）: フック＋DFS 尾で経路を生成 */
@@ -1872,17 +1965,40 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
   const pathable = makeRect(W, H);
   const maxAttempts = 220;
   const rFirst = genOpts?.lv4GenMode === "rFirst";
+  const bench = genOpts?.lv4BenchStats;
+  if (bench) {
+    bench.outerAttemptsUsed = maxAttempts;
+    bench.rejectedNoPath = 0;
+    bench.rejectedPickOrient = 0;
+    bench.rejectedExtendDiscard = 0;
+    bench.rejectedAfterExtend = 0;
+  }
+  const markBenchSuccess = (attempt: number) => {
+    if (bench) bench.outerAttemptsUsed = attempt + 1;
+  };
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const bottoms = bottomCandidates(pathable);
     const tops = topCandidates(pathable);
     if (!bottoms.length || !tops.length) return null;
-    const topGoal = tops[Math.floor(rng() * tops.length)]!;
+    const topGoal = rFirst
+      ? (() => {
+          const cx = (W - 1) / 2;
+          const ord = [...tops].sort((a, b) => Math.abs(a.c - cx) - Math.abs(b.c - cx));
+          return ord[attempt % ord.length]!;
+        })()
+      : tops[Math.floor(rng() * tops.length)]!;
     const path = rFirst
       ? tryConstructGrade3PathRFirstN1(pathable, topGoal, rng)?.path ?? null
       : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)]!, topGoal, rng);
-    if (!path) continue;
+    if (!path) {
+      if (bench) bench.rejectedNoPath++;
+      continue;
+    }
     const picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
-    if (!picked) continue;
+    if (!picked) {
+      if (bench) bench.rejectedPickOrient++;
+      continue;
+    }
 
     let solutionPath = picked.solutionPath;
     let start = picked.start;
@@ -1899,30 +2015,58 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
       picked.height,
       genOpts?.debugReflecShotConsole
     );
-    if (ge.kind === "discard") continue;
+    if (ge.kind === "discard") {
+      if (bench) bench.rejectedExtendDiscard++;
+      continue;
+    }
 
     if (ge.kind === "extended") {
       solutionPath = ge.path;
       start = ge.start;
       startPad = ge.startPad;
-      if (!pathOrthStepValid(solutionPath, picked.pathable, picked.width, picked.height)) continue;
-      if (!grade3RevisitOneCellRule(solutionPath)) continue;
+      if (!pathOrthStepValid(solutionPath, picked.pathable, picked.width, picked.height)) {
+        if (bench) bench.rejectedAfterExtend++;
+        continue;
+      }
+      if (!grade3RevisitOneCellRule(solutionPath)) {
+        if (bench) bench.rejectedAfterExtend++;
+        continue;
+      }
       const fs = pathFirstStepDir(solutionPath);
-      if (!fs || !dirsEqual(fs, DIR.U)) continue;
-      if (countRightAngles(solutionPath) !== 6) continue;
+      if (!fs || !dirsEqual(fs, DIR.U)) {
+        if (bench) bench.rejectedAfterExtend++;
+        continue;
+      }
+      if (countRightAngles(solutionPath) !== 6) {
+        if (bench) bench.rejectedAfterExtend++;
+        continue;
+      }
       const prev = solutionPath[solutionPath.length - 2]!;
       const dLast = unitDirBetween(prev, goal);
-      if (!dLast) continue;
+      if (!dLast) {
+        if (bench) bench.rejectedAfterExtend++;
+        continue;
+      }
       const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
-      if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, picked.width, picked.height)) continue;
+      if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, picked.width, picked.height)) {
+        if (bench) bench.rejectedAfterExtend++;
+        continue;
+      }
       const dEntry = unitOrthoDirBetween(startPad, start);
-      if (!dEntry || !dirsEqual(dEntry, DIR.U)) continue;
+      if (!dEntry || !dirsEqual(dEntry, DIR.U)) {
+        if (bench) bench.rejectedAfterExtend++;
+        continue;
+      }
       const bendSet = bendCellsInPath(solutionPath);
       const { bumpers, ok } = placeDiagonalBumpersInterior(solutionPath);
-      if (!ok || bumpers.size !== bendSet.size) continue;
+      if (!ok || bumpers.size !== bendSet.size) {
+        if (bench) bench.rejectedAfterExtend++;
+        continue;
+      }
       const dup = new Map<string, BumperCell>();
       bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       shuffleWrongDisplay(dup, rng);
+      markBenchSuccess(attempt);
       return {
         width: picked.width,
         height: picked.height,
@@ -1943,6 +2087,7 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
     const dup = new Map<string, BumperCell>();
     picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
     shuffleWrongDisplay(dup, rng);
+    markBenchSuccess(attempt);
     return {
       width: picked.width,
       height: picked.height,

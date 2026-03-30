@@ -161,6 +161,29 @@
       return s / 4294967296;
     };
   }
+  function minOrthoBends(a, b) {
+    if (a.c === b.c && a.r === b.r) return 0;
+    if (a.c === b.c || a.r === b.r) return 0;
+    return 1;
+  }
+  function orthoPolylineSplitImpossible(start, goal, bends, firstHorizontal) {
+    if (bends < minOrthoBends(start, goal)) return true;
+    const dc = goal.c - start.c;
+    const dr = goal.r - start.r;
+    const nSeg = bends + 1;
+    let hCount = 0;
+    let vCount = 0;
+    for (let i = 0; i < nSeg; i++) {
+      const isH = firstHorizontal ? i % 2 === 0 : i % 2 === 1;
+      if (isH) hCount++;
+      else vCount++;
+    }
+    if (hCount === 0 && dc !== 0) return true;
+    if (vCount === 0 && dr !== 0) return true;
+    if (hCount === 1 && dc === 0) return true;
+    if (vCount === 1 && dr === 0) return true;
+    return false;
+  }
   function randomNonZeroSplit(target, parts, rng) {
     if (parts === 0) return target === 0 ? [] : null;
     if (parts === 1) return target !== 0 ? [target] : null;
@@ -424,12 +447,15 @@
         splitsAll.push([a, b, 4 - a - b]);
       }
     }
-    const shuffleSplitsPreferLowMax = (arr) => {
+    const shuffleSplitsPreferLowMax = (arr, start, p1, s1, p2, s2, g, onBottomRow) => {
       const copy = [...arr];
       copy.sort((u, v) => {
         const mu = Math.max(u[0], u[1], u[2]);
         const mv = Math.max(v[0], v[1], v[2]);
         if (mu !== mv) return mu - mv;
+        const du = Math.abs(u[1] - minOrthoBends(s1, p2)) + Math.abs(u[2] - minOrthoBends(s2, g)) + (onBottomRow ? 0 : Math.abs(u[0] - minOrthoBends(start, p1)));
+        const dv = Math.abs(v[1] - minOrthoBends(s1, p2)) + Math.abs(v[2] - minOrthoBends(s2, g)) + (onBottomRow ? 0 : Math.abs(v[0] - minOrthoBends(start, p1)));
+        if (du !== dv) return du - dv;
         return u[0] + u[1] + u[2] - (v[0] + v[1] + v[2]);
       });
       for (let si = copy.length - 1; si > 0; si--) {
@@ -483,7 +509,16 @@
               if (!onBottomRow && start.c === R.c && start.r === R.r) continue;
               const splitsBase = onBottomRow ? splitsAll.filter(([b0]) => b0 === 0) : splitsAll;
               if (!splitsBase.length) continue;
-              const splits = shuffleSplitsPreferLowMax(splitsBase);
+              const splits = shuffleSplitsPreferLowMax(
+                splitsBase,
+                start,
+                P1,
+                S1,
+                P2,
+                S2,
+                goal,
+                onBottomRow
+              );
               for (let pass = 0; pass < 6; pass++) {
                 const firstH0 = pass % 2 === 0;
                 for (const [b0, b1, b2] of splits) {
@@ -491,12 +526,19 @@
                   if (onBottomRow) {
                     if (b0 !== 0) continue;
                   } else {
+                    if (orthoPolylineSplitImpossible(start, P1, b0, firstH0)) continue;
                     seg0 = tryOrthogonalPolyline(start, P1, b0, firstH0, pathable, rng);
                     if (!seg0) continue;
                   }
-                  const seg1 = tryOrthogonalPolyline(S1, P2, b1, rng() < 0.5, pathable, rng);
+                  let firstH1 = rng() < 0.5;
+                  if (orthoPolylineSplitImpossible(S1, P2, b1, firstH1)) firstH1 = !firstH1;
+                  if (orthoPolylineSplitImpossible(S1, P2, b1, firstH1)) continue;
+                  let firstH2 = rng() < 0.5;
+                  if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) firstH2 = !firstH2;
+                  if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) continue;
+                  const seg1 = tryOrthogonalPolyline(S1, P2, b1, firstH1, pathable, rng);
                   if (!seg1) continue;
-                  const seg2 = tryOrthogonalPolyline(S2, goal, b2, rng() < 0.5, pathable, rng);
+                  const seg2 = tryOrthogonalPolyline(S2, goal, b2, firstH2, pathable, rng);
                   if (!seg2) continue;
                   let path;
                   if (onBottomRow) path = [R, ...seg1, R, ...seg2];
@@ -1100,15 +1142,36 @@
     const pathable = makeRect(W, H);
     const maxAttempts = 220;
     const rFirst = (genOpts == null ? void 0 : genOpts.lv4GenMode) === "rFirst";
+    const bench = genOpts == null ? void 0 : genOpts.lv4BenchStats;
+    if (bench) {
+      bench.outerAttemptsUsed = maxAttempts;
+      bench.rejectedNoPath = 0;
+      bench.rejectedPickOrient = 0;
+      bench.rejectedExtendDiscard = 0;
+      bench.rejectedAfterExtend = 0;
+    }
+    const markBenchSuccess = (attempt) => {
+      if (bench) bench.outerAttemptsUsed = attempt + 1;
+    };
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const bottoms = bottomCandidates(pathable);
       const tops = topCandidates(pathable);
       if (!bottoms.length || !tops.length) return null;
-      const topGoal = tops[Math.floor(rng() * tops.length)];
+      const topGoal = rFirst ? (() => {
+        const cx = (W - 1) / 2;
+        const ord = [...tops].sort((a, b) => Math.abs(a.c - cx) - Math.abs(b.c - cx));
+        return ord[attempt % ord.length];
+      })() : tops[Math.floor(rng() * tops.length)];
       const path = rFirst ? (_b = (_a = tryConstructGrade3PathRFirstN1(pathable, topGoal, rng)) == null ? void 0 : _a.path) != null ? _b : null : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)], topGoal, rng);
-      if (!path) continue;
+      if (!path) {
+        if (bench) bench.rejectedNoPath++;
+        continue;
+      }
       const picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
-      if (!picked) continue;
+      if (!picked) {
+        if (bench) bench.rejectedPickOrient++;
+        continue;
+      }
       let solutionPath = picked.solutionPath;
       let start = picked.start;
       let startPad = picked.startPad;
@@ -1123,29 +1186,57 @@
         picked.height,
         genOpts == null ? void 0 : genOpts.debugReflecShotConsole
       );
-      if (ge.kind === "discard") continue;
+      if (ge.kind === "discard") {
+        if (bench) bench.rejectedExtendDiscard++;
+        continue;
+      }
       if (ge.kind === "extended") {
         solutionPath = ge.path;
         start = ge.start;
         startPad = ge.startPad;
-        if (!pathOrthStepValid(solutionPath, picked.pathable, picked.width, picked.height)) continue;
-        if (!grade3RevisitOneCellRule(solutionPath)) continue;
+        if (!pathOrthStepValid(solutionPath, picked.pathable, picked.width, picked.height)) {
+          if (bench) bench.rejectedAfterExtend++;
+          continue;
+        }
+        if (!grade3RevisitOneCellRule(solutionPath)) {
+          if (bench) bench.rejectedAfterExtend++;
+          continue;
+        }
         const fs = pathFirstStepDir(solutionPath);
-        if (!fs || !dirsEqual(fs, DIR.U)) continue;
-        if (countRightAngles(solutionPath) !== 6) continue;
+        if (!fs || !dirsEqual(fs, DIR.U)) {
+          if (bench) bench.rejectedAfterExtend++;
+          continue;
+        }
+        if (countRightAngles(solutionPath) !== 6) {
+          if (bench) bench.rejectedAfterExtend++;
+          continue;
+        }
         const prev = solutionPath[solutionPath.length - 2];
         const dLast = unitDirBetween(prev, goal);
-        if (!dLast) continue;
+        if (!dLast) {
+          if (bench) bench.rejectedAfterExtend++;
+          continue;
+        }
         const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
-        if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, picked.width, picked.height)) continue;
+        if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, picked.width, picked.height)) {
+          if (bench) bench.rejectedAfterExtend++;
+          continue;
+        }
         const dEntry = unitOrthoDirBetween(startPad, start);
-        if (!dEntry || !dirsEqual(dEntry, DIR.U)) continue;
+        if (!dEntry || !dirsEqual(dEntry, DIR.U)) {
+          if (bench) bench.rejectedAfterExtend++;
+          continue;
+        }
         const bendSet = bendCellsInPath(solutionPath);
         const { bumpers, ok } = placeDiagonalBumpersInterior(solutionPath);
-        if (!ok || bumpers.size !== bendSet.size) continue;
+        if (!ok || bumpers.size !== bendSet.size) {
+          if (bench) bench.rejectedAfterExtend++;
+          continue;
+        }
         const dup2 = /* @__PURE__ */ new Map();
         bumpers.forEach((v, k) => dup2.set(k, { display: v.display, solution: v.solution }));
         shuffleWrongDisplay(dup2, rng);
+        markBenchSuccess(attempt);
         return {
           width: picked.width,
           height: picked.height,
@@ -1165,6 +1256,7 @@
       const dup = /* @__PURE__ */ new Map();
       picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       shuffleWrongDisplay(dup, rng);
+      markBenchSuccess(attempt);
       return {
         width: picked.width,
         height: picked.height,
