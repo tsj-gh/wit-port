@@ -9,6 +9,9 @@ export type ReflectShotGenMetrics = {
   totalMs: number;
 };
 
+/** Grade5（Lv.4）経路生成。`rFirst` はデバッグ UI からのみ指定想定 */
+export type ReflectShotLv4GenMode = "default" | "rFirst";
+
 export type ReflectShotMainToWorkerGenerate = {
   type: "GENERATE";
   requestId: string;
@@ -18,6 +21,8 @@ export type ReflectShotMainToWorkerGenerate = {
   grade2Bend6TotalBends?: 6 | 7 | 8;
   /** デバッグ UI オン時: start 延長の棄却理由を Worker の console に出す */
   debugReflecShotConsole?: boolean;
+  /** Grade5+・デバッグ時: Lv.4（再訪1）の生成アルゴリズム */
+  lv4GenMode?: ReflectShotLv4GenMode;
 };
 
 export type ReflectShotWorkerToMain =

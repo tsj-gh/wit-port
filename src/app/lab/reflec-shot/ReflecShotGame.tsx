@@ -130,15 +130,24 @@ function reflectShotWorkerGenOptsForConsumerGrade(
   consumerGrade: number,
   isDevTj: boolean,
   isDebugMode: boolean,
-  debugGrade2Bend6MidSlider: number
-): { grade2Bend6TotalBends?: 6 | 7 | 8; debugReflecShotConsole?: boolean } | undefined {
+  debugGrade2Bend6MidSlider: number,
+  debugLv4GenMode: "default" | "rFirst"
+): {
+  grade2Bend6TotalBends?: 6 | 7 | 8;
+  debugReflecShotConsole?: boolean;
+  lv4GenMode?: "default" | "rFirst";
+} | undefined {
   const o: {
     grade2Bend6TotalBends?: 6 | 7 | 8;
     debugReflecShotConsole?: boolean;
+    lv4GenMode?: "default" | "rFirst";
   } = {};
   if (consumerGrade === 4 && isDevTj && isDebugMode) {
     const n = debugGrade2Bend6MidSlider + 4;
     o.grade2Bend6TotalBends = n === 6 || n === 7 || n === 8 ? n : 7;
+  }
+  if (consumerGrade >= 5 && isDevTj && isDebugMode && debugLv4GenMode === "rFirst") {
+    o.lv4GenMode = "rFirst";
   }
   if (isDevTj && isDebugMode) {
     o.debugReflecShotConsole = true;
@@ -179,6 +188,8 @@ export default function ReflecShotGame() {
   const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(3.5);
   /** devtj+DEBUG ON・G2 のみ Worker に渡す。2〜4 → 全体目標折れ 6〜8（`+4`）。 */
   const [debugGrade2Bend6MidSlider, setDebugGrade2Bend6MidSlider] = useState(3);
+  /** devtj+DEBUG ON・Grade5+: Lv.4 生成。`rFirst` のとき Worker に `lv4GenMode` を送る（Default は従来 `tryConstructGrade3Path`）。 */
+  const [debugLv4GenMode, setDebugLv4GenMode] = useState<"default" | "rFirst">("default");
   const [hashInput, setHashInput] = useState("");
   const [layoutNonce, setLayoutNonce] = useState(0);
   const [stockPrefetchPaused, setStockPrefetchPaused] = useState(false);
@@ -223,8 +234,15 @@ export default function ReflecShotGame() {
   } | null>(null);
 
   const workerGenOpts = useMemo(
-    () => reflectShotWorkerGenOptsForConsumerGrade(grade, isDevTj, isDebugMode, debugGrade2Bend6MidSlider),
-    [grade, isDevTj, isDebugMode, debugGrade2Bend6MidSlider]
+    () =>
+      reflectShotWorkerGenOptsForConsumerGrade(
+        grade,
+        isDevTj,
+        isDebugMode,
+        debugGrade2Bend6MidSlider,
+        debugLv4GenMode
+      ),
+    [grade, isDevTj, isDebugMode, debugGrade2Bend6MidSlider, debugLv4GenMode]
   );
 
   useEffect(() => {
@@ -266,7 +284,8 @@ export default function ReflecShotGame() {
     }
 
     const skipStockForG2Debug = grade === 4 && isDevTj && isDebugMode;
-    const fromStock = skipStockForG2Debug ? null : takeBoardForGrade(grade);
+    const skipStockForG5RFirst = grade === 5 && isDevTj && isDebugMode && debugLv4GenMode === "rFirst";
+    const fromStock = skipStockForG2Debug || skipStockForG5RFirst ? null : takeBoardForGrade(grade);
     if (fromStock) {
       nextBoardSourceRef.current = "stock";
       pendingRestoreRef.current = fromStock;
@@ -314,6 +333,7 @@ export default function ReflecShotGame() {
     workerGenOpts,
     isDevTj,
     isDebugMode,
+    debugLv4GenMode,
   ]);
 
   const currentStageHash = useMemo(
@@ -353,7 +373,8 @@ export default function ReflecShotGame() {
             parsed.grade,
             isDevTj,
             isDebugMode,
-            debugGrade2Bend6MidSlider
+            debugGrade2Bend6MidSlider,
+            debugLv4GenMode
           );
           const { stage } = await generateStageInWorker(parsed.grade, parsed.seed >>> 0, workerOpts);
           nextBoardSourceRef.current = "generated";
@@ -372,13 +393,14 @@ export default function ReflecShotGame() {
         }
       })();
     },
-    [generateStageInWorker, isDevTj, isDebugMode, debugGrade2Bend6MidSlider]
+    [generateStageInWorker, isDevTj, isDebugMode, debugGrade2Bend6MidSlider, debugLv4GenMode]
   );
 
   const goNextProblem = useCallback(() => {
     if (phase !== "won") return;
     const skipStockForG2Debug = grade === 4 && isDevTj && isDebugMode;
-    const next = skipStockForG2Debug ? null : takeBoardForGrade(grade);
+    const skipStockForG5RFirst = grade === 5 && isDevTj && isDebugMode && debugLv4GenMode === "rFirst";
+    const next = skipStockForG2Debug || skipStockForG5RFirst ? null : takeBoardForGrade(grade);
     if (next) {
       nextBoardSourceRef.current = "stock";
       pendingRestoreRef.current = next;
@@ -406,7 +428,16 @@ export default function ReflecShotGame() {
         setBoardLoadWait(false);
       }
     })();
-  }, [phase, grade, takeBoardForGrade, generateStageInWorker, workerGenOpts, isDevTj, isDebugMode]);
+  }, [
+    phase,
+    grade,
+    takeBoardForGrade,
+    generateStageInWorker,
+    workerGenOpts,
+    isDevTj,
+    isDebugMode,
+    debugLv4GenMode,
+  ]);
 
   const beginShot = useCallback(() => {
     const st = stage;
@@ -825,6 +856,35 @@ export default function ReflecShotGame() {
                     <span className="tabular-nums w-8 text-right text-[10px] text-amber-200/90">
                       {debugGrade2Bend6MidSlider}
                     </span>
+                  </div>
+                </div>
+              )}
+              {grade >= 5 && (
+                <div className="mt-2 flex flex-col gap-1 text-slate-400">
+                  <span className="text-[10px] leading-tight text-slate-300">生成モード（Lv.4・再訪1）</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setDebugLv4GenMode("default")}
+                      className={`rounded border px-2 py-0.5 text-[10px] ${
+                        debugLv4GenMode === "default"
+                          ? "border-violet-400 bg-violet-500/25 text-violet-100"
+                          : "border-white/20 text-slate-400"
+                      }`}
+                    >
+                      Default
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDebugLv4GenMode("rFirst")}
+                      className={`rounded border px-2 py-0.5 text-[10px] ${
+                        debugLv4GenMode === "rFirst"
+                          ? "border-violet-400 bg-violet-500/25 text-violet-100"
+                          : "border-white/20 text-slate-400"
+                      }`}
+                    >
+                      R-First
+                    </button>
                   </div>
                 </div>
               )}

@@ -38,7 +38,7 @@ export function bumpersForGrade(grade: number): number {
   return 3;
 }
 
-/** Grade1〜2: 4×4 / Grade3〜4: 5×5 / Grade5: 6×6 */
+/** Grade1〜2: 4×4 / Grade3〜5: 5×5 */
 export function boardSizeForGrade(grade: number): { w: number; h: number } {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
   switch (g) {
@@ -47,9 +47,10 @@ export function boardSizeForGrade(grade: number): { w: number; h: number } {
       return { w: 4, h: 4 };
     case 3:
     case 4:
+    case 5:
       return { w: 5, h: 5 };
     default:
-      return { w: 6, h: 6 };
+      return { w: 5, h: 5 };
   }
 }
 
@@ -59,8 +60,8 @@ function templatesForBoard(w: number, h: number, grade: number): (() => boolean[
   if (g <= 1) return [rect];
   if (g === 2) return [rect, () => templateL(w, h)];
   if (g === 3) return [rect];
-  if (g === 4) return [rect, () => templateL(w, h), () => templateT(w, h)];
-  return [rect, () => templateL(w, h), () => templateT(w, h), () => templateCross(w, h)];
+  if (g === 4 || g === 5) return [rect, () => templateL(w, h), () => templateT(w, h)];
+  return [rect];
 }
 
 function makeRect(w: number, h: number): boolean[][] {
@@ -406,7 +407,10 @@ function grade2BendNoRevisit(path: CellCoord[], bends: Set<string>): boolean {
  * 2 回目の入射は 1 回目の入射の逆向き、または 1 回目の反射（出射）と同じ向き。
  * 再訪マスの前後 4 隣接マスはいずれも異なる（上下左右からそれぞれ 1 本ずつ）。
  */
-function grade3RevisitOneCellRule(path: CellCoord[]): boolean {
+function grade3RevisitOneCellRule(
+  path: CellCoord[],
+  opts?: { implicitBeforeFirstR?: CellCoord }
+): boolean {
   if (path.length < 4) return false;
   const keyToIndices = new Map<string, number[]>();
   path.forEach((p, i) => {
@@ -429,11 +433,27 @@ function grade3RevisitOneCellRule(path: CellCoord[]): boolean {
   const pair = keyToIndices.get(doubleKey)!;
   const i0 = Math.min(pair[0]!, pair[1]!);
   const i1 = Math.max(pair[0]!, pair[1]!);
-  if (i0 <= 0 || i1 >= path.length - 1) return false;
-  if (interiorPassageKind(path, i0) !== "bend") return false;
+  if (i1 >= path.length - 1) return false;
+  if (i0 === 0) {
+    if (!opts?.implicitBeforeFirstR) return false;
+  } else if (i0 <= 0) return false;
+
+  const bendAtFirst =
+    i0 === 0
+      ? (() => {
+          const p0 = path[i0]!;
+          const prev = opts!.implicitBeforeFirstR!;
+          const d0 = unitStepDir(p0.c - prev.c, p0.r - prev.r);
+          const d1 = unitStepDir(path[i0 + 1]!.c - p0.c, path[i0 + 1]!.r - p0.r);
+          if (!d0 || !d1) return false;
+          return orthogonalDirs(d0, d1);
+        })()
+      : interiorPassageKind(path, i0) === "bend";
+  if (!bendAtFirst) return false;
   if (interiorPassageKind(path, i1) !== "bend") return false;
 
-  const dIn1 = unitStepDir(path[i0]!.c - path[i0 - 1]!.c, path[i0]!.r - path[i0 - 1]!.r);
+  const cellBeforeFirst = i0 === 0 ? opts!.implicitBeforeFirstR! : path[i0 - 1]!;
+  const dIn1 = unitStepDir(path[i0]!.c - cellBeforeFirst.c, path[i0]!.r - cellBeforeFirst.r);
   const dOut1 = unitStepDir(path[i0 + 1]!.c - path[i0]!.c, path[i0 + 1]!.r - path[i0]!.r);
   const dIn2 = unitStepDir(path[i1]!.c - path[i1 - 1]!.c, path[i1]!.r - path[i1 - 1]!.r);
   if (!dIn1 || !dOut1 || !dIn2) return false;
@@ -444,7 +464,7 @@ function grade3RevisitOneCellRule(path: CellCoord[]): boolean {
 
   const nb = (p: CellCoord) => keyCell(p.c, p.r);
   const neigh = new Set([
-    nb(path[i0 - 1]!),
+    nb(cellBeforeFirst),
     nb(path[i0 + 1]!),
     nb(path[i1 - 1]!),
     nb(path[i1 + 1]!),
@@ -468,7 +488,8 @@ function tryConstructGrade3Path(
   });
   const step = (from: CellCoord, d: Dir): CellCoord => addCell(from, d);
 
-  for (let tryR = 0; tryR < 40; tryR++) {
+  const tryRLimit = w <= 5 && h <= 5 ? 55 : 40;
+  for (let tryR = 0; tryR < tryRLimit; tryR++) {
     const rc = 1 + Math.floor(rng() * Math.max(1, w - 2));
     const rr = 1 + Math.floor(rng() * Math.max(1, h - 2));
     const R = { c: rc, r: rr };
@@ -548,6 +569,143 @@ function findGrade3SixBendPath(
   return tryConstructGrade3Path(pathable, start, goal, rng);
 }
 
+/**
+ * Grade5・Lv.4・R-First・**N=1**（再訪折れ点 1 個）: `R` と斜めバンパー向きを先に定め、
+ * `start→P1`・`S1→P2`・`S2→goal` の折れ配分は **区間ごとの最大折れが小さい順**にシャッフルして試し、
+ * 各組み合わせで少ない乱択回数の `tryOrthogonalPolyline` を行う（合計直角折れ 6・再訪 1）。
+ *
+ * **RF4-1**: `R` が最下行（`r === h-1`）のときは入射を **盤外真下**（`dIn1 === DIR.U`）に限定し、
+ * `start = R`・経路先頭は `R`（`startPad→R` は盤外）。`grade3RevisitOneCellRule` は `implicitBeforeFirstR: P1` で検証する。
+ */
+function tryConstructGrade3PathRFirstN1(
+  pathable: boolean[][],
+  goal: CellCoord,
+  rng: () => number
+): { path: CellCoord[]; start: CellCoord } | null {
+  const w = pathable.length;
+  const h = pathable[0]!.length;
+  const invEnter = (Rcell: CellCoord, dIn: Dir): CellCoord => ({
+    c: Rcell.c - dIn.dx,
+    r: Rcell.r + dIn.dy,
+  });
+  const step = (from: CellCoord, d: Dir): CellCoord => addCell(from, d);
+
+  const bottoms = bottomCandidates(pathable);
+  if (!bottoms.length) return null;
+
+  const splitsAll: [number, number, number][] = [];
+  for (let a = 0; a <= 4; a++) {
+    for (let b = 0; b <= 4 - a; b++) {
+      splitsAll.push([a, b, 4 - a - b]);
+    }
+  }
+
+  const shuffleSplitsPreferLowMax = (arr: [number, number, number][]) => {
+    const copy = [...arr];
+    copy.sort((u, v) => {
+      const mu = Math.max(u[0], u[1], u[2]);
+      const mv = Math.max(v[0], v[1], v[2]);
+      if (mu !== mv) return mu - mv;
+      return u[0] + u[1] + u[2] - (v[0] + v[1] + v[2]);
+    });
+    for (let si = copy.length - 1; si > 0; si--) {
+      const j = Math.floor(rng() * (si + 1));
+      const tmp = copy[si]!;
+      copy[si] = copy[j]!;
+      copy[j] = tmp;
+    }
+    return copy;
+  };
+
+  const tryRLimit = w <= 5 && h <= 5 ? 55 : 40;
+  for (let tryR = 0; tryR < tryRLimit; tryR++) {
+    const rc = 1 + Math.floor(rng() * Math.max(1, w - 2));
+    const rr = 1 + Math.floor(rng() * Math.max(1, h - 2));
+    const R = { c: rc, r: rr };
+    if (!pathable[rc]![rr]) continue;
+
+    const onBottomRow = rr === h - 1;
+    const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
+    for (const dIn1 of dirOrder) {
+      if (onBottomRow && !dirsEqual(dIn1, DIR.U)) continue;
+
+      const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
+      for (const dOut1 of outs) {
+        const sol = diagonalBumperForTurn(dIn1, dOut1);
+        if (!sol) continue;
+        const dIn2opts = [negateDir(dIn1), dOut1];
+        for (let oi = 0; oi < dIn2opts.length; oi++) {
+          const dIn2 = dIn2opts[oi]!;
+          if (oi > 0 && dirsEqual(dIn2, dIn2opts[0]!)) continue;
+          const dOut2 = applyBumper(dIn2, sol);
+          if (!orthogonalDirs(dIn2, dOut2)) continue;
+
+          const P1 = invEnter(R, dIn1);
+          const S1 = step(R, dOut1);
+          const P2 = invEnter(R, dIn2);
+          const S2 = step(R, dOut2);
+
+          if (onBottomRow) {
+            if (inBounds(P1.c, P1.r, w, h)) continue;
+          } else if (!inBounds(P1.c, P1.r, w, h) || !pathable[P1.c]![P1.r]) continue;
+
+          let okPts = true;
+          for (const q of [S1, P2, S2]) {
+            if (!inBounds(q.c, q.r, w, h) || !pathable[q.c]![q.r]) {
+              okPts = false;
+              break;
+            }
+          }
+          if (!okPts) continue;
+          const nset = new Set([P1, S1, P2, S2].map((q) => keyCell(q.c, q.r)));
+          if (nset.size !== 4) continue;
+
+          const startPool: CellCoord[] = onBottomRow ? [R] : bottoms;
+          const startOrder = [...startPool].sort(() => rng() - 0.5);
+
+          for (const start of startOrder) {
+            if (!onBottomRow && start.c === R.c && start.r === R.r) continue;
+
+            const splitsBase = onBottomRow ? splitsAll.filter(([b0]) => b0 === 0) : splitsAll;
+            if (!splitsBase.length) continue;
+            const splits = shuffleSplitsPreferLowMax(splitsBase);
+
+            for (let pass = 0; pass < 6; pass++) {
+              const firstH0 = pass % 2 === 0;
+              for (const [b0, b1, b2] of splits) {
+                let seg0: CellCoord[] | null = null;
+                if (onBottomRow) {
+                  if (b0 !== 0) continue;
+                } else {
+                  seg0 = tryOrthogonalPolyline(start, P1, b0, firstH0, pathable, rng);
+                  if (!seg0) continue;
+                }
+
+                const seg1 = tryOrthogonalPolyline(S1, P2, b1, rng() < 0.5, pathable, rng);
+                if (!seg1) continue;
+                const seg2 = tryOrthogonalPolyline(S2, goal, b2, rng() < 0.5, pathable, rng);
+                if (!seg2) continue;
+
+                let path: CellCoord[];
+                if (onBottomRow) path = [R, ...seg1, R, ...seg2];
+                else {
+                  if (!seg0) continue;
+                  path = [...seg0, R, ...seg1, R, ...seg2];
+                }
+                if (countRightAngles(path) !== 6) continue;
+                if (!grade3RevisitOneCellRule(path, onBottomRow ? { implicitBeforeFirstR: P1 } : undefined))
+                  continue;
+                return { path, start: onBottomRow ? R : start };
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
 function tryOrthogonalPolyline(
   start: CellCoord,
   goal: CellCoord,
@@ -597,6 +755,27 @@ function tryOrthogonalPolyline(
   }
   if (cur.c !== goal.c || cur.r !== goal.r) return null;
   return path;
+}
+
+/**
+ * 直角折れ数が少ない方から順に `tryOrthogonalPolyline` を試す（各折れ数あたり複数乱択）。
+ * R-First（Lv.4）の「区間ごと折れ 0〜maxBends」用。
+ */
+function tryOrthogonalPolylineMinBends(
+  start: CellCoord,
+  goal: CellCoord,
+  pathable: boolean[][],
+  rng: () => number,
+  maxBends: number
+): CellCoord[] | null {
+  for (let bends = 0; bends <= maxBends; bends++) {
+    for (let t = 0; t < 36; t++) {
+      const firstH = rng() < 0.5;
+      const p = tryOrthogonalPolyline(start, goal, bends, firstH, pathable, rng);
+      if (p) return p;
+    }
+  }
+  return null;
 }
 
 function countRightAngles(path: CellCoord[]): number {
@@ -1154,6 +1333,11 @@ export type ReflectShotPolylineGenOpts = {
   grade2Bend6TotalBends?: 6 | 7 | 8;
   /** `true` のとき Worker 側で `goal->upside down` start 延長の棄却を `console` に出す */
   debugReflecShotConsole?: boolean;
+  /**
+   * Grade5（Lv.4・再訪1・現状 N=1 のみ）: `rFirst` は再訪折れ点周りの接続順と少折れ優先のポリライン探索を用いる。
+   * 未指定・`default` は従来の `tryConstructGrade3Path`。
+   */
+  lv4GenMode?: "default" | "rFirst";
 };
 
 /** Grade2・折れ6（高速化）: フック＋DFS 尾で経路を生成 */
@@ -1702,19 +1886,21 @@ export function diagnoseGrade2Bend6Session(seed: number, maxAttempts = 1200): Gr
   return { seed, ok: false, outerAttemptsUsed: maxAttempts, outerBucket, rotationFail };
 }
 
-/** 盤面生成 Lv.4（旧 Grade3）：6×6・折れ6・1 マス再訪 → `pickGrade2OrientedStage` */
+/** 盤面生成 Lv.4（旧 Grade3）：5×5・折れ6・1 マス再訪 → `pickGrade2OrientedStage` */
 function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpts): GridStage | null {
   const rng = createStageRng(seed);
   const { w: W, h: H } = boardSizeForGrade(5);
   const pathable = makeRect(W, H);
   const maxAttempts = 220;
+  const rFirst = genOpts?.lv4GenMode === "rFirst";
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const bottoms = bottomCandidates(pathable);
     const tops = topCandidates(pathable);
     if (!bottoms.length || !tops.length) return null;
-    const botStart = bottoms[Math.floor(rng() * bottoms.length)]!;
     const topGoal = tops[Math.floor(rng() * tops.length)]!;
-    const path = findGrade3SixBendPath(pathable, botStart, topGoal, rng);
+    const path = rFirst
+      ? tryConstructGrade3PathRFirstN1(pathable, topGoal, rng)?.path ?? null
+      : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)]!, topGoal, rng);
     if (!path) continue;
     const picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
     if (!picked) continue;
@@ -2123,7 +2309,7 @@ export function fallbackGridStage(grade: number, seed: number): GridStage {
     }
     throw new Error("fallbackGridStage(4): Lv.3 の生成に失敗");
   }
-  for (let t = 0; t < 200; t++) {
+  for (let t = 0; t < 500; t++) {
     const st = generateBoardLv4Stage((seed + t * 130051) >>> 0);
     if (st) return { ...st, grade: g, seed };
   }

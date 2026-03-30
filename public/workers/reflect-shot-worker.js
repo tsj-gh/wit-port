@@ -111,9 +111,10 @@
         return { w: 4, h: 4 };
       case 3:
       case 4:
+      case 5:
         return { w: 5, h: 5 };
       default:
-        return { w: 6, h: 6 };
+        return { w: 5, h: 5 };
     }
   }
   function makeRect(w, h) {
@@ -276,7 +277,7 @@
     });
     return !bad;
   }
-  function grade3RevisitOneCellRule(path) {
+  function grade3RevisitOneCellRule(path, opts) {
     if (path.length < 4) return false;
     const keyToIndices = /* @__PURE__ */ new Map();
     path.forEach((p, i) => {
@@ -299,10 +300,22 @@
     const pair = keyToIndices.get(doubleKey);
     const i0 = Math.min(pair[0], pair[1]);
     const i1 = Math.max(pair[0], pair[1]);
-    if (i0 <= 0 || i1 >= path.length - 1) return false;
-    if (interiorPassageKind(path, i0) !== "bend") return false;
+    if (i1 >= path.length - 1) return false;
+    if (i0 === 0) {
+      if (!(opts == null ? void 0 : opts.implicitBeforeFirstR)) return false;
+    } else if (i0 <= 0) return false;
+    const bendAtFirst = i0 === 0 ? (() => {
+      const p0 = path[i0];
+      const prev = opts.implicitBeforeFirstR;
+      const d0 = unitStepDir(p0.c - prev.c, p0.r - prev.r);
+      const d1 = unitStepDir(path[i0 + 1].c - p0.c, path[i0 + 1].r - p0.r);
+      if (!d0 || !d1) return false;
+      return orthogonalDirs(d0, d1);
+    })() : interiorPassageKind(path, i0) === "bend";
+    if (!bendAtFirst) return false;
     if (interiorPassageKind(path, i1) !== "bend") return false;
-    const dIn1 = unitStepDir(path[i0].c - path[i0 - 1].c, path[i0].r - path[i0 - 1].r);
+    const cellBeforeFirst = i0 === 0 ? opts.implicitBeforeFirstR : path[i0 - 1];
+    const dIn1 = unitStepDir(path[i0].c - cellBeforeFirst.c, path[i0].r - cellBeforeFirst.r);
     const dOut1 = unitStepDir(path[i0 + 1].c - path[i0].c, path[i0 + 1].r - path[i0].r);
     const dIn2 = unitStepDir(path[i1].c - path[i1 - 1].c, path[i1].r - path[i1 - 1].r);
     if (!dIn1 || !dOut1 || !dIn2) return false;
@@ -310,7 +323,7 @@
     if (!okIn2) return false;
     const nb = (p) => keyCell(p.c, p.r);
     const neigh = /* @__PURE__ */ new Set([
-      nb(path[i0 - 1]),
+      nb(cellBeforeFirst),
       nb(path[i0 + 1]),
       nb(path[i1 - 1]),
       nb(path[i1 + 1])
@@ -326,7 +339,8 @@
       r: R.r + dIn.dy
     });
     const step = (from, d) => addCell(from, d);
-    for (let tryR = 0; tryR < 40; tryR++) {
+    const tryRLimit = w <= 5 && h <= 5 ? 55 : 40;
+    for (let tryR = 0; tryR < tryRLimit; tryR++) {
       const rc = 1 + Math.floor(rng() * Math.max(1, w - 2));
       const rr = 1 + Math.floor(rng() * Math.max(1, h - 2));
       const R = { c: rc, r: rr };
@@ -393,6 +407,115 @@
   }
   function findGrade3SixBendPath(pathable, start, goal, rng) {
     return tryConstructGrade3Path(pathable, start, goal, rng);
+  }
+  function tryConstructGrade3PathRFirstN1(pathable, goal, rng) {
+    const w = pathable.length;
+    const h = pathable[0].length;
+    const invEnter = (Rcell, dIn) => ({
+      c: Rcell.c - dIn.dx,
+      r: Rcell.r + dIn.dy
+    });
+    const step = (from, d) => addCell(from, d);
+    const bottoms = bottomCandidates(pathable);
+    if (!bottoms.length) return null;
+    const splitsAll = [];
+    for (let a = 0; a <= 4; a++) {
+      for (let b = 0; b <= 4 - a; b++) {
+        splitsAll.push([a, b, 4 - a - b]);
+      }
+    }
+    const shuffleSplitsPreferLowMax = (arr) => {
+      const copy = [...arr];
+      copy.sort((u, v) => {
+        const mu = Math.max(u[0], u[1], u[2]);
+        const mv = Math.max(v[0], v[1], v[2]);
+        if (mu !== mv) return mu - mv;
+        return u[0] + u[1] + u[2] - (v[0] + v[1] + v[2]);
+      });
+      for (let si = copy.length - 1; si > 0; si--) {
+        const j = Math.floor(rng() * (si + 1));
+        const tmp = copy[si];
+        copy[si] = copy[j];
+        copy[j] = tmp;
+      }
+      return copy;
+    };
+    const tryRLimit = w <= 5 && h <= 5 ? 55 : 40;
+    for (let tryR = 0; tryR < tryRLimit; tryR++) {
+      const rc = 1 + Math.floor(rng() * Math.max(1, w - 2));
+      const rr = 1 + Math.floor(rng() * Math.max(1, h - 2));
+      const R = { c: rc, r: rr };
+      if (!pathable[rc][rr]) continue;
+      const onBottomRow = rr === h - 1;
+      const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
+      for (const dIn1 of dirOrder) {
+        if (onBottomRow && !dirsEqual(dIn1, DIR.U)) continue;
+        const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
+        for (const dOut1 of outs) {
+          const sol = diagonalBumperForTurn(dIn1, dOut1);
+          if (!sol) continue;
+          const dIn2opts = [negateDir(dIn1), dOut1];
+          for (let oi = 0; oi < dIn2opts.length; oi++) {
+            const dIn2 = dIn2opts[oi];
+            if (oi > 0 && dirsEqual(dIn2, dIn2opts[0])) continue;
+            const dOut2 = applyBumper(dIn2, sol);
+            if (!orthogonalDirs(dIn2, dOut2)) continue;
+            const P1 = invEnter(R, dIn1);
+            const S1 = step(R, dOut1);
+            const P2 = invEnter(R, dIn2);
+            const S2 = step(R, dOut2);
+            if (onBottomRow) {
+              if (inBounds(P1.c, P1.r, w, h)) continue;
+            } else if (!inBounds(P1.c, P1.r, w, h) || !pathable[P1.c][P1.r]) continue;
+            let okPts = true;
+            for (const q of [S1, P2, S2]) {
+              if (!inBounds(q.c, q.r, w, h) || !pathable[q.c][q.r]) {
+                okPts = false;
+                break;
+              }
+            }
+            if (!okPts) continue;
+            const nset = new Set([P1, S1, P2, S2].map((q) => keyCell(q.c, q.r)));
+            if (nset.size !== 4) continue;
+            const startPool = onBottomRow ? [R] : bottoms;
+            const startOrder = [...startPool].sort(() => rng() - 0.5);
+            for (const start of startOrder) {
+              if (!onBottomRow && start.c === R.c && start.r === R.r) continue;
+              const splitsBase = onBottomRow ? splitsAll.filter(([b0]) => b0 === 0) : splitsAll;
+              if (!splitsBase.length) continue;
+              const splits = shuffleSplitsPreferLowMax(splitsBase);
+              for (let pass = 0; pass < 6; pass++) {
+                const firstH0 = pass % 2 === 0;
+                for (const [b0, b1, b2] of splits) {
+                  let seg0 = null;
+                  if (onBottomRow) {
+                    if (b0 !== 0) continue;
+                  } else {
+                    seg0 = tryOrthogonalPolyline(start, P1, b0, firstH0, pathable, rng);
+                    if (!seg0) continue;
+                  }
+                  const seg1 = tryOrthogonalPolyline(S1, P2, b1, rng() < 0.5, pathable, rng);
+                  if (!seg1) continue;
+                  const seg2 = tryOrthogonalPolyline(S2, goal, b2, rng() < 0.5, pathable, rng);
+                  if (!seg2) continue;
+                  let path;
+                  if (onBottomRow) path = [R, ...seg1, R, ...seg2];
+                  else {
+                    if (!seg0) continue;
+                    path = [...seg0, R, ...seg1, R, ...seg2];
+                  }
+                  if (countRightAngles(path) !== 6) continue;
+                  if (!grade3RevisitOneCellRule(path, onBottomRow ? { implicitBeforeFirstR: P1 } : void 0))
+                    continue;
+                  return { path, start: onBottomRow ? R : start };
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    return null;
   }
   function tryOrthogonalPolyline(start, goal, bends, firstHorizontal, pathable, rng) {
     const w = pathable.length;
@@ -971,17 +1094,18 @@
     return winners[Math.floor(rng() * winners.length)];
   }
   function generateBoardLv4Stage(seed, genOpts) {
+    var _a, _b;
     const rng = createStageRng(seed);
     const { w: W, h: H } = boardSizeForGrade(5);
     const pathable = makeRect(W, H);
     const maxAttempts = 220;
+    const rFirst = (genOpts == null ? void 0 : genOpts.lv4GenMode) === "rFirst";
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const bottoms = bottomCandidates(pathable);
       const tops = topCandidates(pathable);
       if (!bottoms.length || !tops.length) return null;
-      const botStart = bottoms[Math.floor(rng() * bottoms.length)];
       const topGoal = tops[Math.floor(rng() * tops.length)];
-      const path = findGrade3SixBendPath(pathable, botStart, topGoal, rng);
+      const path = rFirst ? (_b = (_a = tryConstructGrade3PathRFirstN1(pathable, topGoal, rng)) == null ? void 0 : _a.path) != null ? _b : null : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)], topGoal, rng);
       if (!path) continue;
       const picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
       if (!picked) continue;
@@ -1349,7 +1473,7 @@
       }
       throw new Error("fallbackGridStage(4): Lv.3 \u306E\u751F\u6210\u306B\u5931\u6557");
     }
-    for (let t = 0; t < 200; t++) {
+    for (let t = 0; t < 500; t++) {
       const st = generateBoardLv4Stage(seed + t * 130051 >>> 0);
       if (st) return __spreadProps(__spreadValues({}, st), { grade: g, seed });
     }
@@ -1374,11 +1498,11 @@
   self.onmessage = (ev) => {
     const msg = ev.data;
     if (!msg || msg.type !== "GENERATE") return;
-    const { requestId, grade, seed, grade2Bend6TotalBends, debugReflecShotConsole } = msg;
+    const { requestId, grade, seed, grade2Bend6TotalBends, debugReflecShotConsole, lv4GenMode } = msg;
     post({ type: "STATUS", status: "RUNNING", requestId });
     try {
       const t0 = performance.now();
-      const genOpts = grade === 4 && grade2Bend6TotalBends != null || debugReflecShotConsole ? __spreadValues(__spreadValues({}, grade === 4 && grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : {}), debugReflecShotConsole ? { debugReflecShotConsole: true } : {}) : void 0;
+      const genOpts = grade === 4 && grade2Bend6TotalBends != null || debugReflecShotConsole || lv4GenMode != null ? __spreadValues(__spreadValues(__spreadValues({}, grade === 4 && grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : {}), debugReflecShotConsole ? { debugReflecShotConsole: true } : {}), lv4GenMode != null ? { lv4GenMode } : {}) : void 0;
       const board = generateGridStageWithFallback(grade, seed, genOpts);
       const totalMs = performance.now() - t0;
       post({

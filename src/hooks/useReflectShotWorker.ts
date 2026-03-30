@@ -5,6 +5,7 @@ import type { GridStage } from "@/app/lab/reflec-shot/gridTypes";
 import {
   deserializeGridStageFromWorker,
   type ReflectShotGenMetrics,
+  type ReflectShotLv4GenMode,
   type ReflectShotMainToWorkerGenerate,
   type ReflectShotWorkerToMain,
 } from "@/app/lab/reflec-shot/reflectShotWorkerTypes";
@@ -83,6 +84,7 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
         source?: ReflectShotGenerateSource;
         grade2Bend6TotalBends?: 6 | 7 | 8;
         debugReflecShotConsole?: boolean;
+        lv4GenMode?: ReflectShotLv4GenMode;
       }
     ): Promise<ReflectShotGenerateResult> => {
       const w = workerRef.current;
@@ -112,6 +114,7 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
             ? { grade2Bend6TotalBends: opts.grade2Bend6TotalBends }
             : {}),
           ...(opts?.debugReflecShotConsole ? { debugReflecShotConsole: true } : {}),
+          ...(opts?.lv4GenMode != null ? { lv4GenMode: opts.lv4GenMode } : {}),
         };
         w.postMessage(payload);
       });
