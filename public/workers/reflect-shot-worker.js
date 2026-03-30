@@ -184,10 +184,10 @@
     if (vCount === 1 && dr === 0) return true;
     return false;
   }
-  function randomNonZeroSplit(target, parts, rng) {
+  function randomNonZeroSplit(target, parts, rng, maxAttempts = 120) {
     if (parts === 0) return target === 0 ? [] : null;
     if (parts === 1) return target !== 0 ? [target] : null;
-    for (let attempt = 0; attempt < 120; attempt++) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const a = [];
       let s = 0;
       for (let i = 0; i < parts - 1; i++) {
@@ -204,6 +204,153 @@
       }
     }
     return null;
+  }
+  function listNonZeroSplitsCapped(target, parts, bound, cap) {
+    const acc = [];
+    const rec = (rem, k, prefix) => {
+      if (acc.length >= cap) return;
+      if (k === 0) {
+        if (rem === 0) acc.push([...prefix]);
+        return;
+      }
+      if (k === 1) {
+        if (rem !== 0 && Math.abs(rem) <= bound) acc.push([...prefix, rem]);
+        return;
+      }
+      for (let v = -bound; v <= bound; v++) {
+        if (v === 0 || acc.length >= cap) continue;
+        prefix.push(v);
+        rec(rem - v, k - 1, prefix);
+        prefix.pop();
+      }
+    };
+    rec(target, parts, []);
+    return acc.length ? acc : null;
+  }
+  function shuffleArrayInPlace(arr, rng) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const t = arr[i];
+      arr[i] = arr[j];
+      arr[j] = t;
+    }
+  }
+  function orthoReachableInPathable(pathable, w, h, start, goal, maxDepth) {
+    if (start.c === goal.c && start.r === goal.r) return true;
+    const seen = /* @__PURE__ */ new Set();
+    const q = [{ c: start.c, r: start.r, d: 0 }];
+    seen.add(keyCell(start.c, start.r));
+    let qi = 0;
+    while (qi < q.length) {
+      const u = q[qi++];
+      if (u.c === goal.c && u.r === goal.r) return true;
+      if (u.d >= maxDepth) continue;
+      for (const dir of [DIR.U, DIR.D, DIR.L, DIR.R]) {
+        const v = addCell({ c: u.c, r: u.r }, dir);
+        if (!inBounds(v.c, v.r, w, h) || !pathable[v.c][v.r]) continue;
+        const vk = keyCell(v.c, v.r);
+        if (seen.has(vk)) continue;
+        seen.add(vk);
+        q.push({ c: v.c, r: v.r, d: u.d + 1 });
+      }
+    }
+    return false;
+  }
+  function dirKeyShort(d) {
+    if (dirsEqual(d, DIR.U)) return "U";
+    if (dirsEqual(d, DIR.D)) return "D";
+    if (dirsEqual(d, DIR.L)) return "L";
+    return "R";
+  }
+  function walkOrthogonalFromLens(start, goal, lens, firstHorizontal, pathable, w, h) {
+    const nSeg = lens.length;
+    const path = [];
+    let cur = __spreadValues({}, start);
+    path.push(cur);
+    for (let i = 0; i < nSeg; i++) {
+      const isH = firstHorizontal ? i % 2 === 0 : i % 2 === 1;
+      let d;
+      if (isH) d = lens[i] > 0 ? DIR.R : DIR.L;
+      else d = lens[i] > 0 ? DIR.D : DIR.U;
+      const steps = Math.abs(lens[i]);
+      for (let s = 0; s < steps; s++) {
+        cur = addCell(cur, d);
+        if (!inBounds(cur.c, cur.r, w, h) || !pathable[cur.c][cur.r]) return null;
+        path.push(cur);
+      }
+    }
+    if (cur.c !== goal.c || cur.r !== goal.r) return null;
+    return path;
+  }
+  function tryOrthogonalPolylineRFirst(start, goal, bends, firstHorizontal, pathable, rng, ctx) {
+    const w = pathable.length;
+    const h = pathable[0].length;
+    if (orthoPolylineSplitImpossible(start, goal, bends, firstHorizontal)) return null;
+    const manhattan = Math.abs(goal.c - start.c) + Math.abs(goal.r - start.r);
+    const maxDepth = manhattan + bends * 2 + 4;
+    if (!orthoReachableInPathable(pathable, w, h, start, goal, maxDepth)) {
+      ctx.bfsPruned++;
+      return null;
+    }
+    const nSeg = bends + 1;
+    const dc = goal.c - start.c;
+    const dr = goal.r - start.r;
+    const hIdx = [];
+    const vIdx = [];
+    for (let i = 0; i < nSeg; i++) {
+      const isH = firstHorizontal ? i % 2 === 0 : i % 2 === 1;
+      if (isH) hIdx.push(i);
+      else vIdx.push(i);
+    }
+    const tryEnumerate = w <= 6 && h <= 6 && bends <= 4 && (() => {
+      const hsList = listNonZeroSplitsCapped(dc, hIdx.length, 8, 120);
+      const vsList = listNonZeroSplitsCapped(dr, vIdx.length, 8, 120);
+      if (!hsList || !vsList) return null;
+      if (hsList.length * vsList.length > 350) return null;
+      const pairs = [];
+      for (const hs2 of hsList) {
+        for (const vs2 of vsList) {
+          pairs.push([hs2, vs2]);
+        }
+      }
+      shuffleArrayInPlace(pairs, rng);
+      for (const [hs2, vs2] of pairs) {
+        if (ctx.polyBudget <= 0) {
+          ctx.budgetHit = true;
+          return null;
+        }
+        ctx.polyBudget--;
+        ctx.polyCalls++;
+        const lens2 = new Array(nSeg);
+        hIdx.forEach((idx, j) => {
+          lens2[idx] = hs2[j];
+        });
+        vIdx.forEach((idx, j) => {
+          lens2[idx] = vs2[j];
+        });
+        const path = walkOrthogonalFromLens(start, goal, lens2, firstHorizontal, pathable, w, h);
+        if (path) return path;
+      }
+      return null;
+    })();
+    if (tryEnumerate) return tryEnumerate;
+    if (ctx.polyBudget <= 0) {
+      ctx.budgetHit = true;
+      return null;
+    }
+    ctx.polyBudget--;
+    ctx.polyCalls++;
+    const hs = randomNonZeroSplit(dc, hIdx.length, rng, 44);
+    const vs = randomNonZeroSplit(dr, vIdx.length, rng, 44);
+    if (!hs || !vs) return null;
+    const lens = new Array(nSeg);
+    hIdx.forEach((idx, j) => {
+      lens[idx] = hs[j];
+    });
+    vIdx.forEach((idx, j) => {
+      lens[idx] = vs[j];
+    });
+    return walkOrthogonalFromLens(start, goal, lens, firstHorizontal, pathable, w, h);
   }
   function unitStepDir(deltaC, deltaR) {
     if (!(Math.abs(deltaC) === 1 && deltaR === 0 || deltaC === 0 && Math.abs(deltaR) === 1)) return null;
@@ -431,7 +578,8 @@
   function findGrade3SixBendPath(pathable, start, goal, rng) {
     return tryConstructGrade3Path(pathable, start, goal, rng);
   }
-  function tryConstructGrade3PathRFirstN1(pathable, goal, rng) {
+  function tryConstructGrade3PathRFirstN1(pathable, goal, rng, bench) {
+    var _a;
     const w = pathable.length;
     const h = pathable[0].length;
     const invEnter = (Rcell, dIn) => ({
@@ -466,8 +614,25 @@
       }
       return copy;
     };
+    const ctx = {
+      polyBudget: 12e3,
+      polyCalls: 0,
+      bfsPruned: 0,
+      budgetHit: false
+    };
+    const failedCombo = /* @__PURE__ */ new Set();
+    const writeBench = (lastTryR) => {
+      if (!bench) return;
+      bench.rFirstPolyCalls = ctx.polyCalls;
+      bench.rFirstBfsPruned = ctx.bfsPruned;
+      bench.rFirstBudgetExhausted = ctx.budgetHit ? 1 : 0;
+      bench.rFirstLastTryR = lastTryR;
+    };
     const tryRLimit = w <= 5 && h <= 5 ? 55 : 40;
-    for (let tryR = 0; tryR < tryRLimit; tryR++) {
+    let lastTryRAt = -1;
+    outerR: for (let tryR = 0; tryR < tryRLimit; tryR++) {
+      lastTryRAt = tryR;
+      if (ctx.budgetHit) break;
       const rc = 1 + Math.floor(rng() * Math.max(1, w - 2));
       const rr = 1 + Math.floor(rng() * Math.max(1, h - 2));
       const R = { c: rc, r: rr };
@@ -475,13 +640,16 @@
       const onBottomRow = rr === h - 1;
       const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
       for (const dIn1 of dirOrder) {
+        if (ctx.budgetHit) break outerR;
         if (onBottomRow && !dirsEqual(dIn1, DIR.U)) continue;
         const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
         for (const dOut1 of outs) {
+          if (ctx.budgetHit) break outerR;
           const sol = diagonalBumperForTurn(dIn1, dOut1);
           if (!sol) continue;
           const dIn2opts = [negateDir(dIn1), dOut1];
           for (let oi = 0; oi < dIn2opts.length; oi++) {
+            if (ctx.budgetHit) break outerR;
             const dIn2 = dIn2opts[oi];
             if (oi > 0 && dirsEqual(dIn2, dIn2opts[0])) continue;
             const dOut2 = applyBumper(dIn2, sol);
@@ -503,9 +671,15 @@
             if (!okPts) continue;
             const nset = new Set([P1, S1, P2, S2].map((q) => keyCell(q.c, q.r)));
             if (nset.size !== 4) continue;
+            const comboKey = `${rc},${rr}|${dirKeyShort(dIn1)}|${dirKeyShort(dOut1)}|${oi}`;
+            if (failedCombo.has(comboKey)) {
+              if (bench) bench.rFirstComboCacheSkips = ((_a = bench.rFirstComboCacheSkips) != null ? _a : 0) + 1;
+              continue;
+            }
             const startPool = onBottomRow ? [R] : bottoms;
             const startOrder = [...startPool].sort(() => rng() - 0.5);
             for (const start of startOrder) {
+              if (ctx.budgetHit) break outerR;
               if (!onBottomRow && start.c === R.c && start.r === R.r) continue;
               const splitsBase = onBottomRow ? splitsAll.filter(([b0]) => b0 === 0) : splitsAll;
               if (!splitsBase.length) continue;
@@ -520,14 +694,17 @@
                 onBottomRow
               );
               for (let pass = 0; pass < 6; pass++) {
+                if (ctx.budgetHit) break outerR;
                 const firstH0 = pass % 2 === 0;
                 for (const [b0, b1, b2] of splits) {
+                  if (ctx.budgetHit) break outerR;
                   let seg0 = null;
                   if (onBottomRow) {
                     if (b0 !== 0) continue;
                   } else {
                     if (orthoPolylineSplitImpossible(start, P1, b0, firstH0)) continue;
-                    seg0 = tryOrthogonalPolyline(start, P1, b0, firstH0, pathable, rng);
+                    seg0 = tryOrthogonalPolylineRFirst(start, P1, b0, firstH0, pathable, rng, ctx);
+                    if (ctx.budgetHit) break outerR;
                     if (!seg0) continue;
                   }
                   let firstH1 = rng() < 0.5;
@@ -536,9 +713,11 @@
                   let firstH2 = rng() < 0.5;
                   if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) firstH2 = !firstH2;
                   if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) continue;
-                  const seg1 = tryOrthogonalPolyline(S1, P2, b1, firstH1, pathable, rng);
+                  const seg1 = tryOrthogonalPolylineRFirst(S1, P2, b1, firstH1, pathable, rng, ctx);
+                  if (ctx.budgetHit) break outerR;
                   if (!seg1) continue;
-                  const seg2 = tryOrthogonalPolyline(S2, goal, b2, firstH2, pathable, rng);
+                  const seg2 = tryOrthogonalPolylineRFirst(S2, goal, b2, firstH2, pathable, rng, ctx);
+                  if (ctx.budgetHit) break outerR;
                   if (!seg2) continue;
                   let path;
                   if (onBottomRow) path = [R, ...seg1, R, ...seg2];
@@ -549,14 +728,17 @@
                   if (countRightAngles(path) !== 6) continue;
                   if (!grade3RevisitOneCellRule(path, onBottomRow ? { implicitBeforeFirstR: P1 } : void 0))
                     continue;
+                  writeBench(tryR);
                   return { path, start: onBottomRow ? R : start };
                 }
               }
             }
+            if (!ctx.budgetHit) failedCombo.add(comboKey);
           }
         }
       }
     }
+    writeBench(Math.max(0, lastTryRAt));
     return null;
   }
   function tryOrthogonalPolyline(start, goal, bends, firstHorizontal, pathable, rng) {
@@ -582,23 +764,7 @@
     vIdx.forEach((idx, j) => {
       lens[idx] = vs[j];
     });
-    const path = [];
-    let cur = __spreadValues({}, start);
-    path.push(cur);
-    for (let i = 0; i < nSeg; i++) {
-      const isH = firstHorizontal ? i % 2 === 0 : i % 2 === 1;
-      let d;
-      if (isH) d = lens[i] > 0 ? DIR.R : DIR.L;
-      else d = lens[i] > 0 ? DIR.D : DIR.U;
-      const steps = Math.abs(lens[i]);
-      for (let s = 0; s < steps; s++) {
-        cur = addCell(cur, d);
-        if (!inBounds(cur.c, cur.r, w, h) || !pathable[cur.c][cur.r]) return null;
-        path.push(cur);
-      }
-    }
-    if (cur.c !== goal.c || cur.r !== goal.r) return null;
-    return path;
+    return walkOrthogonalFromLens(start, goal, lens, firstHorizontal, pathable, w, h);
   }
   function countRightAngles(path) {
     let n = 0;
@@ -1162,7 +1328,14 @@
         const ord = [...tops].sort((a, b) => Math.abs(a.c - cx) - Math.abs(b.c - cx));
         return ord[attempt % ord.length];
       })() : tops[Math.floor(rng() * tops.length)];
-      const path = rFirst ? (_b = (_a = tryConstructGrade3PathRFirstN1(pathable, topGoal, rng)) == null ? void 0 : _a.path) != null ? _b : null : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)], topGoal, rng);
+      if (bench && rFirst) {
+        bench.rFirstPolyCalls = 0;
+        bench.rFirstBfsPruned = 0;
+        bench.rFirstComboCacheSkips = 0;
+        bench.rFirstBudgetExhausted = 0;
+        bench.rFirstLastTryR = 0;
+      }
+      const path = rFirst ? (_b = (_a = tryConstructGrade3PathRFirstN1(pathable, topGoal, rng, bench)) == null ? void 0 : _a.path) != null ? _b : null : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)], topGoal, rng);
       if (!path) {
         if (bench) bench.rejectedNoPath++;
         continue;

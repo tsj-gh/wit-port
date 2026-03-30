@@ -284,10 +284,15 @@ function orthoPolylineSplitImpossible(
 }
 
 /** target を parts 個の非零整数に分ける（和 = target）。失敗時 null */
-function randomNonZeroSplit(target: number, parts: number, rng: () => number): number[] | null {
+function randomNonZeroSplit(
+  target: number,
+  parts: number,
+  rng: () => number,
+  maxAttempts: number = 120
+): number[] | null {
   if (parts === 0) return target === 0 ? [] : null;
   if (parts === 1) return target !== 0 ? [target] : null;
-  for (let attempt = 0; attempt < 120; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const a: number[] = [];
     let s = 0;
     for (let i = 0; i < parts - 1; i++) {
@@ -304,6 +309,203 @@ function randomNonZeroSplit(target: number, parts: number, rng: () => number): n
     }
   }
   return null;
+}
+
+/** `|各分岐| ≤ bound` かつ非零、合計 target となる長さ parts の整数列を高々 cap 個列挙（R-First 用・小盤面のみ） */
+function listNonZeroSplitsCapped(target: number, parts: number, bound: number, cap: number): number[][] | null {
+  const acc: number[][] = [];
+  const rec = (rem: number, k: number, prefix: number[]) => {
+    if (acc.length >= cap) return;
+    if (k === 0) {
+      if (rem === 0) acc.push([...prefix]);
+      return;
+    }
+    if (k === 1) {
+      if (rem !== 0 && Math.abs(rem) <= bound) acc.push([...prefix, rem]);
+      return;
+    }
+    for (let v = -bound; v <= bound; v++) {
+      if (v === 0 || acc.length >= cap) continue;
+      prefix.push(v);
+      rec(rem - v, k - 1, prefix);
+      prefix.pop();
+    }
+  };
+  rec(target, parts, []);
+  return acc.length ? acc : null;
+}
+
+function shuffleArrayInPlace<T>(arr: T[], rng: () => number) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const t = arr[i]!;
+    arr[i] = arr[j]!;
+    arr[j] = t;
+  }
+}
+
+/** 4 近傍・pathable のみ。深さ上限は「最短の樹上界」（折れ込みの余裕をざっくり足す） */
+function orthoReachableInPathable(
+  pathable: boolean[][],
+  w: number,
+  h: number,
+  start: CellCoord,
+  goal: CellCoord,
+  maxDepth: number
+): boolean {
+  if (start.c === goal.c && start.r === goal.r) return true;
+  const seen = new Set<string>();
+  type N = { c: number; r: number; d: number };
+  const q: N[] = [{ c: start.c, r: start.r, d: 0 }];
+  seen.add(keyCell(start.c, start.r));
+  let qi = 0;
+  while (qi < q.length) {
+    const u = q[qi++]!;
+    if (u.c === goal.c && u.r === goal.r) return true;
+    if (u.d >= maxDepth) continue;
+    for (const dir of [DIR.U, DIR.D, DIR.L, DIR.R]) {
+      const v = addCell({ c: u.c, r: u.r }, dir);
+      if (!inBounds(v.c, v.r, w, h) || !pathable[v.c]![v.r]) continue;
+      const vk = keyCell(v.c, v.r);
+      if (seen.has(vk)) continue;
+      seen.add(vk);
+      q.push({ c: v.c, r: v.r, d: u.d + 1 });
+    }
+  }
+  return false;
+}
+
+function dirKeyShort(d: Dir): string {
+  if (dirsEqual(d, DIR.U)) return "U";
+  if (dirsEqual(d, DIR.D)) return "D";
+  if (dirsEqual(d, DIR.L)) return "L";
+  return "R";
+}
+
+function walkOrthogonalFromLens(
+  start: CellCoord,
+  goal: CellCoord,
+  lens: number[],
+  firstHorizontal: boolean,
+  pathable: boolean[][],
+  w: number,
+  h: number
+): CellCoord[] | null {
+  const nSeg = lens.length;
+  const path: CellCoord[] = [];
+  let cur: CellCoord = { ...start };
+  path.push(cur);
+  for (let i = 0; i < nSeg; i++) {
+    const isH = firstHorizontal ? i % 2 === 0 : i % 2 === 1;
+    let d: Dir;
+    if (isH) d = lens[i]! > 0 ? DIR.R : DIR.L;
+    else d = lens[i]! > 0 ? DIR.D : DIR.U;
+    const steps = Math.abs(lens[i]!);
+    for (let s = 0; s < steps; s++) {
+      cur = addCell(cur, d);
+      if (!inBounds(cur.c, cur.r, w, h) || !pathable[cur.c]![cur.r]) return null;
+      path.push(cur);
+    }
+  }
+  if (cur.c !== goal.c || cur.r !== goal.r) return null;
+  return path;
+}
+
+/** R-First 専用: BFS 事前棄却、分割の限界列挙、予算消費、`randomNonZeroSplit` 試行の短縮フォールバック */
+type RFirstPolyCtx = {
+  polyBudget: number;
+  polyCalls: number;
+  bfsPruned: number;
+  budgetHit: boolean;
+};
+
+function tryOrthogonalPolylineRFirst(
+  start: CellCoord,
+  goal: CellCoord,
+  bends: number,
+  firstHorizontal: boolean,
+  pathable: boolean[][],
+  rng: () => number,
+  ctx: RFirstPolyCtx
+): CellCoord[] | null {
+  const w = pathable.length;
+  const h = pathable[0]!.length;
+  if (orthoPolylineSplitImpossible(start, goal, bends, firstHorizontal)) return null;
+
+  const manhattan = Math.abs(goal.c - start.c) + Math.abs(goal.r - start.r);
+  const maxDepth = manhattan + bends * 2 + 4;
+  if (!orthoReachableInPathable(pathable, w, h, start, goal, maxDepth)) {
+    ctx.bfsPruned++;
+    return null;
+  }
+
+  const nSeg = bends + 1;
+  const dc = goal.c - start.c;
+  const dr = goal.r - start.r;
+  const hIdx: number[] = [];
+  const vIdx: number[] = [];
+  for (let i = 0; i < nSeg; i++) {
+    const isH = firstHorizontal ? i % 2 === 0 : i % 2 === 1;
+    if (isH) hIdx.push(i);
+    else vIdx.push(i);
+  }
+
+  const tryEnumerate =
+    w <= 6 &&
+    h <= 6 &&
+    bends <= 4 &&
+    (() => {
+      const hsList = listNonZeroSplitsCapped(dc, hIdx.length, 8, 120);
+      const vsList = listNonZeroSplitsCapped(dr, vIdx.length, 8, 120);
+      if (!hsList || !vsList) return null;
+      if (hsList.length * vsList.length > 350) return null;
+      const pairs: [number[], number[]][] = [];
+      for (const hs of hsList) {
+        for (const vs of vsList) {
+          pairs.push([hs, vs]);
+        }
+      }
+      shuffleArrayInPlace(pairs, rng);
+      for (const [hs, vs] of pairs) {
+        if (ctx.polyBudget <= 0) {
+          ctx.budgetHit = true;
+          return null;
+        }
+        ctx.polyBudget--;
+        ctx.polyCalls++;
+        const lens = new Array<number>(nSeg);
+        hIdx.forEach((idx, j) => {
+          lens[idx] = hs[j]!;
+        });
+        vIdx.forEach((idx, j) => {
+          lens[idx] = vs[j]!;
+        });
+        const path = walkOrthogonalFromLens(start, goal, lens, firstHorizontal, pathable, w, h);
+        if (path) return path;
+      }
+      return null;
+    })();
+
+  if (tryEnumerate) return tryEnumerate;
+
+  if (ctx.polyBudget <= 0) {
+    ctx.budgetHit = true;
+    return null;
+  }
+  ctx.polyBudget--;
+  ctx.polyCalls++;
+
+  const hs = randomNonZeroSplit(dc, hIdx.length, rng, 44);
+  const vs = randomNonZeroSplit(dr, vIdx.length, rng, 44);
+  if (!hs || !vs) return null;
+  const lens = new Array<number>(nSeg);
+  hIdx.forEach((idx, j) => {
+    lens[idx] = hs[j]!;
+  });
+  vIdx.forEach((idx, j) => {
+    lens[idx] = vs[j]!;
+  });
+  return walkOrthogonalFromLens(start, goal, lens, firstHorizontal, pathable, w, h);
 }
 
 /** グリッド差分 (Δc, Δr) から画面上の隣接 1 歩の `Dir` */
@@ -612,13 +814,14 @@ function findGrade3SixBendPath(
  * **RF4-1**: `R` が最下行（`r === h-1`）のときは入射を **盤外真下**（`dIn1 === DIR.U`）に限定し、
  * `start = R`・経路先頭は `R`（`startPad→R` は盤外）。`grade3RevisitOneCellRule` は `implicitBeforeFirstR: P1` で検証する。
  *
- * **補助**: `orthoPolylineSplitImpossible` でポリライン前に分割不能を棄却。折れ配分は最大区間折れ次に `minOrthoBends` との差が小さい順。
- * 外側ループでは `topGoal` を試行ごとに中央列寄りへローテーション（`generateBoardLv4Stage`）。
+ * **補助**: `orthoPolylineSplitImpossible` / BFS 到達 / 分割列挙 / ポリ予算。折れ配分は最大区間折れ次に `minOrthoBends` 近似。
+ * (R,入射出射,oi) 失敗キャッシュ。`lv4BenchStats` で内訳を取れる。
  */
 function tryConstructGrade3PathRFirstN1(
   pathable: boolean[][],
   goal: CellCoord,
-  rng: () => number
+  rng: () => number,
+  bench?: ReflectShotLv4BenchStats | null
 ): { path: CellCoord[]; start: CellCoord } | null {
   const w = pathable.length;
   const h = pathable[0]!.length;
@@ -638,7 +841,6 @@ function tryConstructGrade3PathRFirstN1(
     }
   }
 
-  /** 折れ配分は最大区間折れが小さい順。二次キーは各区間の所要最小折れとのギャップが小さい順（対策2・RNG 消費は tryOrthogonal 前で増えない） */
   const shuffleSplitsPreferLowMax = (
     arr: [number, number, number][],
     start: CellCoord,
@@ -674,8 +876,29 @@ function tryConstructGrade3PathRFirstN1(
     return copy;
   };
 
+  const ctx: RFirstPolyCtx = {
+    polyBudget: 12_000,
+    polyCalls: 0,
+    bfsPruned: 0,
+    budgetHit: false,
+  };
+  const failedCombo = new Set<string>();
+
+  const writeBench = (lastTryR: number) => {
+    if (!bench) return;
+    bench.rFirstPolyCalls = ctx.polyCalls;
+    bench.rFirstBfsPruned = ctx.bfsPruned;
+    bench.rFirstBudgetExhausted = ctx.budgetHit ? 1 : 0;
+    bench.rFirstLastTryR = lastTryR;
+  };
+
   const tryRLimit = w <= 5 && h <= 5 ? 55 : 40;
-  for (let tryR = 0; tryR < tryRLimit; tryR++) {
+  let lastTryRAt = -1;
+
+  outerR: for (let tryR = 0; tryR < tryRLimit; tryR++) {
+    lastTryRAt = tryR;
+    if (ctx.budgetHit) break;
+
     const rc = 1 + Math.floor(rng() * Math.max(1, w - 2));
     const rr = 1 + Math.floor(rng() * Math.max(1, h - 2));
     const R = { c: rc, r: rr };
@@ -684,14 +907,17 @@ function tryConstructGrade3PathRFirstN1(
     const onBottomRow = rr === h - 1;
     const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
     for (const dIn1 of dirOrder) {
+      if (ctx.budgetHit) break outerR;
       if (onBottomRow && !dirsEqual(dIn1, DIR.U)) continue;
 
       const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
       for (const dOut1 of outs) {
+        if (ctx.budgetHit) break outerR;
         const sol = diagonalBumperForTurn(dIn1, dOut1);
         if (!sol) continue;
         const dIn2opts = [negateDir(dIn1), dOut1];
         for (let oi = 0; oi < dIn2opts.length; oi++) {
+          if (ctx.budgetHit) break outerR;
           const dIn2 = dIn2opts[oi]!;
           if (oi > 0 && dirsEqual(dIn2, dIn2opts[0]!)) continue;
           const dOut2 = applyBumper(dIn2, sol);
@@ -717,10 +943,16 @@ function tryConstructGrade3PathRFirstN1(
           const nset = new Set([P1, S1, P2, S2].map((q) => keyCell(q.c, q.r)));
           if (nset.size !== 4) continue;
 
+          const comboKey = `${rc},${rr}|${dirKeyShort(dIn1)}|${dirKeyShort(dOut1)}|${oi}`;
+          if (failedCombo.has(comboKey)) {
+            if (bench) bench.rFirstComboCacheSkips = (bench.rFirstComboCacheSkips ?? 0) + 1;
+            continue;
+          }
           const startPool: CellCoord[] = onBottomRow ? [R] : bottoms;
           const startOrder = [...startPool].sort(() => rng() - 0.5);
 
           for (const start of startOrder) {
+            if (ctx.budgetHit) break outerR;
             if (!onBottomRow && start.c === R.c && start.r === R.r) continue;
 
             const splitsBase = onBottomRow ? splitsAll.filter(([b0]) => b0 === 0) : splitsAll;
@@ -737,14 +969,17 @@ function tryConstructGrade3PathRFirstN1(
             );
 
             for (let pass = 0; pass < 6; pass++) {
+              if (ctx.budgetHit) break outerR;
               const firstH0 = pass % 2 === 0;
               for (const [b0, b1, b2] of splits) {
+                if (ctx.budgetHit) break outerR;
                 let seg0: CellCoord[] | null = null;
                 if (onBottomRow) {
                   if (b0 !== 0) continue;
                 } else {
                   if (orthoPolylineSplitImpossible(start, P1, b0, firstH0)) continue;
-                  seg0 = tryOrthogonalPolyline(start, P1, b0, firstH0, pathable, rng);
+                  seg0 = tryOrthogonalPolylineRFirst(start, P1, b0, firstH0, pathable, rng, ctx);
+                  if (ctx.budgetHit) break outerR;
                   if (!seg0) continue;
                 }
 
@@ -756,9 +991,11 @@ function tryConstructGrade3PathRFirstN1(
                 if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) firstH2 = !firstH2;
                 if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) continue;
 
-                const seg1 = tryOrthogonalPolyline(S1, P2, b1, firstH1, pathable, rng);
+                const seg1 = tryOrthogonalPolylineRFirst(S1, P2, b1, firstH1, pathable, rng, ctx);
+                if (ctx.budgetHit) break outerR;
                 if (!seg1) continue;
-                const seg2 = tryOrthogonalPolyline(S2, goal, b2, firstH2, pathable, rng);
+                const seg2 = tryOrthogonalPolylineRFirst(S2, goal, b2, firstH2, pathable, rng, ctx);
+                if (ctx.budgetHit) break outerR;
                 if (!seg2) continue;
 
                 let path: CellCoord[];
@@ -770,14 +1007,19 @@ function tryConstructGrade3PathRFirstN1(
                 if (countRightAngles(path) !== 6) continue;
                 if (!grade3RevisitOneCellRule(path, onBottomRow ? { implicitBeforeFirstR: P1 } : undefined))
                   continue;
+                writeBench(tryR);
                 return { path, start: onBottomRow ? R : start };
               }
             }
           }
+
+          if (!ctx.budgetHit) failedCombo.add(comboKey);
         }
       }
     }
   }
+
+  writeBench(Math.max(0, lastTryRAt));
   return null;
 }
 
@@ -811,25 +1053,7 @@ function tryOrthogonalPolyline(
   vIdx.forEach((idx, j) => {
     lens[idx] = vs[j]!;
   });
-
-  const path: CellCoord[] = [];
-  let cur: CellCoord = { ...start };
-  path.push(cur);
-
-  for (let i = 0; i < nSeg; i++) {
-    const isH = firstHorizontal ? i % 2 === 0 : i % 2 === 1;
-    let d: Dir;
-    if (isH) d = lens[i]! > 0 ? DIR.R : DIR.L;
-    else d = lens[i]! > 0 ? DIR.D : DIR.U;
-    const steps = Math.abs(lens[i]!);
-    for (let s = 0; s < steps; s++) {
-      cur = addCell(cur, d);
-      if (!inBounds(cur.c, cur.r, w, h) || !pathable[cur.c]![cur.r]) return null;
-      path.push(cur);
-    }
-  }
-  if (cur.c !== goal.c || cur.r !== goal.r) return null;
-  return path;
+  return walkOrthogonalFromLens(start, goal, lens, firstHorizontal, pathable, w, h);
 }
 
 function countRightAngles(path: CellCoord[]): number {
@@ -1390,6 +1614,16 @@ export type ReflectShotLv4BenchStats = {
   rejectedExtendDiscard: number;
   /** start 延長後の再検証で不採用の回数 */
   rejectedAfterExtend: number;
+  /** R-First のみ: 1 回の path 探索での `tryOrthogonalPolylineRFirst` 試行回数 */
+  rFirstPolyCalls?: number;
+  /** R-First のみ: BFS 事前棄却ヒット */
+  rFirstBfsPruned?: number;
+  /** R-First のみ: (R,入射出射,oi) キャッシュヒット */
+  rFirstComboCacheSkips?: number;
+  /** R-First のみ: ポリライン予算枯渇で打ち切り（1 なら該当） */
+  rFirstBudgetExhausted?: number;
+  /** R-First のみ: 終了時の tryR（0 始まり） */
+  rFirstLastTryR?: number;
 };
 
 /** Grade2・折れ6 生成時の上書き（開発者デバッグなど） */
@@ -1987,8 +2221,15 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
           return ord[attempt % ord.length]!;
         })()
       : tops[Math.floor(rng() * tops.length)]!;
+    if (bench && rFirst) {
+      bench.rFirstPolyCalls = 0;
+      bench.rFirstBfsPruned = 0;
+      bench.rFirstComboCacheSkips = 0;
+      bench.rFirstBudgetExhausted = 0;
+      bench.rFirstLastTryR = 0;
+    }
     const path = rFirst
-      ? tryConstructGrade3PathRFirstN1(pathable, topGoal, rng)?.path ?? null
+      ? tryConstructGrade3PathRFirstN1(pathable, topGoal, rng, bench)?.path ?? null
       : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)]!, topGoal, rng);
     if (!path) {
       if (bench) bench.rejectedNoPath++;
