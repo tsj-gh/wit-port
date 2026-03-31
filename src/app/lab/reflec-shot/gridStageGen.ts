@@ -190,30 +190,62 @@ function rightEdgeGoalCandidates(pathable: boolean[][]): CellCoord[] {
   return out;
 }
 
-/** R-Second: 上辺・左端・右端のいずれかからゴールセルを 1 つ乱択 */
-function pickRSecondGoalCell(
-  pathable: boolean[][],
-  rng: () => number,
-  trace?: string[] | null
-): CellCoord | null {
+/** R-Second 出口用: 上辺・左端・右端で pathable かつ内側隣が pathable なゴール候補（重複除く） */
+function rSecondEdgeGoalPoolAll(pathable: boolean[][]): CellCoord[] {
   const tops = topCandidates(pathable);
   const lefts = leftEdgeGoalCandidates(pathable);
   const rights = rightEdgeGoalCandidates(pathable);
-  const pools: { tag: string; arr: CellCoord[] }[] = [];
-  if (tops.length) pools.push({ tag: "top", arr: tops });
-  if (lefts.length) pools.push({ tag: "left", arr: lefts });
-  if (rights.length) pools.push({ tag: "right", arr: rights });
-  if (!pools.length) return null;
-  const pickPi = Math.floor(rng() * pools.length);
-  const { tag, arr } = pools[pickPi]!;
-  const pickGi = Math.floor(rng() * arr.length);
-  const goal = arr[pickGi]!;
-  if (trace) {
-    trace.push(
-      `pickGoal: |top|=${tops.length} |left|=${lefts.length} |right|=${rights.length} → pool[${pickPi}]="${tag}" (${pools.length} pools) → index ${pickGi}/${arr.length} → goal=(${goal.c},${goal.r})`
-    );
+  const seen = new Set<string>();
+  const out: CellCoord[] = [];
+  for (const p of [...tops, ...lefts, ...rights]) {
+    const k = keyCell(p.c, p.r);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(p);
   }
-  return goal;
+  return out;
+}
+
+/** 区間折れ `b2` で S2 から到達しうる辺上ゴールに絞る（`orthoPolylineSplitImpossible` 事前棄却） */
+function rSecondFeasibleEdgeGoalsForS2(
+  pathable: boolean[][],
+  S2: CellCoord,
+  b2: number
+): CellCoord[] {
+  const pool = rSecondEdgeGoalPoolAll(pathable);
+  return pool.filter((g) =>
+    [true, false].some((fh) => !orthoPolylineSplitImpossible(S2, g, b2, fh))
+  );
+}
+
+/**
+ * RS2 出口脚が接頭辞とマス重複する・接頭辞の直角折れ頂点に踏み込む・盤外／pathable 外 → true
+ * （仕様ではこの場合 Lv.4 試行先頭へ戻す）
+ */
+function rSecondExitLegHardViolation(
+  prefixPath: CellCoord[],
+  seg2: CellCoord[],
+  pathable: boolean[][],
+  w: number,
+  h: number
+): boolean {
+  const prefixKeys = new Set(prefixPath.map((p) => keyCell(p.c, p.r)));
+  const bendKeys = new Set(
+    bendVertexIndices(prefixPath).map((i) => keyCell(prefixPath[i]!.c, prefixPath[i]!.r))
+  );
+  for (let i = 0; i < seg2.length; i++) {
+    const p = seg2[i]!;
+    if (!inBounds(p.c, p.r, w, h) || !pathable[p.c]![p.r]) return true;
+    if (p.r > h - 1 || p.r < 0 || p.c < 0 || p.c > w - 1) return true;
+    const k = keyCell(p.c, p.r);
+    if (prefixKeys.has(k)) return true;
+    if (i >= 1 && bendKeys.has(k)) return true;
+  }
+  return false;
+}
+
+function rSecondGoalOnTopLeftOrRightEdge(goal: CellCoord, w: number, h: number): boolean {
+  return goal.r === 0 || goal.c === 0 || goal.c === w - 1;
 }
 
 function findSimplePath(
@@ -472,6 +504,21 @@ type RFirstPolyCtx = {
   budgetHit: boolean;
 };
 
+/** `start` の次のマスを固定したいとき（再訪 R の隣で距離 1 折れを狙う等）。`path[1]` が一致しなければ却下 */
+type TryOrthogonalPolylineRFirstOpts = {
+  forcedSecond?: CellCoord;
+};
+
+function pathFirstStepMatchesForcedSecond(
+  path: CellCoord[],
+  forcedSecond: CellCoord | undefined
+): boolean {
+  if (!forcedSecond) return true;
+  if (path.length < 2) return false;
+  const q = forcedSecond;
+  return path[1]!.c === q.c && path[1]!.r === q.r;
+}
+
 function tryOrthogonalPolylineRFirst(
   start: CellCoord,
   goal: CellCoord,
@@ -479,7 +526,8 @@ function tryOrthogonalPolylineRFirst(
   firstHorizontal: boolean,
   pathable: boolean[][],
   rng: () => number,
-  ctx: RFirstPolyCtx
+  ctx: RFirstPolyCtx,
+  opts?: TryOrthogonalPolylineRFirstOpts
 ): CellCoord[] | null {
   const w = pathable.length;
   const h = pathable[0]!.length;
@@ -534,12 +582,12 @@ function tryOrthogonalPolylineRFirst(
           lens[idx] = vs[j]!;
         });
         const path = walkOrthogonalFromLens(start, goal, lens, firstHorizontal, pathable, w, h);
-        if (path) return path;
+        if (path && pathFirstStepMatchesForcedSecond(path, opts?.forcedSecond)) return path;
       }
       return null;
     })();
 
-  if (tryEnumerate) return tryEnumerate;
+  if (tryEnumerate && pathFirstStepMatchesForcedSecond(tryEnumerate, opts?.forcedSecond)) return tryEnumerate;
 
   if (ctx.polyBudget <= 0) {
     ctx.budgetHit = true;
@@ -558,7 +606,54 @@ function tryOrthogonalPolylineRFirst(
   vIdx.forEach((idx, j) => {
     lens[idx] = vs[j]!;
   });
-  return walkOrthogonalFromLens(start, goal, lens, firstHorizontal, pathable, w, h);
+  const path = walkOrthogonalFromLens(start, goal, lens, firstHorizontal, pathable, w, h);
+  if (!path || !pathFirstStepMatchesForcedSecond(path, opts?.forcedSecond)) return null;
+  return path;
+}
+
+/**
+ * R-Second 中脚／出口: セル列は [R, armTip, …, goal]。R→armTip は1歩で固定。
+ * `nextAttempts`: armTip の次マス path[2] を `tryOrthogonalPolylineRFirst` の forcedSecond で順に試し、
+ * 最後に `undefined`（無制約）で試す。順序は毎回シャッフル。
+ */
+function tryOrthogonalRSecondLegFromR(
+  R: CellCoord,
+  armTip: CellCoord,
+  goal: CellCoord,
+  b: number,
+  pathable: boolean[][],
+  rng: () => number,
+  ctx: RFirstPolyCtx,
+  nextAttempts: (CellCoord | undefined)[]
+): CellCoord[] | null {
+  const manRArm =
+    Math.abs(armTip.c - R.c) + Math.abs(armTip.r - R.r);
+  if (manRArm !== 1) return null;
+
+  let firstHArm = rng() < 0.5;
+  if (orthoPolylineSplitImpossible(armTip, goal, b, firstHArm)) firstHArm = !firstHArm;
+  if (orthoPolylineSplitImpossible(armTip, goal, b, firstHArm)) return null;
+
+  for (const forcedSecond of nextAttempts) {
+    const tailPath = tryOrthogonalPolylineRFirst(
+      armTip,
+      goal,
+      b,
+      firstHArm,
+      pathable,
+      rng,
+      ctx,
+      forcedSecond !== undefined ? { forcedSecond } : undefined
+    );
+    if (ctx.budgetHit) return null;
+    if (!tailPath || tailPath.length < 1) continue;
+    if (tailPath[0]!.c !== armTip.c || tailPath[0]!.r !== armTip.r) continue;
+
+    const full: CellCoord[] = [R, ...tailPath];
+    if (full.length < 2 || full[1]!.c !== armTip.c || full[1]!.r !== armTip.r) continue;
+    return full;
+  }
+  return null;
 }
 
 /** グリッド差分 (Δc, Δr) から画面上の隣接 1 歩の `Dir` */
@@ -1089,13 +1184,44 @@ function rSecondPairMidBendsOk(b1: number, dOut1: Dir, dIn2: Dir): boolean {
   return false;
 }
 
+/** armTip の次マスを試す順: 近傍（直交・前方）をシャッフルし、最後に無制約 undefined を混ぜてシャッフル */
+function rSecondArmTipNextAttempts(
+  armTip: CellCoord,
+  R: CellCoord,
+  dAlongFromR: Dir,
+  pathable: boolean[][],
+  w: number,
+  h: number,
+  rng: () => number
+): (CellCoord | undefined)[] {
+  const neighbors = ([DIR.U, DIR.D, DIR.L, DIR.R] as const)
+    .map((d) => addCell(armTip, d))
+    .filter(
+      (q) =>
+        inBounds(q.c, q.r, w, h) &&
+        pathable[q.c]![q.r] &&
+        !(q.c === R.c && q.r === R.r)
+    );
+  const perp = neighbors.filter((q) => {
+    const d = unitStepDir(q.c - armTip.c, q.r - armTip.r);
+    return d && orthogonalDirs(d, dAlongFromR);
+  });
+  const forward = neighbors.filter((q) => {
+    const d = unitStepDir(q.c - armTip.c, q.r - armTip.r);
+    return d && dirsEqual(d, dAlongFromR);
+  });
+  shuffleArrayInPlace(perp, rng);
+  shuffleArrayInPlace(forward, rng);
+  return [...perp, ...forward, undefined];
+}
+
 /**
  * Grade5・Lv.4・R-Second・**N=1**: RS0〜RS2（折れ配分を先に幾何制約で絞り）→既存ポリライン接合。
- * ゴールは呼び出し側で上辺・左端・右端から選ぶ。スタートは最下段（R が最下行のときは R-First と同型の盤外入射）。
+ * **ゴール**は経路の最後に定まる: 確定した `(b0,b1,b2)` の **出口区間折れ `b2`** に従い、S2 から上辺・左端・右端のいずれかへポリラインで到達したセルを goal とする（事前乱択しない）。
+ * スタートは最下段（R が最下行のときは R-First と同型の盤外入射）。
  */
 function tryConstructGrade3PathRSecondN1(
   pathable: boolean[][],
-  goal: CellCoord,
   rng: () => number,
   bench?: ReflectShotLv4BenchStats | null,
   trace?: string[] | null
@@ -1186,7 +1312,7 @@ function tryConstructGrade3PathRSecondN1(
           const nset = new Set([P1, S1, P2, S2].map((q) => keyCell(q.c, q.r)));
           if (nset.size !== 4) continue;
 
-          const comboKey = `g${goal.c},${goal.r}|${rc},${rr}|${dirKeyShort(dIn1)}|${dirKeyShort(dOut1)}|${oi}`;
+          const comboKey = `${rc},${rr}|${dirKeyShort(dIn1)}|${dirKeyShort(dOut1)}|${oi}`;
           if (failedCombo.has(comboKey)) {
             if (bench) bench.rFirstComboCacheSkips = (bench.rFirstComboCacheSkips ?? 0) + 1;
             continue;
@@ -1226,19 +1352,64 @@ function tryConstructGrade3PathRSecondN1(
                   if (!seg0) continue;
                 }
 
-                let firstH1 = rng() < 0.5;
-                if (orthoPolylineSplitImpossible(S1, P2, b1, firstH1)) firstH1 = !firstH1;
-                if (orthoPolylineSplitImpossible(S1, P2, b1, firstH1)) continue;
+                let okLeg1 = false;
+                for (const fh of [true, false] as const) {
+                  if (!orthoPolylineSplitImpossible(S1, P2, b1, fh)) {
+                    okLeg1 = true;
+                    break;
+                  }
+                }
+                if (!okLeg1) continue;
 
-                let firstH2 = rng() < 0.5;
-                if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) firstH2 = !firstH2;
-                if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) continue;
+                const nextAttempts1 = rSecondArmTipNextAttempts(S1, R, dOut1, pathable, w, h, rng);
+                const seg1u = tryOrthogonalRSecondLegFromR(
+                  R,
+                  S1,
+                  P2,
+                  b1,
+                  pathable,
+                  rng,
+                  ctx,
+                  nextAttempts1
+                );
+                if (ctx.budgetHit) break outerR;
+                if (!seg1u) continue;
+                const seg1 = seg1u.slice(1);
 
-                const seg1 = tryOrthogonalPolylineRFirst(S1, P2, b1, firstH1, pathable, rng, ctx);
-                if (ctx.budgetHit) break outerR;
-                if (!seg1) continue;
-                const seg2 = tryOrthogonalPolylineRFirst(S2, goal, b2, firstH2, pathable, rng, ctx);
-                if (ctx.budgetHit) break outerR;
+                const edgeGoals = rSecondFeasibleEdgeGoalsForS2(pathable, S2, b2);
+                if (!edgeGoals.length) continue;
+                const edgeOrder = [...edgeGoals];
+                shuffleArrayInPlace(edgeOrder, rng);
+
+                const prefixPath: CellCoord[] = onBottomRow
+                  ? [R, ...seg1, R]
+                  : [...seg0!, R, ...seg1, R];
+
+                let seg2: CellCoord[] | null = null;
+                for (const gCell of edgeOrder) {
+                  if (ctx.budgetHit) break outerR;
+                  const nextAttempts2 = rSecondArmTipNextAttempts(S2, R, dOut2, pathable, w, h, rng);
+                  const seg2u = tryOrthogonalRSecondLegFromR(R, S2, gCell, b2, pathable, rng, ctx, nextAttempts2);
+                  if (ctx.budgetHit) break outerR;
+                  if (!seg2u) continue;
+                  const seg2cand = seg2u.slice(1);
+                  if (rSecondExitLegHardViolation(prefixPath, seg2cand, pathable, w, h)) {
+                    if (trace) {
+                      trace.push(
+                        `RSecond seg2 hard violation → redo from next R (prefix↔exit or bend/bottom), tried edge goal=(${gCell.c},${gCell.r})`
+                      );
+                    }
+                    continue outerR;
+                  }
+                  const gEnd = seg2cand[seg2cand.length - 1]!;
+                  if (gEnd.c !== gCell.c || gEnd.r !== gCell.r) continue;
+                  if (!rSecondGoalOnTopLeftOrRightEdge(gEnd, w, h)) continue;
+                  seg2 = seg2cand;
+                  if (trace) {
+                    trace.push(`RSecond goal deferred: resolved on edge (${gEnd.c},${gEnd.r}) after RS0–RS1`);
+                  }
+                  break;
+                }
                 if (!seg2) continue;
 
                 let path: CellCoord[];
@@ -1269,7 +1440,7 @@ function tryConstructGrade3PathRSecondN1(
                     `  P1=(${P1.c},${P1.r}) S1=(${S1.c},${S1.r}) P2=(${P2.c},${P2.r}) S2=(${S2.c},${S2.r})`
                   );
                   trace.push(
-                    `  split (b0,b1,b2)=(${b0},${b1},${b2}) pass=${pass} firstH0(seg0)=${firstH0} firstH1(seg1)=${firstH1} firstH2(seg2)=${firstH2} start=(${start.c},${start.r})`
+                    `  split (b0,b1,b2)=(${b0},${b1},${b2}) pass=${pass} firstH0(seg0)=${firstH0} RS2 legs=middle+exit via R prefix start=(${start.c},${start.r})`
                   );
                   trace.push(
                     `  polyAttemptsThisConstruction=${ctx.polyCalls} failedComboSizeBeforeAdd=${failedCombo.size}`
@@ -1909,7 +2080,7 @@ export type ReflectShotPolylineGenOpts = {
   debugReflecShotConsole?: boolean;
   /**
    * Grade5（Lv.4・再訪1・現状 N=1 のみ）: `rFirst` は再訪折れ点周りの接続順と少折れ優先のポリライン探索。
-   * `rSecond` は折れ配分を RS2-1 で先に絞ったうえで接合し、ゴールは上辺・左端・右端から選ぶ。
+   * `rSecond` は折れ配分を RS2-1 で先に絞ったうえで RS0〜RS1 を接合し、**goal は出口脚（`b2`）成功時に上辺・左端・右端のいずれかへ到達したセルとして最後に確定**する。
    * 未指定・`default` は従来の `tryConstructGrade3Path`。
    */
   lv4GenMode?: "default" | "rFirst" | "rSecond";
@@ -2505,8 +2676,6 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
           `=== Lv4 outer attempt ${attempt + 1}/${maxAttempts} (rejectedNoPath=${bench?.rejectedNoPath ?? 0} rejectedPick=${bench?.rejectedPickOrient ?? 0}) ===`
         );
       }
-      const gCell = pickRSecondGoalCell(pathable, rng, rSecondTrace);
-      if (!gCell) continue;
       if (bench) {
         bench.rFirstPolyCalls = 0;
         bench.rFirstBfsPruned = 0;
@@ -2514,7 +2683,7 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
         bench.rFirstBudgetExhausted = 0;
         bench.rFirstLastTryR = 0;
       }
-      const built = tryConstructGrade3PathRSecondN1(pathable, gCell, rng, bench, rSecondTrace);
+      const built = tryConstructGrade3PathRSecondN1(pathable, rng, bench, rSecondTrace);
       path = built?.path ?? null;
       if (path && rSecondTrace && built) {
         rSecondTrace.push(
@@ -2522,7 +2691,7 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
         );
       }
       if (!path && rSecondTrace) {
-        rSecondTrace.push(`polyline construction → null for this goal`);
+        rSecondTrace.push(`polyline construction → null (goal deferred to RS2 exit; or hard rollback)`);
       }
     } else {
       const topGoal = rFirst

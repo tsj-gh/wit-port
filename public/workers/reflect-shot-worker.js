@@ -179,17 +179,43 @@
     }
     return out;
   }
-  function pickRSecondGoalCell(pathable, rng) {
+  function rSecondEdgeGoalPoolAll(pathable) {
     const tops = topCandidates(pathable);
     const lefts = leftEdgeGoalCandidates(pathable);
     const rights = rightEdgeGoalCandidates(pathable);
-    const pools = [];
-    if (tops.length) pools.push(tops);
-    if (lefts.length) pools.push(lefts);
-    if (rights.length) pools.push(rights);
-    if (!pools.length) return null;
-    const arr = pools[Math.floor(rng() * pools.length)];
-    return arr[Math.floor(rng() * arr.length)];
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const p of [...tops, ...lefts, ...rights]) {
+      const k = keyCell(p.c, p.r);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(p);
+    }
+    return out;
+  }
+  function rSecondFeasibleEdgeGoalsForS2(pathable, S2, b2) {
+    const pool = rSecondEdgeGoalPoolAll(pathable);
+    return pool.filter(
+      (g) => [true, false].some((fh) => !orthoPolylineSplitImpossible(S2, g, b2, fh))
+    );
+  }
+  function rSecondExitLegHardViolation(prefixPath, seg2, pathable, w, h) {
+    const prefixKeys = new Set(prefixPath.map((p) => keyCell(p.c, p.r)));
+    const bendKeys = new Set(
+      bendVertexIndices(prefixPath).map((i) => keyCell(prefixPath[i].c, prefixPath[i].r))
+    );
+    for (let i = 0; i < seg2.length; i++) {
+      const p = seg2[i];
+      if (!inBounds(p.c, p.r, w, h) || !pathable[p.c][p.r]) return true;
+      if (p.r > h - 1 || p.r < 0 || p.c < 0 || p.c > w - 1) return true;
+      const k = keyCell(p.c, p.r);
+      if (prefixKeys.has(k)) return true;
+      if (i >= 1 && bendKeys.has(k)) return true;
+    }
+    return false;
+  }
+  function rSecondGoalOnTopLeftOrRightEdge(goal, w, h) {
+    return goal.r === 0 || goal.c === 0 || goal.c === w - 1;
   }
   function createStageRng(seed) {
     let s = seed >>> 0;
@@ -319,7 +345,13 @@
     if (cur.c !== goal.c || cur.r !== goal.r) return null;
     return path;
   }
-  function tryOrthogonalPolylineRFirst(start, goal, bends, firstHorizontal, pathable, rng, ctx) {
+  function pathFirstStepMatchesForcedSecond(path, forcedSecond) {
+    if (!forcedSecond) return true;
+    if (path.length < 2) return false;
+    const q = forcedSecond;
+    return path[1].c === q.c && path[1].r === q.r;
+  }
+  function tryOrthogonalPolylineRFirst(start, goal, bends, firstHorizontal, pathable, rng, ctx, opts) {
     const w = pathable.length;
     const h = pathable[0].length;
     if (orthoPolylineSplitImpossible(start, goal, bends, firstHorizontal)) return null;
@@ -365,12 +397,12 @@
         vIdx.forEach((idx, j) => {
           lens2[idx] = vs2[j];
         });
-        const path = walkOrthogonalFromLens(start, goal, lens2, firstHorizontal, pathable, w, h);
-        if (path) return path;
+        const path2 = walkOrthogonalFromLens(start, goal, lens2, firstHorizontal, pathable, w, h);
+        if (path2 && pathFirstStepMatchesForcedSecond(path2, opts == null ? void 0 : opts.forcedSecond)) return path2;
       }
       return null;
     })();
-    if (tryEnumerate) return tryEnumerate;
+    if (tryEnumerate && pathFirstStepMatchesForcedSecond(tryEnumerate, opts == null ? void 0 : opts.forcedSecond)) return tryEnumerate;
     if (ctx.polyBudget <= 0) {
       ctx.budgetHit = true;
       return null;
@@ -387,7 +419,35 @@
     vIdx.forEach((idx, j) => {
       lens[idx] = vs[j];
     });
-    return walkOrthogonalFromLens(start, goal, lens, firstHorizontal, pathable, w, h);
+    const path = walkOrthogonalFromLens(start, goal, lens, firstHorizontal, pathable, w, h);
+    if (!path || !pathFirstStepMatchesForcedSecond(path, opts == null ? void 0 : opts.forcedSecond)) return null;
+    return path;
+  }
+  function tryOrthogonalRSecondLegFromR(R, armTip, goal, b, pathable, rng, ctx, nextAttempts) {
+    const manRArm = Math.abs(armTip.c - R.c) + Math.abs(armTip.r - R.r);
+    if (manRArm !== 1) return null;
+    let firstHArm = rng() < 0.5;
+    if (orthoPolylineSplitImpossible(armTip, goal, b, firstHArm)) firstHArm = !firstHArm;
+    if (orthoPolylineSplitImpossible(armTip, goal, b, firstHArm)) return null;
+    for (const forcedSecond of nextAttempts) {
+      const tailPath = tryOrthogonalPolylineRFirst(
+        armTip,
+        goal,
+        b,
+        firstHArm,
+        pathable,
+        rng,
+        ctx,
+        forcedSecond !== void 0 ? { forcedSecond } : void 0
+      );
+      if (ctx.budgetHit) return null;
+      if (!tailPath || tailPath.length < 1) continue;
+      if (tailPath[0].c !== armTip.c || tailPath[0].r !== armTip.r) continue;
+      const full = [R, ...tailPath];
+      if (full.length < 2 || full[1].c !== armTip.c || full[1].r !== armTip.r) continue;
+      return full;
+    }
+    return null;
   }
   function unitStepDir(deltaC, deltaR) {
     if (!(Math.abs(deltaC) === 1 && deltaR === 0 || deltaC === 0 && Math.abs(deltaR) === 1)) return null;
@@ -784,7 +844,23 @@
     if (orthogonalDirs(dOut1, dIn2)) return b1 >= 3 && b1 % 2 === 1;
     return false;
   }
-  function tryConstructGrade3PathRSecondN1(pathable, goal, rng, bench) {
+  function rSecondArmTipNextAttempts(armTip, R, dAlongFromR, pathable, w, h, rng) {
+    const neighbors = [DIR.U, DIR.D, DIR.L, DIR.R].map((d) => addCell(armTip, d)).filter(
+      (q) => inBounds(q.c, q.r, w, h) && pathable[q.c][q.r] && !(q.c === R.c && q.r === R.r)
+    );
+    const perp = neighbors.filter((q) => {
+      const d = unitStepDir(q.c - armTip.c, q.r - armTip.r);
+      return d && orthogonalDirs(d, dAlongFromR);
+    });
+    const forward = neighbors.filter((q) => {
+      const d = unitStepDir(q.c - armTip.c, q.r - armTip.r);
+      return d && dirsEqual(d, dAlongFromR);
+    });
+    shuffleArrayInPlace(perp, rng);
+    shuffleArrayInPlace(forward, rng);
+    return [...perp, ...forward, void 0];
+  }
+  function tryConstructGrade3PathRSecondN1(pathable, rng, bench, trace) {
     var _a;
     const w = pathable.length;
     const h = pathable[0].length;
@@ -859,7 +935,7 @@
             if (!okPts) continue;
             const nset = new Set([P1, S1, P2, S2].map((q) => keyCell(q.c, q.r)));
             if (nset.size !== 4) continue;
-            const comboKey = `g${goal.c},${goal.r}|${rc},${rr}|${dirKeyShort(dIn1)}|${dirKeyShort(dOut1)}|${oi}`;
+            const comboKey = `${rc},${rr}|${dirKeyShort(dIn1)}|${dirKeyShort(dOut1)}|${oi}`;
             if (failedCombo.has(comboKey)) {
               if (bench) bench.rFirstComboCacheSkips = ((_a = bench.rFirstComboCacheSkips) != null ? _a : 0) + 1;
               continue;
@@ -892,17 +968,58 @@
                     if (ctx.budgetHit) break outerR;
                     if (!seg0) continue;
                   }
-                  let firstH1 = rng() < 0.5;
-                  if (orthoPolylineSplitImpossible(S1, P2, b1, firstH1)) firstH1 = !firstH1;
-                  if (orthoPolylineSplitImpossible(S1, P2, b1, firstH1)) continue;
-                  let firstH2 = rng() < 0.5;
-                  if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) firstH2 = !firstH2;
-                  if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) continue;
-                  const seg1 = tryOrthogonalPolylineRFirst(S1, P2, b1, firstH1, pathable, rng, ctx);
+                  let okLeg1 = false;
+                  for (const fh of [true, false]) {
+                    if (!orthoPolylineSplitImpossible(S1, P2, b1, fh)) {
+                      okLeg1 = true;
+                      break;
+                    }
+                  }
+                  if (!okLeg1) continue;
+                  const nextAttempts1 = rSecondArmTipNextAttempts(S1, R, dOut1, pathable, w, h, rng);
+                  const seg1u = tryOrthogonalRSecondLegFromR(
+                    R,
+                    S1,
+                    P2,
+                    b1,
+                    pathable,
+                    rng,
+                    ctx,
+                    nextAttempts1
+                  );
                   if (ctx.budgetHit) break outerR;
-                  if (!seg1) continue;
-                  const seg2 = tryOrthogonalPolylineRFirst(S2, goal, b2, firstH2, pathable, rng, ctx);
-                  if (ctx.budgetHit) break outerR;
+                  if (!seg1u) continue;
+                  const seg1 = seg1u.slice(1);
+                  const edgeGoals = rSecondFeasibleEdgeGoalsForS2(pathable, S2, b2);
+                  if (!edgeGoals.length) continue;
+                  const edgeOrder = [...edgeGoals];
+                  shuffleArrayInPlace(edgeOrder, rng);
+                  const prefixPath = onBottomRow ? [R, ...seg1, R] : [...seg0, R, ...seg1, R];
+                  let seg2 = null;
+                  for (const gCell of edgeOrder) {
+                    if (ctx.budgetHit) break outerR;
+                    const nextAttempts2 = rSecondArmTipNextAttempts(S2, R, dOut2, pathable, w, h, rng);
+                    const seg2u = tryOrthogonalRSecondLegFromR(R, S2, gCell, b2, pathable, rng, ctx, nextAttempts2);
+                    if (ctx.budgetHit) break outerR;
+                    if (!seg2u) continue;
+                    const seg2cand = seg2u.slice(1);
+                    if (rSecondExitLegHardViolation(prefixPath, seg2cand, pathable, w, h)) {
+                      if (trace) {
+                        trace.push(
+                          `RSecond seg2 hard violation \u2192 redo from next R (prefix\u2194exit or bend/bottom), tried edge goal=(${gCell.c},${gCell.r})`
+                        );
+                      }
+                      continue outerR;
+                    }
+                    const gEnd = seg2cand[seg2cand.length - 1];
+                    if (gEnd.c !== gCell.c || gEnd.r !== gCell.r) continue;
+                    if (!rSecondGoalOnTopLeftOrRightEdge(gEnd, w, h)) continue;
+                    seg2 = seg2cand;
+                    if (trace) {
+                      trace.push(`RSecond goal deferred: resolved on edge (${gEnd.c},${gEnd.r}) after RS0\u2013RS1`);
+                    }
+                    break;
+                  }
                   if (!seg2) continue;
                   let path;
                   if (onBottomRow) path = [R, ...seg1, R, ...seg2];
@@ -914,6 +1031,24 @@
                   if (!grade3RevisitOneCellRule(path, onBottomRow ? { implicitBeforeFirstR: P1 } : void 0))
                     continue;
                   writeBench(tryR);
+                  if (trace) {
+                    const pairKind = dirsEqual(dOut1, dIn2) ? "same-axis(2+2t)" : dirsEqual(dOut1, negateDir(dIn2)) ? "opposite(4+2t)" : orthogonalDirs(dOut1, dIn2) ? "orthogonal(3+2t)" : "?";
+                    trace.push(
+                      `RSecond path OK: tryR=${tryR} R=(${R.c},${R.r}) onBottomRow=${onBottomRow} dIn1=${dirKeyShort(dIn1)} dOut1=${dirKeyShort(dOut1)} dIn2=${dirKeyShort(dIn2)} dOut2=${dirKeyShort(dOut2)} oi=${oi} pairRS21=${pairKind} bumper=${sol}`
+                    );
+                    trace.push(
+                      `  RS2 splits allowed (b0+b1+b2=4, RS2-1 on b1): ${splitsValid.map((t) => `(${t[0]},${t[1]},${t[2]})`).join(" ")} (count=${splitsValid.length})`
+                    );
+                    trace.push(
+                      `  P1=(${P1.c},${P1.r}) S1=(${S1.c},${S1.r}) P2=(${P2.c},${P2.r}) S2=(${S2.c},${S2.r})`
+                    );
+                    trace.push(
+                      `  split (b0,b1,b2)=(${b0},${b1},${b2}) pass=${pass} firstH0(seg0)=${firstH0} RS2 legs=middle+exit via R prefix start=(${start.c},${start.r})`
+                    );
+                    trace.push(
+                      `  polyAttemptsThisConstruction=${ctx.polyCalls} failedComboSizeBeforeAdd=${failedCombo.size}`
+                    );
+                  }
                   return { path, start: onBottomRow ? R : start };
                 }
               }
@@ -924,6 +1059,11 @@
       }
     }
     writeBench(Math.max(0, lastTryRAt));
+    if (trace) {
+      trace.push(
+        `tryConstructGrade3PathRSecondN1 end: no path. lastTryR=${lastTryRAt}/${tryRLimit - 1} failedComboKeys=${failedCombo.size} budgetHit=${ctx.budgetHit} polyCalls=${ctx.polyCalls}`
+      );
+    }
     return null;
   }
   function tryOrthogonalPolyline(start, goal, bends, firstHorizontal, pathable, rng) {
@@ -1487,7 +1627,7 @@
     return winners[Math.floor(rng() * winners.length)];
   }
   function generateBoardLv4Stage(seed, genOpts) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f;
     const rng = createStageRng(seed);
     const { w: W, h: H } = boardSizeForGrade(5);
     const pathable = makeRect(W, H);
@@ -1505,6 +1645,8 @@
     const markBenchSuccess = (attempt) => {
       if (bench) bench.outerAttemptsUsed = attempt + 1;
     };
+    const rSecondTrace = genOpts == null ? void 0 : genOpts.lv4RSecondTrace;
+    if (rSecondTrace) rSecondTrace.length = 0;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const bottoms = bottomCandidates(pathable);
       const tops = topCandidates(pathable);
@@ -1512,8 +1654,11 @@
       if (!rSecond && !tops.length) return null;
       let path = null;
       if (rSecond) {
-        const gCell = pickRSecondGoalCell(pathable, rng);
-        if (!gCell) continue;
+        if (rSecondTrace) {
+          rSecondTrace.push(
+            `=== Lv4 outer attempt ${attempt + 1}/${maxAttempts} (rejectedNoPath=${(_a = bench == null ? void 0 : bench.rejectedNoPath) != null ? _a : 0} rejectedPick=${(_b = bench == null ? void 0 : bench.rejectedPickOrient) != null ? _b : 0}) ===`
+          );
+        }
         if (bench) {
           bench.rFirstPolyCalls = 0;
           bench.rFirstBfsPruned = 0;
@@ -1521,7 +1666,16 @@
           bench.rFirstBudgetExhausted = 0;
           bench.rFirstLastTryR = 0;
         }
-        path = (_b = (_a = tryConstructGrade3PathRSecondN1(pathable, gCell, rng, bench)) == null ? void 0 : _a.path) != null ? _b : null;
+        const built = tryConstructGrade3PathRSecondN1(pathable, rng, bench, rSecondTrace);
+        path = (_c = built == null ? void 0 : built.path) != null ? _c : null;
+        if (path && rSecondTrace && built) {
+          rSecondTrace.push(
+            `polyline OK: len=${path.length} logicalStart=(${built.start.c},${built.start.r}) rightAngles=${countRightAngles(path)}`
+          );
+        }
+        if (!path && rSecondTrace) {
+          rSecondTrace.push(`polyline construction \u2192 null (goal deferred to RS2 exit; or hard rollback)`);
+        }
       } else {
         const topGoal = rFirst ? (() => {
           const cx = (W - 1) / 2;
@@ -1535,7 +1689,7 @@
           bench.rFirstBudgetExhausted = 0;
           bench.rFirstLastTryR = 0;
         }
-        path = rFirst ? (_d = (_c = tryConstructGrade3PathRFirstN1(pathable, topGoal, rng, bench)) == null ? void 0 : _c.path) != null ? _d : null : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)], topGoal, rng);
+        path = rFirst ? (_e = (_d = tryConstructGrade3PathRFirstN1(pathable, topGoal, rng, bench)) == null ? void 0 : _d.path) != null ? _e : null : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)], topGoal, rng);
       }
       if (!path) {
         if (bench) bench.rejectedNoPath++;
@@ -1544,7 +1698,13 @@
       const picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
       if (!picked) {
         if (bench) bench.rejectedPickOrient++;
+        if (rSecond && rSecondTrace) rSecondTrace.push(`pickGrade2OrientedStage \u2192 null (orientation/pads/bumpers)`);
         continue;
+      }
+      if (rSecond && rSecondTrace) {
+        rSecondTrace.push(
+          `pickGrade2OrientedStage OK: rotation picks start=(${picked.start.c},${picked.start.r}) goal=(${picked.goal.c},${picked.goal.r}) padLabel=${(_f = picked.grade2PadAdjustLabel) != null ? _f : "none"}`
+        );
       }
       let solutionPath = picked.solutionPath;
       let start = picked.start;
@@ -1562,6 +1722,7 @@
       );
       if (ge.kind === "discard") {
         if (bench) bench.rejectedExtendDiscard++;
+        if (rSecond && rSecondTrace) rSecondTrace.push("maybeExtendStartForGoalUpsideDown: discard");
         continue;
       }
       if (ge.kind === "extended") {
@@ -1611,6 +1772,11 @@
         bumpers.forEach((v, k) => dup2.set(k, { display: v.display, solution: v.solution }));
         shuffleWrongDisplay(dup2, rng);
         markBenchSuccess(attempt);
+        if (rSecond && rSecondTrace) {
+          rSecondTrace.push(
+            `FINAL BOARD: extended start path len=${solutionPath.length} reflecSourceStartExtended=true outerAttemptsUsed=${attempt + 1}`
+          );
+        }
         return {
           width: picked.width,
           height: picked.height,
@@ -1631,6 +1797,11 @@
       picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       shuffleWrongDisplay(dup, rng);
       markBenchSuccess(attempt);
+      if (rSecond && rSecondTrace) {
+        rSecondTrace.push(
+          `FINAL BOARD: no start extend path len=${picked.solutionPath.length} outerAttemptsUsed=${attempt + 1}`
+        );
+      }
       return {
         width: picked.width,
         height: picked.height,
