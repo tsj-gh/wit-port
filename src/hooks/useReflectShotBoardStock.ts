@@ -30,7 +30,7 @@ export function useReflectShotBoardStock(
     opts?: {
       source?: "user" | "prefetch";
       grade2Bend6TotalBends?: 6 | 7 | 8;
-      lv4GenMode?: "default" | "rFirst";
+      lv4GenMode?: "default" | "rFirst" | "rSecond";
     }
   ) => Promise<ReflectShotGenerateResult>,
   enabled: boolean = true

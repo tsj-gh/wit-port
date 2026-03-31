@@ -9,8 +9,8 @@ export type ReflectShotGenMetrics = {
   totalMs: number;
 };
 
-/** Grade5（Lv.4）経路生成。`rFirst` はデバッグ UI からのみ指定想定 */
-export type ReflectShotLv4GenMode = "default" | "rFirst";
+/** Grade5（Lv.4）経路生成。`rFirst` / `rSecond` はデバッグ UI からのみ指定想定 */
+export type ReflectShotLv4GenMode = "default" | "rFirst" | "rSecond";
 
 export type ReflectShotMainToWorkerGenerate = {
   type: "GENERATE";

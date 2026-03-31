@@ -163,6 +163,47 @@ function topCandidates(pathable: boolean[][]): CellCoord[] {
   return out.length ? out : [];
 }
 
+/** R-Second: ゴールを最左列（c=0）。東隣が pathable で盤内から進入可能なマス */
+function leftEdgeGoalCandidates(pathable: boolean[][]): CellCoord[] {
+  const w = pathable.length;
+  const h = pathable[0]?.length ?? 0;
+  const out: CellCoord[] = [];
+  if (w < 2) return out;
+  for (let r = 0; r < h; r++) {
+    if (!pathable[0]![r] || !pathable[1]![r]) continue;
+    out.push({ c: 0, r });
+  }
+  return out;
+}
+
+/** R-Second: ゴールを最右列。西隣が pathable なマス */
+function rightEdgeGoalCandidates(pathable: boolean[][]): CellCoord[] {
+  const w = pathable.length;
+  const h = pathable[0]?.length ?? 0;
+  const out: CellCoord[] = [];
+  if (w < 2) return out;
+  const c = w - 1;
+  for (let r = 0; r < h; r++) {
+    if (!pathable[c]![r] || !pathable[c - 1]![r]) continue;
+    out.push({ c, r });
+  }
+  return out;
+}
+
+/** R-Second: 上辺・左端・右端のいずれかからゴールセルを 1 つ乱択 */
+function pickRSecondGoalCell(pathable: boolean[][], rng: () => number): CellCoord | null {
+  const tops = topCandidates(pathable);
+  const lefts = leftEdgeGoalCandidates(pathable);
+  const rights = rightEdgeGoalCandidates(pathable);
+  const pools: CellCoord[][] = [];
+  if (tops.length) pools.push(tops);
+  if (lefts.length) pools.push(lefts);
+  if (rights.length) pools.push(rights);
+  if (!pools.length) return null;
+  const arr = pools[Math.floor(rng() * pools.length)]!;
+  return arr[Math.floor(rng() * arr.length)]!;
+}
+
 function findSimplePath(
   pathable: boolean[][],
   start: CellCoord,
@@ -1023,6 +1064,195 @@ function tryConstructGrade3PathRFirstN1(
   return null;
 }
 
+/**
+ * R-Second RS2-1: 再訪点 R の「閉路側」区間 S1→P2（折れ b1）が幾何 (dOut1, dIn2) で取れる最小・パリティ。
+ * - 同軸往復（dOut1 === dIn2）: 2+2t
+ * - 直交: 3+2t（Lv.4 では b1=3 のみ）
+ * - 反対軸: 4+2t（Lv.4 では b1=4 のみ）
+ */
+function rSecondPairMidBendsOk(b1: number, dOut1: Dir, dIn2: Dir): boolean {
+  if (dirsEqual(dOut1, dIn2)) return b1 >= 2 && b1 % 2 === 0;
+  if (dirsEqual(dOut1, negateDir(dIn2))) return b1 >= 4 && b1 % 2 === 0;
+  if (orthogonalDirs(dOut1, dIn2)) return b1 >= 3 && b1 % 2 === 1;
+  return false;
+}
+
+/**
+ * Grade5・Lv.4・R-Second・**N=1**: RS0〜RS2（折れ配分を先に幾何制約で絞り）→既存ポリライン接合。
+ * ゴールは呼び出し側で上辺・左端・右端から選ぶ。スタートは最下段（R が最下行のときは R-First と同型の盤外入射）。
+ */
+function tryConstructGrade3PathRSecondN1(
+  pathable: boolean[][],
+  goal: CellCoord,
+  rng: () => number,
+  bench?: ReflectShotLv4BenchStats | null
+): { path: CellCoord[]; start: CellCoord } | null {
+  const w = pathable.length;
+  const h = pathable[0]!.length;
+  const invEnter = (Rcell: CellCoord, dIn: Dir): CellCoord => ({
+    c: Rcell.c - dIn.dx,
+    r: Rcell.r + dIn.dy,
+  });
+  const step = (from: CellCoord, d: Dir): CellCoord => addCell(from, d);
+
+  const bottoms = bottomCandidates(pathable);
+  if (!bottoms.length) return null;
+
+  const splitsAll: [number, number, number][] = [];
+  for (let a = 0; a <= 4; a++) {
+    for (let b = 0; b <= 4 - a; b++) {
+      splitsAll.push([a, b, 4 - a - b]);
+    }
+  }
+
+  const ctx: RFirstPolyCtx = {
+    polyBudget: 12_000,
+    polyCalls: 0,
+    bfsPruned: 0,
+    budgetHit: false,
+  };
+  const failedCombo = new Set<string>();
+
+  const writeBench = (lastTryR: number) => {
+    if (!bench) return;
+    bench.rFirstPolyCalls = ctx.polyCalls;
+    bench.rFirstBfsPruned = ctx.bfsPruned;
+    bench.rFirstBudgetExhausted = ctx.budgetHit ? 1 : 0;
+    bench.rFirstLastTryR = lastTryR;
+  };
+
+  const tryRLimit = w <= 5 && h <= 5 ? 55 : 40;
+  let lastTryRAt = -1;
+
+  outerR: for (let tryR = 0; tryR < tryRLimit; tryR++) {
+    lastTryRAt = tryR;
+    if (ctx.budgetHit) break;
+
+    const rc = 1 + Math.floor(rng() * Math.max(1, w - 2));
+    const rr = 1 + Math.floor(rng() * Math.max(1, h - 2));
+    const R = { c: rc, r: rr };
+    if (!pathable[rc]![rr]) continue;
+
+    const onBottomRow = rr === h - 1;
+    const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
+    for (const dIn1 of dirOrder) {
+      if (ctx.budgetHit) break outerR;
+      if (onBottomRow && !dirsEqual(dIn1, DIR.U)) continue;
+
+      const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
+      for (const dOut1 of outs) {
+        if (ctx.budgetHit) break outerR;
+        const sol = diagonalBumperForTurn(dIn1, dOut1);
+        if (!sol) continue;
+        const dIn2opts = [negateDir(dIn1), dOut1];
+        const oiOrder = rng() < 0.5 ? [0, 1] : [1, 0];
+        for (const oi of oiOrder) {
+          if (ctx.budgetHit) break outerR;
+          const dIn2 = dIn2opts[oi]!;
+          if (oi > 0 && dirsEqual(dIn2, dIn2opts[0]!)) continue;
+          const dOut2 = applyBumper(dIn2, sol);
+          if (!orthogonalDirs(dIn2, dOut2)) continue;
+
+          const P1 = invEnter(R, dIn1);
+          const S1 = step(R, dOut1);
+          const P2 = invEnter(R, dIn2);
+          const S2 = step(R, dOut2);
+
+          if (onBottomRow) {
+            if (inBounds(P1.c, P1.r, w, h)) continue;
+          } else if (!inBounds(P1.c, P1.r, w, h) || !pathable[P1.c]![P1.r]) continue;
+
+          let okPts = true;
+          for (const q of [S1, P2, S2]) {
+            if (!inBounds(q.c, q.r, w, h) || !pathable[q.c]![q.r]) {
+              okPts = false;
+              break;
+            }
+          }
+          if (!okPts) continue;
+          const nset = new Set([P1, S1, P2, S2].map((q) => keyCell(q.c, q.r)));
+          if (nset.size !== 4) continue;
+
+          const comboKey = `g${goal.c},${goal.r}|${rc},${rr}|${dirKeyShort(dIn1)}|${dirKeyShort(dOut1)}|${oi}`;
+          if (failedCombo.has(comboKey)) {
+            if (bench) bench.rFirstComboCacheSkips = (bench.rFirstComboCacheSkips ?? 0) + 1;
+            continue;
+          }
+
+          const splitsValid = splitsAll.filter(([b0, b1, b2]) => {
+            if (b0 + b1 + b2 !== 4) return false;
+            return rSecondPairMidBendsOk(b1, dOut1, dIn2);
+          });
+          if (!splitsValid.length) continue;
+
+          const splits = [...splitsValid];
+          shuffleArrayInPlace(splits, rng);
+
+          const startPool: CellCoord[] = onBottomRow ? [R] : bottoms;
+          const startOrder = [...startPool].sort(() => rng() - 0.5);
+
+          for (const start of startOrder) {
+            if (ctx.budgetHit) break outerR;
+            if (!onBottomRow && start.c === R.c && start.r === R.r) continue;
+
+            const splitsBase = onBottomRow ? splits.filter(([b0]) => b0 === 0) : splits;
+            if (!splitsBase.length) continue;
+
+            for (let pass = 0; pass < 6; pass++) {
+              if (ctx.budgetHit) break outerR;
+              const firstH0 = pass % 2 === 0;
+              for (const [b0, b1, b2] of splitsBase) {
+                if (ctx.budgetHit) break outerR;
+                let seg0: CellCoord[] | null = null;
+                if (onBottomRow) {
+                  if (b0 !== 0) continue;
+                } else {
+                  if (orthoPolylineSplitImpossible(start, P1, b0, firstH0)) continue;
+                  seg0 = tryOrthogonalPolylineRFirst(start, P1, b0, firstH0, pathable, rng, ctx);
+                  if (ctx.budgetHit) break outerR;
+                  if (!seg0) continue;
+                }
+
+                let firstH1 = rng() < 0.5;
+                if (orthoPolylineSplitImpossible(S1, P2, b1, firstH1)) firstH1 = !firstH1;
+                if (orthoPolylineSplitImpossible(S1, P2, b1, firstH1)) continue;
+
+                let firstH2 = rng() < 0.5;
+                if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) firstH2 = !firstH2;
+                if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) continue;
+
+                const seg1 = tryOrthogonalPolylineRFirst(S1, P2, b1, firstH1, pathable, rng, ctx);
+                if (ctx.budgetHit) break outerR;
+                if (!seg1) continue;
+                const seg2 = tryOrthogonalPolylineRFirst(S2, goal, b2, firstH2, pathable, rng, ctx);
+                if (ctx.budgetHit) break outerR;
+                if (!seg2) continue;
+
+                let path: CellCoord[];
+                if (onBottomRow) path = [R, ...seg1, R, ...seg2];
+                else {
+                  if (!seg0) continue;
+                  path = [...seg0, R, ...seg1, R, ...seg2];
+                }
+                if (countRightAngles(path) !== 6) continue;
+                if (!grade3RevisitOneCellRule(path, onBottomRow ? { implicitBeforeFirstR: P1 } : undefined))
+                  continue;
+                writeBench(tryR);
+                return { path, start: onBottomRow ? R : start };
+              }
+            }
+          }
+
+          if (!ctx.budgetHit) failedCombo.add(comboKey);
+        }
+      }
+    }
+  }
+
+  writeBench(Math.max(0, lastTryRAt));
+  return null;
+}
+
 function tryOrthogonalPolyline(
   start: CellCoord,
   goal: CellCoord,
@@ -1636,10 +1866,11 @@ export type ReflectShotPolylineGenOpts = {
   /** `true` のとき Worker 側で `goal->upside down` start 延長の棄却を `console` に出す */
   debugReflecShotConsole?: boolean;
   /**
-   * Grade5（Lv.4・再訪1・現状 N=1 のみ）: `rFirst` は再訪折れ点周りの接続順と少折れ優先のポリライン探索を用いる。
+   * Grade5（Lv.4・再訪1・現状 N=1 のみ）: `rFirst` は再訪折れ点周りの接続順と少折れ優先のポリライン探索。
+   * `rSecond` は折れ配分を RS2-1 で先に絞ったうえで接合し、ゴールは上辺・左端・右端から選ぶ。
    * 未指定・`default` は従来の `tryConstructGrade3Path`。
    */
-  lv4GenMode?: "default" | "rFirst";
+  lv4GenMode?: "default" | "rFirst" | "rSecond";
   /**
    * ベンチ・診断用: 参照が渡されたときのみ、`generateBoardLv4Stage` の 1 呼び出し内で集計を書き込む。
    */
@@ -2199,6 +2430,7 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
   const pathable = makeRect(W, H);
   const maxAttempts = 220;
   const rFirst = genOpts?.lv4GenMode === "rFirst";
+  const rSecond = genOpts?.lv4GenMode === "rSecond";
   const bench = genOpts?.lv4BenchStats;
   if (bench) {
     bench.outerAttemptsUsed = maxAttempts;
@@ -2213,24 +2445,41 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const bottoms = bottomCandidates(pathable);
     const tops = topCandidates(pathable);
-    if (!bottoms.length || !tops.length) return null;
-    const topGoal = rFirst
-      ? (() => {
-          const cx = (W - 1) / 2;
-          const ord = [...tops].sort((a, b) => Math.abs(a.c - cx) - Math.abs(b.c - cx));
-          return ord[attempt % ord.length]!;
-        })()
-      : tops[Math.floor(rng() * tops.length)]!;
-    if (bench && rFirst) {
-      bench.rFirstPolyCalls = 0;
-      bench.rFirstBfsPruned = 0;
-      bench.rFirstComboCacheSkips = 0;
-      bench.rFirstBudgetExhausted = 0;
-      bench.rFirstLastTryR = 0;
+    if (!bottoms.length) return null;
+    if (!rSecond && !tops.length) return null;
+
+    let path: CellCoord[] | null = null;
+
+    if (rSecond) {
+      const gCell = pickRSecondGoalCell(pathable, rng);
+      if (!gCell) continue;
+      if (bench) {
+        bench.rFirstPolyCalls = 0;
+        bench.rFirstBfsPruned = 0;
+        bench.rFirstComboCacheSkips = 0;
+        bench.rFirstBudgetExhausted = 0;
+        bench.rFirstLastTryR = 0;
+      }
+      path = tryConstructGrade3PathRSecondN1(pathable, gCell, rng, bench)?.path ?? null;
+    } else {
+      const topGoal = rFirst
+        ? (() => {
+            const cx = (W - 1) / 2;
+            const ord = [...tops].sort((a, b) => Math.abs(a.c - cx) - Math.abs(b.c - cx));
+            return ord[attempt % ord.length]!;
+          })()
+        : tops[Math.floor(rng() * tops.length)]!;
+      if (bench && rFirst) {
+        bench.rFirstPolyCalls = 0;
+        bench.rFirstBfsPruned = 0;
+        bench.rFirstComboCacheSkips = 0;
+        bench.rFirstBudgetExhausted = 0;
+        bench.rFirstLastTryR = 0;
+      }
+      path = rFirst
+        ? tryConstructGrade3PathRFirstN1(pathable, topGoal, rng, bench)?.path ?? null
+        : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)]!, topGoal, rng);
     }
-    const path = rFirst
-      ? tryConstructGrade3PathRFirstN1(pathable, topGoal, rng, bench)?.path ?? null
-      : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)]!, topGoal, rng);
     if (!path) {
       if (bench) bench.rejectedNoPath++;
       continue;

@@ -154,6 +154,43 @@
     }
     return out.length ? out : [];
   }
+  function leftEdgeGoalCandidates(pathable) {
+    var _a, _b;
+    const w = pathable.length;
+    const h = (_b = (_a = pathable[0]) == null ? void 0 : _a.length) != null ? _b : 0;
+    const out = [];
+    if (w < 2) return out;
+    for (let r = 0; r < h; r++) {
+      if (!pathable[0][r] || !pathable[1][r]) continue;
+      out.push({ c: 0, r });
+    }
+    return out;
+  }
+  function rightEdgeGoalCandidates(pathable) {
+    var _a, _b;
+    const w = pathable.length;
+    const h = (_b = (_a = pathable[0]) == null ? void 0 : _a.length) != null ? _b : 0;
+    const out = [];
+    if (w < 2) return out;
+    const c = w - 1;
+    for (let r = 0; r < h; r++) {
+      if (!pathable[c][r] || !pathable[c - 1][r]) continue;
+      out.push({ c, r });
+    }
+    return out;
+  }
+  function pickRSecondGoalCell(pathable, rng) {
+    const tops = topCandidates(pathable);
+    const lefts = leftEdgeGoalCandidates(pathable);
+    const rights = rightEdgeGoalCandidates(pathable);
+    const pools = [];
+    if (tops.length) pools.push(tops);
+    if (lefts.length) pools.push(lefts);
+    if (rights.length) pools.push(rights);
+    if (!pools.length) return null;
+    const arr = pools[Math.floor(rng() * pools.length)];
+    return arr[Math.floor(rng() * arr.length)];
+  }
   function createStageRng(seed) {
     let s = seed >>> 0;
     return () => {
@@ -697,6 +734,154 @@
                 if (ctx.budgetHit) break outerR;
                 const firstH0 = pass % 2 === 0;
                 for (const [b0, b1, b2] of splits) {
+                  if (ctx.budgetHit) break outerR;
+                  let seg0 = null;
+                  if (onBottomRow) {
+                    if (b0 !== 0) continue;
+                  } else {
+                    if (orthoPolylineSplitImpossible(start, P1, b0, firstH0)) continue;
+                    seg0 = tryOrthogonalPolylineRFirst(start, P1, b0, firstH0, pathable, rng, ctx);
+                    if (ctx.budgetHit) break outerR;
+                    if (!seg0) continue;
+                  }
+                  let firstH1 = rng() < 0.5;
+                  if (orthoPolylineSplitImpossible(S1, P2, b1, firstH1)) firstH1 = !firstH1;
+                  if (orthoPolylineSplitImpossible(S1, P2, b1, firstH1)) continue;
+                  let firstH2 = rng() < 0.5;
+                  if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) firstH2 = !firstH2;
+                  if (orthoPolylineSplitImpossible(S2, goal, b2, firstH2)) continue;
+                  const seg1 = tryOrthogonalPolylineRFirst(S1, P2, b1, firstH1, pathable, rng, ctx);
+                  if (ctx.budgetHit) break outerR;
+                  if (!seg1) continue;
+                  const seg2 = tryOrthogonalPolylineRFirst(S2, goal, b2, firstH2, pathable, rng, ctx);
+                  if (ctx.budgetHit) break outerR;
+                  if (!seg2) continue;
+                  let path;
+                  if (onBottomRow) path = [R, ...seg1, R, ...seg2];
+                  else {
+                    if (!seg0) continue;
+                    path = [...seg0, R, ...seg1, R, ...seg2];
+                  }
+                  if (countRightAngles(path) !== 6) continue;
+                  if (!grade3RevisitOneCellRule(path, onBottomRow ? { implicitBeforeFirstR: P1 } : void 0))
+                    continue;
+                  writeBench(tryR);
+                  return { path, start: onBottomRow ? R : start };
+                }
+              }
+            }
+            if (!ctx.budgetHit) failedCombo.add(comboKey);
+          }
+        }
+      }
+    }
+    writeBench(Math.max(0, lastTryRAt));
+    return null;
+  }
+  function rSecondPairMidBendsOk(b1, dOut1, dIn2) {
+    if (dirsEqual(dOut1, dIn2)) return b1 >= 2 && b1 % 2 === 0;
+    if (dirsEqual(dOut1, negateDir(dIn2))) return b1 >= 4 && b1 % 2 === 0;
+    if (orthogonalDirs(dOut1, dIn2)) return b1 >= 3 && b1 % 2 === 1;
+    return false;
+  }
+  function tryConstructGrade3PathRSecondN1(pathable, goal, rng, bench) {
+    var _a;
+    const w = pathable.length;
+    const h = pathable[0].length;
+    const invEnter = (Rcell, dIn) => ({
+      c: Rcell.c - dIn.dx,
+      r: Rcell.r + dIn.dy
+    });
+    const step = (from, d) => addCell(from, d);
+    const bottoms = bottomCandidates(pathable);
+    if (!bottoms.length) return null;
+    const splitsAll = [];
+    for (let a = 0; a <= 4; a++) {
+      for (let b = 0; b <= 4 - a; b++) {
+        splitsAll.push([a, b, 4 - a - b]);
+      }
+    }
+    const ctx = {
+      polyBudget: 12e3,
+      polyCalls: 0,
+      bfsPruned: 0,
+      budgetHit: false
+    };
+    const failedCombo = /* @__PURE__ */ new Set();
+    const writeBench = (lastTryR) => {
+      if (!bench) return;
+      bench.rFirstPolyCalls = ctx.polyCalls;
+      bench.rFirstBfsPruned = ctx.bfsPruned;
+      bench.rFirstBudgetExhausted = ctx.budgetHit ? 1 : 0;
+      bench.rFirstLastTryR = lastTryR;
+    };
+    const tryRLimit = w <= 5 && h <= 5 ? 55 : 40;
+    let lastTryRAt = -1;
+    outerR: for (let tryR = 0; tryR < tryRLimit; tryR++) {
+      lastTryRAt = tryR;
+      if (ctx.budgetHit) break;
+      const rc = 1 + Math.floor(rng() * Math.max(1, w - 2));
+      const rr = 1 + Math.floor(rng() * Math.max(1, h - 2));
+      const R = { c: rc, r: rr };
+      if (!pathable[rc][rr]) continue;
+      const onBottomRow = rr === h - 1;
+      const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
+      for (const dIn1 of dirOrder) {
+        if (ctx.budgetHit) break outerR;
+        if (onBottomRow && !dirsEqual(dIn1, DIR.U)) continue;
+        const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
+        for (const dOut1 of outs) {
+          if (ctx.budgetHit) break outerR;
+          const sol = diagonalBumperForTurn(dIn1, dOut1);
+          if (!sol) continue;
+          const dIn2opts = [negateDir(dIn1), dOut1];
+          const oiOrder = rng() < 0.5 ? [0, 1] : [1, 0];
+          for (const oi of oiOrder) {
+            if (ctx.budgetHit) break outerR;
+            const dIn2 = dIn2opts[oi];
+            if (oi > 0 && dirsEqual(dIn2, dIn2opts[0])) continue;
+            const dOut2 = applyBumper(dIn2, sol);
+            if (!orthogonalDirs(dIn2, dOut2)) continue;
+            const P1 = invEnter(R, dIn1);
+            const S1 = step(R, dOut1);
+            const P2 = invEnter(R, dIn2);
+            const S2 = step(R, dOut2);
+            if (onBottomRow) {
+              if (inBounds(P1.c, P1.r, w, h)) continue;
+            } else if (!inBounds(P1.c, P1.r, w, h) || !pathable[P1.c][P1.r]) continue;
+            let okPts = true;
+            for (const q of [S1, P2, S2]) {
+              if (!inBounds(q.c, q.r, w, h) || !pathable[q.c][q.r]) {
+                okPts = false;
+                break;
+              }
+            }
+            if (!okPts) continue;
+            const nset = new Set([P1, S1, P2, S2].map((q) => keyCell(q.c, q.r)));
+            if (nset.size !== 4) continue;
+            const comboKey = `g${goal.c},${goal.r}|${rc},${rr}|${dirKeyShort(dIn1)}|${dirKeyShort(dOut1)}|${oi}`;
+            if (failedCombo.has(comboKey)) {
+              if (bench) bench.rFirstComboCacheSkips = ((_a = bench.rFirstComboCacheSkips) != null ? _a : 0) + 1;
+              continue;
+            }
+            const splitsValid = splitsAll.filter(([b0, b1, b2]) => {
+              if (b0 + b1 + b2 !== 4) return false;
+              return rSecondPairMidBendsOk(b1, dOut1, dIn2);
+            });
+            if (!splitsValid.length) continue;
+            const splits = [...splitsValid];
+            shuffleArrayInPlace(splits, rng);
+            const startPool = onBottomRow ? [R] : bottoms;
+            const startOrder = [...startPool].sort(() => rng() - 0.5);
+            for (const start of startOrder) {
+              if (ctx.budgetHit) break outerR;
+              if (!onBottomRow && start.c === R.c && start.r === R.r) continue;
+              const splitsBase = onBottomRow ? splits.filter(([b0]) => b0 === 0) : splits;
+              if (!splitsBase.length) continue;
+              for (let pass = 0; pass < 6; pass++) {
+                if (ctx.budgetHit) break outerR;
+                const firstH0 = pass % 2 === 0;
+                for (const [b0, b1, b2] of splitsBase) {
                   if (ctx.budgetHit) break outerR;
                   let seg0 = null;
                   if (onBottomRow) {
@@ -1302,12 +1487,13 @@
     return winners[Math.floor(rng() * winners.length)];
   }
   function generateBoardLv4Stage(seed, genOpts) {
-    var _a, _b;
+    var _a, _b, _c, _d;
     const rng = createStageRng(seed);
     const { w: W, h: H } = boardSizeForGrade(5);
     const pathable = makeRect(W, H);
     const maxAttempts = 220;
     const rFirst = (genOpts == null ? void 0 : genOpts.lv4GenMode) === "rFirst";
+    const rSecond = (genOpts == null ? void 0 : genOpts.lv4GenMode) === "rSecond";
     const bench = genOpts == null ? void 0 : genOpts.lv4BenchStats;
     if (bench) {
       bench.outerAttemptsUsed = maxAttempts;
@@ -1322,20 +1508,35 @@
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const bottoms = bottomCandidates(pathable);
       const tops = topCandidates(pathable);
-      if (!bottoms.length || !tops.length) return null;
-      const topGoal = rFirst ? (() => {
-        const cx = (W - 1) / 2;
-        const ord = [...tops].sort((a, b) => Math.abs(a.c - cx) - Math.abs(b.c - cx));
-        return ord[attempt % ord.length];
-      })() : tops[Math.floor(rng() * tops.length)];
-      if (bench && rFirst) {
-        bench.rFirstPolyCalls = 0;
-        bench.rFirstBfsPruned = 0;
-        bench.rFirstComboCacheSkips = 0;
-        bench.rFirstBudgetExhausted = 0;
-        bench.rFirstLastTryR = 0;
+      if (!bottoms.length) return null;
+      if (!rSecond && !tops.length) return null;
+      let path = null;
+      if (rSecond) {
+        const gCell = pickRSecondGoalCell(pathable, rng);
+        if (!gCell) continue;
+        if (bench) {
+          bench.rFirstPolyCalls = 0;
+          bench.rFirstBfsPruned = 0;
+          bench.rFirstComboCacheSkips = 0;
+          bench.rFirstBudgetExhausted = 0;
+          bench.rFirstLastTryR = 0;
+        }
+        path = (_b = (_a = tryConstructGrade3PathRSecondN1(pathable, gCell, rng, bench)) == null ? void 0 : _a.path) != null ? _b : null;
+      } else {
+        const topGoal = rFirst ? (() => {
+          const cx = (W - 1) / 2;
+          const ord = [...tops].sort((a, b) => Math.abs(a.c - cx) - Math.abs(b.c - cx));
+          return ord[attempt % ord.length];
+        })() : tops[Math.floor(rng() * tops.length)];
+        if (bench && rFirst) {
+          bench.rFirstPolyCalls = 0;
+          bench.rFirstBfsPruned = 0;
+          bench.rFirstComboCacheSkips = 0;
+          bench.rFirstBudgetExhausted = 0;
+          bench.rFirstLastTryR = 0;
+        }
+        path = rFirst ? (_d = (_c = tryConstructGrade3PathRFirstN1(pathable, topGoal, rng, bench)) == null ? void 0 : _c.path) != null ? _d : null : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)], topGoal, rng);
       }
-      const path = rFirst ? (_b = (_a = tryConstructGrade3PathRFirstN1(pathable, topGoal, rng, bench)) == null ? void 0 : _a.path) != null ? _b : null : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)], topGoal, rng);
       if (!path) {
         if (bench) bench.rejectedNoPath++;
         continue;

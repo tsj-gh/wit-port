@@ -131,16 +131,16 @@ function reflectShotWorkerGenOptsForConsumerGrade(
   isDevTj: boolean,
   isDebugMode: boolean,
   debugGrade2Bend6MidSlider: number,
-  debugLv4GenMode: "default" | "rFirst"
+  debugLv4GenMode: "default" | "rFirst" | "rSecond"
 ): {
   grade2Bend6TotalBends?: 6 | 7 | 8;
   debugReflecShotConsole?: boolean;
-  lv4GenMode?: "default" | "rFirst";
+  lv4GenMode?: "default" | "rFirst" | "rSecond";
 } | undefined {
   const o: {
     grade2Bend6TotalBends?: 6 | 7 | 8;
     debugReflecShotConsole?: boolean;
-    lv4GenMode?: "default" | "rFirst";
+    lv4GenMode?: "default" | "rFirst" | "rSecond";
   } = {};
   if (consumerGrade === 4 && isDevTj && isDebugMode) {
     const n = debugGrade2Bend6MidSlider + 4;
@@ -148,6 +148,9 @@ function reflectShotWorkerGenOptsForConsumerGrade(
   }
   if (consumerGrade >= 5 && isDevTj && isDebugMode && debugLv4GenMode === "rFirst") {
     o.lv4GenMode = "rFirst";
+  }
+  if (consumerGrade >= 5 && isDevTj && isDebugMode && debugLv4GenMode === "rSecond") {
+    o.lv4GenMode = "rSecond";
   }
   if (isDevTj && isDebugMode) {
     o.debugReflecShotConsole = true;
@@ -188,8 +191,8 @@ export default function ReflecShotGame() {
   const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(3.5);
   /** devtj+DEBUG ON・G2 のみ Worker に渡す。2〜4 → 全体目標折れ 6〜8（`+4`）。 */
   const [debugGrade2Bend6MidSlider, setDebugGrade2Bend6MidSlider] = useState(3);
-  /** devtj+DEBUG ON・Grade5+: Lv.4 生成。`rFirst` のとき Worker に `lv4GenMode` を送る（Default は従来 `tryConstructGrade3Path`）。 */
-  const [debugLv4GenMode, setDebugLv4GenMode] = useState<"default" | "rFirst">("default");
+  /** devtj+DEBUG ON・Grade5+: Lv.4 生成。`rFirst` / `rSecond` のとき Worker に `lv4GenMode` を送る。 */
+  const [debugLv4GenMode, setDebugLv4GenMode] = useState<"default" | "rFirst" | "rSecond">("default");
   const [hashInput, setHashInput] = useState("");
   const [layoutNonce, setLayoutNonce] = useState(0);
   const [stockPrefetchPaused, setStockPrefetchPaused] = useState(false);
@@ -284,8 +287,9 @@ export default function ReflecShotGame() {
     }
 
     const skipStockForG2Debug = grade === 4 && isDevTj && isDebugMode;
-    const skipStockForG5RFirst = grade === 5 && isDevTj && isDebugMode && debugLv4GenMode === "rFirst";
-    const fromStock = skipStockForG2Debug || skipStockForG5RFirst ? null : takeBoardForGrade(grade);
+    const skipStockForG5AltLv4 =
+      grade === 5 && isDevTj && isDebugMode && (debugLv4GenMode === "rFirst" || debugLv4GenMode === "rSecond");
+    const fromStock = skipStockForG2Debug || skipStockForG5AltLv4 ? null : takeBoardForGrade(grade);
     if (fromStock) {
       nextBoardSourceRef.current = "stock";
       pendingRestoreRef.current = fromStock;
@@ -399,8 +403,9 @@ export default function ReflecShotGame() {
   const goNextProblem = useCallback(() => {
     if (phase !== "won") return;
     const skipStockForG2Debug = grade === 4 && isDevTj && isDebugMode;
-    const skipStockForG5RFirst = grade === 5 && isDevTj && isDebugMode && debugLv4GenMode === "rFirst";
-    const next = skipStockForG2Debug || skipStockForG5RFirst ? null : takeBoardForGrade(grade);
+    const skipStockForG5AltLv4 =
+      grade === 5 && isDevTj && isDebugMode && (debugLv4GenMode === "rFirst" || debugLv4GenMode === "rSecond");
+    const next = skipStockForG2Debug || skipStockForG5AltLv4 ? null : takeBoardForGrade(grade);
     if (next) {
       nextBoardSourceRef.current = "stock";
       pendingRestoreRef.current = next;
@@ -884,6 +889,17 @@ export default function ReflecShotGame() {
                       }`}
                     >
                       R-First
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDebugLv4GenMode("rSecond")}
+                      className={`rounded border px-2 py-0.5 text-[10px] ${
+                        debugLv4GenMode === "rSecond"
+                          ? "border-violet-400 bg-violet-500/25 text-violet-100"
+                          : "border-white/20 text-slate-400"
+                      }`}
+                    >
+                      R-Second
                     </button>
                   </div>
                 </div>
