@@ -191,17 +191,29 @@ function rightEdgeGoalCandidates(pathable: boolean[][]): CellCoord[] {
 }
 
 /** R-Second: 上辺・左端・右端のいずれかからゴールセルを 1 つ乱択 */
-function pickRSecondGoalCell(pathable: boolean[][], rng: () => number): CellCoord | null {
+function pickRSecondGoalCell(
+  pathable: boolean[][],
+  rng: () => number,
+  trace?: string[] | null
+): CellCoord | null {
   const tops = topCandidates(pathable);
   const lefts = leftEdgeGoalCandidates(pathable);
   const rights = rightEdgeGoalCandidates(pathable);
-  const pools: CellCoord[][] = [];
-  if (tops.length) pools.push(tops);
-  if (lefts.length) pools.push(lefts);
-  if (rights.length) pools.push(rights);
+  const pools: { tag: string; arr: CellCoord[] }[] = [];
+  if (tops.length) pools.push({ tag: "top", arr: tops });
+  if (lefts.length) pools.push({ tag: "left", arr: lefts });
+  if (rights.length) pools.push({ tag: "right", arr: rights });
   if (!pools.length) return null;
-  const arr = pools[Math.floor(rng() * pools.length)]!;
-  return arr[Math.floor(rng() * arr.length)]!;
+  const pickPi = Math.floor(rng() * pools.length);
+  const { tag, arr } = pools[pickPi]!;
+  const pickGi = Math.floor(rng() * arr.length);
+  const goal = arr[pickGi]!;
+  if (trace) {
+    trace.push(
+      `pickGoal: |top|=${tops.length} |left|=${lefts.length} |right|=${rights.length} → pool[${pickPi}]="${tag}" (${pools.length} pools) → index ${pickGi}/${arr.length} → goal=(${goal.c},${goal.r})`
+    );
+  }
+  return goal;
 }
 
 function findSimplePath(
@@ -1085,7 +1097,8 @@ function tryConstructGrade3PathRSecondN1(
   pathable: boolean[][],
   goal: CellCoord,
   rng: () => number,
-  bench?: ReflectShotLv4BenchStats | null
+  bench?: ReflectShotLv4BenchStats | null,
+  trace?: string[] | null
 ): { path: CellCoord[]; start: CellCoord } | null {
   const w = pathable.length;
   const h = pathable[0]!.length;
@@ -1238,6 +1251,30 @@ function tryConstructGrade3PathRSecondN1(
                 if (!grade3RevisitOneCellRule(path, onBottomRow ? { implicitBeforeFirstR: P1 } : undefined))
                   continue;
                 writeBench(tryR);
+                if (trace) {
+                  const pairKind = dirsEqual(dOut1, dIn2)
+                    ? "same-axis(2+2t)"
+                    : dirsEqual(dOut1, negateDir(dIn2))
+                      ? "opposite(4+2t)"
+                      : orthogonalDirs(dOut1, dIn2)
+                        ? "orthogonal(3+2t)"
+                        : "?";
+                  trace.push(
+                    `RSecond path OK: tryR=${tryR} R=(${R.c},${R.r}) onBottomRow=${onBottomRow} dIn1=${dirKeyShort(dIn1)} dOut1=${dirKeyShort(dOut1)} dIn2=${dirKeyShort(dIn2)} dOut2=${dirKeyShort(dOut2)} oi=${oi} pairRS21=${pairKind} bumper=${sol}`
+                  );
+                  trace.push(
+                    `  RS2 splits allowed (b0+b1+b2=4, RS2-1 on b1): ${splitsValid.map((t) => `(${t[0]},${t[1]},${t[2]})`).join(" ")} (count=${splitsValid.length})`
+                  );
+                  trace.push(
+                    `  P1=(${P1.c},${P1.r}) S1=(${S1.c},${S1.r}) P2=(${P2.c},${P2.r}) S2=(${S2.c},${S2.r})`
+                  );
+                  trace.push(
+                    `  split (b0,b1,b2)=(${b0},${b1},${b2}) pass=${pass} firstH0(seg0)=${firstH0} firstH1(seg1)=${firstH1} firstH2(seg2)=${firstH2} start=(${start.c},${start.r})`
+                  );
+                  trace.push(
+                    `  polyAttemptsThisConstruction=${ctx.polyCalls} failedComboSizeBeforeAdd=${failedCombo.size}`
+                  );
+                }
                 return { path, start: onBottomRow ? R : start };
               }
             }
@@ -1250,6 +1287,11 @@ function tryConstructGrade3PathRSecondN1(
   }
 
   writeBench(Math.max(0, lastTryRAt));
+  if (trace) {
+    trace.push(
+      `tryConstructGrade3PathRSecondN1 end: no path. lastTryR=${lastTryRAt}/${tryRLimit - 1} failedComboKeys=${failedCombo.size} budgetHit=${ctx.budgetHit} polyCalls=${ctx.polyCalls}`
+    );
+  }
   return null;
 }
 
@@ -1875,6 +1917,10 @@ export type ReflectShotPolylineGenOpts = {
    * ベンチ・診断用: 参照が渡されたときのみ、`generateBoardLv4Stage` の 1 呼び出し内で集計を書き込む。
    */
   lv4BenchStats?: ReflectShotLv4BenchStats;
+  /**
+   * 診断用: 渡した配列に R-Second 生成の主要ログを追記する（`lv4GenMode: "rSecond"` 時）。
+   */
+  lv4RSecondTrace?: string[];
 };
 
 /** Grade2・折れ6（高速化）: フック＋DFS 尾で経路を生成 */
@@ -2442,6 +2488,9 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
   const markBenchSuccess = (attempt: number) => {
     if (bench) bench.outerAttemptsUsed = attempt + 1;
   };
+  const rSecondTrace = genOpts?.lv4RSecondTrace;
+  if (rSecondTrace) rSecondTrace.length = 0;
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const bottoms = bottomCandidates(pathable);
     const tops = topCandidates(pathable);
@@ -2451,7 +2500,12 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
     let path: CellCoord[] | null = null;
 
     if (rSecond) {
-      const gCell = pickRSecondGoalCell(pathable, rng);
+      if (rSecondTrace) {
+        rSecondTrace.push(
+          `=== Lv4 outer attempt ${attempt + 1}/${maxAttempts} (rejectedNoPath=${bench?.rejectedNoPath ?? 0} rejectedPick=${bench?.rejectedPickOrient ?? 0}) ===`
+        );
+      }
+      const gCell = pickRSecondGoalCell(pathable, rng, rSecondTrace);
       if (!gCell) continue;
       if (bench) {
         bench.rFirstPolyCalls = 0;
@@ -2460,7 +2514,16 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
         bench.rFirstBudgetExhausted = 0;
         bench.rFirstLastTryR = 0;
       }
-      path = tryConstructGrade3PathRSecondN1(pathable, gCell, rng, bench)?.path ?? null;
+      const built = tryConstructGrade3PathRSecondN1(pathable, gCell, rng, bench, rSecondTrace);
+      path = built?.path ?? null;
+      if (path && rSecondTrace && built) {
+        rSecondTrace.push(
+          `polyline OK: len=${path.length} logicalStart=(${built.start.c},${built.start.r}) rightAngles=${countRightAngles(path)}`
+        );
+      }
+      if (!path && rSecondTrace) {
+        rSecondTrace.push(`polyline construction → null for this goal`);
+      }
     } else {
       const topGoal = rFirst
         ? (() => {
@@ -2487,7 +2550,13 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
     const picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
     if (!picked) {
       if (bench) bench.rejectedPickOrient++;
+      if (rSecond && rSecondTrace) rSecondTrace.push(`pickGrade2OrientedStage → null (orientation/pads/bumpers)`);
       continue;
+    }
+    if (rSecond && rSecondTrace) {
+      rSecondTrace.push(
+        `pickGrade2OrientedStage OK: rotation picks start=(${picked.start.c},${picked.start.r}) goal=(${picked.goal.c},${picked.goal.r}) padLabel=${picked.grade2PadAdjustLabel ?? "none"}`
+      );
     }
 
     let solutionPath = picked.solutionPath;
@@ -2507,6 +2576,7 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
     );
     if (ge.kind === "discard") {
       if (bench) bench.rejectedExtendDiscard++;
+      if (rSecond && rSecondTrace) rSecondTrace.push("maybeExtendStartForGoalUpsideDown: discard");
       continue;
     }
 
@@ -2557,6 +2627,11 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
       bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       shuffleWrongDisplay(dup, rng);
       markBenchSuccess(attempt);
+      if (rSecond && rSecondTrace) {
+        rSecondTrace.push(
+          `FINAL BOARD: extended start path len=${solutionPath.length} reflecSourceStartExtended=true outerAttemptsUsed=${attempt + 1}`
+        );
+      }
       return {
         width: picked.width,
         height: picked.height,
@@ -2578,6 +2653,11 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
     picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
     shuffleWrongDisplay(dup, rng);
     markBenchSuccess(attempt);
+    if (rSecond && rSecondTrace) {
+      rSecondTrace.push(
+        `FINAL BOARD: no start extend path len=${picked.solutionPath.length} outerAttemptsUsed=${attempt + 1}`
+      );
+    }
     return {
       width: picked.width,
       height: picked.height,
