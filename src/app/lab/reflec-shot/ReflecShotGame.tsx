@@ -248,6 +248,26 @@ export default function ReflecShotGame() {
     [grade, isDevTj, isDebugMode, debugGrade2Bend6MidSlider, debugLv4GenMode]
   );
 
+  /** 盤ロード effect は seed / layoutNonce のみで起動。Grade 変更だけでは走らせない（常に最新値は ref から読む） */
+  const boardLoadContextRef = useRef({
+    grade,
+    workerGenOpts,
+    isDevTj,
+    isDebugMode,
+    debugLv4GenMode,
+    generateStageInWorker,
+    takeBoardForGrade,
+  });
+  boardLoadContextRef.current = {
+    grade,
+    workerGenOpts,
+    isDevTj,
+    isDebugMode,
+    debugLv4GenMode,
+    generateStageInWorker,
+    takeBoardForGrade,
+  };
+
   useEffect(() => {
     const prev = debugPrevBoardRef.current;
     debugPrevBoardRef.current = { grade, seed };
@@ -286,10 +306,20 @@ export default function ReflecShotGame() {
       return;
     }
 
-    const skipStockForG2Debug = grade === 4 && isDevTj && isDebugMode;
-    const skipStockForG5AltLv4 =
-      grade === 5 && isDevTj && isDebugMode && (debugLv4GenMode === "rFirst" || debugLv4GenMode === "rSecond");
-    const fromStock = skipStockForG2Debug || skipStockForG5AltLv4 ? null : takeBoardForGrade(grade);
+    const ctx = boardLoadContextRef.current;
+    const {
+      grade: g,
+      workerGenOpts: opts,
+      isDevTj: devTj,
+      isDebugMode: dbg,
+      debugLv4GenMode: lv4m,
+      generateStageInWorker: gen,
+      takeBoardForGrade: take,
+    } = ctx;
+
+    const skipStockForG2Debug = g === 4 && devTj && dbg;
+    const skipStockForG5AltLv4 = g === 5 && devTj && dbg && (lv4m === "rFirst" || lv4m === "rSecond");
+    const fromStock = skipStockForG2Debug || skipStockForG5AltLv4 ? null : take(g);
     if (fromStock) {
       nextBoardSourceRef.current = "stock";
       pendingRestoreRef.current = fromStock;
@@ -303,9 +333,9 @@ export default function ReflecShotGame() {
     setStatusMsg("盤面を準備中…");
     (async () => {
       try {
-        const { stage } = await generateStageInWorker(grade, seed, workerGenOpts);
+        const { stage: loaded } = await gen(g, seed, opts);
         if (cancelled) return;
-        const cloned = cloneGridStageForRestore(stage);
+        const cloned = cloneGridStageForRestore(loaded);
         setBoardDisplaySource("generated");
         setStage(cloned);
         setPhase("edit");
@@ -328,17 +358,9 @@ export default function ReflecShotGame() {
     return () => {
       cancelled = true;
     };
-  }, [
-    grade,
-    seed,
-    layoutNonce,
-    generateStageInWorker,
-    takeBoardForGrade,
-    workerGenOpts,
-    isDevTj,
-    isDebugMode,
-    debugLv4GenMode,
-  ]);
+    // 意図: Grade プルダウンのみの変更では再生成しない（seed / layoutNonce / 保留復元のみトリガー）
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- boardLoadContextRef が最新 grade / opts を保持
+  }, [seed, layoutNonce]);
 
   const currentStageHash = useMemo(
     () => (stage ? encodeReflecStageHash(stage) : ""),
@@ -1023,7 +1045,8 @@ export default function ReflecShotGame() {
             disabled={isGenerating || boardLoadWait}
             onChange={(e) => {
               setGrade(Number(e.target.value));
-              setSeed((Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0);
+              setPhase("edit");
+              setStatusMsg("");
             }}
           >
             {[1, 2, 3, 4, 5].map((g) => (
