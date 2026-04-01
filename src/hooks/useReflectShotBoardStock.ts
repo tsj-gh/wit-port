@@ -64,7 +64,10 @@ export function useReflectShotBoardStock(
       for (let i = 0; i < need; i++) {
         inFlightByGradeRef.current[g] = (inFlightByGradeRef.current[g] ?? 0) + 1;
         const seed = randomSeed() ^ (i * 0x9e3779b9);
-        void generate(g, seed >>> 0, { source: "prefetch" })
+        void generate(g, seed >>> 0, {
+          source: "prefetch",
+          ...(g === 5 ? ({ lv4GenMode: "rSecond" as const } as const) : {}),
+        })
           .then(({ stage }) => {
             inFlightByGradeRef.current[g] = Math.max(0, (inFlightByGradeRef.current[g] ?? 0) - 1);
             stockRef.current[g]!.push(stage);

@@ -2646,8 +2646,10 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
   const { w: W, h: H } = boardSizeForGrade(5);
   const pathable = makeRect(W, H);
   const maxAttempts = 220;
-  const rFirst = genOpts?.lv4GenMode === "rFirst";
-  const rSecond = genOpts?.lv4GenMode === "rSecond";
+  /** Grade5 既定は R-Second。明示 `default` のときのみ従来の `tryConstructGrade3Path` 系 */
+  const lv4Mode = genOpts?.lv4GenMode ?? "rSecond";
+  const rFirst = lv4Mode === "rFirst";
+  const rSecond = lv4Mode === "rSecond";
   const bench = genOpts?.lv4BenchStats;
   if (bench) {
     bench.outerAttemptsUsed = maxAttempts;

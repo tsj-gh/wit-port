@@ -1627,13 +1627,14 @@
     return winners[Math.floor(rng() * winners.length)];
   }
   function generateBoardLv4Stage(seed, genOpts) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g;
     const rng = createStageRng(seed);
     const { w: W, h: H } = boardSizeForGrade(5);
     const pathable = makeRect(W, H);
     const maxAttempts = 220;
-    const rFirst = (genOpts == null ? void 0 : genOpts.lv4GenMode) === "rFirst";
-    const rSecond = (genOpts == null ? void 0 : genOpts.lv4GenMode) === "rSecond";
+    const lv4Mode = (_a = genOpts == null ? void 0 : genOpts.lv4GenMode) != null ? _a : "rSecond";
+    const rFirst = lv4Mode === "rFirst";
+    const rSecond = lv4Mode === "rSecond";
     const bench = genOpts == null ? void 0 : genOpts.lv4BenchStats;
     if (bench) {
       bench.outerAttemptsUsed = maxAttempts;
@@ -1656,7 +1657,7 @@
       if (rSecond) {
         if (rSecondTrace) {
           rSecondTrace.push(
-            `=== Lv4 outer attempt ${attempt + 1}/${maxAttempts} (rejectedNoPath=${(_a = bench == null ? void 0 : bench.rejectedNoPath) != null ? _a : 0} rejectedPick=${(_b = bench == null ? void 0 : bench.rejectedPickOrient) != null ? _b : 0}) ===`
+            `=== Lv4 outer attempt ${attempt + 1}/${maxAttempts} (rejectedNoPath=${(_b = bench == null ? void 0 : bench.rejectedNoPath) != null ? _b : 0} rejectedPick=${(_c = bench == null ? void 0 : bench.rejectedPickOrient) != null ? _c : 0}) ===`
           );
         }
         if (bench) {
@@ -1667,7 +1668,7 @@
           bench.rFirstLastTryR = 0;
         }
         const built = tryConstructGrade3PathRSecondN1(pathable, rng, bench, rSecondTrace);
-        path = (_c = built == null ? void 0 : built.path) != null ? _c : null;
+        path = (_d = built == null ? void 0 : built.path) != null ? _d : null;
         if (path && rSecondTrace && built) {
           rSecondTrace.push(
             `polyline OK: len=${path.length} logicalStart=(${built.start.c},${built.start.r}) rightAngles=${countRightAngles(path)}`
@@ -1689,7 +1690,7 @@
           bench.rFirstBudgetExhausted = 0;
           bench.rFirstLastTryR = 0;
         }
-        path = rFirst ? (_e = (_d = tryConstructGrade3PathRFirstN1(pathable, topGoal, rng, bench)) == null ? void 0 : _d.path) != null ? _e : null : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)], topGoal, rng);
+        path = rFirst ? (_f = (_e = tryConstructGrade3PathRFirstN1(pathable, topGoal, rng, bench)) == null ? void 0 : _e.path) != null ? _f : null : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)], topGoal, rng);
       }
       if (!path) {
         if (bench) bench.rejectedNoPath++;
@@ -1703,7 +1704,7 @@
       }
       if (rSecond && rSecondTrace) {
         rSecondTrace.push(
-          `pickGrade2OrientedStage OK: rotation picks start=(${picked.start.c},${picked.start.r}) goal=(${picked.goal.c},${picked.goal.r}) padLabel=${(_f = picked.grade2PadAdjustLabel) != null ? _f : "none"}`
+          `pickGrade2OrientedStage OK: rotation picks start=(${picked.start.c},${picked.start.r}) goal=(${picked.goal.c},${picked.goal.r}) padLabel=${(_g = picked.grade2PadAdjustLabel) != null ? _g : "none"}`
         );
       }
       let solutionPath = picked.solutionPath;

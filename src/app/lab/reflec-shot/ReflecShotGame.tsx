@@ -146,11 +146,14 @@ function reflectShotWorkerGenOptsForConsumerGrade(
     const n = debugGrade2Bend6MidSlider + 4;
     o.grade2Bend6TotalBends = n === 6 || n === 7 || n === 8 ? n : 7;
   }
-  if (consumerGrade >= 5 && isDevTj && isDebugMode && debugLv4GenMode === "rFirst") {
-    o.lv4GenMode = "rFirst";
-  }
-  if (consumerGrade >= 5 && isDevTj && isDebugMode && debugLv4GenMode === "rSecond") {
-    o.lv4GenMode = "rSecond";
+  if (consumerGrade >= 5) {
+    if (isDevTj && isDebugMode) {
+      if (debugLv4GenMode === "rFirst") o.lv4GenMode = "rFirst";
+      else if (debugLv4GenMode === "default") o.lv4GenMode = "default";
+      else o.lv4GenMode = "rSecond";
+    } else {
+      o.lv4GenMode = "rSecond";
+    }
   }
   if (isDevTj && isDebugMode) {
     o.debugReflecShotConsole = true;
@@ -191,8 +194,8 @@ export default function ReflecShotGame() {
   const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(3.5);
   /** devtj+DEBUG ON・G2 のみ Worker に渡す。2〜4 → 全体目標折れ 6〜8（`+4`）。 */
   const [debugGrade2Bend6MidSlider, setDebugGrade2Bend6MidSlider] = useState(3);
-  /** devtj+DEBUG ON・Grade5+: Lv.4 生成。`rFirst` / `rSecond` のとき Worker に `lv4GenMode` を送る。 */
-  const [debugLv4GenMode, setDebugLv4GenMode] = useState<"default" | "rFirst" | "rSecond">("default");
+  /** devtj+DEBUG ON・Grade5+: Lv.4 生成。既定は R-Second（本番 Grade5 も同様）。 */
+  const [debugLv4GenMode, setDebugLv4GenMode] = useState<"default" | "rFirst" | "rSecond">("rSecond");
   const [hashInput, setHashInput] = useState("");
   const [layoutNonce, setLayoutNonce] = useState(0);
   const [stockPrefetchPaused, setStockPrefetchPaused] = useState(false);
@@ -318,7 +321,7 @@ export default function ReflecShotGame() {
     } = ctx;
 
     const skipStockForG2Debug = g === 4 && devTj && dbg;
-    const skipStockForG5AltLv4 = g === 5 && devTj && dbg && (lv4m === "rFirst" || lv4m === "rSecond");
+    const skipStockForG5AltLv4 = g === 5 && devTj && dbg && (lv4m === "rFirst" || lv4m === "default");
     const fromStock = skipStockForG2Debug || skipStockForG5AltLv4 ? null : take(g);
     if (fromStock) {
       nextBoardSourceRef.current = "stock";
@@ -426,7 +429,7 @@ export default function ReflecShotGame() {
     if (phase !== "won") return;
     const skipStockForG2Debug = grade === 4 && isDevTj && isDebugMode;
     const skipStockForG5AltLv4 =
-      grade === 5 && isDevTj && isDebugMode && (debugLv4GenMode === "rFirst" || debugLv4GenMode === "rSecond");
+      grade === 5 && isDevTj && isDebugMode && (debugLv4GenMode === "rFirst" || debugLv4GenMode === "default");
     const next = skipStockForG2Debug || skipStockForG5AltLv4 ? null : takeBoardForGrade(grade);
     if (next) {
       nextBoardSourceRef.current = "stock";
