@@ -1282,6 +1282,9 @@ function tryConstructGrade3PathRSecondN1(
     bfsPruned: 0,
     budgetHit: false,
   };
+  /** 中脚「長」モードの追加乱択回数／短・長両立時に長を選ぶ確率（再訪ループ経路長の偏り低減） */
+  const rSecondMiddleLongPolyTries = 12;
+  const rSecondMiddlePreferLongWhenBoth = 0.58;
   const failedCombo = new Set<string>();
 
   const writeBench = (lastTryR: number) => {
@@ -1385,27 +1388,59 @@ function tryConstructGrade3PathRSecondN1(
                 }
 
                 const b1Open = rSecondMiddleOpenPolylineBends(b1);
-                let okLeg1 = false;
+                let okLeg1Short = false;
+                let okLeg1Long = false;
                 for (const fh of [true, false] as const) {
-                  if (!orthoPolylineSplitImpossible(S1, P2, b1Open, fh)) {
-                    okLeg1 = true;
-                    break;
-                  }
+                  if (!orthoPolylineSplitImpossible(S1, P2, b1Open, fh)) okLeg1Short = true;
+                  if (!orthoPolylineSplitImpossible(S1, P2, b1, fh)) okLeg1Long = true;
                 }
-                if (!okLeg1) continue;
+                if (!okLeg1Short && !okLeg1Long) continue;
 
                 const nextAttempts1 = rSecondArmTipNextAttempts(S1, R, dOut1, pathable, w, h, rng);
-                const seg1u = tryOrthogonalRSecondLegFromR(
-                  R,
-                  S1,
-                  P2,
-                  b1Open,
-                  pathable,
-                  rng,
-                  ctx,
-                  nextAttempts1
-                );
-                if (ctx.budgetHit) break outerR;
+                const rKey = keyCell(R.c, R.r);
+                const middleLegNoR = (u: CellCoord[]) =>
+                  !u.slice(1).some((p) => keyCell(p.c, p.r) === rKey);
+
+                let candShort: CellCoord[] | null = null;
+                if (okLeg1Short) {
+                  const u = tryOrthogonalRSecondLegFromR(
+                    R,
+                    S1,
+                    P2,
+                    b1Open,
+                    pathable,
+                    rng,
+                    ctx,
+                    nextAttempts1
+                  );
+                  if (ctx.budgetHit) break outerR;
+                  if (u && middleLegNoR(u)) candShort = u;
+                }
+
+                let candLong: CellCoord[] | null = null;
+                if (okLeg1Long) {
+                  for (let lt = 0; lt < rSecondMiddleLongPolyTries && !candLong; lt++) {
+                    const u = tryOrthogonalRSecondLegFromR(
+                      R,
+                      S1,
+                      P2,
+                      b1,
+                      pathable,
+                      rng,
+                      ctx,
+                      nextAttempts1
+                    );
+                    if (ctx.budgetHit) break outerR;
+                    if (u && middleLegNoR(u)) candLong = u;
+                  }
+                }
+
+                let seg1u: CellCoord[] | null = null;
+                if (candShort && candLong) {
+                  seg1u = rng() < rSecondMiddlePreferLongWhenBoth ? candLong : candShort;
+                } else {
+                  seg1u = candLong ?? candShort;
+                }
                 if (!seg1u) continue;
                 const seg1 = seg1u.slice(1);
 

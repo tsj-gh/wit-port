@@ -906,6 +906,8 @@
       bfsPruned: 0,
       budgetHit: false
     };
+    const rSecondMiddleLongPolyTries = 12;
+    const rSecondMiddlePreferLongWhenBoth = 0.58;
     const failedCombo = /* @__PURE__ */ new Set();
     const writeBench = (lastTryR) => {
       if (!bench) return;
@@ -992,26 +994,54 @@
                     if (!seg0) continue;
                   }
                   const b1Open = rSecondMiddleOpenPolylineBends(b1);
-                  let okLeg1 = false;
+                  let okLeg1Short = false;
+                  let okLeg1Long = false;
                   for (const fh of [true, false]) {
-                    if (!orthoPolylineSplitImpossible(S1, P2, b1Open, fh)) {
-                      okLeg1 = true;
-                      break;
+                    if (!orthoPolylineSplitImpossible(S1, P2, b1Open, fh)) okLeg1Short = true;
+                    if (!orthoPolylineSplitImpossible(S1, P2, b1, fh)) okLeg1Long = true;
+                  }
+                  if (!okLeg1Short && !okLeg1Long) continue;
+                  const nextAttempts1 = rSecondArmTipNextAttempts(S1, R, dOut1, pathable, w, h, rng);
+                  const rKey = keyCell(R.c, R.r);
+                  const middleLegNoR = (u) => !u.slice(1).some((p) => keyCell(p.c, p.r) === rKey);
+                  let candShort = null;
+                  if (okLeg1Short) {
+                    const u = tryOrthogonalRSecondLegFromR(
+                      R,
+                      S1,
+                      P2,
+                      b1Open,
+                      pathable,
+                      rng,
+                      ctx,
+                      nextAttempts1
+                    );
+                    if (ctx.budgetHit) break outerR;
+                    if (u && middleLegNoR(u)) candShort = u;
+                  }
+                  let candLong = null;
+                  if (okLeg1Long) {
+                    for (let lt = 0; lt < rSecondMiddleLongPolyTries && !candLong; lt++) {
+                      const u = tryOrthogonalRSecondLegFromR(
+                        R,
+                        S1,
+                        P2,
+                        b1,
+                        pathable,
+                        rng,
+                        ctx,
+                        nextAttempts1
+                      );
+                      if (ctx.budgetHit) break outerR;
+                      if (u && middleLegNoR(u)) candLong = u;
                     }
                   }
-                  if (!okLeg1) continue;
-                  const nextAttempts1 = rSecondArmTipNextAttempts(S1, R, dOut1, pathable, w, h, rng);
-                  const seg1u = tryOrthogonalRSecondLegFromR(
-                    R,
-                    S1,
-                    P2,
-                    b1Open,
-                    pathable,
-                    rng,
-                    ctx,
-                    nextAttempts1
-                  );
-                  if (ctx.budgetHit) break outerR;
+                  let seg1u = null;
+                  if (candShort && candLong) {
+                    seg1u = rng() < rSecondMiddlePreferLongWhenBoth ? candLong : candShort;
+                  } else {
+                    seg1u = candLong != null ? candLong : candShort;
+                  }
                   if (!seg1u) continue;
                   const seg1 = seg1u.slice(1);
                   const prefixPathCanonical = onBottomRow ? [R, ...seg1, R] : [...seg0, R, ...seg1, R];
