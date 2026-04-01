@@ -522,6 +522,23 @@
     }
     return { path: newPath, pathable: newPathable, w: nw, h: nh };
   }
+  function transformCellByKQuarters(cell, k, w0, h0) {
+    let c = cell.c;
+    let r = cell.r;
+    let w = w0;
+    let h = h0;
+    for (let i = 0; i < k; i++) {
+      const nc = r;
+      const nr = w - 1 - c;
+      c = nc;
+      r = nr;
+      const nw = h;
+      const nh = w;
+      w = nw;
+      h = nh;
+    }
+    return { c, r };
+  }
   function grade1NoRevisit(path) {
     const seen = /* @__PURE__ */ new Set();
     for (const p of path) {
@@ -990,46 +1007,74 @@
                   if (ctx.budgetHit) break outerR;
                   if (!seg1u) continue;
                   const seg1 = seg1u.slice(1);
-                  const edgeGoals = rSecondFeasibleEdgeGoalsForS2(pathable, S2, b2);
-                  if (!edgeGoals.length) continue;
-                  const edgeOrder = [...edgeGoals];
-                  shuffleArrayInPlace(edgeOrder, rng);
-                  const prefixPath = onBottomRow ? [R, ...seg1, R] : [...seg0, R, ...seg1, R];
-                  let seg2 = null;
-                  for (const gCell of edgeOrder) {
-                    if (ctx.budgetHit) break outerR;
-                    const nextAttempts2 = rSecondArmTipNextAttempts(S2, R, dOut2, pathable, w, h, rng);
-                    const seg2u = tryOrthogonalRSecondLegFromR(R, S2, gCell, b2, pathable, rng, ctx, nextAttempts2);
-                    if (ctx.budgetHit) break outerR;
-                    if (!seg2u) continue;
-                    const seg2cand = seg2u.slice(1);
-                    if (rSecondExitLegHardViolation(prefixPath, seg2cand, pathable, w, h)) {
+                  const prefixPathCanonical = onBottomRow ? [R, ...seg1, R] : [...seg0, R, ...seg1, R];
+                  const boardW = w;
+                  const boardH = h;
+                  const ks = [0, 1, 2, 3].sort(() => rng() - 0.5);
+                  let orientSnap = null;
+                  orientK: for (const k of ks) {
+                    let pb = pathable.map((col) => [...col]);
+                    let pref = prefixPathCanonical.map((x) => __spreadValues({}, x));
+                    let pw = boardW;
+                    let ph = boardH;
+                    for (let i = 0; i < k; i++) {
+                      const nx = applyQuarterCCWPathable(pb, pref, pw, ph);
+                      pb = nx.pathable;
+                      pref = nx.path;
+                      pw = nx.w;
+                      ph = nx.h;
+                    }
+                    const fsK = pathFirstStepDir(pref);
+                    if (!fsK || !dirsEqual(fsK, DIR.U)) continue orientK;
+                    const Rt = pref[pref.length - 1];
+                    const S2t = transformCellByKQuarters(S2, k, boardW, boardH);
+                    const dArm = unitStepDir(S2t.c - Rt.c, S2t.r - Rt.r);
+                    if (!dArm) continue orientK;
+                    const edgeGoals = rSecondFeasibleEdgeGoalsForS2(pb, S2t, b2);
+                    if (!edgeGoals.length) continue orientK;
+                    const edgeOrder = [...edgeGoals];
+                    shuffleArrayInPlace(edgeOrder, rng);
+                    const nextAttempts2 = rSecondArmTipNextAttempts(S2t, Rt, dArm, pb, pw, ph, rng);
+                    for (const gCell of edgeOrder) {
+                      if (ctx.budgetHit) break outerR;
+                      const seg2u = tryOrthogonalRSecondLegFromR(Rt, S2t, gCell, b2, pb, rng, ctx, nextAttempts2);
+                      if (ctx.budgetHit) break outerR;
+                      if (!seg2u) continue;
+                      const seg2cand = seg2u.slice(1);
+                      if (rSecondExitLegHardViolation(pref, seg2cand, pb, pw, ph)) {
+                        if (trace) {
+                          trace.push(
+                            `RSecond seg2 hard violation \u2192 redo from next R (prefix\u2194exit or bend/bottom), tried edge goal=(${gCell.c},${gCell.r}) k=${k}`
+                          );
+                        }
+                        continue outerR;
+                      }
+                      const gEnd = seg2cand[seg2cand.length - 1];
+                      if (gEnd.c !== gCell.c || gEnd.r !== gCell.r) continue;
+                      if (!rSecondGoalOnTopLeftOrRightEdge(gEnd, pw, ph)) continue;
+                      const fullPathT = [...pref, ...seg2cand];
+                      if (countRightAngles(fullPathT) !== 6) continue;
+                      const implicitP1 = onBottomRow ? transformCellByKQuarters(P1, k, boardW, boardH) : void 0;
+                      if (!grade3RevisitOneCellRule(
+                        fullPathT,
+                        implicitP1 ? { implicitBeforeFirstR: implicitP1 } : void 0
+                      ))
+                        continue;
+                      const snap = finalizeGrade2OrientedAfterRotation(pb, fullPathT, pw, ph, 6, {
+                        relaxBendVisit: true,
+                        requireGoalOnTopLeftRight: true
+                      });
+                      if (!snap) continue;
+                      orientSnap = snap;
                       if (trace) {
                         trace.push(
-                          `RSecond seg2 hard violation \u2192 redo from next R (prefix\u2194exit or bend/bottom), tried edge goal=(${gCell.c},${gCell.r})`
+                          `RSecond seg2 in oriented frame: goal candidate (${gEnd.c},${gEnd.r}) k=${k} before pad norm`
                         );
                       }
-                      continue outerR;
+                      break orientK;
                     }
-                    const gEnd = seg2cand[seg2cand.length - 1];
-                    if (gEnd.c !== gCell.c || gEnd.r !== gCell.r) continue;
-                    if (!rSecondGoalOnTopLeftOrRightEdge(gEnd, w, h)) continue;
-                    seg2 = seg2cand;
-                    if (trace) {
-                      trace.push(`RSecond goal deferred: resolved on edge (${gEnd.c},${gEnd.r}) after RS0\u2013RS1`);
-                    }
-                    break;
                   }
-                  if (!seg2) continue;
-                  let path;
-                  if (onBottomRow) path = [R, ...seg1, R, ...seg2];
-                  else {
-                    if (!seg0) continue;
-                    path = [...seg0, R, ...seg1, R, ...seg2];
-                  }
-                  if (countRightAngles(path) !== 6) continue;
-                  if (!grade3RevisitOneCellRule(path, onBottomRow ? { implicitBeforeFirstR: P1 } : void 0))
-                    continue;
+                  if (!orientSnap) continue;
                   writeBench(tryR);
                   if (trace) {
                     const pairKind = dirsEqual(dOut1, dIn2) ? "same-axis(2+2t)" : dirsEqual(dOut1, negateDir(dIn2)) ? "opposite(4+2t)" : orthogonalDirs(dOut1, dIn2) ? "orthogonal(3+2t)" : "?";
@@ -1040,7 +1085,7 @@
                       `  RS2 splits allowed (b0+b1+b2=4, RS2-1 on b1): ${splitsValid.map((t) => `(${t[0]},${t[1]},${t[2]})`).join(" ")} (count=${splitsValid.length})`
                     );
                     trace.push(
-                      `  P1=(${P1.c},${P1.r}) S1=(${S1.c},${S1.r}) P2=(${P2.c},${P2.r}) S2=(${S2.c},${S2.r})`
+                      `  P1=(${P1.c},${P1.r}) S1=(${S1.c},${S1.r}) P2=(${P2.c},${P2.r}) S2=(${S2.c},${S2.r}) oddG=S2`
                     );
                     trace.push(
                       `  split (b0,b1,b2)=(${b0},${b1},${b2}) pass=${pass} firstH0(seg0)=${firstH0} RS2 legs=middle+exit via R prefix start=(${start.c},${start.r})`
@@ -1048,8 +1093,11 @@
                     trace.push(
                       `  polyAttemptsThisConstruction=${ctx.polyCalls} failedComboSizeBeforeAdd=${failedCombo.size}`
                     );
+                    trace.push(
+                      `  finalized goal (top/left/right on final board)=(${orientSnap.goal.c},${orientSnap.goal.r})`
+                    );
                   }
-                  return { path, start: onBottomRow ? R : start };
+                  return orientSnap;
                 }
               }
             }
@@ -1369,6 +1417,40 @@
     const merged = pathS.concat(path0.slice(1));
     return { kind: "extended", path: merged, start: newStart, startPad: newStartPad };
   }
+  function finalizeGrade2OrientedAfterRotation(pb, p, w, h, bends, opts) {
+    const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h);
+    if (norm.kind === "retry") return null;
+    const pN = norm.path;
+    const padAdjustLabel = norm.label;
+    const start = pN[0];
+    const goal = pN[pN.length - 1];
+    if ((opts == null ? void 0 : opts.requireGoalOnTopLeftRight) && !rSecondGoalOnTopLeftOrRightEdge(goal, w, h)) return null;
+    const startPad = { c: start.c, r: start.r + 1 };
+    const prev = pN[pN.length - 2];
+    const dLast = unitDirBetween(prev, goal);
+    if (!dLast) return null;
+    const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
+    if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, w, h)) return null;
+    const dEntry = unitOrthoDirBetween(startPad, start);
+    if (!dEntry || !dirsEqual(dEntry, DIR.U)) return null;
+    const bendSet = bendCellsInPath(pN);
+    if (!(opts == null ? void 0 : opts.relaxBendVisit) && !grade2BendNoRevisit(pN, bendSet)) return null;
+    const { bumpers, ok } = placeDiagonalBumpersInterior(pN);
+    const needBumpers = (opts == null ? void 0 : opts.relaxBendVisit) ? bendSet.size : bends;
+    if (!ok || bumpers.size !== needBumpers) return null;
+    return {
+      width: w,
+      height: h,
+      pathable: pb,
+      start,
+      goal,
+      startPad,
+      goalPad,
+      solutionPath: pN,
+      bumpers: new Map(bumpers),
+      grade2PadAdjustLabel: padAdjustLabel
+    };
+  }
   function pickGrade2OrientedStage(pathable, path, w0, h0, bends, rng, opts) {
     const winners = [];
     for (let k = 0; k < 4; k++) {
@@ -1385,37 +1467,8 @@
       }
       const fs = pathFirstStepDir(p);
       if (!fs || !dirsEqual(fs, DIR.U)) continue;
-      const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h);
-      if (norm.kind === "retry") continue;
-      p = norm.path;
-      const padAdjustLabel = norm.label;
-      const start = p[0];
-      const goal = p[p.length - 1];
-      const startPad = { c: start.c, r: start.r + 1 };
-      const prev = p[p.length - 2];
-      const dLast = unitDirBetween(prev, goal);
-      if (!dLast) continue;
-      const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
-      if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, w, h)) continue;
-      const dEntry = unitOrthoDirBetween(startPad, start);
-      if (!dEntry || !dirsEqual(dEntry, DIR.U)) continue;
-      const bendSet = bendCellsInPath(p);
-      if (!(opts == null ? void 0 : opts.relaxBendVisit) && !grade2BendNoRevisit(p, bendSet)) continue;
-      const { bumpers, ok } = placeDiagonalBumpersInterior(p);
-      const needBumpers = (opts == null ? void 0 : opts.relaxBendVisit) ? bendSet.size : bends;
-      if (!ok || bumpers.size !== needBumpers) continue;
-      winners.push({
-        width: w,
-        height: h,
-        pathable: pb,
-        start,
-        goal,
-        startPad,
-        goalPad,
-        solutionPath: p,
-        bumpers: new Map(bumpers),
-        grade2PadAdjustLabel: padAdjustLabel
-      });
+      const snap = finalizeGrade2OrientedAfterRotation(pb, p, w, h, bends, opts);
+      if (snap) winners.push(snap);
     }
     if (!winners.length) return null;
     return winners[Math.floor(rng() * winners.length)];
@@ -1627,7 +1680,7 @@
     return winners[Math.floor(rng() * winners.length)];
   }
   function generateBoardLv4Stage(seed, genOpts) {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f;
     const rng = createStageRng(seed);
     const { w: W, h: H } = boardSizeForGrade(5);
     const pathable = makeRect(W, H);
@@ -1653,7 +1706,7 @@
       const tops = topCandidates(pathable);
       if (!bottoms.length) return null;
       if (!rSecond && !tops.length) return null;
-      let path = null;
+      let picked = null;
       if (rSecond) {
         if (rSecondTrace) {
           rSecondTrace.push(
@@ -1667,14 +1720,13 @@
           bench.rFirstBudgetExhausted = 0;
           bench.rFirstLastTryR = 0;
         }
-        const built = tryConstructGrade3PathRSecondN1(pathable, rng, bench, rSecondTrace);
-        path = (_d = built == null ? void 0 : built.path) != null ? _d : null;
-        if (path && rSecondTrace && built) {
+        picked = tryConstructGrade3PathRSecondN1(pathable, rng, bench, rSecondTrace);
+        if (picked && rSecondTrace) {
           rSecondTrace.push(
-            `polyline OK: len=${path.length} logicalStart=(${built.start.c},${built.start.r}) rightAngles=${countRightAngles(path)}`
+            `polyline OK: len=${picked.solutionPath.length} start=(${picked.start.c},${picked.start.r}) rightAngles=${countRightAngles(picked.solutionPath)}`
           );
         }
-        if (!path && rSecondTrace) {
+        if (!picked && rSecondTrace) {
           rSecondTrace.push(`polyline construction \u2192 null (goal deferred to RS2 exit; or hard rollback)`);
         }
       } else {
@@ -1690,21 +1742,24 @@
           bench.rFirstBudgetExhausted = 0;
           bench.rFirstLastTryR = 0;
         }
-        path = rFirst ? (_f = (_e = tryConstructGrade3PathRFirstN1(pathable, topGoal, rng, bench)) == null ? void 0 : _e.path) != null ? _f : null : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)], topGoal, rng);
+        const path = rFirst ? (_e = (_d = tryConstructGrade3PathRFirstN1(pathable, topGoal, rng, bench)) == null ? void 0 : _d.path) != null ? _e : null : findGrade3SixBendPath(pathable, bottoms[Math.floor(rng() * bottoms.length)], topGoal, rng);
+        if (!path) {
+          if (bench) bench.rejectedNoPath++;
+          continue;
+        }
+        picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
+        if (!picked) {
+          if (bench) bench.rejectedPickOrient++;
+          continue;
+        }
       }
-      if (!path) {
-        if (bench) bench.rejectedNoPath++;
-        continue;
-      }
-      const picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
       if (!picked) {
-        if (bench) bench.rejectedPickOrient++;
-        if (rSecond && rSecondTrace) rSecondTrace.push(`pickGrade2OrientedStage \u2192 null (orientation/pads/bumpers)`);
+        if (bench) bench.rejectedNoPath++;
         continue;
       }
       if (rSecond && rSecondTrace) {
         rSecondTrace.push(
-          `pickGrade2OrientedStage OK: rotation picks start=(${picked.start.c},${picked.start.r}) goal=(${picked.goal.c},${picked.goal.r}) padLabel=${(_g = picked.grade2PadAdjustLabel) != null ? _g : "none"}`
+          `RSecond oriented OK: start=(${picked.start.c},${picked.start.r}) goal=(${picked.goal.c},${picked.goal.r}) padLabel=${(_f = picked.grade2PadAdjustLabel) != null ? _f : "none"}`
         );
       }
       let solutionPath = picked.solutionPath;
