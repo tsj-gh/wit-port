@@ -59,9 +59,30 @@ function gapsBetweenBends(bendIdx: number[]): number[] {
   return g;
 }
 
+/** gridStageGen の関節分類と同型（再訪部分路 sub[0]=R） */
+function jointPatternOnRLoop(sub: CellCoord[]): "bothEndsBend" | "s1BendOnly" | "p2BendOnly" | "other" {
+  const R = sub[0]!;
+  if (sub.length < 3) return "other";
+  const dRS1 = unitStepDir(sub[1]!.c - sub[0]!.c, sub[1]!.r - sub[0]!.r);
+  const dS1n = unitStepDir(sub[2]!.c - sub[1]!.c, sub[2]!.r - sub[1]!.r);
+  const s1 = !!(dRS1 && dS1n && orthogonalDirs(dRS1, dS1n));
+  const n = sub.length;
+  const P2 = sub[n - 1]!;
+  const prev = sub[n - 2]!;
+  const dPrevP2 = unitStepDir(P2.c - prev.c, P2.r - prev.r);
+  const dP2R = unitStepDir(R.c - P2.c, R.r - P2.r);
+  const p2 = !!(dPrevP2 && dP2R && orthogonalDirs(dPrevP2, dP2R));
+  if (s1 && p2) return "bothEndsBend";
+  if (s1 && !p2) return "s1BendOnly";
+  if (!s1 && p2) return "p2BendOnly";
+  return "other";
+}
+
 const trials = Math.max(1, parseInt(process.argv[2] ?? "100", 10) || 100);
 const globalGapHist = new Map<number, number>();
 const rLoopLenHist = new Map<number, number>();
+const gapTupleHist = new Map<string, number>();
+const jointHist = new Map<string, number>();
 let okCount = 0;
 let nullCount = 0;
 let noRevisitCount = 0;
@@ -86,6 +107,10 @@ for (let t = 0; t < trials; t++) {
   rLoopLenHist.set(sl, (rLoopLenHist.get(sl) ?? 0) + 1);
   const bendIdx = bendIndicesOnSubpath(sub);
   const gaps = gapsBetweenBends(bendIdx);
+  const tupleKey = gaps.length ? gaps.join("-") : "(no-internal-bend)";
+  gapTupleHist.set(tupleKey, (gapTupleHist.get(tupleKey) ?? 0) + 1);
+  const jp = jointPatternOnRLoop(sub);
+  jointHist.set(jp, (jointHist.get(jp) ?? 0) + 1);
   for (const d of gaps) {
     globalGapHist.set(d, (globalGapHist.get(d) ?? 0) + 1);
   }
@@ -98,12 +123,20 @@ for (let t = 0; t < trials; t++) {
 console.log(`Grade5 R-Second trials=${trials} generated=${okCount} null=${nullCount} noRevisit=${noRevisitCount}`);
 console.log("再訪区間 R→…→R のセル数（両端 R 含む）ヒストグラム:");
 for (const L of [...rLoopLenHist.keys()].sort((a, b) => a - b)) {
-  console.log(`  len ${L}: ${rLoopLenHist.get(L)}`);
+  console.log(`  len ${L}: ${rLoopLenHist.get(L)} (${(((rLoopLenHist.get(L) ?? 0) / okCount) * 100).toFixed(1)}%)`);
 }
-console.log("沿線距離（隣接折れ頂点間の辺数）ヒストグラム（全試行・全ギャップ合算）:");
+console.log("関節パターン（S1/P2 での 90°）試行ごと:");
+for (const k of [...jointHist.keys()].sort()) {
+  console.log(`  ${k}: ${jointHist.get(k)} (${(((jointHist.get(k) ?? 0) / okCount) * 100).toFixed(1)}%)`);
+}
+console.log("折れ点間ギャップ列（試行ごと・例 [1-1] は短い閉路）:");
+for (const k of [...gapTupleHist.keys()].sort()) {
+  console.log(`  [${k}]: ${gapTupleHist.get(k)} (${(((gapTupleHist.get(k) ?? 0) / okCount) * 100).toFixed(1)}%)`);
+}
+console.log("沿線距離（隣接折れ頂点間）エッジ本数の合算ヒストグラム:");
 const sorted = [...globalGapHist.keys()].sort((a, b) => a - b);
 for (const d of sorted) {
-  console.log(`  ${d}: ${globalGapHist.get(d)}`);
+  console.log(`  gap ${d}: ${globalGapHist.get(d)} 件`);
 }
 if (examplesGe2.length) {
   console.log(`\n距離>=2 のギャップを含む例 (${examplesGe2.length} 件、最大5件表示):`);

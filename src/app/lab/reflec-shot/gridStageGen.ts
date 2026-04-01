@@ -626,11 +626,20 @@ function tryOrthogonalRSecondLegFromR(
   rng: () => number,
   ctx: RFirstPolyCtx,
   nextAttempts: (CellCoord | undefined)[],
-  acceptFull?: (full: CellCoord[]) => boolean
+  acceptFull?: (full: CellCoord[]) => boolean,
+  midCallStats?: RSecondMidLegCallStats | null
 ): CellCoord[] | null {
   const manRArm =
     Math.abs(armTip.c - R.c) + Math.abs(armTip.r - R.r);
   if (manRArm !== 1) return null;
+
+  if (midCallStats) {
+    midCallStats.forcedTries = nextAttempts.length;
+    midCallStats.noPoly = 0;
+    midCallStats.badTip = 0;
+    midCallStats.badFull = 0;
+    midCallStats.candidateEval = 0;
+  }
 
   let firstHArm = rng() < 0.5;
   if (orthoPolylineSplitImpossible(armTip, goal, b, firstHArm)) firstHArm = !firstHArm;
@@ -648,12 +657,24 @@ function tryOrthogonalRSecondLegFromR(
       forcedSecond !== undefined ? { forcedSecond } : undefined
     );
     if (ctx.budgetHit) return null;
-    if (!tailPath || tailPath.length < 1) continue;
-    if (tailPath[0]!.c !== armTip.c || tailPath[0]!.r !== armTip.r) continue;
+    if (!tailPath || tailPath.length < 1) {
+      if (midCallStats) midCallStats.noPoly++;
+      continue;
+    }
+    if (tailPath[0]!.c !== armTip.c || tailPath[0]!.r !== armTip.r) {
+      if (midCallStats) midCallStats.badTip++;
+      continue;
+    }
 
     const full: CellCoord[] = [R, ...tailPath];
-    if (full.length < 2 || full[1]!.c !== armTip.c || full[1]!.r !== armTip.r) continue;
-    if (acceptFull && !acceptFull(full)) continue;
+    if (full.length < 2 || full[1]!.c !== armTip.c || full[1]!.r !== armTip.r) {
+      if (midCallStats) midCallStats.badFull++;
+      continue;
+    }
+    if (acceptFull) {
+      if (midCallStats) midCallStats.candidateEval++;
+      if (!acceptFull(full)) continue;
+    }
     return full;
   }
   return null;
@@ -1212,6 +1233,56 @@ function rSecondMiddleOpenPolylineBends(b1: number): number {
   return Math.max(0, b1 - 2);
 }
 
+/** `(dOut1,dIn2)` で RS2-1 として許される中脚折れ本数 `b1` の最大（0〜4）。高いほど S1〜P2 開区間の折れが増え、再訪ループが「1×1 より大きい」矩形周りになりやすい。 */
+function rSecondMaxValidB1ForPair(dOut1: Dir, dIn2: Dir): number {
+  let best = -1;
+  for (let b1 = 0; b1 <= 4; b1++) {
+    if (rSecondPairMidBendsOk(b1, dOut1, dIn2)) best = b1;
+  }
+  return best;
+}
+
+/**
+ * 折れ配分の試行順: **b1 の大きい帯からラウンドロビン**（同一 b1 内はシャッフル）。
+ * 高 b1（例 `(0,4,0)`）を先頭だけ固めて試すと失敗コストが積み上がり生成が遅延するため、帯ごとに 1 本ずつ交互に挟む。
+ */
+function rSecondSplitsRoundRobinByDescendingB1(
+  splitsValid: [number, number, number][],
+  rng: () => number
+): [number, number, number][] {
+  const byB1 = new Map<number, [number, number, number][]>();
+  for (const t of splitsValid) {
+    const b1 = t[1]!;
+    let g = byB1.get(b1);
+    if (!g) {
+      g = [];
+      byB1.set(b1, g);
+    }
+    g.push(t);
+  }
+  const tiers = Array.from(byB1.keys()).sort((a, b) => b - a);
+  const queues = tiers.map((b1) => {
+    const g = [...byB1.get(b1)!];
+    shuffleArrayInPlace(g, rng);
+    return g;
+  });
+  const rot = queues.length ? Math.floor(rng() * queues.length) : 0;
+  const rotated = rot === 0 ? queues : [...queues.slice(rot), ...queues.slice(0, rot)];
+  const out: [number, number, number][] = [];
+  let progressed = true;
+  while (progressed) {
+    progressed = false;
+    for (const q of rotated) {
+      const t = q.shift();
+      if (t !== undefined) {
+        out.push(t);
+        progressed = true;
+      }
+    }
+  }
+  return out;
+}
+
 /** 出口脚: `b2` は R→S2 の関節折れを含む。開区間 S2〜goal には `max(0, b2-1)` */
 function rSecondExitOpenPolylineBends(b2: number): number {
   return Math.max(0, b2 - 1);
@@ -1264,6 +1335,16 @@ function rSecondArmTipNextAttempts(
 /** 中脚 `[R,S1,…,P2]` での関節: S1 で折る／P2 で折る／両方／の 3 通りを明示探索する */
 type RSecondMiddleJointPattern = "bothEndsBend" | "s1BendOnly" | "p2BendOnly";
 
+/**
+ * 関節パターンの試行順。**単端折れ（s1 / p2）を先に**（先頭 2 つは 50% で入れ替え）、**両端折れは必ず最後**。
+ * ランダム全並べ替えだと `bothEndsBend` が先に成功しやすく、再訪ループの幾何が偏るため。
+ */
+function rSecondMiddleJointPatternTrialOrder(rng: () => number): RSecondMiddleJointPattern[] {
+  return rng() < 0.5
+    ? ["s1BendOnly", "p2BendOnly", "bothEndsBend"]
+    : ["p2BendOnly", "s1BendOnly", "bothEndsBend"];
+}
+
 function rSecondMiddleJointPatternAttempts(
   perp: CellCoord[],
   forward: CellCoord[],
@@ -1314,7 +1395,8 @@ function tryConstructGrade3PathRSecondN1(
   pathable: boolean[][],
   rng: () => number,
   bench?: ReflectShotLv4BenchStats | null,
-  trace?: string[] | null
+  trace?: string[] | null,
+  midDiagPush?: (line: string) => void
 ) {
   const w = pathable.length;
   const h = pathable[0]!.length;
@@ -1340,7 +1422,7 @@ function tryConstructGrade3PathRSecondN1(
     bfsPruned: 0,
     budgetHit: false,
   };
-  /** 中脚「長」モードの追加乱択回数／短・長両立時に長を選ぶ確率（再訪ループ経路長の偏り低減） */
+  /** 中脚「長」モードの追加乱択回数（`tryOrthogonalPolylineRFirst(S1,P2,b1,·)` のゆれ） */
   const rSecondMiddleLongPolyTries = 12;
   const rSecondMiddlePreferLongWhenBoth = 0.58;
   const failedCombo = new Set<string>();
@@ -1377,8 +1459,20 @@ function tryConstructGrade3PathRSecondN1(
         const sol = diagonalBumperForTurn(dIn1, dOut1);
         if (!sol) continue;
         const dIn2opts = [negateDir(dIn1), dOut1];
-        const oiOrder = rng() < 0.5 ? [0, 1] : [1, 0];
-        for (const oi of oiOrder) {
+        const oiCandidates: number[] = [];
+        for (let oi = 0; oi <= 1; oi++) {
+          const dIn2Try = dIn2opts[oi]!;
+          if (oi > 0 && dirsEqual(dIn2Try, dIn2opts[0]!)) continue;
+          oiCandidates.push(oi);
+        }
+        oiCandidates.sort((a, b) => {
+          const ma = rSecondMaxValidB1ForPair(dOut1, dIn2opts[a]!);
+          const mb = rSecondMaxValidB1ForPair(dOut1, dIn2opts[b]!);
+          if (mb === ma) return rng() < 0.5 ? -1 : 1;
+          const preferHighMaxB1 = rng() < 0.72;
+          return preferHighMaxB1 ? mb - ma : ma - mb;
+        });
+        for (const oi of oiCandidates) {
           if (ctx.budgetHit) break outerR;
           const dIn2 = dIn2opts[oi]!;
           if (oi > 0 && dirsEqual(dIn2, dIn2opts[0]!)) continue;
@@ -1417,8 +1511,7 @@ function tryConstructGrade3PathRSecondN1(
           });
           if (!splitsValid.length) continue;
 
-          const splits = [...splitsValid];
-          shuffleArrayInPlace(splits, rng);
+          const splits = rSecondSplitsRoundRobinByDescendingB1(splitsValid, rng);
 
           const startPool: CellCoord[] = onBottomRow ? [R] : bottoms;
           const startOrder = [...startPool].sort(() => rng() - 0.5);
@@ -1446,11 +1539,22 @@ function tryConstructGrade3PathRSecondN1(
                 }
 
                 const b1Open = rSecondMiddleOpenPolylineBends(b1);
+                /**
+                 * 「長」中脚に `b1` 本をそのまま渡すと R 周り関節と二重に数えられ、全体 `countRightAngles===6` と噛み合わず
+                 * 出口まで到達できない。**短の一段多い** `min(b1, b1Open+1)` で探索する（`b1=3`→2 本・再訪区間が伸びる）。
+                 */
+                const b1LongPolyBends = Math.min(b1, Math.max(b1Open + 1, 0));
+                const longMiddleDistinct = b1LongPolyBends > b1Open;
                 let okLeg1Short = false;
                 let okLeg1Long = false;
                 for (const fh of [true, false] as const) {
                   if (!orthoPolylineSplitImpossible(S1, P2, b1Open, fh)) okLeg1Short = true;
-                  if (!orthoPolylineSplitImpossible(S1, P2, b1, fh)) okLeg1Long = true;
+                  if (
+                    longMiddleDistinct &&
+                    !orthoPolylineSplitImpossible(S1, P2, b1LongPolyBends, fh)
+                  ) {
+                    okLeg1Long = true;
+                  }
                 }
                 if (!okLeg1Short && !okLeg1Long) continue;
 
@@ -1466,18 +1570,34 @@ function tryConstructGrade3PathRSecondN1(
                 const middleLegNoR = (u: CellCoord[]) =>
                   !u.slice(1).some((p) => keyCell(p.c, p.r) === rKey);
 
-                const jointPatternsAll: RSecondMiddleJointPattern[] = [
-                  "bothEndsBend",
-                  "s1BendOnly",
-                  "p2BendOnly",
-                ];
-
                 let candShort: CellCoord[] | null = null;
                 if (okLeg1Short) {
-                  const jOrder = [...jointPatternsAll].sort(() => rng() - 0.5);
+                  const jOrder = rSecondMiddleJointPatternTrialOrder(rng);
                   for (const jp of jOrder) {
                     if (candShort) break;
                     const att = rSecondMiddleJointPatternAttempts(s1Perp, s1Forward, jp, rng);
+                    const st: RSecondMidLegCallStats | null = midDiagPush
+                      ? {
+                          forcedTries: 0,
+                          noPoly: 0,
+                          badTip: 0,
+                          badFull: 0,
+                          candidateEval: 0,
+                          failNoR: 0,
+                          failJoint: 0,
+                        }
+                      : null;
+                    const acceptMid = (full: CellCoord[]) => {
+                      if (!middleLegNoR(full)) {
+                        if (st) st.failNoR++;
+                        return false;
+                      }
+                      if (!rSecondMiddleLegMatchesJointPattern(full, R, jp)) {
+                        if (st) st.failJoint++;
+                        return false;
+                      }
+                      return true;
+                    };
                     const u = tryOrthogonalRSecondLegFromR(
                       R,
                       S1,
@@ -1487,8 +1607,14 @@ function tryConstructGrade3PathRSecondN1(
                       rng,
                       ctx,
                       att,
-                      (full) => middleLegNoR(full) && rSecondMiddleLegMatchesJointPattern(full, R, jp)
+                      acceptMid,
+                      st
                     );
+                    if (midDiagPush && st) {
+                      midDiagPush(
+                        `mid short tryR=${tryR} split=${b0},${b1},${b2} pass=${pass} jp=${jp} ok=${u != null} ft=${st.forcedTries} np=${st.noPoly} ce=${st.candidateEval} fN=${st.failNoR} fJ=${st.failJoint}`
+                      );
+                    }
                     if (ctx.budgetHit) break outerR;
                     if (u) candShort = u;
                   }
@@ -1497,120 +1623,175 @@ function tryConstructGrade3PathRSecondN1(
                 let candLong: CellCoord[] | null = null;
                 if (okLeg1Long) {
                   for (let lt = 0; lt < rSecondMiddleLongPolyTries && !candLong; lt++) {
-                    const jOrder = [...jointPatternsAll].sort(() => rng() - 0.5);
+                    const jOrder = rSecondMiddleJointPatternTrialOrder(rng);
                     for (const jp of jOrder) {
                       if (candLong) break;
                       const att = rSecondMiddleJointPatternAttempts(s1Perp, s1Forward, jp, rng);
+                      const st: RSecondMidLegCallStats | null = midDiagPush
+                        ? {
+                            forcedTries: 0,
+                            noPoly: 0,
+                            badTip: 0,
+                            badFull: 0,
+                            candidateEval: 0,
+                            failNoR: 0,
+                            failJoint: 0,
+                          }
+                        : null;
+                      const acceptMidL = (full: CellCoord[]) => {
+                        if (!middleLegNoR(full)) {
+                          if (st) st.failNoR++;
+                          return false;
+                        }
+                        if (!rSecondMiddleLegMatchesJointPattern(full, R, jp)) {
+                          if (st) st.failJoint++;
+                          return false;
+                        }
+                        return true;
+                      };
                       const u = tryOrthogonalRSecondLegFromR(
                         R,
                         S1,
                         P2,
-                        b1,
+                        b1LongPolyBends,
                         pathable,
                         rng,
                         ctx,
                         att,
-                        (full) => middleLegNoR(full) && rSecondMiddleLegMatchesJointPattern(full, R, jp)
+                        acceptMidL,
+                        st
                       );
+                      if (midDiagPush && st) {
+                        midDiagPush(
+                          `mid long tryR=${tryR} lt=${lt} split=${b0},${b1},${b2} pass=${pass} jp=${jp} ok=${u != null} ft=${st.forcedTries} np=${st.noPoly} ce=${st.candidateEval} fN=${st.failNoR} fJ=${st.failJoint}`
+                        );
+                      }
                       if (ctx.budgetHit) break outerR;
                       if (u) candLong = u;
                     }
                   }
                 }
 
-                let seg1u: CellCoord[] | null = null;
-                if (candShort && candLong) {
-                  seg1u = rng() < rSecondMiddlePreferLongWhenBoth ? candLong : candShort;
-                } else {
-                  seg1u = candLong ?? candShort;
+                /** b1≥3 かつ短・長両立: **長→短**で出口まで試す（長単独採用で生成が全滅するのを防ぐ） */
+                const middleOrder: CellCoord[][] = [];
+                if (candLong && candShort && b1 >= 3) {
+                  middleOrder.push(candLong, candShort);
+                } else if (candLong && candShort) {
+                  middleOrder.push(rng() < rSecondMiddlePreferLongWhenBoth ? candLong : candShort);
+                } else if (candLong) {
+                  middleOrder.push(candLong);
+                } else if (candShort) {
+                  middleOrder.push(candShort);
                 }
-                if (!seg1u) continue;
-                const seg1 = seg1u.slice(1);
+                if (!middleOrder.length) continue;
 
-                const prefixPathCanonical: CellCoord[] = onBottomRow
-                  ? [R, ...seg1, R]
-                  : [...seg0!, R, ...seg1, R];
-                const boardW = w;
-                const boardH = h;
-                const ks = [0, 1, 2, 3].sort(() => rng() - 0.5);
                 let orientSnap: Grade2OrientedSnapshot | null = null;
-
-                orientK: for (const k of ks) {
-                  let pb = pathable.map((col) => [...col!]);
-                  let pref = prefixPathCanonical.map((x) => ({ ...x }));
-                  let pw = boardW;
-                  let ph = boardH;
-                  for (let i = 0; i < k; i++) {
-                    const nx = applyQuarterCCWPathable(pb, pref, pw, ph);
-                    pb = nx.pathable;
-                    pref = nx.path;
-                    pw = nx.w;
-                    ph = nx.h;
+                let winMi = -1;
+                nextMiddle: for (let mi = 0; mi < middleOrder.length; mi++) {
+                  const seg1u = middleOrder[mi]!;
+                  const legLabel =
+                    candLong && seg1u === candLong ? "long" : candShort && seg1u === candShort ? "short" : "?";
+                  if (midDiagPush) {
+                    midDiagPush(
+                      `mid pick tryR=${tryR} split=${b0},${b1},${b2} mi=${mi}/${middleOrder.length} leg=${legLabel} hasShort=${candShort != null} hasLong=${candLong != null}`
+                    );
                   }
-                  const fsK = pathFirstStepDir(pref);
-                  if (!fsK || !dirsEqual(fsK, DIR.U)) continue orientK;
 
-                  const Rt = pref[pref.length - 1]!;
-                  const S2t = transformCellByKQuarters(S2, k, boardW, boardH);
-                  const dArm = unitStepDir(S2t.c - Rt.c, S2t.r - Rt.r);
-                  if (!dArm) continue orientK;
+                  const seg1 = seg1u.slice(1);
+                  const prefixPathCanonical: CellCoord[] = onBottomRow
+                    ? [R, ...seg1, R]
+                    : [...seg0!, R, ...seg1, R];
+                  const boardW = w;
+                  const boardH = h;
+                  const ks = [0, 1, 2, 3].sort(() => rng() - 0.5);
 
-                  const b2Open = rSecondExitOpenPolylineBends(b2);
-                  const edgeGoals = rSecondFeasibleEdgeGoalsForS2(pb, S2t, b2Open);
-                  if (!edgeGoals.length) continue orientK;
-                  const edgeOrder = [...edgeGoals];
-                  shuffleArrayInPlace(edgeOrder, rng);
+                  orientK: for (const k of ks) {
+                    let pb = pathable.map((col) => [...col!]);
+                    let pref = prefixPathCanonical.map((x) => ({ ...x }));
+                    let pw = boardW;
+                    let ph = boardH;
+                    for (let i = 0; i < k; i++) {
+                      const nx = applyQuarterCCWPathable(pb, pref, pw, ph);
+                      pb = nx.pathable;
+                      pref = nx.path;
+                      pw = nx.w;
+                      ph = nx.h;
+                    }
+                    const fsK = pathFirstStepDir(pref);
+                    if (!fsK || !dirsEqual(fsK, DIR.U)) continue orientK;
 
-                  const nextAttempts2 = rSecondArmTipNextAttempts(S2t, Rt, dArm, pb, pw, ph, rng);
+                    const Rt = pref[pref.length - 1]!;
+                    const S2t = transformCellByKQuarters(S2, k, boardW, boardH);
+                    const dArm = unitStepDir(S2t.c - Rt.c, S2t.r - Rt.r);
+                    if (!dArm) continue orientK;
 
-                  for (const gCell of edgeOrder) {
-                    if (ctx.budgetHit) break outerR;
-                    const seg2u = tryOrthogonalRSecondLegFromR(Rt, S2t, gCell, b2Open, pb, rng, ctx, nextAttempts2);
-                    if (ctx.budgetHit) break outerR;
-                    if (!seg2u) continue;
-                    const seg2cand = seg2u.slice(1);
-                    if (rSecondExitLegHardViolation(pref, seg2cand, pb, pw, ph)) {
+                    const b2Open = rSecondExitOpenPolylineBends(b2);
+                    const edgeGoals = rSecondFeasibleEdgeGoalsForS2(pb, S2t, b2Open);
+                    if (!edgeGoals.length) continue orientK;
+                    const edgeOrder = [...edgeGoals];
+                    shuffleArrayInPlace(edgeOrder, rng);
+
+                    const nextAttempts2 = rSecondArmTipNextAttempts(S2t, Rt, dArm, pb, pw, ph, rng);
+
+                    for (const gCell of edgeOrder) {
+                      if (ctx.budgetHit) break outerR;
+                      const seg2u = tryOrthogonalRSecondLegFromR(Rt, S2t, gCell, b2Open, pb, rng, ctx, nextAttempts2);
+                      if (ctx.budgetHit) break outerR;
+                      if (!seg2u) continue;
+                      const seg2cand = seg2u.slice(1);
+                      if (rSecondExitLegHardViolation(pref, seg2cand, pb, pw, ph)) {
+                        if (trace) {
+                          trace.push(
+                            `RSecond seg2 hard violation → redo from next R (prefix↔exit or bend/bottom), tried edge goal=(${gCell.c},${gCell.r}) k=${k}`
+                          );
+                        }
+                        if (mi + 1 < middleOrder.length) continue nextMiddle;
+                        continue outerR;
+                      }
+                      const gEnd = seg2cand[seg2cand.length - 1]!;
+                      if (gEnd.c !== gCell.c || gEnd.r !== gCell.r) continue;
+                      if (!rSecondGoalOnTopLeftOrRightEdge(gEnd, pw, ph)) continue;
+
+                      const fullPathT: CellCoord[] = [...pref, ...seg2cand];
+                      if (countRightAngles(fullPathT) !== 6) continue;
+
+                      const implicitP1 = onBottomRow ? transformCellByKQuarters(P1, k, boardW, boardH) : undefined;
+                      if (
+                        !grade3RevisitOneCellRule(
+                          fullPathT,
+                          implicitP1 ? { implicitBeforeFirstR: implicitP1 } : undefined
+                        )
+                      )
+                        continue;
+
+                      const snap = finalizeGrade2OrientedAfterRotation(pb, fullPathT, pw, ph, 6, {
+                        relaxBendVisit: true,
+                        requireGoalOnTopLeftRight: true,
+                      });
+                      if (!snap) continue;
+
+                      orientSnap = snap;
+                      winMi = mi;
                       if (trace) {
                         trace.push(
-                          `RSecond seg2 hard violation → redo from next R (prefix↔exit or bend/bottom), tried edge goal=(${gCell.c},${gCell.r}) k=${k}`
+                          `RSecond seg2 in oriented frame: goal candidate (${gEnd.c},${gEnd.r}) k=${k} before pad norm`
                         );
                       }
-                      continue outerR;
+                      break orientK;
                     }
-                    const gEnd = seg2cand[seg2cand.length - 1]!;
-                    if (gEnd.c !== gCell.c || gEnd.r !== gCell.r) continue;
-                    if (!rSecondGoalOnTopLeftOrRightEdge(gEnd, pw, ph)) continue;
-
-                    const fullPathT: CellCoord[] = [...pref, ...seg2cand];
-                    if (countRightAngles(fullPathT) !== 6) continue;
-
-                    const implicitP1 = onBottomRow ? transformCellByKQuarters(P1, k, boardW, boardH) : undefined;
-                    if (
-                      !grade3RevisitOneCellRule(
-                        fullPathT,
-                        implicitP1 ? { implicitBeforeFirstR: implicitP1 } : undefined
-                      )
-                    )
-                      continue;
-
-                    const snap = finalizeGrade2OrientedAfterRotation(pb, fullPathT, pw, ph, 6, {
-                      relaxBendVisit: true,
-                      requireGoalOnTopLeftRight: true,
-                    });
-                    if (!snap) continue;
-
-                    orientSnap = snap;
-                    if (trace) {
-                      trace.push(
-                        `RSecond seg2 in oriented frame: goal candidate (${gEnd.c},${gEnd.r}) k=${k} before pad norm`
-                      );
-                    }
-                    break orientK;
                   }
+                  if (orientSnap) break nextMiddle;
                 }
                 if (!orientSnap) continue;
 
                 writeBench(tryR);
+                if (bench) {
+                  bench.rSecondWinningSplit = [b0, b1, b2];
+                  if (winMi >= 0) {
+                    bench.rSecondWinningMiddleLeg =
+                      candLong != null && middleOrder[winMi] === candLong ? "long" : "short";
+                  }
+                }
                 if (trace) {
                   const pairKind = dirsEqual(dOut1, dIn2)
                     ? "same-axis(2+2t)"
@@ -2277,6 +2458,10 @@ export type ReflectShotLv4BenchStats = {
   rFirstBudgetExhausted?: number;
   /** R-First のみ: 終了時の tryR（0 始まり） */
   rFirstLastTryR?: number;
+  /** R-Second のみ: 成功経路の折れ配分 `(b0,b1,b2)`（診断・ベンチ用） */
+  rSecondWinningSplit?: [number, number, number];
+  /** R-Second のみ: 採用した中脚が長モード（`b1` 本折れ）か短モード（`b1-2`）か */
+  rSecondWinningMiddleLeg?: "long" | "short";
 };
 
 /** Grade2・折れ6 生成時の上書き（開発者デバッグなど） */
@@ -2302,6 +2487,29 @@ export type ReflectShotPolylineGenOpts = {
    * 診断用: 渡した配列に R-Second 生成の主要ログを追記する（`lv4GenMode: "rSecond"` 時）。
    */
   lv4RSecondTrace?: string[];
+  /**
+   * 診断用: 中脚 `tryOrthogonalRSecondLegFromR` の試行統計を 1 行ずつ追記（`rSecond` 時）。
+   * `maxLines` で上限（既定は無制限）。
+   */
+  lv4RSecondMidDiag?: { lines: string[]; maxLines?: number };
+};
+
+/** R-Second 中脚 1 呼び出し分の統計（`lv4RSecondMidDiag` 用） */
+export type RSecondMidLegCallStats = {
+  /** `forcedSecond` 列の長さ */
+  forcedTries: number;
+  /** ポリラインが取れず／空 */
+  noPoly: number;
+  /** 尾の先端が armTip と一致しない */
+  badTip: number;
+  /** R+尾の連結形状が不正 */
+  badFull: number;
+  /** `acceptFull` を評価した回数 */
+  candidateEval: number;
+  /** 再訪 R により却下 */
+  failNoR: number;
+  /** 関節パターン不一致により却下 */
+  failJoint: number;
 };
 
 /** Grade2・折れ6（高速化）: フック＋DFS 尾で経路を生成 */
@@ -2873,6 +3081,13 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
   };
   const rSecondTrace = genOpts?.lv4RSecondTrace;
   if (rSecondTrace) rSecondTrace.length = 0;
+  const midDiag = genOpts?.lv4RSecondMidDiag;
+  const midPush =
+    midDiag &&
+    ((s: string) => {
+      if (midDiag.maxLines != null && midDiag.lines.length >= midDiag.maxLines) return;
+      midDiag.lines.push(s);
+    });
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const bottoms = bottomCandidates(pathable);
@@ -2895,7 +3110,7 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
         bench.rFirstBudgetExhausted = 0;
         bench.rFirstLastTryR = 0;
       }
-      picked = tryConstructGrade3PathRSecondN1(pathable, rng, bench, rSecondTrace);
+      picked = tryConstructGrade3PathRSecondN1(pathable, rng, bench, rSecondTrace, midPush || undefined);
       if (picked && rSecondTrace) {
         rSecondTrace.push(
           `polyline OK: len=${picked.solutionPath.length} start=(${picked.start.c},${picked.start.r}) rightAngles=${countRightAngles(picked.solutionPath)}`

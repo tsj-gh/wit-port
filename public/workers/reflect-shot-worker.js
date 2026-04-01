@@ -423,9 +423,16 @@
     if (!path || !pathFirstStepMatchesForcedSecond(path, opts == null ? void 0 : opts.forcedSecond)) return null;
     return path;
   }
-  function tryOrthogonalRSecondLegFromR(R, armTip, goal, b, pathable, rng, ctx, nextAttempts, acceptFull) {
+  function tryOrthogonalRSecondLegFromR(R, armTip, goal, b, pathable, rng, ctx, nextAttempts, acceptFull, midCallStats) {
     const manRArm = Math.abs(armTip.c - R.c) + Math.abs(armTip.r - R.r);
     if (manRArm !== 1) return null;
+    if (midCallStats) {
+      midCallStats.forcedTries = nextAttempts.length;
+      midCallStats.noPoly = 0;
+      midCallStats.badTip = 0;
+      midCallStats.badFull = 0;
+      midCallStats.candidateEval = 0;
+    }
     let firstHArm = rng() < 0.5;
     if (orthoPolylineSplitImpossible(armTip, goal, b, firstHArm)) firstHArm = !firstHArm;
     if (orthoPolylineSplitImpossible(armTip, goal, b, firstHArm)) return null;
@@ -441,11 +448,23 @@
         forcedSecond !== void 0 ? { forcedSecond } : void 0
       );
       if (ctx.budgetHit) return null;
-      if (!tailPath || tailPath.length < 1) continue;
-      if (tailPath[0].c !== armTip.c || tailPath[0].r !== armTip.r) continue;
+      if (!tailPath || tailPath.length < 1) {
+        if (midCallStats) midCallStats.noPoly++;
+        continue;
+      }
+      if (tailPath[0].c !== armTip.c || tailPath[0].r !== armTip.r) {
+        if (midCallStats) midCallStats.badTip++;
+        continue;
+      }
       const full = [R, ...tailPath];
-      if (full.length < 2 || full[1].c !== armTip.c || full[1].r !== armTip.r) continue;
-      if (acceptFull && !acceptFull(full)) continue;
+      if (full.length < 2 || full[1].c !== armTip.c || full[1].r !== armTip.r) {
+        if (midCallStats) midCallStats.badFull++;
+        continue;
+      }
+      if (acceptFull) {
+        if (midCallStats) midCallStats.candidateEval++;
+        if (!acceptFull(full)) continue;
+      }
       return full;
     }
     return null;
@@ -865,6 +884,46 @@
   function rSecondMiddleOpenPolylineBends(b1) {
     return Math.max(0, b1 - 2);
   }
+  function rSecondMaxValidB1ForPair(dOut1, dIn2) {
+    let best = -1;
+    for (let b1 = 0; b1 <= 4; b1++) {
+      if (rSecondPairMidBendsOk(b1, dOut1, dIn2)) best = b1;
+    }
+    return best;
+  }
+  function rSecondSplitsRoundRobinByDescendingB1(splitsValid, rng) {
+    const byB1 = /* @__PURE__ */ new Map();
+    for (const t of splitsValid) {
+      const b1 = t[1];
+      let g = byB1.get(b1);
+      if (!g) {
+        g = [];
+        byB1.set(b1, g);
+      }
+      g.push(t);
+    }
+    const tiers = Array.from(byB1.keys()).sort((a, b) => b - a);
+    const queues = tiers.map((b1) => {
+      const g = [...byB1.get(b1)];
+      shuffleArrayInPlace(g, rng);
+      return g;
+    });
+    const rot = queues.length ? Math.floor(rng() * queues.length) : 0;
+    const rotated = rot === 0 ? queues : [...queues.slice(rot), ...queues.slice(0, rot)];
+    const out = [];
+    let progressed = true;
+    while (progressed) {
+      progressed = false;
+      for (const q of rotated) {
+        const t = q.shift();
+        if (t !== void 0) {
+          out.push(t);
+          progressed = true;
+        }
+      }
+    }
+    return out;
+  }
   function rSecondExitOpenPolylineBends(b2) {
     return Math.max(0, b2 - 1);
   }
@@ -887,6 +946,9 @@
     shuffleArrayInPlace(perp, rng);
     shuffleArrayInPlace(forward, rng);
     return [...perp, ...forward, void 0];
+  }
+  function rSecondMiddleJointPatternTrialOrder(rng) {
+    return rng() < 0.5 ? ["s1BendOnly", "p2BendOnly", "bothEndsBend"] : ["p2BendOnly", "s1BendOnly", "bothEndsBend"];
   }
   function rSecondMiddleJointPatternAttempts(perp, forward, pattern, rng) {
     const p = [...perp];
@@ -919,7 +981,7 @@
     if (pattern === "p2BendOnly") return !s1 && p2;
     return false;
   }
-  function tryConstructGrade3PathRSecondN1(pathable, rng, bench, trace) {
+  function tryConstructGrade3PathRSecondN1(pathable, rng, bench, trace, midDiagPush) {
     var _a;
     const w = pathable.length;
     const h = pathable[0].length;
@@ -972,8 +1034,20 @@
           const sol = diagonalBumperForTurn(dIn1, dOut1);
           if (!sol) continue;
           const dIn2opts = [negateDir(dIn1), dOut1];
-          const oiOrder = rng() < 0.5 ? [0, 1] : [1, 0];
-          for (const oi of oiOrder) {
+          const oiCandidates = [];
+          for (let oi = 0; oi <= 1; oi++) {
+            const dIn2Try = dIn2opts[oi];
+            if (oi > 0 && dirsEqual(dIn2Try, dIn2opts[0])) continue;
+            oiCandidates.push(oi);
+          }
+          oiCandidates.sort((a, b) => {
+            const ma = rSecondMaxValidB1ForPair(dOut1, dIn2opts[a]);
+            const mb = rSecondMaxValidB1ForPair(dOut1, dIn2opts[b]);
+            if (mb === ma) return rng() < 0.5 ? -1 : 1;
+            const preferHighMaxB1 = rng() < 0.72;
+            return preferHighMaxB1 ? mb - ma : ma - mb;
+          });
+          for (const oi of oiCandidates) {
             if (ctx.budgetHit) break outerR;
             const dIn2 = dIn2opts[oi];
             if (oi > 0 && dirsEqual(dIn2, dIn2opts[0])) continue;
@@ -1006,8 +1080,7 @@
               return rSecondPairMidBendsOk(b1, dOut1, dIn2);
             });
             if (!splitsValid.length) continue;
-            const splits = [...splitsValid];
-            shuffleArrayInPlace(splits, rng);
+            const splits = rSecondSplitsRoundRobinByDescendingB1(splitsValid, rng);
             const startPool = onBottomRow ? [R] : bottoms;
             const startOrder = [...startPool].sort(() => rng() - 0.5);
             for (const start of startOrder) {
@@ -1030,11 +1103,15 @@
                     if (!seg0) continue;
                   }
                   const b1Open = rSecondMiddleOpenPolylineBends(b1);
+                  const b1LongPolyBends = Math.min(b1, Math.max(b1Open + 1, 0));
+                  const longMiddleDistinct = b1LongPolyBends > b1Open;
                   let okLeg1Short = false;
                   let okLeg1Long = false;
                   for (const fh of [true, false]) {
                     if (!orthoPolylineSplitImpossible(S1, P2, b1Open, fh)) okLeg1Short = true;
-                    if (!orthoPolylineSplitImpossible(S1, P2, b1, fh)) okLeg1Long = true;
+                    if (longMiddleDistinct && !orthoPolylineSplitImpossible(S1, P2, b1LongPolyBends, fh)) {
+                      okLeg1Long = true;
+                    }
                   }
                   if (!okLeg1Short && !okLeg1Long) continue;
                   const { perp: s1Perp, forward: s1Forward } = rSecondArmTipNeighborSplit(
@@ -1047,17 +1124,32 @@
                   );
                   const rKey = keyCell(R.c, R.r);
                   const middleLegNoR = (u) => !u.slice(1).some((p) => keyCell(p.c, p.r) === rKey);
-                  const jointPatternsAll = [
-                    "bothEndsBend",
-                    "s1BendOnly",
-                    "p2BendOnly"
-                  ];
                   let candShort = null;
                   if (okLeg1Short) {
-                    const jOrder = [...jointPatternsAll].sort(() => rng() - 0.5);
+                    const jOrder = rSecondMiddleJointPatternTrialOrder(rng);
                     for (const jp of jOrder) {
                       if (candShort) break;
                       const att = rSecondMiddleJointPatternAttempts(s1Perp, s1Forward, jp, rng);
+                      const st = midDiagPush ? {
+                        forcedTries: 0,
+                        noPoly: 0,
+                        badTip: 0,
+                        badFull: 0,
+                        candidateEval: 0,
+                        failNoR: 0,
+                        failJoint: 0
+                      } : null;
+                      const acceptMid = (full) => {
+                        if (!middleLegNoR(full)) {
+                          if (st) st.failNoR++;
+                          return false;
+                        }
+                        if (!rSecondMiddleLegMatchesJointPattern(full, R, jp)) {
+                          if (st) st.failJoint++;
+                          return false;
+                        }
+                        return true;
+                      };
                       const u = tryOrthogonalRSecondLegFromR(
                         R,
                         S1,
@@ -1067,8 +1159,14 @@
                         rng,
                         ctx,
                         att,
-                        (full) => middleLegNoR(full) && rSecondMiddleLegMatchesJointPattern(full, R, jp)
+                        acceptMid,
+                        st
                       );
+                      if (midDiagPush && st) {
+                        midDiagPush(
+                          `mid short tryR=${tryR} split=${b0},${b1},${b2} pass=${pass} jp=${jp} ok=${u != null} ft=${st.forcedTries} np=${st.noPoly} ce=${st.candidateEval} fN=${st.failNoR} fJ=${st.failJoint}`
+                        );
+                      }
                       if (ctx.budgetHit) break outerR;
                       if (u) candShort = u;
                     }
@@ -1076,104 +1174,153 @@
                   let candLong = null;
                   if (okLeg1Long) {
                     for (let lt = 0; lt < rSecondMiddleLongPolyTries && !candLong; lt++) {
-                      const jOrder = [...jointPatternsAll].sort(() => rng() - 0.5);
+                      const jOrder = rSecondMiddleJointPatternTrialOrder(rng);
                       for (const jp of jOrder) {
                         if (candLong) break;
                         const att = rSecondMiddleJointPatternAttempts(s1Perp, s1Forward, jp, rng);
+                        const st = midDiagPush ? {
+                          forcedTries: 0,
+                          noPoly: 0,
+                          badTip: 0,
+                          badFull: 0,
+                          candidateEval: 0,
+                          failNoR: 0,
+                          failJoint: 0
+                        } : null;
+                        const acceptMidL = (full) => {
+                          if (!middleLegNoR(full)) {
+                            if (st) st.failNoR++;
+                            return false;
+                          }
+                          if (!rSecondMiddleLegMatchesJointPattern(full, R, jp)) {
+                            if (st) st.failJoint++;
+                            return false;
+                          }
+                          return true;
+                        };
                         const u = tryOrthogonalRSecondLegFromR(
                           R,
                           S1,
                           P2,
-                          b1,
+                          b1LongPolyBends,
                           pathable,
                           rng,
                           ctx,
                           att,
-                          (full) => middleLegNoR(full) && rSecondMiddleLegMatchesJointPattern(full, R, jp)
+                          acceptMidL,
+                          st
                         );
+                        if (midDiagPush && st) {
+                          midDiagPush(
+                            `mid long tryR=${tryR} lt=${lt} split=${b0},${b1},${b2} pass=${pass} jp=${jp} ok=${u != null} ft=${st.forcedTries} np=${st.noPoly} ce=${st.candidateEval} fN=${st.failNoR} fJ=${st.failJoint}`
+                          );
+                        }
                         if (ctx.budgetHit) break outerR;
                         if (u) candLong = u;
                       }
                     }
                   }
-                  let seg1u = null;
-                  if (candShort && candLong) {
-                    seg1u = rng() < rSecondMiddlePreferLongWhenBoth ? candLong : candShort;
-                  } else {
-                    seg1u = candLong != null ? candLong : candShort;
+                  const middleOrder = [];
+                  if (candLong && candShort && b1 >= 3) {
+                    middleOrder.push(candLong, candShort);
+                  } else if (candLong && candShort) {
+                    middleOrder.push(rng() < rSecondMiddlePreferLongWhenBoth ? candLong : candShort);
+                  } else if (candLong) {
+                    middleOrder.push(candLong);
+                  } else if (candShort) {
+                    middleOrder.push(candShort);
                   }
-                  if (!seg1u) continue;
-                  const seg1 = seg1u.slice(1);
-                  const prefixPathCanonical = onBottomRow ? [R, ...seg1, R] : [...seg0, R, ...seg1, R];
-                  const boardW = w;
-                  const boardH = h;
-                  const ks = [0, 1, 2, 3].sort(() => rng() - 0.5);
+                  if (!middleOrder.length) continue;
                   let orientSnap = null;
-                  orientK: for (const k of ks) {
-                    let pb = pathable.map((col) => [...col]);
-                    let pref = prefixPathCanonical.map((x) => __spreadValues({}, x));
-                    let pw = boardW;
-                    let ph = boardH;
-                    for (let i = 0; i < k; i++) {
-                      const nx = applyQuarterCCWPathable(pb, pref, pw, ph);
-                      pb = nx.pathable;
-                      pref = nx.path;
-                      pw = nx.w;
-                      ph = nx.h;
+                  let winMi = -1;
+                  nextMiddle: for (let mi = 0; mi < middleOrder.length; mi++) {
+                    const seg1u = middleOrder[mi];
+                    const legLabel = candLong && seg1u === candLong ? "long" : candShort && seg1u === candShort ? "short" : "?";
+                    if (midDiagPush) {
+                      midDiagPush(
+                        `mid pick tryR=${tryR} split=${b0},${b1},${b2} mi=${mi}/${middleOrder.length} leg=${legLabel} hasShort=${candShort != null} hasLong=${candLong != null}`
+                      );
                     }
-                    const fsK = pathFirstStepDir(pref);
-                    if (!fsK || !dirsEqual(fsK, DIR.U)) continue orientK;
-                    const Rt = pref[pref.length - 1];
-                    const S2t = transformCellByKQuarters(S2, k, boardW, boardH);
-                    const dArm = unitStepDir(S2t.c - Rt.c, S2t.r - Rt.r);
-                    if (!dArm) continue orientK;
-                    const b2Open = rSecondExitOpenPolylineBends(b2);
-                    const edgeGoals = rSecondFeasibleEdgeGoalsForS2(pb, S2t, b2Open);
-                    if (!edgeGoals.length) continue orientK;
-                    const edgeOrder = [...edgeGoals];
-                    shuffleArrayInPlace(edgeOrder, rng);
-                    const nextAttempts2 = rSecondArmTipNextAttempts(S2t, Rt, dArm, pb, pw, ph, rng);
-                    for (const gCell of edgeOrder) {
-                      if (ctx.budgetHit) break outerR;
-                      const seg2u = tryOrthogonalRSecondLegFromR(Rt, S2t, gCell, b2Open, pb, rng, ctx, nextAttempts2);
-                      if (ctx.budgetHit) break outerR;
-                      if (!seg2u) continue;
-                      const seg2cand = seg2u.slice(1);
-                      if (rSecondExitLegHardViolation(pref, seg2cand, pb, pw, ph)) {
+                    const seg1 = seg1u.slice(1);
+                    const prefixPathCanonical = onBottomRow ? [R, ...seg1, R] : [...seg0, R, ...seg1, R];
+                    const boardW = w;
+                    const boardH = h;
+                    const ks = [0, 1, 2, 3].sort(() => rng() - 0.5);
+                    orientK: for (const k of ks) {
+                      let pb = pathable.map((col) => [...col]);
+                      let pref = prefixPathCanonical.map((x) => __spreadValues({}, x));
+                      let pw = boardW;
+                      let ph = boardH;
+                      for (let i = 0; i < k; i++) {
+                        const nx = applyQuarterCCWPathable(pb, pref, pw, ph);
+                        pb = nx.pathable;
+                        pref = nx.path;
+                        pw = nx.w;
+                        ph = nx.h;
+                      }
+                      const fsK = pathFirstStepDir(pref);
+                      if (!fsK || !dirsEqual(fsK, DIR.U)) continue orientK;
+                      const Rt = pref[pref.length - 1];
+                      const S2t = transformCellByKQuarters(S2, k, boardW, boardH);
+                      const dArm = unitStepDir(S2t.c - Rt.c, S2t.r - Rt.r);
+                      if (!dArm) continue orientK;
+                      const b2Open = rSecondExitOpenPolylineBends(b2);
+                      const edgeGoals = rSecondFeasibleEdgeGoalsForS2(pb, S2t, b2Open);
+                      if (!edgeGoals.length) continue orientK;
+                      const edgeOrder = [...edgeGoals];
+                      shuffleArrayInPlace(edgeOrder, rng);
+                      const nextAttempts2 = rSecondArmTipNextAttempts(S2t, Rt, dArm, pb, pw, ph, rng);
+                      for (const gCell of edgeOrder) {
+                        if (ctx.budgetHit) break outerR;
+                        const seg2u = tryOrthogonalRSecondLegFromR(Rt, S2t, gCell, b2Open, pb, rng, ctx, nextAttempts2);
+                        if (ctx.budgetHit) break outerR;
+                        if (!seg2u) continue;
+                        const seg2cand = seg2u.slice(1);
+                        if (rSecondExitLegHardViolation(pref, seg2cand, pb, pw, ph)) {
+                          if (trace) {
+                            trace.push(
+                              `RSecond seg2 hard violation \u2192 redo from next R (prefix\u2194exit or bend/bottom), tried edge goal=(${gCell.c},${gCell.r}) k=${k}`
+                            );
+                          }
+                          if (mi + 1 < middleOrder.length) continue nextMiddle;
+                          continue outerR;
+                        }
+                        const gEnd = seg2cand[seg2cand.length - 1];
+                        if (gEnd.c !== gCell.c || gEnd.r !== gCell.r) continue;
+                        if (!rSecondGoalOnTopLeftOrRightEdge(gEnd, pw, ph)) continue;
+                        const fullPathT = [...pref, ...seg2cand];
+                        if (countRightAngles(fullPathT) !== 6) continue;
+                        const implicitP1 = onBottomRow ? transformCellByKQuarters(P1, k, boardW, boardH) : void 0;
+                        if (!grade3RevisitOneCellRule(
+                          fullPathT,
+                          implicitP1 ? { implicitBeforeFirstR: implicitP1 } : void 0
+                        ))
+                          continue;
+                        const snap = finalizeGrade2OrientedAfterRotation(pb, fullPathT, pw, ph, 6, {
+                          relaxBendVisit: true,
+                          requireGoalOnTopLeftRight: true
+                        });
+                        if (!snap) continue;
+                        orientSnap = snap;
+                        winMi = mi;
                         if (trace) {
                           trace.push(
-                            `RSecond seg2 hard violation \u2192 redo from next R (prefix\u2194exit or bend/bottom), tried edge goal=(${gCell.c},${gCell.r}) k=${k}`
+                            `RSecond seg2 in oriented frame: goal candidate (${gEnd.c},${gEnd.r}) k=${k} before pad norm`
                           );
                         }
-                        continue outerR;
+                        break orientK;
                       }
-                      const gEnd = seg2cand[seg2cand.length - 1];
-                      if (gEnd.c !== gCell.c || gEnd.r !== gCell.r) continue;
-                      if (!rSecondGoalOnTopLeftOrRightEdge(gEnd, pw, ph)) continue;
-                      const fullPathT = [...pref, ...seg2cand];
-                      if (countRightAngles(fullPathT) !== 6) continue;
-                      const implicitP1 = onBottomRow ? transformCellByKQuarters(P1, k, boardW, boardH) : void 0;
-                      if (!grade3RevisitOneCellRule(
-                        fullPathT,
-                        implicitP1 ? { implicitBeforeFirstR: implicitP1 } : void 0
-                      ))
-                        continue;
-                      const snap = finalizeGrade2OrientedAfterRotation(pb, fullPathT, pw, ph, 6, {
-                        relaxBendVisit: true,
-                        requireGoalOnTopLeftRight: true
-                      });
-                      if (!snap) continue;
-                      orientSnap = snap;
-                      if (trace) {
-                        trace.push(
-                          `RSecond seg2 in oriented frame: goal candidate (${gEnd.c},${gEnd.r}) k=${k} before pad norm`
-                        );
-                      }
-                      break orientK;
                     }
+                    if (orientSnap) break nextMiddle;
                   }
                   if (!orientSnap) continue;
                   writeBench(tryR);
+                  if (bench) {
+                    bench.rSecondWinningSplit = [b0, b1, b2];
+                    if (winMi >= 0) {
+                      bench.rSecondWinningMiddleLeg = candLong != null && middleOrder[winMi] === candLong ? "long" : "short";
+                    }
+                  }
                   if (trace) {
                     const pairKind = dirsEqual(dOut1, dIn2) ? "same-axis(2+2t)" : dirsEqual(dOut1, negateDir(dIn2)) ? "opposite(4+2t)" : orthogonalDirs(dOut1, dIn2) ? "orthogonal(3+2t)" : "?";
                     trace.push(
@@ -1799,6 +1946,11 @@
     };
     const rSecondTrace = genOpts == null ? void 0 : genOpts.lv4RSecondTrace;
     if (rSecondTrace) rSecondTrace.length = 0;
+    const midDiag = genOpts == null ? void 0 : genOpts.lv4RSecondMidDiag;
+    const midPush = midDiag && ((s) => {
+      if (midDiag.maxLines != null && midDiag.lines.length >= midDiag.maxLines) return;
+      midDiag.lines.push(s);
+    });
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const bottoms = bottomCandidates(pathable);
       const tops = topCandidates(pathable);
@@ -1818,7 +1970,7 @@
           bench.rFirstBudgetExhausted = 0;
           bench.rFirstLastTryR = 0;
         }
-        picked = tryConstructGrade3PathRSecondN1(pathable, rng, bench, rSecondTrace);
+        picked = tryConstructGrade3PathRSecondN1(pathable, rng, bench, rSecondTrace, midPush || void 0);
         if (picked && rSecondTrace) {
           rSecondTrace.push(
             `polyline OK: len=${picked.solutionPath.length} start=(${picked.start.c},${picked.start.r}) rightAngles=${countRightAngles(picked.solutionPath)}`
