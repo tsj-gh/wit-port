@@ -625,7 +625,8 @@ function tryOrthogonalRSecondLegFromR(
   pathable: boolean[][],
   rng: () => number,
   ctx: RFirstPolyCtx,
-  nextAttempts: (CellCoord | undefined)[]
+  nextAttempts: (CellCoord | undefined)[],
+  acceptFull?: (full: CellCoord[]) => boolean
 ): CellCoord[] | null {
   const manRArm =
     Math.abs(armTip.c - R.c) + Math.abs(armTip.r - R.r);
@@ -652,6 +653,7 @@ function tryOrthogonalRSecondLegFromR(
 
     const full: CellCoord[] = [R, ...tailPath];
     if (full.length < 2 || full[1]!.c !== armTip.c || full[1]!.r !== armTip.r) continue;
+    if (acceptFull && !acceptFull(full)) continue;
     return full;
   }
   return null;
@@ -1215,16 +1217,15 @@ function rSecondExitOpenPolylineBends(b2: number): number {
   return Math.max(0, b2 - 1);
 }
 
-/** armTip の次マスを試す順: 近傍（直交・前方）をシャッフルし、最後に無制約 undefined を混ぜてシャッフル */
-function rSecondArmTipNextAttempts(
+/** `R→armTip` を `dAlongFromR` で進んだあと、armTip からの **直交**／**直進** 候補に分ける（シャッフル前） */
+function rSecondArmTipNeighborSplit(
   armTip: CellCoord,
   R: CellCoord,
   dAlongFromR: Dir,
   pathable: boolean[][],
   w: number,
-  h: number,
-  rng: () => number
-): (CellCoord | undefined)[] {
+  h: number
+): { perp: CellCoord[]; forward: CellCoord[] } {
   const neighbors = ([DIR.U, DIR.D, DIR.L, DIR.R] as const)
     .map((d) => addCell(armTip, d))
     .filter(
@@ -1241,9 +1242,66 @@ function rSecondArmTipNextAttempts(
     const d = unitStepDir(q.c - armTip.c, q.r - armTip.r);
     return d && dirsEqual(d, dAlongFromR);
   });
+  return { perp, forward };
+}
+
+/** armTip の次マスを試す順: 近傍（直交・前方）をシャッフルし、最後に無制約 undefined を混ぜてシャッフル */
+function rSecondArmTipNextAttempts(
+  armTip: CellCoord,
+  R: CellCoord,
+  dAlongFromR: Dir,
+  pathable: boolean[][],
+  w: number,
+  h: number,
+  rng: () => number
+): (CellCoord | undefined)[] {
+  const { perp, forward } = rSecondArmTipNeighborSplit(armTip, R, dAlongFromR, pathable, w, h);
   shuffleArrayInPlace(perp, rng);
   shuffleArrayInPlace(forward, rng);
   return [...perp, ...forward, undefined];
+}
+
+/** 中脚 `[R,S1,…,P2]` での関節: S1 で折る／P2 で折る／両方／の 3 通りを明示探索する */
+type RSecondMiddleJointPattern = "bothEndsBend" | "s1BendOnly" | "p2BendOnly";
+
+function rSecondMiddleJointPatternAttempts(
+  perp: CellCoord[],
+  forward: CellCoord[],
+  pattern: RSecondMiddleJointPattern,
+  rng: () => number
+): (CellCoord | undefined)[] {
+  const p = [...perp];
+  const f = [...forward];
+  shuffleArrayInPlace(p, rng);
+  shuffleArrayInPlace(f, rng);
+  if (pattern === "p2BendOnly") {
+    return [...f, undefined];
+  }
+  return [...p, undefined, ...f];
+}
+
+function rSecondMiddleLegJointBendFlags(full: CellCoord[], R: CellCoord): { s1: boolean; p2: boolean } {
+  if (full.length < 3) return { s1: false, p2: false };
+  const dRS1 = unitStepDir(full[1]!.c - full[0]!.c, full[1]!.r - full[0]!.r);
+  const dS1n = unitStepDir(full[2]!.c - full[1]!.c, full[2]!.r - full[1]!.r);
+  const s1 = !!(dRS1 && dS1n && orthogonalDirs(dRS1, dS1n));
+
+  const n = full.length;
+  const P2 = full[n - 1]!;
+  const prev = full[n - 2]!;
+  const dPrevP2 = unitStepDir(P2.c - prev.c, P2.r - prev.r);
+  const dP2R = unitStepDir(R.c - P2.c, R.r - P2.r);
+  const p2 = !!(dPrevP2 && dP2R && orthogonalDirs(dPrevP2, dP2R));
+  return { s1, p2 };
+}
+
+function rSecondMiddleLegMatchesJointPattern(full: CellCoord[], R: CellCoord, pattern: RSecondMiddleJointPattern): boolean {
+  if (full.length < 2 || full[0]!.c !== R.c || full[0]!.r !== R.r) return false;
+  const { s1, p2 } = rSecondMiddleLegJointBendFlags(full, R);
+  if (pattern === "bothEndsBend") return s1 && p2;
+  if (pattern === "s1BendOnly") return s1 && !p2;
+  if (pattern === "p2BendOnly") return !s1 && p2;
+  return false;
 }
 
 /**
@@ -1396,42 +1454,67 @@ function tryConstructGrade3PathRSecondN1(
                 }
                 if (!okLeg1Short && !okLeg1Long) continue;
 
-                const nextAttempts1 = rSecondArmTipNextAttempts(S1, R, dOut1, pathable, w, h, rng);
+                const { perp: s1Perp, forward: s1Forward } = rSecondArmTipNeighborSplit(
+                  S1,
+                  R,
+                  dOut1,
+                  pathable,
+                  w,
+                  h
+                );
                 const rKey = keyCell(R.c, R.r);
                 const middleLegNoR = (u: CellCoord[]) =>
                   !u.slice(1).some((p) => keyCell(p.c, p.r) === rKey);
 
+                const jointPatternsAll: RSecondMiddleJointPattern[] = [
+                  "bothEndsBend",
+                  "s1BendOnly",
+                  "p2BendOnly",
+                ];
+
                 let candShort: CellCoord[] | null = null;
                 if (okLeg1Short) {
-                  const u = tryOrthogonalRSecondLegFromR(
-                    R,
-                    S1,
-                    P2,
-                    b1Open,
-                    pathable,
-                    rng,
-                    ctx,
-                    nextAttempts1
-                  );
-                  if (ctx.budgetHit) break outerR;
-                  if (u && middleLegNoR(u)) candShort = u;
+                  const jOrder = [...jointPatternsAll].sort(() => rng() - 0.5);
+                  for (const jp of jOrder) {
+                    if (candShort) break;
+                    const att = rSecondMiddleJointPatternAttempts(s1Perp, s1Forward, jp, rng);
+                    const u = tryOrthogonalRSecondLegFromR(
+                      R,
+                      S1,
+                      P2,
+                      b1Open,
+                      pathable,
+                      rng,
+                      ctx,
+                      att,
+                      (full) => middleLegNoR(full) && rSecondMiddleLegMatchesJointPattern(full, R, jp)
+                    );
+                    if (ctx.budgetHit) break outerR;
+                    if (u) candShort = u;
+                  }
                 }
 
                 let candLong: CellCoord[] | null = null;
                 if (okLeg1Long) {
                   for (let lt = 0; lt < rSecondMiddleLongPolyTries && !candLong; lt++) {
-                    const u = tryOrthogonalRSecondLegFromR(
-                      R,
-                      S1,
-                      P2,
-                      b1,
-                      pathable,
-                      rng,
-                      ctx,
-                      nextAttempts1
-                    );
-                    if (ctx.budgetHit) break outerR;
-                    if (u && middleLegNoR(u)) candLong = u;
+                    const jOrder = [...jointPatternsAll].sort(() => rng() - 0.5);
+                    for (const jp of jOrder) {
+                      if (candLong) break;
+                      const att = rSecondMiddleJointPatternAttempts(s1Perp, s1Forward, jp, rng);
+                      const u = tryOrthogonalRSecondLegFromR(
+                        R,
+                        S1,
+                        P2,
+                        b1,
+                        pathable,
+                        rng,
+                        ctx,
+                        att,
+                        (full) => middleLegNoR(full) && rSecondMiddleLegMatchesJointPattern(full, R, jp)
+                      );
+                      if (ctx.budgetHit) break outerR;
+                      if (u) candLong = u;
+                    }
                   }
                 }
 
