@@ -861,6 +861,12 @@
     if (orthogonalDirs(dOut1, dIn2)) return b1 >= 3 && b1 % 2 === 1;
     return false;
   }
+  function rSecondMiddleOpenPolylineBends(b1) {
+    return Math.max(0, b1 - 2);
+  }
+  function rSecondExitOpenPolylineBends(b2) {
+    return Math.max(0, b2 - 1);
+  }
   function rSecondArmTipNextAttempts(armTip, R, dAlongFromR, pathable, w, h, rng) {
     const neighbors = [DIR.U, DIR.D, DIR.L, DIR.R].map((d) => addCell(armTip, d)).filter(
       (q) => inBounds(q.c, q.r, w, h) && pathable[q.c][q.r] && !(q.c === R.c && q.r === R.r)
@@ -985,9 +991,10 @@
                     if (ctx.budgetHit) break outerR;
                     if (!seg0) continue;
                   }
+                  const b1Open = rSecondMiddleOpenPolylineBends(b1);
                   let okLeg1 = false;
                   for (const fh of [true, false]) {
-                    if (!orthoPolylineSplitImpossible(S1, P2, b1, fh)) {
+                    if (!orthoPolylineSplitImpossible(S1, P2, b1Open, fh)) {
                       okLeg1 = true;
                       break;
                     }
@@ -998,7 +1005,7 @@
                     R,
                     S1,
                     P2,
-                    b1,
+                    b1Open,
                     pathable,
                     rng,
                     ctx,
@@ -1007,8 +1014,6 @@
                   if (ctx.budgetHit) break outerR;
                   if (!seg1u) continue;
                   const seg1 = seg1u.slice(1);
-                  const rKey = keyCell(R.c, R.r);
-                  if (seg1.some((p) => keyCell(p.c, p.r) === rKey)) continue;
                   const prefixPathCanonical = onBottomRow ? [R, ...seg1, R] : [...seg0, R, ...seg1, R];
                   const boardW = w;
                   const boardH = h;
@@ -1032,14 +1037,15 @@
                     const S2t = transformCellByKQuarters(S2, k, boardW, boardH);
                     const dArm = unitStepDir(S2t.c - Rt.c, S2t.r - Rt.r);
                     if (!dArm) continue orientK;
-                    const edgeGoals = rSecondFeasibleEdgeGoalsForS2(pb, S2t, b2);
+                    const b2Open = rSecondExitOpenPolylineBends(b2);
+                    const edgeGoals = rSecondFeasibleEdgeGoalsForS2(pb, S2t, b2Open);
                     if (!edgeGoals.length) continue orientK;
                     const edgeOrder = [...edgeGoals];
                     shuffleArrayInPlace(edgeOrder, rng);
                     const nextAttempts2 = rSecondArmTipNextAttempts(S2t, Rt, dArm, pb, pw, ph, rng);
                     for (const gCell of edgeOrder) {
                       if (ctx.budgetHit) break outerR;
-                      const seg2u = tryOrthogonalRSecondLegFromR(Rt, S2t, gCell, b2, pb, rng, ctx, nextAttempts2);
+                      const seg2u = tryOrthogonalRSecondLegFromR(Rt, S2t, gCell, b2Open, pb, rng, ctx, nextAttempts2);
                       if (ctx.budgetHit) break outerR;
                       if (!seg2u) continue;
                       const seg2cand = seg2u.slice(1);

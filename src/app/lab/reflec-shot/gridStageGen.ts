@@ -613,8 +613,7 @@ function tryOrthogonalPolylineRFirst(
 
 /**
  * R-Second 中脚／出口: セル列は [R, armTip, …, goal]。R→armTip は1歩で固定。
- * `b` は **R-First の `tryOrthogonalPolyline(armTip, goal, b, …)` と同じ**区間全体の直角折れ本数
- *（`tryOrthogonalPolylineRFirst` の `bends` 引数にそのまま渡す）。
+ * `b` は **開区間** armTip〜goal のポリラインに要求する直角折れ数（`rSecondMiddleOpenPolylineBends` / `rSecondExitOpenPolylineBends` で算出した値を渡す）。
  * `nextAttempts`: armTip の次マス path[2] を `tryOrthogonalPolylineRFirst` の forcedSecond で順に試し、
  * 最後に `undefined`（無制約）で試す。順序は毎回シャッフル。
  */
@@ -1193,9 +1192,8 @@ function tryConstructGrade3PathRFirstN1(
 }
 
 /**
- * R-Second RS2-1: 再訪点 R の「閉路側」区間の折れ本数 `b1`。
- * **R-First の `seg1 = tryOrthogonalPolyline(S1, P2, b1, …)` と同じ意味**で、`tryOrthogonalPolylineRFirst(S1, P2, b1, …)` に渡す
- *（旧実装の `b1-2` 換算は誤りで、最短 L のみに縮んでいた）。
+ * R-Second RS2-1: 再訪点 R の「閉路側」区間の折れ本数 `b1`（**合計**）。
+ * `R→S1` と `S1→中脚先` が直交する関節、`手前→P2` と `P2→R` が直交する関節は **b1 に含め**、開区間 S1〜P2 のポリライン内部の折れは `rSecondMiddleOpenPolylineBends(b1)` で得る。
  * - 同軸往復（dOut1 === dIn2）: 2+2t
  * - 直交: 3+2t（Lv.4 では b1=3 のみ）
  * - 反対軸: 4+2t（Lv.4 では b1=4 のみ）
@@ -1205,6 +1203,16 @@ function rSecondPairMidBendsOk(b1: number, dOut1: Dir, dIn2: Dir): boolean {
   if (dirsEqual(dOut1, negateDir(dIn2))) return b1 >= 4 && b1 % 2 === 0;
   if (orthogonalDirs(dOut1, dIn2)) return b1 >= 3 && b1 % 2 === 1;
   return false;
+}
+
+/** RS2-1 中脚: `b1` は S1・P2 の関節折れを含む。`tryOrthogonalPolylineRFirst(S1, P2, ·)` へは開区間分 `max(0, b1-2)` */
+function rSecondMiddleOpenPolylineBends(b1: number): number {
+  return Math.max(0, b1 - 2);
+}
+
+/** 出口脚: `b2` は R→S2 の関節折れを含む。開区間 S2〜goal には `max(0, b2-1)` */
+function rSecondExitOpenPolylineBends(b2: number): number {
+  return Math.max(0, b2 - 1);
 }
 
 /** armTip の次マスを試す順: 近傍（直交・前方）をシャッフルし、最後に無制約 undefined を混ぜてシャッフル */
@@ -1376,9 +1384,10 @@ function tryConstructGrade3PathRSecondN1(
                   if (!seg0) continue;
                 }
 
+                const b1Open = rSecondMiddleOpenPolylineBends(b1);
                 let okLeg1 = false;
                 for (const fh of [true, false] as const) {
-                  if (!orthoPolylineSplitImpossible(S1, P2, b1, fh)) {
+                  if (!orthoPolylineSplitImpossible(S1, P2, b1Open, fh)) {
                     okLeg1 = true;
                     break;
                   }
@@ -1390,7 +1399,7 @@ function tryConstructGrade3PathRSecondN1(
                   R,
                   S1,
                   P2,
-                  b1,
+                  b1Open,
                   pathable,
                   rng,
                   ctx,
@@ -1399,8 +1408,6 @@ function tryConstructGrade3PathRSecondN1(
                 if (ctx.budgetHit) break outerR;
                 if (!seg1u) continue;
                 const seg1 = seg1u.slice(1);
-                const rKey = keyCell(R.c, R.r);
-                if (seg1.some((p) => keyCell(p.c, p.r) === rKey)) continue;
 
                 const prefixPathCanonical: CellCoord[] = onBottomRow
                   ? [R, ...seg1, R]
@@ -1430,7 +1437,8 @@ function tryConstructGrade3PathRSecondN1(
                   const dArm = unitStepDir(S2t.c - Rt.c, S2t.r - Rt.r);
                   if (!dArm) continue orientK;
 
-                  const edgeGoals = rSecondFeasibleEdgeGoalsForS2(pb, S2t, b2);
+                  const b2Open = rSecondExitOpenPolylineBends(b2);
+                  const edgeGoals = rSecondFeasibleEdgeGoalsForS2(pb, S2t, b2Open);
                   if (!edgeGoals.length) continue orientK;
                   const edgeOrder = [...edgeGoals];
                   shuffleArrayInPlace(edgeOrder, rng);
@@ -1439,7 +1447,7 @@ function tryConstructGrade3PathRSecondN1(
 
                   for (const gCell of edgeOrder) {
                     if (ctx.budgetHit) break outerR;
-                    const seg2u = tryOrthogonalRSecondLegFromR(Rt, S2t, gCell, b2, pb, rng, ctx, nextAttempts2);
+                    const seg2u = tryOrthogonalRSecondLegFromR(Rt, S2t, gCell, b2Open, pb, rng, ctx, nextAttempts2);
                     if (ctx.budgetHit) break outerR;
                     if (!seg2u) continue;
                     const seg2cand = seg2u.slice(1);
