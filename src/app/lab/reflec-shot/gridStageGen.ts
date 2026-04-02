@@ -3572,42 +3572,95 @@ export function generateGridStage(
   return generateBoardLv4Stage(seed, polyOpts);
 }
 
-/** 乱数シードをずらして `generateGridStage` と同型の生成を再試行 */
-export function fallbackGridStage(grade: number, seed: number): GridStage {
+/** `generateGridStageWithFallback` / Worker 計測用 */
+export type GridStageGenWithFallbackMeta = {
+  stage: GridStage;
+  /** `generateGridStage` が非 null だったか */
+  usedPrimary: boolean;
+  /** フォールバック走査の t（プライマリ成功時は 0） */
+  fallbackT: number;
+  requestSeed: number;
+  /** 盤の `stage.seed` と一致（フォールバックではずらした本体シード） */
+  effectiveSeed: number;
+};
+
+type FallbackInner = { stage: GridStage; t: number };
+
+/** 乱数シードをずらして `generateGridStage` と同型の生成を再試行（幾何に使ったシードを `stage.seed` に反映） */
+function fallbackGridStageInner(
+  grade: number,
+  seed: number,
+  polyOpts?: ReflectShotPolylineGenOpts
+): FallbackInner {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
   if (g === 1) {
     for (let t = 0; t < 500; t++) {
-      const st = generateBoardLv1Stage(1, (seed + t * 0x9e3779b9) >>> 0);
-      if (st) return { ...st, grade: g, seed };
+      const bodySeed = (seed + t * 0x9e3779b9) >>> 0;
+      const st = generateBoardLv1Stage(1, bodySeed);
+      if (st) return { stage: { ...st, grade: g, seed: bodySeed }, t };
     }
     throw new Error("fallbackGridStage(1): Lv.1・バンパー2 の生成に失敗");
   }
   if (g === 2) {
     for (let t = 0; t < 500; t++) {
-      const st = generateBoardLv1Stage(2, (seed + t * 0x9e3779b9) >>> 0);
-      if (st) return { ...st, grade: g, seed };
+      const bodySeed = (seed + t * 0x9e3779b9) >>> 0;
+      const st = generateBoardLv1Stage(2, bodySeed);
+      if (st) return { stage: { ...st, grade: g, seed: bodySeed }, t };
     }
     throw new Error("fallbackGridStage(2): Lv.1・バンパー4+ の生成に失敗");
   }
   if (g === 3) {
     for (let t = 0; t < 200; t++) {
-      const st = generateBoardLv2Stage((seed + t * 130051) >>> 0);
-      if (st) return { ...st, grade: g, seed };
+      const bodySeed = (seed + t * 130051) >>> 0;
+      const st = generateBoardLv2Stage(bodySeed, polyOpts);
+      if (st) return { stage: { ...st, grade: g, seed: bodySeed }, t };
     }
     throw new Error("fallbackGridStage(3): Lv.2 の生成に失敗");
   }
   if (g === 4) {
     for (let t = 0; t < 200; t++) {
-      const st = generateBoardLv3Stage((seed + t * 130051) >>> 0);
-      if (st) return { ...st, grade: g, seed };
+      const bodySeed = (seed + t * 130051) >>> 0;
+      const st = generateBoardLv3Stage(bodySeed, polyOpts);
+      if (st) return { stage: { ...st, grade: g, seed: bodySeed }, t };
     }
     throw new Error("fallbackGridStage(4): Lv.3 の生成に失敗");
   }
   for (let t = 0; t < 500; t++) {
-    const st = generateBoardLv4Stage((seed + t * 130051) >>> 0);
-    if (st) return { ...st, grade: g, seed };
+    const bodySeed = (seed + t * 130051) >>> 0;
+    const st = generateBoardLv4Stage(bodySeed, polyOpts);
+    if (st) return { stage: { ...st, grade: g, seed: bodySeed }, t };
   }
   throw new Error("fallbackGridStage(5): Lv.4 の生成に失敗");
+}
+
+export function fallbackGridStage(grade: number, seed: number, polyOpts?: ReflectShotPolylineGenOpts): GridStage {
+  return fallbackGridStageInner(grade, seed, polyOpts).stage;
+}
+
+export function generateGridStageWithFallbackMeta(
+  grade: number,
+  seed: number,
+  polyOpts?: ReflectShotPolylineGenOpts
+): GridStageGenWithFallbackMeta {
+  const requestSeed = seed >>> 0;
+  const primary = generateGridStage(grade, requestSeed, polyOpts);
+  if (primary) {
+    return {
+      stage: primary,
+      usedPrimary: true,
+      fallbackT: 0,
+      requestSeed,
+      effectiveSeed: primary.seed >>> 0,
+    };
+  }
+  const { stage, t } = fallbackGridStageInner(grade, requestSeed, polyOpts);
+  return {
+    stage,
+    usedPrimary: false,
+    fallbackT: t,
+    requestSeed,
+    effectiveSeed: stage.seed >>> 0,
+  };
 }
 
 export function generateGridStageWithFallback(
@@ -3615,5 +3668,5 @@ export function generateGridStageWithFallback(
   seed: number,
   polyOpts?: ReflectShotPolylineGenOpts
 ): GridStage {
-  return generateGridStage(grade, seed, polyOpts) ?? fallbackGridStage(grade, seed);
+  return generateGridStageWithFallbackMeta(grade, seed, polyOpts).stage;
 }

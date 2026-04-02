@@ -945,6 +945,28 @@ export default function ReflecShotGame() {
                       ? `${lastMetrics.totalMs.toFixed(1)} ms`
                       : "—"}
                 </div>
+                {lastMetrics && (
+                  <div className="text-[9px] text-slate-400 leading-snug space-y-0.5">
+                    <div>
+                      生成経路:{" "}
+                      <span className={lastMetrics.usedPrimary ? "text-emerald-300" : "text-amber-300"}>
+                        {lastMetrics.usedPrimary ? "プライマリ" : `フォールバック t=${lastMetrics.fallbackT}`}
+                      </span>
+                    </div>
+                    <div className="break-all">
+                      seed req…eff:{" "}
+                      <code className="text-slate-300">
+                        0x{(lastMetrics.requestSeed >>> 0).toString(16)}
+                      </code>
+                      {lastMetrics.requestSeed >>> 0 !== (lastMetrics.effectiveSeed >>> 0) ? (
+                        <>
+                          {" → "}
+                          <code className="text-amber-200">0x{(lastMetrics.effectiveSeed >>> 0).toString(16)}</code>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
                 <div className="text-sky-200/80">
                   Stock:{" "}
                   {REFLECT_SHOT_STOCK_GRADES.map((g) => (

@@ -7,6 +7,14 @@ export type ReflectShotSerializedStage = Omit<GridStage, "bumpers"> & {
 
 export type ReflectShotGenMetrics = {
   totalMs: number;
+  /** `generateGridStage` が成功した（フォールバック未使用） */
+  usedPrimary: boolean;
+  /** フォールバック探索のオフセット t（プライマリ成功時は 0） */
+  fallbackT: number;
+  /** `GENERATE` で渡した seed */
+  requestSeed: number;
+  /** 盤 `board.seed` と一致する、生成に実際に使った seed */
+  effectiveSeed: number;
 };
 
 /** Grade5（Lv.4）経路生成。`rFirst` / `rSecond` はデバッグ UI からのみ指定想定 */

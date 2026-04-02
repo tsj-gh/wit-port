@@ -2386,45 +2386,67 @@
     if (g === 4) return generateBoardLv3Stage(seed, polyOpts);
     return generateBoardLv4Stage(seed, polyOpts);
   }
-  function fallbackGridStage(grade, seed) {
+  function fallbackGridStageInner(grade, seed, polyOpts) {
     const g = Math.max(1, Math.min(5, Math.floor(grade)));
     if (g === 1) {
       for (let t = 0; t < 500; t++) {
-        const st = generateBoardLv1Stage(1, seed + t * 2654435769 >>> 0);
-        if (st) return __spreadProps(__spreadValues({}, st), { grade: g, seed });
+        const bodySeed = seed + t * 2654435769 >>> 0;
+        const st = generateBoardLv1Stage(1, bodySeed);
+        if (st) return { stage: __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed }), t };
       }
       throw new Error("fallbackGridStage(1): Lv.1\u30FB\u30D0\u30F3\u30D1\u30FC2 \u306E\u751F\u6210\u306B\u5931\u6557");
     }
     if (g === 2) {
       for (let t = 0; t < 500; t++) {
-        const st = generateBoardLv1Stage(2, seed + t * 2654435769 >>> 0);
-        if (st) return __spreadProps(__spreadValues({}, st), { grade: g, seed });
+        const bodySeed = seed + t * 2654435769 >>> 0;
+        const st = generateBoardLv1Stage(2, bodySeed);
+        if (st) return { stage: __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed }), t };
       }
       throw new Error("fallbackGridStage(2): Lv.1\u30FB\u30D0\u30F3\u30D1\u30FC4+ \u306E\u751F\u6210\u306B\u5931\u6557");
     }
     if (g === 3) {
       for (let t = 0; t < 200; t++) {
-        const st = generateBoardLv2Stage(seed + t * 130051 >>> 0);
-        if (st) return __spreadProps(__spreadValues({}, st), { grade: g, seed });
+        const bodySeed = seed + t * 130051 >>> 0;
+        const st = generateBoardLv2Stage(bodySeed, polyOpts);
+        if (st) return { stage: __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed }), t };
       }
       throw new Error("fallbackGridStage(3): Lv.2 \u306E\u751F\u6210\u306B\u5931\u6557");
     }
     if (g === 4) {
       for (let t = 0; t < 200; t++) {
-        const st = generateBoardLv3Stage(seed + t * 130051 >>> 0);
-        if (st) return __spreadProps(__spreadValues({}, st), { grade: g, seed });
+        const bodySeed = seed + t * 130051 >>> 0;
+        const st = generateBoardLv3Stage(bodySeed, polyOpts);
+        if (st) return { stage: __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed }), t };
       }
       throw new Error("fallbackGridStage(4): Lv.3 \u306E\u751F\u6210\u306B\u5931\u6557");
     }
     for (let t = 0; t < 500; t++) {
-      const st = generateBoardLv4Stage(seed + t * 130051 >>> 0);
-      if (st) return __spreadProps(__spreadValues({}, st), { grade: g, seed });
+      const bodySeed = seed + t * 130051 >>> 0;
+      const st = generateBoardLv4Stage(bodySeed, polyOpts);
+      if (st) return { stage: __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed }), t };
     }
     throw new Error("fallbackGridStage(5): Lv.4 \u306E\u751F\u6210\u306B\u5931\u6557");
   }
-  function generateGridStageWithFallback(grade, seed, polyOpts) {
-    var _a;
-    return (_a = generateGridStage(grade, seed, polyOpts)) != null ? _a : fallbackGridStage(grade, seed);
+  function generateGridStageWithFallbackMeta(grade, seed, polyOpts) {
+    const requestSeed = seed >>> 0;
+    const primary = generateGridStage(grade, requestSeed, polyOpts);
+    if (primary) {
+      return {
+        stage: primary,
+        usedPrimary: true,
+        fallbackT: 0,
+        requestSeed,
+        effectiveSeed: primary.seed >>> 0
+      };
+    }
+    const { stage, t } = fallbackGridStageInner(grade, requestSeed, polyOpts);
+    return {
+      stage,
+      usedPrimary: false,
+      fallbackT: t,
+      requestSeed,
+      effectiveSeed: stage.seed >>> 0
+    };
   }
 
   // src/app/lab/reflec-shot/reflectShotWorkerTypes.ts
@@ -2446,13 +2468,33 @@
     try {
       const t0 = performance.now();
       const genOpts = grade === 4 && grade2Bend6TotalBends != null || debugReflecShotConsole || lv4GenMode != null ? __spreadValues(__spreadValues(__spreadValues({}, grade === 4 && grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : {}), debugReflecShotConsole ? { debugReflecShotConsole: true } : {}), lv4GenMode != null ? { lv4GenMode } : {}) : void 0;
-      const board = generateGridStageWithFallback(grade, seed, genOpts);
+      const meta = generateGridStageWithFallbackMeta(grade, seed, genOpts);
       const totalMs = performance.now() - t0;
+      if (debugReflecShotConsole) {
+        console.log("[ReflecShot Worker] generate", {
+          grade,
+          usedPrimary: meta.usedPrimary,
+          fallbackT: meta.fallbackT,
+          requestSeed: meta.requestSeed,
+          effectiveSeed: meta.effectiveSeed,
+          requestHex: meta.requestSeed.toString(16),
+          effectiveHex: meta.effectiveSeed.toString(16),
+          start: `${meta.stage.start.c},${meta.stage.start.r}`,
+          goal: `${meta.stage.goal.c},${meta.stage.goal.r}`,
+          ms: totalMs
+        });
+      }
       post({
         type: "SUCCESS",
         requestId,
-        board: serializeGridStageForWorker(board),
-        metrics: { totalMs }
+        board: serializeGridStageForWorker(meta.stage),
+        metrics: {
+          totalMs,
+          usedPrimary: meta.usedPrimary,
+          fallbackT: meta.fallbackT,
+          requestSeed: meta.requestSeed,
+          effectiveSeed: meta.effectiveSeed
+        }
       });
     } catch (e) {
       post({

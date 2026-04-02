@@ -1,7 +1,7 @@
 /**
  * esbuild で `public/workers/reflect-shot-worker.js` へバンドルするエントリ。
  */
-import { generateGridStageWithFallback } from "../app/lab/reflec-shot/gridStageGen";
+import { generateGridStageWithFallbackMeta } from "../app/lab/reflec-shot/gridStageGen";
 import {
   serializeGridStageForWorker,
   type ReflectShotMainToWorkerGenerate,
@@ -29,13 +29,33 @@ self.onmessage = (ev: MessageEvent<ReflectShotMainToWorkerGenerate>) => {
             ...(lv4GenMode != null ? { lv4GenMode } : {}),
           }
         : undefined;
-    const board = generateGridStageWithFallback(grade, seed, genOpts);
+    const meta = generateGridStageWithFallbackMeta(grade, seed, genOpts);
     const totalMs = performance.now() - t0;
+    if (debugReflecShotConsole) {
+      console.log("[ReflecShot Worker] generate", {
+        grade,
+        usedPrimary: meta.usedPrimary,
+        fallbackT: meta.fallbackT,
+        requestSeed: meta.requestSeed,
+        effectiveSeed: meta.effectiveSeed,
+        requestHex: meta.requestSeed.toString(16),
+        effectiveHex: meta.effectiveSeed.toString(16),
+        start: `${meta.stage.start.c},${meta.stage.start.r}`,
+        goal: `${meta.stage.goal.c},${meta.stage.goal.r}`,
+        ms: totalMs,
+      });
+    }
     post({
       type: "SUCCESS",
       requestId,
-      board: serializeGridStageForWorker(board),
-      metrics: { totalMs },
+      board: serializeGridStageForWorker(meta.stage),
+      metrics: {
+        totalMs,
+        usedPrimary: meta.usedPrimary,
+        fallbackT: meta.fallbackT,
+        requestSeed: meta.requestSeed,
+        effectiveSeed: meta.effectiveSeed,
+      },
     });
   } catch (e) {
     post({
