@@ -32,18 +32,6 @@ const BASE_CELL_TRAVEL_MS = 280;
 const CHARGE_MS = 520;
 const SWIPE_MIN = 12;
 
-/** グレードモーダル見出し（プルダウン廃止・広告との誤接触防止のため一覧選択） */
-const REFLEC_SHOT_GRADE_MODAL_TITLES: Record<1 | 2 | 3 | 4 | 5, string> = {
-  1: "1. バンパー2",
-  2: "2. バンパー4+",
-  3: "3. 折れ4",
-  4: "4. 折れ6〜8",
-  5: "5. 再訪1",
-};
-
-/** 広告ブロックと操作 UI のあいだに確保する最小余白（px）。ポリシー・審査向け */
-const AD_UI_MIN_GAP_PX = 150;
-
 type Phase = "edit" | "move" | "won" | "lost";
 
 type BoardSurfaceSource = "stock" | "generated";
@@ -213,7 +201,6 @@ export default function ReflecShotGame() {
   const [hashInput, setHashInput] = useState("");
   const [layoutNonce, setLayoutNonce] = useState(0);
   const [windowWidth, setWindowWidth] = useState(1024);
-  const [gradeModalOpen, setGradeModalOpen] = useState(false);
   const [stockPrefetchPaused, setStockPrefetchPaused] = useState(false);
   const nextBoardSourceRef = useRef<BoardSurfaceSource | null>(null);
   const [boardDisplaySource, setBoardDisplaySource] = useState<BoardSurfaceSource | null>(null);
@@ -295,20 +282,6 @@ export default function ReflecShotGame() {
   }, []);
 
   const isMobile = windowWidth < 768;
-
-  useEffect(() => {
-    if (!gradeModalOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setGradeModalOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [gradeModalOpen]);
 
   useEffect(() => {
     const prev = debugPrevBoardRef.current;
@@ -1117,14 +1090,11 @@ export default function ReflecShotGame() {
         </div>
       )}
 
-      <div
-        className={isMobile ? "hidden" : ""}
-        style={isMobile ? undefined : { marginBottom: AD_UI_MIN_GAP_PX }}
-      >
+      <div className={isMobile ? "hidden" : "mb-4"}>
         <ReflecShotAdSlot slotIndex={1} isDebugMode={isDebugMode} />
       </div>
 
-      <section className="relative z-[1] rounded-2xl p-4 sm:p-6 mb-4 border border-white/10 bg-white/5 backdrop-blur isolate">
+      <section className="rounded-2xl p-4 sm:p-6 mb-4 border border-white/10 bg-white/5 backdrop-blur">
         <div className="flex flex-col items-center">
           <div className="flex justify-between w-full max-w-[520px] mb-2 font-semibold text-wit-text text-sm">
             <span>
@@ -1167,27 +1137,31 @@ export default function ReflecShotGame() {
             />
           </div>
           {isMobile && (
-            <div
-              className="mt-4 w-full max-w-[520px] mx-auto"
-              style={{ minHeight: 100, marginBottom: AD_UI_MIN_GAP_PX }}
-            >
+            <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
               <ReflecShotAdSlot slotIndex={1} isDebugMode={isDebugMode} />
             </div>
           )}
         </div>
-        <div className="relative z-[1] w-full max-w-[520px] mx-auto min-w-0 mt-4 mb-2 flex flex-wrap items-center gap-2 text-sm">
-          <button
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={gradeModalOpen}
-            aria-controls="reflec-shot-grade-modal"
-            disabled={isGenerating || boardLoadWait}
-            onClick={() => setGradeModalOpen(true)}
-            title={bendOrBumperHint(grade)}
-            className="shrink-0 snap-center whitespace-nowrap px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation border bg-sky-600 text-white border-sky-500 hover:bg-sky-500 disabled:opacity-50 disabled:pointer-events-none"
-          >
-            G{grade}
-          </button>
+        <div className="w-full max-w-[520px] mx-auto min-w-0 mt-4 mb-2 flex flex-wrap items-center gap-2 text-sm">
+          <label className="text-wit-muted flex items-center gap-2">
+            Grade
+            <select
+              className="bg-slate-800 border border-white/15 rounded-lg px-2 py-1 text-wit-text"
+              value={grade}
+              disabled={isGenerating || boardLoadWait}
+              onChange={(e) => {
+                setGrade(Number(e.target.value));
+                setPhase("edit");
+                setStatusMsg("");
+              }}
+            >
+              {[1, 2, 3, 4, 5].map((g) => (
+                <option key={g} value={g}>
+                  {g}（{bendOrBumperHint(g)}）
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             className="rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-1 text-sky-200 hover:bg-sky-500/25"
@@ -1217,18 +1191,12 @@ export default function ReflecShotGame() {
           )}
         </div>
 
-        <div
-          className="w-full max-w-[520px] mx-auto relative z-0"
-          style={{ minHeight: 100, marginTop: AD_UI_MIN_GAP_PX }}
-        >
+        <div className="mt-8 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
           <ReflecShotAdSlot slotIndex={2} isDebugMode={isDebugMode} />
         </div>
 
         {isDevTj && (
-          <div
-            className="relative z-[1] flex flex-wrap gap-2 justify-center pb-2"
-            style={{ marginTop: AD_UI_MIN_GAP_PX }}
-          >
+          <div className="flex flex-wrap gap-2 justify-center pb-2 mt-3">
             <button
               type="button"
               disabled={isGenerating || boardLoadWait}
@@ -1248,10 +1216,7 @@ export default function ReflecShotGame() {
         )}
 
         {!isDevTj && (
-          <div
-            className="relative z-[1] flex justify-center pb-2"
-            style={{ marginTop: AD_UI_MIN_GAP_PX }}
-          >
+          <div className="flex justify-center pb-2 mt-3">
             <button
               type="button"
               disabled={isGenerating || boardLoadWait}
@@ -1270,69 +1235,6 @@ export default function ReflecShotGame() {
           <li>開発用: <code className="text-slate-500">?devtj=true</code> でデバッグと下部の再生成・自動解答。</li>
         </ul>
       </section>
-
-      {gradeModalOpen && (
-        <div
-          className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] bg-black/70 touch-none overscroll-contain"
-          style={{ WebkitTapHighlightColor: "transparent" }}
-          role="presentation"
-          onClick={() => setGradeModalOpen(false)}
-        >
-          <div
-            id="reflec-shot-grade-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reflec-grade-modal-title"
-            className="relative z-[201] w-full max-w-md max-h-[min(85vh,640px)] overflow-hidden rounded-2xl border border-white/15 bg-slate-900 shadow-2xl flex flex-col pointer-events-auto touch-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-4 pt-4 pb-2 border-b border-white/10 shrink-0">
-              <h2 id="reflec-grade-modal-title" className="text-lg font-semibold text-wit-text">
-                グレードを選ぶ
-              </h2>
-              <p className="text-xs text-wit-muted mt-1">
-                一覧からタップして切り替えます。外側をタップまたは Esc で閉じます。
-              </p>
-            </div>
-            <div className="overflow-y-auto overflow-x-hidden p-3 space-y-2 flex-1 min-h-0">
-              {([1, 2, 3, 4, 5] as const).map((g) => {
-                const active = grade === g;
-                return (
-                  <button
-                    key={g}
-                    type="button"
-                    aria-current={active ? "true" : undefined}
-                    disabled={isGenerating || boardLoadWait}
-                    onClick={() => {
-                      setGrade(g);
-                      setPhase("edit");
-                      setStatusMsg("");
-                      setGradeModalOpen(false);
-                    }}
-                    className={`w-full text-left rounded-xl border px-4 py-3 transition-colors min-h-[48px] ${
-                      active
-                        ? "border-sky-500 bg-sky-600/30 text-white"
-                        : "border-slate-600 bg-slate-800/80 text-wit-text hover:bg-slate-700/90"
-                    } disabled:opacity-50 disabled:pointer-events-none`}
-                  >
-                    <span className="block font-medium text-sm">{REFLEC_SHOT_GRADE_MODAL_TITLES[g]}</span>
-                    <span className="block text-xs text-wit-muted mt-0.5">{bendOrBumperHint(g)}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="p-3 border-t border-white/10 shrink-0">
-              <button
-                type="button"
-                className="w-full rounded-lg border border-slate-600 bg-slate-800 py-3 text-sm font-medium text-wit-text hover:bg-slate-700 min-h-[48px]"
-                onClick={() => setGradeModalOpen(false)}
-              >
-                閉じる
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

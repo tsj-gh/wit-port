@@ -105,7 +105,7 @@ export function ReflecShotAdSlot({ slotIndex, isDebugMode }: ReflecShotAdSlotPro
 
   if (showPlaceholder) {
     return (
-      <div className="relative z-0 m-0">
+      <div className="my-4">
         <AdPlaceholder slotIndex={slotIndex} isFlashing={isFlashing} />
       </div>
     );
@@ -113,12 +113,12 @@ export function ReflecShotAdSlot({ slotIndex, isDebugMode }: ReflecShotAdSlotPro
 
   if (!slotId) {
     return (
-      <div className="relative z-0 m-0" style={{ minHeight: AD_MIN_HEIGHT_PX }} aria-hidden="true" />
+      <div className="my-4" style={{ minHeight: AD_MIN_HEIGHT_PX }} aria-hidden="true" />
     );
   }
 
   return (
-    <div className="relative z-0 m-0" aria-label={`広告スペース ${slotIndex}（Reflec-Shot）`}>
+    <div className="my-4" aria-label={`広告スペース ${slotIndex}（Reflec-Shot）`}>
       <div
         id={divId}
         style={{ minHeight: AD_MIN_HEIGHT_PX }}
