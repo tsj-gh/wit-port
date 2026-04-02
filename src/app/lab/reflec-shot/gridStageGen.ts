@@ -248,6 +248,67 @@ function rSecondGoalOnTopLeftOrRightEdge(goal: CellCoord, w: number, h: number):
   return goal.r === 0 || goal.c === 0 || goal.c === w - 1;
 }
 
+/** Lv.4（Grade5）: `goalPad = goal + sign(goal-prev)`（直交 1 歩・盤外パッド） */
+function lv4GoalPadFromPrev(prev: CellCoord, goal: CellCoord): CellCoord {
+  return {
+    c: goal.c + Math.sign(goal.c - prev.c),
+    r: goal.r + Math.sign(goal.r - prev.r),
+  };
+}
+
+/**
+ * Grade 5・Lv.4 専用: `goalPad` を盤の最下行の真下（`goalPad.r >= h`）に置かず、
+ * 左右端の `goal` ではゴール直前の入射を **左端→L・右端→R** に限定する。
+ */
+function lv4GoalPadRulesViolate(goal: CellCoord, prev: CellCoord, w: number, h: number): boolean {
+  const entry = unitStepDir(goal.c - prev.c, goal.r - prev.r);
+  if (!entry) return true;
+  const gp = lv4GoalPadFromPrev(prev, goal);
+  if (gp.r >= h) return true;
+  if (goal.c === 0 && !dirsEqual(entry, DIR.L)) return true;
+  if (goal.c === w - 1 && !dirsEqual(entry, DIR.R)) return true;
+  return false;
+}
+
+/**
+ * 正規化済み経路の末尾が「横 1 セグメント + 下方向へ goal（D）」のとき、
+ * 最後の折れを **縦先行→横** に入れ替えて（同じ goal）、`goalPad` を底辺外にしない向きを試す。
+ */
+function lv4TryFlipLastHVToVHTail(
+  p: CellCoord[],
+  pathable: boolean[][],
+  w: number,
+  hC: number
+): CellCoord[] | null {
+  const n = p.length;
+  if (n < 3) return null;
+  const goal = p[n - 1]!;
+  const prev = p[n - 2]!;
+  const pre2 = p[n - 3]!;
+  const eLast = unitStepDir(goal.c - prev.c, goal.r - prev.r);
+  if (!eLast || !dirsEqual(eLast, DIR.D)) return null;
+  const ePen = unitStepDir(prev.c - pre2.c, prev.r - pre2.r);
+  if (!ePen || ePen.dx === 0) return null;
+  if (prev.c !== goal.c || prev.r !== goal.r - 1) return null;
+  const prefix = p.slice(0, n - 3);
+  const tail: CellCoord[] = [pre2];
+  let cur: CellCoord = { ...pre2 };
+  while (cur.r !== goal.r) {
+    cur = addCell(cur, cur.r < goal.r ? DIR.D : DIR.U);
+    if (!inBounds(cur.c, cur.r, w, hC) || !pathable[cur.c]![cur.r]) return null;
+    tail.push(cur);
+  }
+  while (cur.c !== goal.c) {
+    cur = addCell(cur, cur.c < goal.c ? DIR.R : DIR.L);
+    if (!inBounds(cur.c, cur.r, w, hC) || !pathable[cur.c]![cur.r]) return null;
+    tail.push(cur);
+  }
+  if (cur.c !== goal.c || cur.r !== goal.r) return null;
+  const out = prefix.concat(tail);
+  if (!pathOrthStepValid(out, pathable, w, hC)) return null;
+  return out;
+}
+
 function findSimplePath(
   pathable: boolean[][],
   start: CellCoord,
@@ -1781,6 +1842,7 @@ function tryConstructGrade3PathRSecondN1(
                       const snap = finalizeGrade2OrientedAfterRotation(pb, fullPathT, pw, ph, 6, {
                         relaxBendVisit: true,
                         requireGoalOnTopLeftRight: true,
+                        enforceLv4GoalPadRules: true,
                       });
                       if (!snap) continue;
 
@@ -2298,12 +2360,34 @@ function finalizeGrade2OrientedAfterRotation(
   w: number,
   h: number,
   bends: number,
-  opts?: { relaxBendVisit?: boolean; requireGoalOnTopLeftRight?: boolean }
+  opts?: {
+    relaxBendVisit?: boolean;
+    requireGoalOnTopLeftRight?: boolean;
+    /** Grade 5・Lv.4: `goalPad` を最下行の真下に置かず、左右端では入射を L/R に限定（違反時は末尾 HV→VH 反転を 1 回試行） */
+    enforceLv4GoalPadRules?: boolean;
+  }
 ): Grade2OrientedSnapshot | null {
   const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h);
   if (norm.kind === "retry") return null;
-  const pN = norm.path;
-  const padAdjustLabel = norm.label;
+  let pN = norm.path;
+  let padAdjustLabel = norm.label;
+
+  if (opts?.enforceLv4GoalPadRules) {
+    const g0 = pN[pN.length - 1]!;
+    const pr0 = pN[pN.length - 2]!;
+    if (lv4GoalPadRulesViolate(g0, pr0, w, h)) {
+      const flipped = lv4TryFlipLastHVToVHTail(pN, pb, w, h);
+      if (!flipped) return null;
+      const norm2 = normalizeGrade2OppositePadPolyline(flipped, pb, w, h);
+      if (norm2.kind === "retry") return null;
+      pN = norm2.path;
+      padAdjustLabel = norm2.label ?? padAdjustLabel;
+      const g1 = pN[pN.length - 1]!;
+      const pr1 = pN[pN.length - 2]!;
+      if (lv4GoalPadRulesViolate(g1, pr1, w, h)) return null;
+    }
+    if (!grade3RevisitOneCellRule(pN)) return null;
+  }
 
   const start = pN[0]!;
   const goal = pN[pN.length - 1]!;
@@ -2347,7 +2431,11 @@ function pickGrade2OrientedStage(
   h0: number,
   bends: number,
   rng: () => number,
-  opts?: { relaxBendVisit?: boolean }
+  opts?: {
+    relaxBendVisit?: boolean;
+    requireGoalOnTopLeftRight?: boolean;
+    enforceLv4GoalPadRules?: boolean;
+  }
 ): Grade2OrientedSnapshot | null {
   const winners: Grade2OrientedSnapshot[] = [];
   for (let k = 0; k < 4; k++) {
@@ -3155,7 +3243,10 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
         if (bench) bench.rejectedNoPath++;
         continue;
       }
-      picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
+      picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, {
+        relaxBendVisit: true,
+        enforceLv4GoalPadRules: true,
+      });
       if (!picked) {
         if (bench) bench.rejectedPickOrient++;
         continue;
@@ -3223,6 +3314,10 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
       }
       const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
       if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, picked.width, picked.height)) {
+        if (bench) bench.rejectedAfterExtend++;
+        continue;
+      }
+      if (lv4GoalPadRulesViolate(goal, prev, picked.width, picked.height)) {
         if (bench) bench.rejectedAfterExtend++;
         continue;
       }

@@ -217,6 +217,50 @@
   function rSecondGoalOnTopLeftOrRightEdge(goal, w, h) {
     return goal.r === 0 || goal.c === 0 || goal.c === w - 1;
   }
+  function lv4GoalPadFromPrev(prev, goal) {
+    return {
+      c: goal.c + Math.sign(goal.c - prev.c),
+      r: goal.r + Math.sign(goal.r - prev.r)
+    };
+  }
+  function lv4GoalPadRulesViolate(goal, prev, w, h) {
+    const entry = unitStepDir(goal.c - prev.c, goal.r - prev.r);
+    if (!entry) return true;
+    const gp = lv4GoalPadFromPrev(prev, goal);
+    if (gp.r >= h) return true;
+    if (goal.c === 0 && !dirsEqual(entry, DIR.L)) return true;
+    if (goal.c === w - 1 && !dirsEqual(entry, DIR.R)) return true;
+    return false;
+  }
+  function lv4TryFlipLastHVToVHTail(p, pathable, w, hC) {
+    const n = p.length;
+    if (n < 3) return null;
+    const goal = p[n - 1];
+    const prev = p[n - 2];
+    const pre2 = p[n - 3];
+    const eLast = unitStepDir(goal.c - prev.c, goal.r - prev.r);
+    if (!eLast || !dirsEqual(eLast, DIR.D)) return null;
+    const ePen = unitStepDir(prev.c - pre2.c, prev.r - pre2.r);
+    if (!ePen || ePen.dx === 0) return null;
+    if (prev.c !== goal.c || prev.r !== goal.r - 1) return null;
+    const prefix = p.slice(0, n - 3);
+    const tail = [pre2];
+    let cur = __spreadValues({}, pre2);
+    while (cur.r !== goal.r) {
+      cur = addCell(cur, cur.r < goal.r ? DIR.D : DIR.U);
+      if (!inBounds(cur.c, cur.r, w, hC) || !pathable[cur.c][cur.r]) return null;
+      tail.push(cur);
+    }
+    while (cur.c !== goal.c) {
+      cur = addCell(cur, cur.c < goal.c ? DIR.R : DIR.L);
+      if (!inBounds(cur.c, cur.r, w, hC) || !pathable[cur.c][cur.r]) return null;
+      tail.push(cur);
+    }
+    if (cur.c !== goal.c || cur.r !== goal.r) return null;
+    const out = prefix.concat(tail);
+    if (!pathOrthStepValid(out, pathable, w, hC)) return null;
+    return out;
+  }
   function createStageRng(seed) {
     let s = seed >>> 0;
     return () => {
@@ -1310,7 +1354,8 @@
                           continue;
                         const snap = finalizeGrade2OrientedAfterRotation(pb, fullPathT, pw, ph, 6, {
                           relaxBendVisit: true,
-                          requireGoalOnTopLeftRight: true
+                          requireGoalOnTopLeftRight: true,
+                          enforceLv4GoalPadRules: true
                         });
                         if (!snap) continue;
                         orientSnap = snap;
@@ -1675,10 +1720,27 @@
     return { kind: "extended", path: merged, start: newStart, startPad: newStartPad };
   }
   function finalizeGrade2OrientedAfterRotation(pb, p, w, h, bends, opts) {
+    var _a;
     const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h);
     if (norm.kind === "retry") return null;
-    const pN = norm.path;
-    const padAdjustLabel = norm.label;
+    let pN = norm.path;
+    let padAdjustLabel = norm.label;
+    if (opts == null ? void 0 : opts.enforceLv4GoalPadRules) {
+      const g0 = pN[pN.length - 1];
+      const pr0 = pN[pN.length - 2];
+      if (lv4GoalPadRulesViolate(g0, pr0, w, h)) {
+        const flipped = lv4TryFlipLastHVToVHTail(pN, pb, w, h);
+        if (!flipped) return null;
+        const norm2 = normalizeGrade2OppositePadPolyline(flipped, pb, w, h);
+        if (norm2.kind === "retry") return null;
+        pN = norm2.path;
+        padAdjustLabel = (_a = norm2.label) != null ? _a : padAdjustLabel;
+        const g1 = pN[pN.length - 1];
+        const pr1 = pN[pN.length - 2];
+        if (lv4GoalPadRulesViolate(g1, pr1, w, h)) return null;
+      }
+      if (!grade3RevisitOneCellRule(pN)) return null;
+    }
     const start = pN[0];
     const goal = pN[pN.length - 1];
     if ((opts == null ? void 0 : opts.requireGoalOnTopLeftRight) && !rSecondGoalOnTopLeftOrRightEdge(goal, w, h)) return null;
@@ -2009,7 +2071,10 @@
           if (bench) bench.rejectedNoPath++;
           continue;
         }
-        picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, { relaxBendVisit: true });
+        picked = pickGrade2OrientedStage(pathable, path, W, H, 6, rng, {
+          relaxBendVisit: true,
+          enforceLv4GoalPadRules: true
+        });
         if (!picked) {
           if (bench) bench.rejectedPickOrient++;
           continue;
@@ -2072,6 +2137,10 @@
         }
         const goalPad = { c: goal.c + dLast.dx, r: goal.r + dLast.dy };
         if (!isStrictlyOutsideBoard(goalPad.c, goalPad.r, picked.width, picked.height)) {
+          if (bench) bench.rejectedAfterExtend++;
+          continue;
+        }
+        if (lv4GoalPadRulesViolate(goal, prev, picked.width, picked.height)) {
           if (bench) bench.rejectedAfterExtend++;
           continue;
         }

@@ -47,7 +47,12 @@
 - **射出体が到達するとクリア判定**するマス。
 - **Grade 1 / 2（Lv.1）**: **`goal` の真上**（`goalPad = (goal.c, goal.r - 1)`）。
 - **Grade 4（Lv.3・折れ6）**: **`goal` の真上 1 マスに固定**（`goalPad = (goal.c, goal.r - 1)`）。`placeDiagonalBumpers` はこのパッドと **`goalPad → goal`** を前提にゴール周りの斜めバンパーを決める。
-- **Grade 3 / 5（Lv.2・Lv.4）**: **`goal` に向かう最後の直線の進行方向に、`goal` と直交隣接する盤外 1 マス**（`prev` を経路上のゴール直前とし `goalPad = goal + unitDir(prev → goal)`）。
+- **Grade 3 / 5（Lv.2・Lv.4）**（一般）: **`goal` に向かう最後の直線の進行方向に、`goal` と直交隣接する盤外 1 マス**（`prev` を経路上のゴール直前とし `goalPad = goal + sign(goal - prev)`（グリッド差分の直交 1 歩））。
+- **Grade 5・Lv.4 の追加ルール**（`enforceLv4GoalPadRules`、本番 Grade 5 の `rSecond` / `default` / `rFirst` すべて）  
+  - **`goalPad` を盤面の最下行の真下に置かない**（`goalPad.r < height`。`r = height` のマスは盤外だが、本ルールではその「下側」パッドを禁止する）。  
+  - **`goal` が左端**（`c = 0`）のとき、経路上の入射方向（`prev → goal` の **`unitStepDir` / 画面 `Dir`**）は **`L`（右から左）** に限る。  
+  - **`goal` が右端**（`c = width - 1`）のとき、入射は **`R`** に限る。  
+  - パッド正規化後に上記を満たさないうえ、入射が **`D`**（上から下）かつ末尾が「横 1 セグメント＋縦に goal」という **L 字**である場合、**最後の折れの順序を「縦→横」に入れ替えた**経路を 1 回試し、再度 `normalizeGrade2OppositePadPolyline` して採否する（`gridStageGen.ts` の `lv4TryFlipLastHVToVHTail`）。
 
 ---
 
@@ -117,6 +122,7 @@
 
 - **盤面**: **5×5** 全域 `pathable`（Grade3・4 と同一サイズ）。
 - **経路**: **折れ数 6**・**ちょうど 1 マスが 2 回通る**（両回 90° 折れ）。再訪の入射・出射ルールは旧 Grade3 と同じ。実装は `findGrade3SixBendPath`（`tryConstructGrade3Path`）＋ `pickGrade2OrientedStage(..., relaxBendVisit: true)`。
+- **ゴール／goalPad**: `finalizeGrade2OrientedAfterRotation` に **`enforceLv4GoalPadRules: true`** を渡す。**`goalPad` を最下行の真下にしない**・**左右端 goal では入射を L / R に限定**・**D 入射 L 字末尾は折れ順反転を 1 回試行**。上記 `goalPad` 節を参照。
 - **バンパー**: 盤内の直角折れ（再訪セルは 1 セルで両ターンに整合）。**バンパーが置かれるマス数は 5**。
 - **生成まわり**: 再訪＋6 直角の整合を 5×5 に収めるのは 6×6 より難易度が高い。実装では `tryConstructGrade3Path` の再訪点サンプルを盤が 5×5 のときやや厚くし、`generateBoardLv4Stage` の試行・`fallbackGridStage(5)` のシード走査を長めに取る。よって **単一 `seed` では `generateGridStage(5, …)` が `null` になりうる**が、`generateGridStageWithFallback` では別シードで再試行される。
 
