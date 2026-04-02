@@ -32,6 +32,9 @@ const BASE_CELL_TRAVEL_MS = 280;
 const CHARGE_MS = 520;
 const SWIPE_MIN = 12;
 
+/** グレード操作帯と広告枠のあいだ（誤タップ防止・審査向け） */
+const GRADE_AD_MIN_GAP_PX = 150;
+
 type Phase = "edit" | "move" | "won" | "lost";
 
 type BoardSurfaceSource = "stock" | "generated";
@@ -1142,56 +1145,78 @@ export default function ReflecShotGame() {
             </div>
           )}
         </div>
-        <div className="w-full max-w-[520px] mx-auto min-w-0 mt-4 mb-2 flex flex-wrap items-center gap-2 text-sm">
-          <label className="text-wit-muted flex items-center gap-2">
-            Grade
-            <select
-              className="bg-slate-800 border border-white/15 rounded-lg px-2 py-1 text-wit-text"
-              value={grade}
-              disabled={isGenerating || boardLoadWait}
-              onChange={(e) => {
-                setGrade(Number(e.target.value));
-                setPhase("edit");
-                setStatusMsg("");
-              }}
+        <div
+          className={`w-full max-w-[520px] mx-auto min-w-0 mb-2 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start ${
+            isMobile ? "mt-[150px]" : "mt-4"
+          }`}
+        >
+          <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
+            <label className="block text-xs text-wit-muted mb-1">グレード</label>
+            <div
+              className="flex w-full min-w-0 overflow-x-auto gap-2 py-1 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
+              style={{ WebkitOverflowScrolling: "touch" }}
             >
-              {[1, 2, 3, 4, 5].map((g) => (
-                <option key={g} value={g}>
-                  {g}（{bendOrBumperHint(g)}）
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-1 text-sky-200 hover:bg-sky-500/25"
-            onClick={beginShot}
-            disabled={phase !== "edit" || !stage}
-          >
-            射出（start へ）
-          </button>
-          {phase === "won" && (
+              {([1, 2, 3, 4, 5] as const).map((g) => {
+                const isActive = grade === g;
+                return (
+                  <button
+                    key={g}
+                    type="button"
+                    aria-pressed={isActive}
+                    disabled={isGenerating || boardLoadWait}
+                    onClick={() => {
+                      setGrade(g);
+                      setPhase("edit");
+                      setStatusMsg("");
+                    }}
+                    className={`shrink-0 snap-center whitespace-nowrap px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${
+                      isActive
+                        ? "bg-sky-600 text-white border border-sky-500"
+                        : "bg-slate-800 text-wit-text border border-slate-600 hover:bg-slate-700"
+                    } disabled:opacity-50 disabled:pointer-events-none`}
+                    title={bendOrBumperHint(g)}
+                  >
+                    G{g}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="shrink-0 w-full sm:w-auto flex flex-wrap gap-2 items-center text-sm">
             <button
               type="button"
-              className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-40"
-              onClick={goNextProblem}
-              disabled={boardLoadWait}
+              className="rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-1 text-sky-200 hover:bg-sky-500/25"
+              onClick={beginShot}
+              disabled={phase !== "edit" || !stage}
             >
-              次の問題へ
+              射出（start へ）
             </button>
-          )}
-          {phase === "lost" && (
-            <button
-              type="button"
-              className="rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1 text-amber-200"
-              onClick={retryAfterLoss}
-            >
-              再配置して再開
-            </button>
-          )}
+            {phase === "won" && (
+              <button
+                type="button"
+                className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-40"
+                onClick={goNextProblem}
+                disabled={boardLoadWait}
+              >
+                次の問題へ
+              </button>
+            )}
+            {phase === "lost" && (
+              <button
+                type="button"
+                className="rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1 text-amber-200"
+                onClick={retryAfterLoss}
+              >
+                再配置して再開
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="mt-8 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
+        <div
+          className="w-full max-w-[520px] mx-auto"
+          style={{ minHeight: 100, marginTop: GRADE_AD_MIN_GAP_PX }}
+        >
           <ReflecShotAdSlot slotIndex={2} isDebugMode={isDebugMode} />
         </div>
 
