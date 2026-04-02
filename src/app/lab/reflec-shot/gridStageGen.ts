@@ -1296,7 +1296,7 @@ function rSecondPairMidBendsOk(b1: number, dOut1: Dir, dIn2: Dir): boolean {
   return false;
 }
 
-/** RS2-1 中脚: `b1` は S1・P2 の関節折れを含む。`tryOrthogonalPolylineRFirst(S1, P2, ·)` へは開区間分 `max(0, b1-2)` */
+/** RS2-1 中脚: `b1` は S1・P2 の関節折れを含む。両端関節が両方 90° のときの開区間折れ（旧 `rSecondMiddleOpenPolylineBends` と同じ）。 */
 function rSecondMiddleOpenPolylineBends(b1: number): number {
   return Math.max(0, b1 - 2);
 }
@@ -1400,17 +1400,70 @@ function rSecondArmTipNextAttempts(
   return [...perp, ...forward, undefined];
 }
 
-/** 中脚 `[R,S1,…,P2]` での関節: S1 で折る／P2 で折る／両方／の 3 通りを明示探索する */
-type RSecondMiddleJointPattern = "bothEndsBend" | "s1BendOnly" | "p2BendOnly";
+/** 中脚 `[R,S1,…,P2]` での関節: S1／P2／両方／**両端ストレート**（`!s1&&!p2`） */
+type RSecondMiddleJointPattern =
+  | "bothEndsBend"
+  | "s1BendOnly"
+  | "p2BendOnly"
+  | "neitherEndBend";
+
+const R_SECOND_JOINT_THREE: RSecondMiddleJointPattern[] = ["s1BendOnly", "p2BendOnly", "bothEndsBend"];
+
+/** 中脚採用時、同試行で複数パターンが成功したときの相対重み（幾何上「出やすい」ものを抑え、四類似に寄せる）。 */
+const R_SECOND_JOINT_SUCCESS_PICK_WEIGHT: Record<RSecondMiddleJointPattern, number> = {
+  p2BendOnly: 6.5,
+  s1BendOnly: 2.15,
+  bothEndsBend: 0.38,
+  neitherEndBend: 0.38,
+};
+
+function pickRSecondJointPatternByWeight(
+  jps: RSecondMiddleJointPattern[],
+  rng: () => number
+): RSecondMiddleJointPattern {
+  let sum = 0;
+  const w = jps.map((jp) => {
+    const t = R_SECOND_JOINT_SUCCESS_PICK_WEIGHT[jp] ?? 1;
+    sum += t;
+    return t;
+  });
+  let u = rng() * sum;
+  for (let i = 0; i < jps.length; i++) {
+    u -= w[i]!;
+    if (u <= 0) return jps[i]!;
+  }
+  return jps[jps.length - 1]!;
+}
 
 /**
- * 関節パターンの試行順。**単端折れ（s1 / p2）を先に**（先頭 2 つは 50% で入れ替え）、**両端折れは必ず最後**。
- * ランダム全並べ替えだと `bothEndsBend` が先に成功しやすく、再訪ループの幾何が偏るため。
+ * 関節パターンごとの S1〜P2 **開区間**の直角折れ本数（`tryOrthogonalRSecondLegFromR` → `tryOrthogonalPolylineRFirst` の `bends`）。
+ * 両端ストレートでは関節分を数に含めないため `b1` 本すべてが開区間に乗る。
  */
-function rSecondMiddleJointPatternTrialOrder(rng: () => number): RSecondMiddleJointPattern[] {
-  return rng() < 0.5
-    ? ["s1BendOnly", "p2BendOnly", "bothEndsBend"]
-    : ["p2BendOnly", "s1BendOnly", "bothEndsBend"];
+function rSecondMiddleOpenPolylineBendsForJointPattern(b1: number, pattern: RSecondMiddleJointPattern): number {
+  if (pattern === "bothEndsBend") return Math.max(0, b1 - 2);
+  if (pattern === "s1BendOnly" || pattern === "p2BendOnly") return Math.max(0, b1 - 1);
+  return b1;
+}
+
+/** 長中脚: 開区間を短より 1 多く（`min(b1, short+1)` をパターン別の短に適用）。 */
+function rSecondMiddleLongOpenPolylineBendsForJointPattern(b1: number, pattern: RSecondMiddleJointPattern): number {
+  const shortB = rSecondMiddleOpenPolylineBendsForJointPattern(b1, pattern);
+  return Math.min(b1, shortB + 1);
+}
+
+/**
+ * 関節パターン試行順: 候補を **一様シャッフル**（4 種そろうと分布が近い）。
+ * `neitherEndBend` は両端ストレートのため開区間に `b1` 本すべてを使う（両端 90° 前提の `b1-2` とは別）。**候補は `b1>=3`**（直交ペアで多い `b1=3` を含める。旧 `b1Open>=2` 限定は `(0,4,0)` 寄りになり `neither` が実質出なかった）。
+ */
+function rSecondMiddleJointPatternTrialOrder(
+  rng: () => number,
+  includeNeither: boolean
+): RSecondMiddleJointPattern[] {
+  const pool: RSecondMiddleJointPattern[] = includeNeither
+    ? [...R_SECOND_JOINT_THREE, "neitherEndBend"]
+    : [...R_SECOND_JOINT_THREE];
+  shuffleArrayInPlace(pool, rng);
+  return pool;
 }
 
 function rSecondMiddleJointPatternAttempts(
@@ -1426,10 +1479,15 @@ function rSecondMiddleJointPatternAttempts(
   if (pattern === "p2BendOnly") {
     return [...f, undefined];
   }
+  /** S1 ストレート優先（`p2BendOnly` と同型の試行順）。採否は `acceptMid` の関節フラグで分離。 */
+  if (pattern === "neitherEndBend") {
+    return [...f, undefined];
+  }
   return [...p, undefined, ...f];
 }
 
-function rSecondMiddleLegJointBendFlags(full: CellCoord[], R: CellCoord): { s1: boolean; p2: boolean } {
+/** 診断用: 中脚 `[R,…,P2]` で R〜S1 直交関節・P2〜R 直交関節の有無（`s1` / `p2`） */
+export function rSecondMiddleLegJointBendFlags(full: CellCoord[], R: CellCoord): { s1: boolean; p2: boolean } {
   if (full.length < 3) return { s1: false, p2: false };
   const dRS1 = unitStepDir(full[1]!.c - full[0]!.c, full[1]!.r - full[0]!.r);
   const dS1n = unitStepDir(full[2]!.c - full[1]!.c, full[2]!.r - full[1]!.r);
@@ -1450,6 +1508,7 @@ function rSecondMiddleLegMatchesJointPattern(full: CellCoord[], R: CellCoord, pa
   if (pattern === "bothEndsBend") return s1 && p2;
   if (pattern === "s1BendOnly") return s1 && !p2;
   if (pattern === "p2BendOnly") return !s1 && p2;
+  if (pattern === "neitherEndBend") return !s1 && !p2;
   return false;
 }
 
@@ -1613,21 +1672,32 @@ function tryConstructGrade3PathRSecondN1(
                 }
 
                 const b1Open = rSecondMiddleOpenPolylineBends(b1);
-                /**
-                 * 「長」中脚に `b1` 本をそのまま渡すと R 周り関節と二重に数えられ、全体 `countRightAngles===6` と噛み合わず
-                 * 出口まで到達できない。**短の一段多い** `min(b1, b1Open+1)` で探索する（`b1=3`→2 本・再訪区間が伸びる）。
-                 */
-                const b1LongPolyBends = Math.min(b1, Math.max(b1Open + 1, 0));
-                const longMiddleDistinct = b1LongPolyBends > b1Open;
+                const rSecondJointPatternsForB1: RSecondMiddleJointPattern[] = [
+                  ...R_SECOND_JOINT_THREE,
+                  ...(b1 >= 3 ? (["neitherEndBend"] as const) : []),
+                ];
+                const longMiddleDistinct = rSecondJointPatternsForB1.some(
+                  (jp) =>
+                    rSecondMiddleLongOpenPolylineBendsForJointPattern(b1, jp) >
+                    rSecondMiddleOpenPolylineBendsForJointPattern(b1, jp)
+                );
                 let okLeg1Short = false;
                 let okLeg1Long = false;
                 for (const fh of [true, false] as const) {
-                  if (!orthoPolylineSplitImpossible(S1, P2, b1Open, fh)) okLeg1Short = true;
-                  if (
-                    longMiddleDistinct &&
-                    !orthoPolylineSplitImpossible(S1, P2, b1LongPolyBends, fh)
-                  ) {
-                    okLeg1Long = true;
+                  for (const jp of rSecondJointPatternsForB1) {
+                    const sb = rSecondMiddleOpenPolylineBendsForJointPattern(b1, jp);
+                    if (!orthoPolylineSplitImpossible(S1, P2, sb, fh)) okLeg1Short = true;
+                    if (
+                      longMiddleDistinct &&
+                      !orthoPolylineSplitImpossible(
+                        S1,
+                        P2,
+                        rSecondMiddleLongOpenPolylineBendsForJointPattern(b1, jp),
+                        fh
+                      )
+                    ) {
+                      okLeg1Long = true;
+                    }
                   }
                 }
                 if (!okLeg1Short && !okLeg1Long) continue;
@@ -1646,9 +1716,9 @@ function tryConstructGrade3PathRSecondN1(
 
                 let candShort: CellCoord[] | null = null;
                 if (okLeg1Short) {
-                  const jOrder = rSecondMiddleJointPatternTrialOrder(rng);
+                  const jOrder = rSecondMiddleJointPatternTrialOrder(rng, b1 >= 3);
+                  const shortByJp: Partial<Record<RSecondMiddleJointPattern, CellCoord[][]>> = {};
                   for (const jp of jOrder) {
-                    if (candShort) break;
                     const att = rSecondMiddleJointPatternAttempts(s1Perp, s1Forward, jp, rng);
                     const st: RSecondMidLegCallStats | null = midDiagPush
                       ? {
@@ -1676,7 +1746,7 @@ function tryConstructGrade3PathRSecondN1(
                       R,
                       S1,
                       P2,
-                      b1Open,
+                      rSecondMiddleOpenPolylineBendsForJointPattern(b1, jp),
                       pathable,
                       rng,
                       ctx,
@@ -1690,16 +1760,29 @@ function tryConstructGrade3PathRSecondN1(
                       );
                     }
                     if (ctx.budgetHit) break outerR;
-                    if (u) candShort = u;
+                    if (u) {
+                      let g = shortByJp[jp];
+                      if (!g) {
+                        g = [];
+                        shortByJp[jp] = g;
+                      }
+                      g.push(u);
+                    }
+                  }
+                  const shortOkJp = jOrder.filter((jp) => shortByJp[jp]?.length);
+                  if (shortOkJp.length) {
+                    const pickJp = pickRSecondJointPatternByWeight(shortOkJp, rng);
+                    const arr = shortByJp[pickJp]!;
+                    candShort = arr[Math.floor(rng() * arr.length)]!;
                   }
                 }
 
                 let candLong: CellCoord[] | null = null;
                 if (okLeg1Long) {
                   for (let lt = 0; lt < rSecondMiddleLongPolyTries && !candLong; lt++) {
-                    const jOrder = rSecondMiddleJointPatternTrialOrder(rng);
+                    const jOrder = rSecondMiddleJointPatternTrialOrder(rng, b1 >= 3);
+                    const longByJp: Partial<Record<RSecondMiddleJointPattern, CellCoord[][]>> = {};
                     for (const jp of jOrder) {
-                      if (candLong) break;
                       const att = rSecondMiddleJointPatternAttempts(s1Perp, s1Forward, jp, rng);
                       const st: RSecondMidLegCallStats | null = midDiagPush
                         ? {
@@ -1727,7 +1810,7 @@ function tryConstructGrade3PathRSecondN1(
                         R,
                         S1,
                         P2,
-                        b1LongPolyBends,
+                        rSecondMiddleLongOpenPolylineBendsForJointPattern(b1, jp),
                         pathable,
                         rng,
                         ctx,
@@ -1741,7 +1824,20 @@ function tryConstructGrade3PathRSecondN1(
                         );
                       }
                       if (ctx.budgetHit) break outerR;
-                      if (u) candLong = u;
+                      if (u) {
+                        let g = longByJp[jp];
+                        if (!g) {
+                          g = [];
+                          longByJp[jp] = g;
+                        }
+                        g.push(u);
+                      }
+                    }
+                    const longOkJp = jOrder.filter((jp) => longByJp[jp]?.length);
+                    if (longOkJp.length) {
+                      const pickJp = pickRSecondJointPatternByWeight(longOkJp, rng);
+                      const arr = longByJp[pickJp]!;
+                      candLong = arr[Math.floor(rng() * arr.length)]!;
                     }
                   }
                 }

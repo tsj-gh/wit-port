@@ -996,8 +996,41 @@
     shuffleArrayInPlace(forward, rng);
     return [...perp, ...forward, void 0];
   }
-  function rSecondMiddleJointPatternTrialOrder(rng) {
-    return rng() < 0.5 ? ["s1BendOnly", "p2BendOnly", "bothEndsBend"] : ["p2BendOnly", "s1BendOnly", "bothEndsBend"];
+  var R_SECOND_JOINT_THREE = ["s1BendOnly", "p2BendOnly", "bothEndsBend"];
+  var R_SECOND_JOINT_SUCCESS_PICK_WEIGHT = {
+    p2BendOnly: 6.5,
+    s1BendOnly: 2.15,
+    bothEndsBend: 0.38,
+    neitherEndBend: 0.38
+  };
+  function pickRSecondJointPatternByWeight(jps, rng) {
+    let sum = 0;
+    const w = jps.map((jp) => {
+      var _a;
+      const t = (_a = R_SECOND_JOINT_SUCCESS_PICK_WEIGHT[jp]) != null ? _a : 1;
+      sum += t;
+      return t;
+    });
+    let u = rng() * sum;
+    for (let i = 0; i < jps.length; i++) {
+      u -= w[i];
+      if (u <= 0) return jps[i];
+    }
+    return jps[jps.length - 1];
+  }
+  function rSecondMiddleOpenPolylineBendsForJointPattern(b1, pattern) {
+    if (pattern === "bothEndsBend") return Math.max(0, b1 - 2);
+    if (pattern === "s1BendOnly" || pattern === "p2BendOnly") return Math.max(0, b1 - 1);
+    return b1;
+  }
+  function rSecondMiddleLongOpenPolylineBendsForJointPattern(b1, pattern) {
+    const shortB = rSecondMiddleOpenPolylineBendsForJointPattern(b1, pattern);
+    return Math.min(b1, shortB + 1);
+  }
+  function rSecondMiddleJointPatternTrialOrder(rng, includeNeither) {
+    const pool = includeNeither ? [...R_SECOND_JOINT_THREE, "neitherEndBend"] : [...R_SECOND_JOINT_THREE];
+    shuffleArrayInPlace(pool, rng);
+    return pool;
   }
   function rSecondMiddleJointPatternAttempts(perp, forward, pattern, rng) {
     const p = [...perp];
@@ -1005,6 +1038,9 @@
     shuffleArrayInPlace(p, rng);
     shuffleArrayInPlace(f, rng);
     if (pattern === "p2BendOnly") {
+      return [...f, void 0];
+    }
+    if (pattern === "neitherEndBend") {
       return [...f, void 0];
     }
     return [...p, void 0, ...f];
@@ -1028,6 +1064,7 @@
     if (pattern === "bothEndsBend") return s1 && p2;
     if (pattern === "s1BendOnly") return s1 && !p2;
     if (pattern === "p2BendOnly") return !s1 && p2;
+    if (pattern === "neitherEndBend") return !s1 && !p2;
     return false;
   }
   function tryConstructGrade3PathRSecondN1(pathable, rng, bench, trace, midDiagPush) {
@@ -1158,14 +1195,27 @@
                     if (!seg0) continue;
                   }
                   const b1Open = rSecondMiddleOpenPolylineBends(b1);
-                  const b1LongPolyBends = Math.min(b1, Math.max(b1Open + 1, 0));
-                  const longMiddleDistinct = b1LongPolyBends > b1Open;
+                  const rSecondJointPatternsForB1 = [
+                    ...R_SECOND_JOINT_THREE,
+                    ...b1 >= 3 ? ["neitherEndBend"] : []
+                  ];
+                  const longMiddleDistinct = rSecondJointPatternsForB1.some(
+                    (jp) => rSecondMiddleLongOpenPolylineBendsForJointPattern(b1, jp) > rSecondMiddleOpenPolylineBendsForJointPattern(b1, jp)
+                  );
                   let okLeg1Short = false;
                   let okLeg1Long = false;
                   for (const fh of [true, false]) {
-                    if (!orthoPolylineSplitImpossible(S1, P2, b1Open, fh)) okLeg1Short = true;
-                    if (longMiddleDistinct && !orthoPolylineSplitImpossible(S1, P2, b1LongPolyBends, fh)) {
-                      okLeg1Long = true;
+                    for (const jp of rSecondJointPatternsForB1) {
+                      const sb = rSecondMiddleOpenPolylineBendsForJointPattern(b1, jp);
+                      if (!orthoPolylineSplitImpossible(S1, P2, sb, fh)) okLeg1Short = true;
+                      if (longMiddleDistinct && !orthoPolylineSplitImpossible(
+                        S1,
+                        P2,
+                        rSecondMiddleLongOpenPolylineBendsForJointPattern(b1, jp),
+                        fh
+                      )) {
+                        okLeg1Long = true;
+                      }
                     }
                   }
                   if (!okLeg1Short && !okLeg1Long) continue;
@@ -1181,9 +1231,9 @@
                   const middleLegNoR = (u) => !u.slice(1).some((p) => keyCell(p.c, p.r) === rKey);
                   let candShort = null;
                   if (okLeg1Short) {
-                    const jOrder = rSecondMiddleJointPatternTrialOrder(rng);
+                    const jOrder = rSecondMiddleJointPatternTrialOrder(rng, b1 >= 3);
+                    const shortByJp = {};
                     for (const jp of jOrder) {
-                      if (candShort) break;
                       const att = rSecondMiddleJointPatternAttempts(s1Perp, s1Forward, jp, rng);
                       const st = midDiagPush ? {
                         forcedTries: 0,
@@ -1209,7 +1259,7 @@
                         R,
                         S1,
                         P2,
-                        b1Open,
+                        rSecondMiddleOpenPolylineBendsForJointPattern(b1, jp),
                         pathable,
                         rng,
                         ctx,
@@ -1223,15 +1273,31 @@
                         );
                       }
                       if (ctx.budgetHit) break outerR;
-                      if (u) candShort = u;
+                      if (u) {
+                        let g = shortByJp[jp];
+                        if (!g) {
+                          g = [];
+                          shortByJp[jp] = g;
+                        }
+                        g.push(u);
+                      }
+                    }
+                    const shortOkJp = jOrder.filter((jp) => {
+                      var _a2;
+                      return (_a2 = shortByJp[jp]) == null ? void 0 : _a2.length;
+                    });
+                    if (shortOkJp.length) {
+                      const pickJp = pickRSecondJointPatternByWeight(shortOkJp, rng);
+                      const arr = shortByJp[pickJp];
+                      candShort = arr[Math.floor(rng() * arr.length)];
                     }
                   }
                   let candLong = null;
                   if (okLeg1Long) {
                     for (let lt = 0; lt < rSecondMiddleLongPolyTries && !candLong; lt++) {
-                      const jOrder = rSecondMiddleJointPatternTrialOrder(rng);
+                      const jOrder = rSecondMiddleJointPatternTrialOrder(rng, b1 >= 3);
+                      const longByJp = {};
                       for (const jp of jOrder) {
-                        if (candLong) break;
                         const att = rSecondMiddleJointPatternAttempts(s1Perp, s1Forward, jp, rng);
                         const st = midDiagPush ? {
                           forcedTries: 0,
@@ -1257,7 +1323,7 @@
                           R,
                           S1,
                           P2,
-                          b1LongPolyBends,
+                          rSecondMiddleLongOpenPolylineBendsForJointPattern(b1, jp),
                           pathable,
                           rng,
                           ctx,
@@ -1271,7 +1337,23 @@
                           );
                         }
                         if (ctx.budgetHit) break outerR;
-                        if (u) candLong = u;
+                        if (u) {
+                          let g = longByJp[jp];
+                          if (!g) {
+                            g = [];
+                            longByJp[jp] = g;
+                          }
+                          g.push(u);
+                        }
+                      }
+                      const longOkJp = jOrder.filter((jp) => {
+                        var _a2;
+                        return (_a2 = longByJp[jp]) == null ? void 0 : _a2.length;
+                      });
+                      if (longOkJp.length) {
+                        const pickJp = pickRSecondJointPatternByWeight(longOkJp, rng);
+                        const arr = longByJp[pickJp];
+                        candLong = arr[Math.floor(rng() * arr.length)];
                       }
                     }
                   }
