@@ -24,6 +24,8 @@ import {
   cloneGridStageForRestore,
 } from "./gridTypes";
 import { decodeReflecStageHash, encodeReflecStageHash, parseReflecHash } from "./reflecShotStageHash";
+import { ReflecShotAdSlot } from "@/components/ReflecShotAdSlots";
+import { refreshAds } from "@/lib/ads";
 
 /** 1マス移動の基準時間（ms）。実効速度はこれを速度倍率で除算。 */
 const BASE_CELL_TRAVEL_MS = 280;
@@ -198,6 +200,7 @@ export default function ReflecShotGame() {
   const [debugLv4GenMode, setDebugLv4GenMode] = useState<"default" | "rFirst" | "rSecond">("rSecond");
   const [hashInput, setHashInput] = useState("");
   const [layoutNonce, setLayoutNonce] = useState(0);
+  const [windowWidth, setWindowWidth] = useState(1024);
   const [stockPrefetchPaused, setStockPrefetchPaused] = useState(false);
   const nextBoardSourceRef = useRef<BoardSurfaceSource | null>(null);
   const [boardDisplaySource, setBoardDisplaySource] = useState<BoardSurfaceSource | null>(null);
@@ -270,6 +273,15 @@ export default function ReflecShotGame() {
     generateStageInWorker,
     takeBoardForGrade,
   };
+
+  useEffect(() => {
+    const update = () => setWindowWidth(window.innerWidth);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const isMobile = windowWidth < 768;
 
   useEffect(() => {
     const prev = debugPrevBoardRef.current;
@@ -365,6 +377,11 @@ export default function ReflecShotGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- boardLoadContextRef が最新 grade / opts を保持
   }, [seed, layoutNonce]);
 
+  useEffect(() => {
+    if (phase !== "won") return;
+    refreshAds();
+  }, [phase]);
+
   const currentStageHash = useMemo(
     () => (stage ? encodeReflecStageHash(stage) : ""),
     [stage?.grade, stage?.seed]
@@ -427,6 +444,7 @@ export default function ReflecShotGame() {
 
   const goNextProblem = useCallback(() => {
     if (phase !== "won") return;
+    refreshAds();
     const skipStockForG2Debug = grade === 4 && isDevTj && isDebugMode;
     const skipStockForG5AltLv4 =
       grade === 5 && isDevTj && isDebugMode && (debugLv4GenMode === "rFirst" || debugLv4GenMode === "default");
@@ -782,7 +800,10 @@ export default function ReflecShotGame() {
     }
   };
 
-  const regen = () => setSeed((Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0);
+  const regen = () => {
+    refreshAds();
+    setSeed((Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0);
+  };
 
   const autoSolve = () => {
     const st = stage;
@@ -796,6 +817,7 @@ export default function ReflecShotGame() {
 
   const retryAfterLoss = () => {
     if (!stage) return;
+    refreshAds();
     setPhase("edit");
     setStatusMsg("");
     simRef.current = {
@@ -809,7 +831,7 @@ export default function ReflecShotGame() {
   };
 
   return (
-    <div className="w-full max-w-lg mx-auto flex flex-col gap-3">
+    <div className="w-full max-w-[520px] mx-auto flex flex-col gap-3">
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-4 z-50">
           <button
@@ -998,6 +1020,13 @@ export default function ReflecShotGame() {
                   />
                   Stockの生成を停止
                 </label>
+                <button
+                  type="button"
+                  onClick={() => refreshAds()}
+                  className="mt-1 px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                >
+                  フラッシュテスト
+                </button>
               </div>
               <div className="mt-2 border-t border-white/10 pt-2 space-y-1.5">
                 <div className="font-semibold text-slate-300 text-[10px]">シード（初期盤再現）</div>
@@ -1061,120 +1090,151 @@ export default function ReflecShotGame() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <label className="text-wit-muted flex items-center gap-2">
-          Grade
-          <select
-            className="bg-slate-800 border border-white/15 rounded-lg px-2 py-1 text-wit-text"
-            value={grade}
-            disabled={isGenerating || boardLoadWait}
-            onChange={(e) => {
-              setGrade(Number(e.target.value));
-              setPhase("edit");
-              setStatusMsg("");
-            }}
-          >
-            {[1, 2, 3, 4, 5].map((g) => (
-              <option key={g} value={g}>
-                {g}（{bendOrBumperHint(g)}）
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          className="rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-1 text-sky-200 hover:bg-sky-500/25"
-          onClick={beginShot}
-          disabled={phase !== "edit" || !stage}
-        >
-          射出（start へ）
-        </button>
-        {phase === "won" && (
-          <button
-            type="button"
-            className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-40"
-            onClick={goNextProblem}
-            disabled={boardLoadWait}
-          >
-            次の問題へ
-          </button>
-        )}
-        {phase === "lost" && (
-          <button
-            type="button"
-            className="rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1 text-amber-200"
-            onClick={retryAfterLoss}
-          >
-            再配置して再開
-          </button>
-        )}
+      <div className={isMobile ? "hidden" : "mb-4"}>
+        <ReflecShotAdSlot slotIndex={1} isDebugMode={isDebugMode} />
       </div>
 
-      {(statusMsg || boardLoadWait) && (
-        <p
-          className={`text-sm ${
-            phase === "won"
-              ? "text-emerald-400"
-              : phase === "lost"
-                ? "text-amber-300"
-                : boardLoadWait
-                  ? "text-sky-300"
-                  : "text-wit-muted"
-          }`}
-        >
-          {boardLoadWait && !statusMsg ? "盤面を準備中…" : statusMsg}
-        </p>
-      )}
-
-      <canvas
-        ref={canvasRef}
-        className="w-full aspect-square max-h-[min(72vh,520px)] mx-auto rounded-2xl border border-white/10 bg-slate-950 touch-none select-none cursor-default"
-        style={{ touchAction: "none" }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerCancel}
-      />
-
-      {isDevTj && (
-        <div className="flex flex-wrap gap-2 justify-center pb-2">
-          <button
-            type="button"
-            disabled={isGenerating || boardLoadWait}
-            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
-            onClick={regen}
+      <section className="rounded-2xl p-4 sm:p-6 mb-4 border border-white/10 bg-white/5 backdrop-blur">
+        <div className="flex flex-col items-center">
+          <div className="flex justify-between w-full max-w-[520px] mb-2 font-semibold text-wit-text text-sm">
+            <span>
+              {phase === "edit"
+                ? "編集"
+                : phase === "move"
+                  ? "進行中"
+                  : phase === "won"
+                    ? "クリア"
+                    : "失敗"}
+            </span>
+          </div>
+          {(statusMsg || boardLoadWait) && (
+            <p
+              className={`w-full max-w-[520px] mb-2 text-sm ${
+                phase === "won"
+                  ? "text-emerald-400"
+                  : phase === "lost"
+                    ? "text-amber-300"
+                    : boardLoadWait
+                      ? "text-sky-300"
+                      : "text-wit-muted"
+              }`}
+            >
+              {boardLoadWait && !statusMsg ? "盤面を準備中…" : statusMsg}
+            </p>
+          )}
+          <div
+            className="w-full max-w-[520px] touch-none select-none"
+            style={{ WebkitTapHighlightColor: "transparent" }}
           >
-            ステージ再生成
-          </button>
-          <button
-            type="button"
-            className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-emerald-300 text-sm hover:bg-emerald-500/25"
-            onClick={autoSolve}
-          >
-            自動解答
-          </button>
+            <canvas
+              ref={canvasRef}
+              className="w-full aspect-square max-h-[min(72vh,520px)] mx-auto rounded-2xl border border-white/10 bg-slate-950 touch-none select-none cursor-default"
+              style={{ touchAction: "none" }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerCancel}
+            />
+          </div>
+          {isMobile && (
+            <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
+              <ReflecShotAdSlot slotIndex={1} isDebugMode={isDebugMode} />
+            </div>
+          )}
         </div>
-      )}
-
-      {!isDevTj && (
-        <div className="flex justify-center pb-2">
+        <div className="w-full max-w-[520px] mx-auto min-w-0 mt-4 mb-2 flex flex-wrap items-center gap-2 text-sm">
+          <label className="text-wit-muted flex items-center gap-2">
+            Grade
+            <select
+              className="bg-slate-800 border border-white/15 rounded-lg px-2 py-1 text-wit-text"
+              value={grade}
+              disabled={isGenerating || boardLoadWait}
+              onChange={(e) => {
+                setGrade(Number(e.target.value));
+                setPhase("edit");
+                setStatusMsg("");
+              }}
+            >
+              {[1, 2, 3, 4, 5].map((g) => (
+                <option key={g} value={g}>
+                  {g}（{bendOrBumperHint(g)}）
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
-            disabled={isGenerating || boardLoadWait}
-            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
-            onClick={regen}
+            className="rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-1 text-sky-200 hover:bg-sky-500/25"
+            onClick={beginShot}
+            disabled={phase !== "edit" || !stage}
           >
-            ステージ再生成
+            射出（start へ）
           </button>
+          {phase === "won" && (
+            <button
+              type="button"
+              className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-40"
+              onClick={goNextProblem}
+              disabled={boardLoadWait}
+            >
+              次の問題へ
+            </button>
+          )}
+          {phase === "lost" && (
+            <button
+              type="button"
+              className="rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1 text-amber-200"
+              onClick={retryAfterLoss}
+            >
+              再配置して再開
+            </button>
+          )}
         </div>
-      )}
 
-      <ul className="text-wit-muted text-xs leading-relaxed space-y-1 list-disc pl-5">
-        <li>グリッド論理パズル：マス中心からマス中心へ等速移動。進行・バンパー反射の向きが壁（外縁・Void）へ向くと失敗。</li>
-        <li>バンパーは長押し（約{CHARGE_MS}ms）後にスワイプで ／ ＼ － ｜ にスナップ。</li>
-        <li>スタート側パッド（startPad）に戻ると失敗。ゴール側パッド（goalPad）に入るとクリア（グレードによりパッドの位置が異なります）。</li>
-        <li>開発用: <code className="text-slate-500">?devtj=true</code> でデバッグと下部の再生成・自動解答。</li>
-      </ul>
+        <div className="mt-8 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
+          <ReflecShotAdSlot slotIndex={2} isDebugMode={isDebugMode} />
+        </div>
+
+        {isDevTj && (
+          <div className="flex flex-wrap gap-2 justify-center pb-2 mt-3">
+            <button
+              type="button"
+              disabled={isGenerating || boardLoadWait}
+              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
+              onClick={regen}
+            >
+              ステージ再生成
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-emerald-300 text-sm hover:bg-emerald-500/25"
+              onClick={autoSolve}
+            >
+              自動解答
+            </button>
+          </div>
+        )}
+
+        {!isDevTj && (
+          <div className="flex justify-center pb-2 mt-3">
+            <button
+              type="button"
+              disabled={isGenerating || boardLoadWait}
+              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
+              onClick={regen}
+            >
+              ステージ再生成
+            </button>
+          </div>
+        )}
+
+        <ul className="mt-3 text-wit-muted text-xs leading-relaxed space-y-1 list-disc pl-5">
+          <li>グリッド論理パズル：マス中心からマス中心へ等速移動。進行・バンパー反射の向きが壁（外縁・Void）へ向くと失敗。</li>
+          <li>バンパーは長押し（約{CHARGE_MS}ms）後にスワイプで ／ ＼ － ｜ にスナップ。</li>
+          <li>スタート側パッド（startPad）に戻ると失敗。ゴール側パッド（goalPad）に入るとクリア（グレードによりパッドの位置が異なります）。</li>
+          <li>開発用: <code className="text-slate-500">?devtj=true</code> でデバッグと下部の再生成・自動解答。</li>
+        </ul>
+      </section>
     </div>
   );
 }
