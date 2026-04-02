@@ -306,10 +306,12 @@ function addDeadEndBranches(
     return { c: c!, r: r! };
   });
 
-  for (const cell of mainCells.sort(() => rng() - 0.5)) {
+  shuffleArrayInPlace(mainCells, rng);
+  for (const cell of mainCells) {
     if (used >= budget) break;
     if (rng() > 0.4) continue;
-    const dirs = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
+    const dirs = [DIR.U, DIR.D, DIR.L, DIR.R];
+    shuffleArrayInPlace(dirs, rng);
     for (const d of dirs) {
       let cur = addCell(cell, d);
       let steps = 0;
@@ -923,9 +925,11 @@ function tryConstructGrade3Path(
     const R = { c: rc, r: rr };
     if (!pathable[rc]![rr]) continue;
 
-    const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
+    const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R];
+    shuffleArrayInPlace(dirOrder, rng);
     for (const dIn1 of dirOrder) {
-      const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
+      const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d));
+      shuffleArrayInPlace(outs, rng);
       for (const dOut1 of outs) {
         const sol = diagonalBumperForTurn(dIn1, dOut1);
         if (!sol) continue;
@@ -1096,12 +1100,14 @@ function tryConstructGrade3PathRFirstN1(
     if (!pathable[rc]![rr]) continue;
 
     const onBottomRow = rr === h - 1;
-    const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
+    const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R];
+    shuffleArrayInPlace(dirOrder, rng);
     for (const dIn1 of dirOrder) {
       if (ctx.budgetHit) break outerR;
       if (onBottomRow && !dirsEqual(dIn1, DIR.U)) continue;
 
-      const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
+      const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d));
+      shuffleArrayInPlace(outs, rng);
       for (const dOut1 of outs) {
         if (ctx.budgetHit) break outerR;
         const sol = diagonalBumperForTurn(dIn1, dOut1);
@@ -1140,7 +1146,8 @@ function tryConstructGrade3PathRFirstN1(
             continue;
           }
           const startPool: CellCoord[] = onBottomRow ? [R] : bottoms;
-          const startOrder = [...startPool].sort(() => rng() - 0.5);
+          const startOrder = [...startPool];
+          shuffleArrayInPlace(startOrder, rng);
 
           for (const start of startOrder) {
             if (ctx.budgetHit) break outerR;
@@ -1448,12 +1455,14 @@ function tryConstructGrade3PathRSecondN1(
     if (!pathable[rc]![rr]) continue;
 
     const onBottomRow = rr === h - 1;
-    const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
+    const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R];
+    shuffleArrayInPlace(dirOrder, rng);
     for (const dIn1 of dirOrder) {
       if (ctx.budgetHit) break outerR;
       if (onBottomRow && !dirsEqual(dIn1, DIR.U)) continue;
 
-      const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
+      const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d));
+      shuffleArrayInPlace(outs, rng);
       for (const dOut1 of outs) {
         if (ctx.budgetHit) break outerR;
         const sol = diagonalBumperForTurn(dIn1, dOut1);
@@ -1465,14 +1474,17 @@ function tryConstructGrade3PathRSecondN1(
           if (oi > 0 && dirsEqual(dIn2Try, dIn2opts[0]!)) continue;
           oiCandidates.push(oi);
         }
-        oiCandidates.sort((a, b) => {
-          const ma = rSecondMaxValidB1ForPair(dOut1, dIn2opts[a]!);
-          const mb = rSecondMaxValidB1ForPair(dOut1, dIn2opts[b]!);
-          if (mb === ma) return rng() < 0.5 ? -1 : 1;
-          const preferHighMaxB1 = rng() < 0.72;
-          return preferHighMaxB1 ? mb - ma : ma - mb;
+        const preferHighMaxB1 = rng() < 0.72;
+        const oiScored = oiCandidates.map((idx) => ({
+          oi: idx,
+          maxB: rSecondMaxValidB1ForPair(dOut1, dIn2opts[idx]!),
+          tie: rng(),
+        }));
+        oiScored.sort((a, b) => {
+          if (a.maxB !== b.maxB) return preferHighMaxB1 ? b.maxB - a.maxB : a.maxB - b.maxB;
+          return a.tie - b.tie;
         });
-        for (const oi of oiCandidates) {
+        for (const { oi } of oiScored) {
           if (ctx.budgetHit) break outerR;
           const dIn2 = dIn2opts[oi]!;
           if (oi > 0 && dirsEqual(dIn2, dIn2opts[0]!)) continue;
@@ -1514,7 +1526,8 @@ function tryConstructGrade3PathRSecondN1(
           const splits = rSecondSplitsRoundRobinByDescendingB1(splitsValid, rng);
 
           const startPool: CellCoord[] = onBottomRow ? [R] : bottoms;
-          const startOrder = [...startPool].sort(() => rng() - 0.5);
+          const startOrder = [...startPool];
+          shuffleArrayInPlace(startOrder, rng);
 
           for (const start of startOrder) {
             if (ctx.budgetHit) break outerR;
@@ -1703,7 +1716,8 @@ function tryConstructGrade3PathRSecondN1(
                     : [...seg0!, R, ...seg1, R];
                   const boardW = w;
                   const boardH = h;
-                  const ks = [0, 1, 2, 3].sort(() => rng() - 0.5);
+                  const ks = [0, 1, 2, 3];
+                  shuffleArrayInPlace(ks, rng);
 
                   orientK: for (const k of ks) {
                     let pb = pathable.map((col) => [...col!]);

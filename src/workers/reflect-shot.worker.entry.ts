@@ -34,6 +34,8 @@ self.onmessage = (ev: MessageEvent<ReflectShotMainToWorkerGenerate>) => {
     if (debugReflecShotConsole) {
       console.log("[ReflecShot Worker] generate", {
         grade,
+        lv4GenMode: lv4GenMode ?? "(omit)",
+        genOptsPresent: genOpts != null,
         usedPrimary: meta.usedPrimary,
         fallbackT: meta.fallbackT,
         requestSeed: meta.requestSeed,

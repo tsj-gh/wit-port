@@ -649,9 +649,11 @@
       const rr = 1 + Math.floor(rng() * Math.max(1, h - 2));
       const R = { c: rc, r: rr };
       if (!pathable[rc][rr]) continue;
-      const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
+      const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R];
+      shuffleArrayInPlace(dirOrder, rng);
       for (const dIn1 of dirOrder) {
-        const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
+        const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d));
+        shuffleArrayInPlace(outs, rng);
         for (const dOut1 of outs) {
           const sol = diagonalBumperForTurn(dIn1, dOut1);
           if (!sol) continue;
@@ -772,11 +774,13 @@
       const R = { c: rc, r: rr };
       if (!pathable[rc][rr]) continue;
       const onBottomRow = rr === h - 1;
-      const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
+      const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R];
+      shuffleArrayInPlace(dirOrder, rng);
       for (const dIn1 of dirOrder) {
         if (ctx.budgetHit) break outerR;
         if (onBottomRow && !dirsEqual(dIn1, DIR.U)) continue;
-        const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
+        const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d));
+        shuffleArrayInPlace(outs, rng);
         for (const dOut1 of outs) {
           if (ctx.budgetHit) break outerR;
           const sol = diagonalBumperForTurn(dIn1, dOut1);
@@ -811,7 +815,8 @@
               continue;
             }
             const startPool = onBottomRow ? [R] : bottoms;
-            const startOrder = [...startPool].sort(() => rng() - 0.5);
+            const startOrder = [...startPool];
+            shuffleArrayInPlace(startOrder, rng);
             for (const start of startOrder) {
               if (ctx.budgetHit) break outerR;
               if (!onBottomRow && start.c === R.c && start.r === R.r) continue;
@@ -1024,11 +1029,13 @@
       const R = { c: rc, r: rr };
       if (!pathable[rc][rr]) continue;
       const onBottomRow = rr === h - 1;
-      const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R].sort(() => rng() - 0.5);
+      const dirOrder = [DIR.U, DIR.D, DIR.L, DIR.R];
+      shuffleArrayInPlace(dirOrder, rng);
       for (const dIn1 of dirOrder) {
         if (ctx.budgetHit) break outerR;
         if (onBottomRow && !dirsEqual(dIn1, DIR.U)) continue;
-        const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d)).sort(() => rng() - 0.5);
+        const outs = [DIR.U, DIR.D, DIR.L, DIR.R].filter((d) => orthogonalDirs(dIn1, d));
+        shuffleArrayInPlace(outs, rng);
         for (const dOut1 of outs) {
           if (ctx.budgetHit) break outerR;
           const sol = diagonalBumperForTurn(dIn1, dOut1);
@@ -1040,14 +1047,17 @@
             if (oi > 0 && dirsEqual(dIn2Try, dIn2opts[0])) continue;
             oiCandidates.push(oi);
           }
-          oiCandidates.sort((a, b) => {
-            const ma = rSecondMaxValidB1ForPair(dOut1, dIn2opts[a]);
-            const mb = rSecondMaxValidB1ForPair(dOut1, dIn2opts[b]);
-            if (mb === ma) return rng() < 0.5 ? -1 : 1;
-            const preferHighMaxB1 = rng() < 0.72;
-            return preferHighMaxB1 ? mb - ma : ma - mb;
+          const preferHighMaxB1 = rng() < 0.72;
+          const oiScored = oiCandidates.map((idx) => ({
+            oi: idx,
+            maxB: rSecondMaxValidB1ForPair(dOut1, dIn2opts[idx]),
+            tie: rng()
+          }));
+          oiScored.sort((a, b) => {
+            if (a.maxB !== b.maxB) return preferHighMaxB1 ? b.maxB - a.maxB : a.maxB - b.maxB;
+            return a.tie - b.tie;
           });
-          for (const oi of oiCandidates) {
+          for (const { oi } of oiScored) {
             if (ctx.budgetHit) break outerR;
             const dIn2 = dIn2opts[oi];
             if (oi > 0 && dirsEqual(dIn2, dIn2opts[0])) continue;
@@ -1082,7 +1092,8 @@
             if (!splitsValid.length) continue;
             const splits = rSecondSplitsRoundRobinByDescendingB1(splitsValid, rng);
             const startPool = onBottomRow ? [R] : bottoms;
-            const startOrder = [...startPool].sort(() => rng() - 0.5);
+            const startOrder = [...startPool];
+            shuffleArrayInPlace(startOrder, rng);
             for (const start of startOrder) {
               if (ctx.budgetHit) break outerR;
               if (!onBottomRow && start.c === R.c && start.r === R.r) continue;
@@ -1245,7 +1256,8 @@
                     const prefixPathCanonical = onBottomRow ? [R, ...seg1, R] : [...seg0, R, ...seg1, R];
                     const boardW = w;
                     const boardH = h;
-                    const ks = [0, 1, 2, 3].sort(() => rng() - 0.5);
+                    const ks = [0, 1, 2, 3];
+                    shuffleArrayInPlace(ks, rng);
                     orientK: for (const k of ks) {
                       let pb = pathable.map((col) => [...col]);
                       let pref = prefixPathCanonical.map((x) => __spreadValues({}, x));
@@ -2473,6 +2485,8 @@
       if (debugReflecShotConsole) {
         console.log("[ReflecShot Worker] generate", {
           grade,
+          lv4GenMode: lv4GenMode != null ? lv4GenMode : "(omit)",
+          genOptsPresent: genOpts != null,
           usedPrimary: meta.usedPrimary,
           fallbackT: meta.fallbackT,
           requestSeed: meta.requestSeed,
