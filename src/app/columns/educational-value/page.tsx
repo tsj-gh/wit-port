@@ -7,7 +7,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.ap
 export const metadata: Metadata = {
   title: "知育コラム：ロジックパズルと思考力の育成",
   description:
-    "ペアリンク・Reflec-Shot・スカイスクレイパー等の知育効果を、脳科学・モンテッソーリ教育・難易度設計の観点から体系的に解説する固定ページ。",
+    "ペアリンク・Reflec-Shot・スカイスクレイパー・Pres-Sure Judge の知育効果を、脳科学・モンテッソーリ教育・難易度設計の観点から体系的に解説する固定ページ。",
   keywords: ["知育", "モンテッソーリ", "ロジックパズル", "前頭前野", "自己教育", "Wispo"],
   alternates: { canonical: `${BASE_URL}/columns/educational-value` },
 };
@@ -82,7 +82,7 @@ export default function EducationalValueColumnPage() {
             </li>
             <li>
               <a href="#pres-sure" className="text-sky-300 hover:underline">
-                Pres-Sure Judge（補足）
+                Pres-Sure Judge（天秤・時間圧）
               </a>
             </li>
           </ul>
@@ -145,9 +145,22 @@ export default function EducationalValueColumnPage() {
         </p>
         <PlayLink href="/games/skyscraper" label="このパズルを今すぐ遊ぶ（スカイスクレイパー）" />
 
-        <SectionTitle id="pres-sure">4. Pres-Sure Judge（補足）</SectionTitle>
+        <SectionTitle id="pres-sure">4. Pres-Sure Judge（タイムプレッシャー下の均衡判断）</SectionTitle>
+        <h3 className="mt-4 font-semibold text-wit-text">開発背景</h3>
         <p>
-          時間制限下での均衡維持とリソース配分は、前頭前野の時間管理・抑制制御・リスク評価を同時に問う別系統の課題です。ロジックパズル型コンテンツとは異なりリアルタイム性が強いため、本コラムの主軸とは分けつつ、自律的な判断リズムの訓練として位置づけられます。詳細な理論展開は今後のコラム拡張の余地として残します。
+          NPC が先に重りを載せ、プレイヤーは在庫からドラッグして天秤の皿へ配置し、制限時間内に均衡を保つという課題は、紙教材では時間圧と連続的な視覚フィードバックを同時に再現しにくい領域です。デジタル化により傾きと残り時間が同期し、誤判断が即座に盤面へ反映されます。判定ミスやタイムアウトがラウンドを通じて累積するサバイバル構造は、単発の正誤より戦略の持続と自己調整を問う意図に基づき、数の大小・空間配置・タイミングを一体の行為として反復できるように設計されています。
+        </p>
+        <h3 className="mt-4 font-semibold text-wit-text">脳科学的視点</h3>
+        <p>
+          短い時間窓で載せ先・載せる重り・Judge（確定）のタイミングを決める過程は、前頭前野が担う実行機能、特に抑制制御と状況の迅速な更新を繰り返し刺激します。動く天秤と指の軌道を対応づける操作は視空間運動統合を伴い、数値と左右のトルクのイメージをワーキングメモリに二重に保持する負荷が生じます。NPC の一手ごとに状態が書き換わるため予測誤差処理が高頻度で回り、ラウンドが進むにつれ覚醒と注意の維持にも課題が加わり、学童期以降の実行機能の持久力に近い訓練として位置づけられます。
+        </p>
+        <h3 className="mt-4 font-semibold text-wit-text">モンテッソーリ教育との接点</h3>
+        <p>
+          天秤の傾きは具体的教具に近い因果として児童の感覚・運動と結びつき、抽象的レクチャーより先に身体化された理解を促します。誤配置やタイムアウトの即時可視化は、叱責ではなく環境からのフィードバックとして自己訂正を支えます。NPC の挙動は他者の操作のデジタル的代理として機能し、「他者の行為のあとに自分がどう応答するか」という社会的文脈を薄いレイヤーで経験させます。成人の過度な口出しを減じ、結果が環境に返る構造は自己教育の原則と整合します。
+        </p>
+        <h3 className="mt-4 font-semibold text-wit-text">ステップアップ設計</h3>
+        <p>
+          ラウンド進行に伴い NPC の出方や在庫の緊張度が変化し、一枚比較から数手先の均衡イメージを要する局面へ移行します。Judge 操作は連続微調整に流されず判断の区切りを明示し、衝動と推理を分離する習慣づけに寄与します。難易度が段階的に上がることで準備された負荷勾配を保ち、ロジックパズルとは異なる軸として数・時間・身体操作を統合した知育体験を提供します。
         </p>
         <PlayLink href="/games/pres-sure-judge" label="このパズルを今すぐ遊ぶ（Pres-Sure Judge）" />
 
