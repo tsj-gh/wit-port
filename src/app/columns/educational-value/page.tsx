@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Suspense } from "react";
+import { EducationalColumnWispoHeader } from "@/components/educational/EducationalColumnWispoHeader";
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
 
@@ -36,6 +38,9 @@ function PlayLink({ href, label }: { href: string; label: string }) {
 export default function EducationalValueColumnPage() {
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 pb-16 md:py-14">
+      <Suspense fallback={<div className="mb-8 h-9 w-40 rounded-lg bg-white/5" aria-hidden />}>
+        <EducationalColumnWispoHeader />
+      </Suspense>
       <article className="text-sm leading-relaxed text-wit-muted md:text-base">
         <p className="mb-2 text-xs font-medium uppercase tracking-widest text-wit-muted">知育コラム</p>
         <h1 className="mb-6 text-2xl font-bold tracking-tight text-wit-text md:text-3xl">
@@ -105,7 +110,7 @@ export default function EducationalValueColumnPage() {
         <p>
           グレード（G1〜）により盤面規模と対ペア数、生成上の制約が段階的に増えます。入門で成功体験を固め、高次で探索空間を拡大する勾配は、準備された難易度という観点から妥当です。線をグラフの辺とみなす視点は、将来の離散数学的直観の下地にもなり得ます。
         </p>
-        <PlayLink href="/games/pair-link" label="このパズルを今すぐ遊ぶ（Pair-Link）" />
+        <PlayLink href="/games/pair-link" label="このパズルを今すぐ遊ぶ（Pair-Link・ペアリンク）" />
 
         <SectionTitle id="reflec-shot">2. Reflec-Shot（リフレクショット）</SectionTitle>
         <h3 className="mt-4 font-semibold text-wit-text">開発背景</h3>
@@ -124,7 +129,7 @@ export default function EducationalValueColumnPage() {
         <p>
           グレード上昇に伴い盤面規模とバンパー配置の複雑さが増し、単純な直線予測から多段反射の推論へ移行します。低グレードの成功が自我の充実を支え、高グレードが持続的注意と計画の持続を求めます。ラボ公開は小規模な観察導入にも適します。
         </p>
-        <PlayLink href="/lab/reflec-shot" label="このパズルを今すぐ遊ぶ（Reflec-Shot・ラボ）" />
+        <PlayLink href="/lab/reflec-shot" label="このパズルを今すぐ遊ぶ（Reflec-Shot・リフレクショット・知育ラボ）" />
 
         <SectionTitle id="skyscraper">3. Skyscraper（スカイスクレイパー）</SectionTitle>
         <h3 className="mt-4 font-semibold text-wit-text">開発背景</h3>
@@ -143,7 +148,7 @@ export default function EducationalValueColumnPage() {
         <p>
           盤サイズと難易プリセットにより探索空間を段階的に拡大します。小盤でヒントが強く効く型を体感的に蓄積し、大盤で複合制約への耐性を養う流れは、算数における場合分けの持久力とも通じます。
         </p>
-        <PlayLink href="/games/skyscraper" label="このパズルを今すぐ遊ぶ（Skyscraper）" />
+        <PlayLink href="/games/skyscraper" label="このパズルを今すぐ遊ぶ（Skyscraper・スカイスクレイパー）" />
 
         <SectionTitle id="pres-sure">4. Pres-Sure Judge（プレッシャージャッジ）</SectionTitle>
         <h3 className="mt-4 font-semibold text-wit-text">開発背景</h3>
