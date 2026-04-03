@@ -32,7 +32,7 @@ function getDebugSlotLabel(slotIndex: number): string {
 function AdPlaceholder({ slotIndex, isFlashing }: { slotIndex: number; isFlashing: boolean }) {
   return (
     <div
-      className={`flex items-center justify-center rounded-lg border border-dashed border-white/30 bg-slate-700/40 text-wit-muted text-xs font-mono transition-all duration-200 ${
+      className={`flex w-full items-center justify-center rounded-lg border border-dashed border-white/30 bg-slate-700/40 px-3 py-2 text-center text-wit-muted text-xs font-mono transition-all duration-200 ${
         isFlashing ? "opacity-100 ring-2 ring-emerald-400/80 scale-[1.01]" : "opacity-70"
       }`}
       style={{ minHeight: AD_MIN_HEIGHT_PX }}
@@ -105,7 +105,7 @@ export function ReflecShotAdSlot({ slotIndex, isDebugMode }: ReflecShotAdSlotPro
 
   if (showPlaceholder) {
     return (
-      <div className="my-4">
+      <div className="mx-auto w-full max-w-full">
         <AdPlaceholder slotIndex={slotIndex} isFlashing={isFlashing} />
       </div>
     );
@@ -113,16 +113,16 @@ export function ReflecShotAdSlot({ slotIndex, isDebugMode }: ReflecShotAdSlotPro
 
   if (!slotId) {
     return (
-      <div className="my-4" style={{ minHeight: AD_MIN_HEIGHT_PX }} aria-hidden="true" />
+      <div className="mx-auto w-full max-w-full" style={{ minHeight: AD_MIN_HEIGHT_PX }} aria-hidden="true" />
     );
   }
 
   return (
-    <div className="my-4" aria-label={`広告スペース ${slotIndex}（Reflec-Shot）`}>
+    <div className="mx-auto w-full max-w-full" aria-label={`広告スペース ${slotIndex}（Reflec-Shot）`}>
       <div
         id={divId}
         style={{ minHeight: AD_MIN_HEIGHT_PX }}
-        className="flex min-h-[100px] items-center justify-center"
+        className="mx-auto flex min-h-[100px] w-full max-w-full items-center justify-center"
       />
     </div>
   );

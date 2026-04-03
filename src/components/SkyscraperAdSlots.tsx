@@ -3,14 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { AD_REFRESH_EVENT } from "@/lib/ads";
 
-const ADSENSE_CLIENT = "ca-pub-5383262801288621";
-const SLOT_1 = process.env.NEXT_PUBLIC_ADSENSE_SLOT_PRESSURE_1 || "";
-const SLOT_2 = process.env.NEXT_PUBLIC_ADSENSE_SLOT_PRESSURE_2 || "";
+const ADSENSE_CLIENT =
+  process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID || "ca-pub-5383262801288621";
+const SLOT_1 = process.env.NEXT_PUBLIC_ADSENSE_SLOT_SKYSCRAPER_1 || "";
+const SLOT_2 = process.env.NEXT_PUBLIC_ADSENSE_SLOT_SKYSCRAPER_2 || "";
 
-/** Layout Shift 防止のための最小高さ（px） */
 const AD_MIN_HEIGHT_PX = 100;
 
-/** レスポンシブ対応の広告サイズ */
 const AD_SIZES: [number, number][] = [
   [320, 50],
   [336, 280],
@@ -18,14 +17,13 @@ const AD_SIZES: [number, number][] = [
   [300, 250],
 ];
 
-type PresSureJudgeAdSlotProps = {
+type SkyscraperAdSlotProps = {
   slotIndex: 1 | 2;
   isDebugMode: boolean;
 };
 
-/** デバッグ時のみ表示するラベル（本番ではプレースホルダー自体を出さない） */
 function getDebugSlotLabel(slotIndex: number): string {
-  return `広告スペース #${slotIndex}`;
+  return `広告スペース #${slotIndex}（スカイスクレイパー）`;
 }
 
 function AdPlaceholder({ slotIndex, isFlashing }: { slotIndex: number; isFlashing: boolean }) {
@@ -35,23 +33,19 @@ function AdPlaceholder({ slotIndex, isFlashing }: { slotIndex: number; isFlashin
         isFlashing ? "opacity-100 ring-2 ring-emerald-400/80 scale-[1.01]" : "opacity-70"
       }`}
       style={{ minHeight: AD_MIN_HEIGHT_PX }}
-      aria-label={`広告スペース ${slotIndex}（Pres-Sure Judge・デバッグ表示）`}
+      aria-label={`広告スペース ${slotIndex}（スカイスクレイパー・デバッグ表示）`}
     >
       {getDebugSlotLabel(slotIndex)}
     </div>
   );
 }
 
-/**
- * Pres-Sure Judge 用広告ユニット
- * slotIndex=2 が両スロットの GPT 初期化を担当（Pair-link と同様）
- */
-export function PresSureJudgeAdSlot({ slotIndex, isDebugMode }: PresSureJudgeAdSlotProps) {
+export function SkyscraperAdSlot({ slotIndex, isDebugMode }: SkyscraperAdSlotProps) {
   const initializedRef = useRef(false);
   const [isFlashing, setIsFlashing] = useState(false);
 
   const slotId = slotIndex === 1 ? SLOT_1 : SLOT_2;
-  const divId = `ad-pressure-${slotIndex}`;
+  const divId = `ad-skyscraper-${slotIndex}`;
   const showPlaceholder = isDebugMode || (!slotId && process.env.NODE_ENV !== "production");
 
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -87,22 +81,24 @@ export function PresSureJudgeAdSlot({ slotIndex, isDebugMode }: PresSureJudgeAdS
       try {
         const path1 = `/${ADSENSE_CLIENT}/${SLOT_1}`;
         const path2 = `/${ADSENSE_CLIENT}/${SLOT_2}`;
-        const s1 = googletag.defineSlot(path1, AD_SIZES, "ad-pressure-1");
-        const s2 = googletag.defineSlot(path2, AD_SIZES, "ad-pressure-2");
+
+        const s1 = googletag.defineSlot(path1, AD_SIZES, "ad-skyscraper-1");
+        const s2 = googletag.defineSlot(path2, AD_SIZES, "ad-skyscraper-2");
+
         if (s1 && s2) {
           googletag.enableServices();
-          googletag.display("ad-pressure-1");
-          googletag.display("ad-pressure-2");
+          googletag.display("ad-skyscraper-1");
+          googletag.display("ad-skyscraper-2");
         }
       } catch {
-        // AdBlock 等: ゲームの進行を妨げない
+        /* AdBlock 等 */
       }
     });
   }, [isDebugMode, slotIndex]);
 
   if (showPlaceholder) {
     return (
-      <div className="mx-auto w-full max-w-full" style={{ minHeight: AD_MIN_HEIGHT_PX }}>
+      <div className="mx-auto w-full max-w-full">
         <AdPlaceholder slotIndex={slotIndex} isFlashing={isFlashing} />
       </div>
     );
@@ -110,20 +106,12 @@ export function PresSureJudgeAdSlot({ slotIndex, isDebugMode }: PresSureJudgeAdS
 
   if (!slotId) {
     return (
-      <div
-        className="mx-auto w-full max-w-full"
-        style={{ minHeight: AD_MIN_HEIGHT_PX }}
-        aria-hidden="true"
-      />
+      <div className="mx-auto w-full max-w-full" style={{ minHeight: AD_MIN_HEIGHT_PX }} aria-hidden="true" />
     );
   }
 
   return (
-    <div
-      className="mx-auto w-full max-w-full"
-      aria-label={`広告スペース ${slotIndex}（Pres-Sure Judge）`}
-      style={{ minHeight: AD_MIN_HEIGHT_PX }}
-    >
+    <div className="mx-auto w-full max-w-full" aria-label={`広告スペース ${slotIndex}（スカイスクレイパー）`}>
       <div
         id={divId}
         style={{ minHeight: AD_MIN_HEIGHT_PX }}

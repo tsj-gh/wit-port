@@ -2,8 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { DevLink } from "@/components/DevLink";
 import confetti from "canvas-confetti";
+import { GamePageHeader } from "@/components/GamePageHeader";
+import { SkyscraperAdSlot } from "@/components/SkyscraperAdSlots";
+import { refreshAds } from "@/lib/ads";
+import {
+  GAME_AD_GAP_AFTER_SLOT_1_PX,
+  GAME_AD_GAP_BEFORE_SLOT_2_PX,
+  GAME_COLUMN_CLASS,
+} from "@/lib/gameLayout";
 import {
   generatePuzzleAction,
   validateAnswerAction,
@@ -54,6 +61,8 @@ export default function SkyscraperGame() {
   const [hashInput, setHashInput] = useState("");
   const searchParams = useSearchParams();
   const isDevTj = searchParams.get("devtj") === "true";
+  const [isDebugMode, setIsDebugMode] = useState(false);
+  const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
   const userSync = useUserSyncContext();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeSecondsRef = useRef(0);
@@ -90,6 +99,7 @@ export default function SkyscraperGame() {
       setCoreGridHash(result.coreGridHash ?? null);
       setLoading(false);
       setTimerActive(true);
+      refreshAds();
     },
     []
   );
@@ -351,11 +361,44 @@ export default function SkyscraperGame() {
   }
 
   return (
-    <div className="mx-auto max-w-[1080px] w-full px-4 py-6">
-      {isDevTj && (
-        <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono">
-          <div className="font-bold text-emerald-400 mb-2">デバッグパネル</div>
-          <div className="space-y-2 text-slate-400/90 text-[10px]">
+    <div className="relative mx-auto max-w-[1080px] w-full px-4 py-4 isolate">
+      {isDevTj && !isDebugMode && (
+        <div className="fixed right-4 top-4 z-50">
+          <button
+            type="button"
+            onClick={() => setIsDebugMode(true)}
+            className="rounded border border-white/20 px-2 py-1 font-mono text-xs"
+            style={{ background: "#334155" }}
+          >
+            DEBUG OFF
+          </button>
+        </div>
+      )}
+      {isDevTj && isDebugMode && (
+        <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-left text-xs font-mono">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            {isDebugPanelExpanded && <span className="font-bold text-emerald-400">デバッグパネル</span>}
+            <div className="ml-auto flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setIsDebugMode(false)}
+                className="rounded border border-white/20 px-2 py-1"
+                style={{ background: "#10b981" }}
+              >
+                DEBUG ON
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDebugPanelExpanded((v) => !v)}
+                className="rounded border border-white/20 p-1 text-white/80"
+                aria-expanded={isDebugPanelExpanded}
+              >
+                {isDebugPanelExpanded ? "▲" : "▼"}
+              </button>
+            </div>
+          </div>
+          {isDebugPanelExpanded && (
+          <div className="space-y-2 text-[10px] text-slate-400/90">
             <DevDebugUserStats />
             <div className="flex flex-wrap gap-1">
               <button
@@ -420,84 +463,26 @@ export default function SkyscraperGame() {
               </button>
             </div>
           </div>
+          )}
         </div>
       )}
-      <header className="flex justify-between items-center mb-6">
-        <DevLink
-          href="/"
-          className="flex items-center gap-3 text-xl sm:text-2xl font-black tracking-wider text-wit-text no-underline hover:opacity-90"
-        >
-          <span className="block w-8 h-8 rounded-lg bg-gradient-to-br from-wit-emerald to-teal-600" />
-          Wispo
-        </DevLink>
-        <div className="flex items-center gap-2 text-wit-muted text-sm">
-          <span className="tabular-nums">{formatTime(timeSeconds)}</span>
-          {solved && <span className="text-wit-emerald">クリア</span>}
-        </div>
-      </header>
+      <div className={GAME_COLUMN_CLASS}>
+      <GamePageHeader
+        titleEn="Skyscraper"
+        titleJa="スカイスクレイパー"
+        trailing={
+          <>
+            <span className="tabular-nums">{formatTime(timeSeconds)}</span>
+            {solved && <span className="text-wit-emerald">クリア</span>}
+          </>
+        }
+      />
 
-      <section className="rounded-2xl p-4 sm:p-6 mb-4 border border-white/10 bg-white/5 backdrop-blur">
-        <h2 className="text-lg font-bold mb-4 text-wit-text">設定</h2>
-        <div className="flex flex-wrap gap-4 items-end">
-          <div>
-            <label className="block text-xs text-wit-muted mb-1">サイズ（N×N）</label>
-            <select
-              value={n}
-              onChange={(e) => loadPuzzle(Number(e.target.value), difficulty)}
-              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
-            >
-              <option value={4}>4×4（入門）</option>
-              <option value={5}>5×5（標準）</option>
-              <option value={6}>6×6（上級）</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-wit-muted mb-1">難易度</label>
-            <select
-              value={difficulty}
-              onChange={(e) => loadPuzzle(n, e.target.value as "easy" | "normal" | "hard")}
-              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-wit-text text-sm"
-            >
-              <option value="easy">かんたん（多め）</option>
-              <option value="normal">ふつう</option>
-              <option value="hard">むずかしい（少なめ）</option>
-            </select>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={handleHint}
-              disabled={solved}
-              className="px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-wit-text text-sm hover:bg-slate-600 disabled:opacity-50"
-            >
-              ヒント
-            </button>
-            <button
-              onClick={handleCheck}
-              className="px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-wit-text text-sm hover:bg-slate-600"
-            >
-              途中判定
-            </button>
-            <button
-              onClick={handleClear}
-              disabled={solved}
-              className="px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-wit-text text-sm hover:bg-slate-600 disabled:opacity-50"
-            >
-              リセット
-            </button>
-            <button
-              onClick={handleSolve}
-              className="px-3 py-2 rounded-lg bg-wit-emerald text-white text-sm hover:bg-emerald-600"
-            >
-              自動解答
-            </button>
-          </div>
-        </div>
-        <p className="text-xs text-wit-muted mt-2">
-          マスをタップ/クリックで 1→2→…→N→空白 と巡回。数字キー(1〜N)/Backspace可。上スワイプで増、下スワイプで減。
-        </p>
-      </section>
+      <div className="relative z-0 w-full" style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}>
+        <SkyscraperAdSlot slotIndex={1} isDebugMode={isDebugMode} />
+      </div>
 
-      <section className="rounded-2xl p-4 sm:p-6 mb-4 border border-white/10 bg-white/5 backdrop-blur">
+      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
         <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
           <div className="flex flex-col gap-2 items-center">
             <div className="grid gap-1 justify-items-center" style={{ gridTemplateColumns: `repeat(${n + 2}, auto)` }}>
@@ -661,26 +646,128 @@ export default function SkyscraperGame() {
           </div>
         </div>
 
-        <div className="mt-4 flex justify-between items-center">
-          <button
-            onClick={() => loadPuzzle(n, difficulty)}
-            className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600"
-          >
-            新規生成
-          </button>
-          <div className="text-sm text-wit-muted min-h-[1.5em] font-medium">{status}</div>
+        <div className="mt-3 min-h-[1.5em] text-center text-sm font-medium text-wit-muted">{status}</div>
+      </section>
+
+      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-3 backdrop-blur sm:px-5 sm:pb-5 sm:pt-3">
+        <div className="flex w-full min-w-0 flex-col gap-4">
+          <div className="w-full min-w-0">
+            <label className="mb-1 block text-xs text-wit-muted">サイズ（N×N）</label>
+            <div
+              className="flex w-full min-w-0 gap-2 overflow-x-auto py-1 [scrollbar-width:none] [-ms-overflow-style:none] snap-x snap-mandatory [&::-webkit-scrollbar]:[display:none]"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              {([4, 5, 6] as const).map((size) => {
+                const isActive = n === size;
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => loadPuzzle(size, difficulty)}
+                    disabled={loading}
+                    className={`min-h-[44px] shrink-0 snap-center touch-manipulation whitespace-nowrap rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+                      isActive
+                        ? "border-sky-500 bg-sky-600 text-white"
+                        : "border-slate-600 bg-slate-800 text-wit-text hover:bg-slate-700"
+                    } disabled:opacity-50`}
+                  >
+                    {size}×{size}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="w-full min-w-0">
+            <label className="mb-1 block text-xs text-wit-muted">難易度</label>
+            <div
+              className="flex w-full min-w-0 gap-2 overflow-x-auto py-1 [scrollbar-width:none] [-ms-overflow-style:none] snap-x snap-mandatory [&::-webkit-scrollbar]:[display:none]"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              {(
+                [
+                  { key: "easy" as const, label: "かんたん" },
+                  { key: "normal" as const, label: "ふつう" },
+                  { key: "hard" as const, label: "むずかしい" },
+                ] as const
+              ).map(({ key, label }) => {
+                const isActive = difficulty === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => loadPuzzle(n, key)}
+                    disabled={loading}
+                    className={`min-h-[44px] shrink-0 snap-center touch-manipulation whitespace-nowrap rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+                      isActive
+                        ? "border-sky-500 bg-sky-600 text-white"
+                        : "border-slate-600 bg-slate-800 text-wit-text hover:bg-slate-700"
+                    } disabled:opacity-50`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleHint}
+              disabled={solved}
+              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-wit-text hover:bg-slate-600 disabled:opacity-50"
+            >
+              ヒント
+            </button>
+            <button
+              onClick={handleCheck}
+              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-wit-text hover:bg-slate-600"
+            >
+              途中判定
+            </button>
+            <button
+              onClick={handleClear}
+              disabled={solved}
+              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-wit-text hover:bg-slate-600 disabled:opacity-50"
+            >
+              リセット
+            </button>
+            <button
+              onClick={handleSolve}
+              className="rounded-lg bg-wit-emerald px-3 py-2 text-sm text-white hover:bg-emerald-600"
+            >
+              自動解答
+            </button>
+          </div>
+          <div className="flex justify-center">
+            <button
+              onClick={() => loadPuzzle(n, difficulty)}
+              disabled={loading}
+              className="rounded-lg bg-wit-emerald px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+            >
+              新規生成
+            </button>
+          </div>
         </div>
       </section>
 
-      <section className="rounded-2xl p-4 sm:p-6 border border-white/10 bg-white/5 backdrop-blur">
-        <h2 className="text-lg font-bold mb-3 text-wit-text">ルール（要点）</h2>
-        <ol className="list-decimal list-inside space-y-2 text-wit-muted text-sm leading-relaxed">
+      <div className="relative z-0 w-full" style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}>
+        <SkyscraperAdSlot slotIndex={2} isDebugMode={isDebugMode} />
+      </div>
+
+      <section className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-5">
+        <h2 className="mb-3 text-lg font-bold text-wit-text">ルール（要点）</h2>
+        <p className="mb-3 text-xs leading-relaxed text-wit-muted">
+          マスをタップ/クリックで 1→2→…→N→空白 と巡回。数字キー(1〜N)/Backspace可。上スワイプで増、下スワイプで減。
+        </p>
+        <ol className="list-inside list-decimal space-y-2 text-sm leading-relaxed text-wit-muted">
           <li>各マスは「ビルの高さ」を表し、1〜N の数字を入れます。</li>
           <li>各行・各列には 1〜N が 1つずつ（重複なし）入ります。</li>
           <li>4辺の数字（手がかり）は、その方向から見えるビルの本数（手前から順により高いビルが現れるたびに +1）。</li>
           <li>すべての手がかりを満たすように数字を配置すると完成です。</li>
         </ol>
       </section>
+      </div>
 
       {showClearOverlay && (
         <div

@@ -26,7 +26,7 @@ export type ReflectShotGenerateResult = {
 };
 
 /**
- * Reflect-Shot 盤面生成を専用 Worker に委譲する。
+ * Reflec-Shot 盤面生成を専用 Worker に委譲する。
  * アンマウント時に worker を terminate。同一 Worker に対する応答は requestId で突き合わせる。
  */
 export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
@@ -67,7 +67,7 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
     };
 
     return () => {
-      pendingMap.forEach((p) => p.reject(new Error("Reflect-Shot Worker を終了しました")));
+      pendingMap.forEach((p) => p.reject(new Error("Reflec-Shot Worker を終了しました")));
       pendingMap.clear();
       userInFlightRef.current = 0;
       setIsGenerating(false);
@@ -89,12 +89,12 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
     ): Promise<ReflectShotGenerateResult> => {
       const w = workerRef.current;
       if (!w) {
-        return Promise.reject(new Error("Reflect-Shot Worker が未初期化です"));
+        return Promise.reject(new Error("Reflec-Shot Worker が未初期化です"));
       }
 
       const source: ReflectShotGenerateSource = opts?.source ?? "user";
       if (source === "user" && userInFlightRef.current > 0) {
-        return Promise.reject(new Error("Reflect-Shot: ユーザー向け生成は既に実行中です"));
+        return Promise.reject(new Error("Reflec-Shot: ユーザー向け生成は既に実行中です"));
       }
 
       const requestId = `rs-${Date.now()}-${++reqIdRef.current}`;

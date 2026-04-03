@@ -21,7 +21,7 @@ function emptyStock(): StockRef {
 }
 
 /**
- * Reflect-Shot 用: Web Worker 経由でグレード別に盤面ストックを補充し、FIFO で取り出す。
+ * Reflec-Shot 用: Web Worker 経由でグレード別に盤面ストックを補充し、FIFO で取り出す。
  */
 export function useReflectShotBoardStock(
   generate: (

@@ -6,6 +6,13 @@ import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PresSureJudgeAdSlot } from "@/components/PresSureJudgeAdSlots";
+import { GamePageHeader } from "@/components/GamePageHeader";
+import {
+  GAME_AD_GAP_AFTER_SLOT_1_PX,
+  GAME_AD_GAP_BEFORE_SLOT_2_PX,
+  GAME_COLUMN_CLASS_WIDE,
+  GAME_TOP_AD_RESERVED_PX,
+} from "@/lib/gameLayout";
 import { useUserSyncContext } from "@/components/UserSyncProvider";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
 import { recordPuzzleClear } from "@/lib/wispo-user-data";
@@ -1304,7 +1311,6 @@ export default function PresSureJudgeGame() {
   };
   const leftDisplay = applySinkIfNeeded(leftDisplayRaw);
   const rightDisplay = applySinkIfNeeded(rightDisplayRaw);
-  const isMobile = forcedWidth === 375 || (forcedWidth == null && viewportWidth < 768);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#0a0e18] to-[#0f172a] text-wit-text isolate">
@@ -1609,31 +1615,34 @@ export default function PresSureJudgeGame() {
           )}
         </div>
       )}
-      <header className="relative z-20 shrink-0 flex justify-between items-center px-4 py-4 md:px-6 md:py-6 border-b border-white/10">
-        <DevLink
-          href="/"
-          className="flex items-center gap-3 text-xl font-black tracking-wider text-wit-text no-underline hover:opacity-90"
-        >
-          <span className="block w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-[0_0_12px_rgba(245,158,11,0.4)]" />
-          Wispo
-        </DevLink>
-        {phase !== "ready" && phase !== "result" && (
-          <span className="text-wit-muted text-sm tabular-nums font-medium">Round {round}</span>
-        )}
-      </header>
+      <div className={GAME_COLUMN_CLASS_WIDE}>
+      <GamePageHeader
+        titleEn="Pres-Sure Judge"
+        titleJa="プレッシャージャッジ"
+        maxWidthClassName="w-full"
+        className="relative z-20 shrink-0 border-b border-white/10 px-4 py-4 md:px-6 md:py-4"
+        trailing={
+          phase !== "ready" && phase !== "result" ? (
+            <span className="font-medium tabular-nums text-wit-muted">Round {round}</span>
+          ) : null
+        }
+      />
 
-      {/* 広告枠A: PCはヘッダー下、モバイルでは非表示（Pair-linkと同様） */}
-      {!isMobile && (
-        <div className="px-4 pb-3 md:px-6" style={{ minHeight: 100 }}>
+      <div
+        className="relative z-10 w-full shrink-0 px-4 md:px-6"
+        style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
+      >
+        <div className="w-full" style={{ minHeight: 100 }}>
           <PresSureJudgeAdSlot slotIndex={1} isDebugMode={isDebugMode} />
         </div>
-      )}
+      </div>
+      </div>
 
       <main
-        className="relative z-0 flex-1 min-h-0 mx-auto w-full max-w-[640px] px-4 py-2 md:py-4 flex flex-col overflow-hidden"
+        className={`relative z-[1] flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-2 md:py-4 ${GAME_COLUMN_CLASS_WIDE}`}
         style={{
           paddingBottom: "max(5rem, env(safe-area-inset-bottom, 0px) + 4rem)",
-          minHeight: `calc(100dvh - ${layoutParams.headerHeightRem}px)`,
+          minHeight: `calc(100dvh - ${layoutParams.headerHeightRem + GAME_TOP_AD_RESERVED_PX}px)`,
         }}
       >
         {flyingItems.map((fly) => (
@@ -1741,7 +1750,7 @@ export default function PresSureJudgeGame() {
               className="flex flex-col min-h-0 flex-1 max-h-[85vh] md:max-h-[85vh]"
               style={{
                 gap: layoutParams.gameGap,
-                height: `calc(100dvh - ${layoutParams.headerHeightRem}px)`,
+                height: `calc(100dvh - ${layoutParams.headerHeightRem + GAME_TOP_AD_RESERVED_PX}px)`,
                 touchAction: "none",
               }}
             >
@@ -2089,8 +2098,8 @@ export default function PresSureJudgeGame() {
                     Judge（確定）
                   </button>
                 </div>
-                {/* 広告枠B: 在庫/Judgeパネルの外・直下（誤タップ防止のため30px以上の余白） */}
-                <div className="mt-8 shrink-0" style={{ minHeight: 100 }}>
+                {/* 広告枠B: 操作UIの直下 */}
+                <div className="relative z-0 w-full shrink-0" style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}>
                   <PresSureJudgeAdSlot slotIndex={2} isDebugMode={isDebugMode} />
                 </div>
                 </>

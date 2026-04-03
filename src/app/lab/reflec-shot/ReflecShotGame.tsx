@@ -25,15 +25,18 @@ import {
 } from "./gridTypes";
 import { decodeReflecStageHash, encodeReflecStageHash, parseReflecHash } from "./reflecShotStageHash";
 import { ReflecShotAdSlot } from "@/components/ReflecShotAdSlots";
+import { GamePageHeader } from "@/components/GamePageHeader";
 import { refreshAds } from "@/lib/ads";
+import {
+  GAME_AD_GAP_AFTER_SLOT_1_PX,
+  GAME_AD_GAP_BEFORE_SLOT_2_PX,
+  GAME_COLUMN_CLASS,
+} from "@/lib/gameLayout";
 
 /** 1マス移動の基準時間（ms）。実効速度はこれを速度倍率で除算。 */
 const BASE_CELL_TRAVEL_MS = 280;
 const CHARGE_MS = 520;
 const SWIPE_MIN = 12;
-
-/** グレード操作帯と広告枠のあいだ（誤タップ防止・審査向け） */
-const GRADE_AD_MIN_GAP_PX = 150;
 
 type Phase = "edit" | "move" | "won" | "lost";
 
@@ -203,7 +206,6 @@ export default function ReflecShotGame() {
   const [debugLv4GenMode, setDebugLv4GenMode] = useState<"default" | "rFirst" | "rSecond">("rSecond");
   const [hashInput, setHashInput] = useState("");
   const [layoutNonce, setLayoutNonce] = useState(0);
-  const [windowWidth, setWindowWidth] = useState(1024);
   const [stockPrefetchPaused, setStockPrefetchPaused] = useState(false);
   const nextBoardSourceRef = useRef<BoardSurfaceSource | null>(null);
   const [boardDisplaySource, setBoardDisplaySource] = useState<BoardSurfaceSource | null>(null);
@@ -276,15 +278,6 @@ export default function ReflecShotGame() {
     generateStageInWorker,
     takeBoardForGrade,
   };
-
-  useEffect(() => {
-    const update = () => setWindowWidth(window.innerWidth);
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
-
-  const isMobile = windowWidth < 768;
 
   useEffect(() => {
     const prev = debugPrevBoardRef.current;
@@ -834,7 +827,7 @@ export default function ReflecShotGame() {
   };
 
   return (
-    <div className="w-full max-w-[520px] mx-auto flex flex-col gap-3">
+    <div className={`${GAME_COLUMN_CLASS} flex flex-col gap-3`}>
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-4 z-50">
           <button
@@ -1093,13 +1086,15 @@ export default function ReflecShotGame() {
         </div>
       )}
 
-      <div className={isMobile ? "hidden" : "mb-4"}>
+      <GamePageHeader titleEn="Reflec-Shot" titleJa="リフレクショット" />
+
+      <div className="relative z-0 w-full" style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}>
         <ReflecShotAdSlot slotIndex={1} isDebugMode={isDebugMode} />
       </div>
 
-      <section className="rounded-2xl p-4 sm:p-6 mb-4 border border-white/10 bg-white/5 backdrop-blur">
-        <div className="flex flex-col items-center">
-          <div className="flex justify-between w-full max-w-[520px] mb-2 font-semibold text-wit-text text-sm">
+      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
+        <div className="flex w-full flex-col items-center">
+          <div className="mb-2 flex w-full justify-between text-sm font-semibold text-wit-text">
             <span>
               {phase === "edit"
                 ? "編集"
@@ -1112,7 +1107,7 @@ export default function ReflecShotGame() {
           </div>
           {(statusMsg || boardLoadWait) && (
             <p
-              className={`w-full max-w-[520px] mb-2 text-sm ${
+              className={`mb-2 w-full text-sm ${
                 phase === "won"
                   ? "text-emerald-400"
                   : phase === "lost"
@@ -1126,7 +1121,7 @@ export default function ReflecShotGame() {
             </p>
           )}
           <div
-            className="w-full max-w-[520px] touch-none select-none"
+            className="w-full touch-none select-none"
             style={{ WebkitTapHighlightColor: "transparent" }}
           >
             <canvas
@@ -1139,17 +1134,8 @@ export default function ReflecShotGame() {
               onPointerCancel={onPointerCancel}
             />
           </div>
-          {isMobile && (
-            <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
-              <ReflecShotAdSlot slotIndex={1} isDebugMode={isDebugMode} />
-            </div>
-          )}
         </div>
-        <div
-          className={`w-full max-w-[520px] mx-auto min-w-0 mb-2 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start ${
-            isMobile ? "mt-[150px]" : "mt-4"
-          }`}
-        >
+        <div className="mb-2 mt-4 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
           <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
             <label className="block text-xs text-wit-muted mb-1">グレード</label>
             <div
@@ -1213,15 +1199,8 @@ export default function ReflecShotGame() {
           </div>
         </div>
 
-        <div
-          className="w-full max-w-[520px] mx-auto"
-          style={{ minHeight: 100, marginTop: GRADE_AD_MIN_GAP_PX }}
-        >
-          <ReflecShotAdSlot slotIndex={2} isDebugMode={isDebugMode} />
-        </div>
-
         {isDevTj && (
-          <div className="flex flex-wrap gap-2 justify-center pb-2 mt-3">
+          <div className="mt-3 flex flex-wrap justify-center gap-2 pb-2">
             <button
               type="button"
               disabled={isGenerating || boardLoadWait}
@@ -1241,7 +1220,7 @@ export default function ReflecShotGame() {
         )}
 
         {!isDevTj && (
-          <div className="flex justify-center pb-2 mt-3">
+          <div className="mt-3 flex justify-center pb-2">
             <button
               type="button"
               disabled={isGenerating || boardLoadWait}
@@ -1253,12 +1232,16 @@ export default function ReflecShotGame() {
           </div>
         )}
 
-        <ul className="mt-3 text-wit-muted text-xs leading-relaxed space-y-1 list-disc pl-5">
-          <li>グリッド論理パズル：マス中心からマス中心へ等速移動。進行・バンパー反射の向きが壁（外縁・Void）へ向くと失敗。</li>
-          <li>バンパーは長押し（約{CHARGE_MS}ms）後にスワイプで ／ ＼ － ｜ にスナップ。</li>
-          <li>スタート側パッド（startPad）に戻ると失敗。ゴール側パッド（goalPad）に入るとクリア（グレードによりパッドの位置が異なります）。</li>
-          <li>開発用: <code className="text-slate-500">?devtj=true</code> でデバッグと下部の再生成・自動解答。</li>
-        </ul>
+        <div
+          className="relative z-0 w-full"
+          style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}
+        >
+          <ReflecShotAdSlot slotIndex={2} isDebugMode={isDebugMode} />
+        </div>
+
+        <p className="mt-3 text-sm leading-relaxed text-wit-muted">
+          グリッド論理版プロトタイプ。入口・ゴールはそれぞれ最下段の下辺・最上段の上辺を開けた隣のマスに置き、L字・T字などの形状をバンパー（／＼－｜）と壁のルールで解きます。Grade が上がるほど盤のマス数が増えます。
+        </p>
       </section>
     </div>
   );

@@ -16,6 +16,12 @@ import {
 import { computeABCScore, computeStats, type ABCScore } from "@/lib/pair-link-abc-score";
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
+import { GamePageHeader } from "@/components/GamePageHeader";
+import {
+  GAME_AD_GAP_AFTER_SLOT_1_PX,
+  GAME_AD_GAP_BEFORE_SLOT_2_PX,
+  GAME_COLUMN_CLASS,
+} from "@/lib/gameLayout";
 import { useUserSyncContext } from "@/components/UserSyncProvider";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
 import { recordPuzzleClear } from "@/lib/wispo-user-data";
@@ -589,8 +595,6 @@ export default function PairLinkGame() {
   }, [forcedWidth]);
 
   const effectiveViewportWidth = forcedWidth ?? windowWidth - 40;
-  const isMobile =
-    forcedWidth === 375 || (forcedWidth == null && windowWidth < 768);
   const canvasPixelSize = Math.min(500, Math.max(300, effectiveViewportWidth));
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1512,7 +1516,7 @@ export default function PairLinkGame() {
   }
 
   return (
-    <div className="mx-auto max-w-[1080px] w-full px-4 py-6">
+    <div className="mx-auto max-w-[1080px] w-full px-4 py-4">
       {isDevTj && lastPuzzleDebugInfo && !useLegacyMode && (
         <div
           className="fixed left-4 bottom-4 z-40 rounded-lg border border-white/10 bg-black/70 px-2 py-1.5 text-[10px] font-mono text-slate-400"
@@ -2153,33 +2157,32 @@ export default function PairLinkGame() {
             : undefined
         }
       >
-        <header className="flex justify-between items-center mb-6">
-        <DevLink
-          href="/"
-          className="flex items-center gap-3 text-xl sm:text-2xl font-black tracking-wider text-wit-text no-underline hover:opacity-90"
-        >
-          <span className="block w-8 h-8 rounded-lg bg-gradient-to-br from-wit-emerald to-teal-600" />
-          Wispo
-        </DevLink>
-        <div className="flex items-center gap-2 text-wit-muted text-sm">
-          <span className="tabular-nums">{formatTime(timeSeconds)}</span>
-          {solved && <span className="text-wit-emerald">クリア</span>}
-        </div>
-      </header>
+        <div className={GAME_COLUMN_CLASS}>
+        <GamePageHeader
+          titleEn="Pair-Link"
+          titleJa="ペアリンク"
+          trailing={
+            <>
+              <span className="tabular-nums">{formatTime(timeSeconds)}</span>
+              {solved && <span className="text-wit-emerald">クリア</span>}
+            </>
+          }
+        />
 
-      {/* 広告枠1: PCは上部、モバイルでは盤面直下へ配置（Switching Logic） */}
-      <div className={isMobile ? "hidden" : "mb-4"}>
+      <div
+        className="relative z-0 w-full"
+        style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
+      >
         <PairLinkAdSlot slotIndex={1} isDebugMode={isDebugMode} />
       </div>
 
-      <section className="rounded-2xl p-4 sm:p-6 mb-4 border border-white/10 bg-white/5 backdrop-blur">
-        <div className="flex flex-col items-center">
-          <div className="flex justify-between w-full max-w-[520px] mb-2 font-semibold text-wit-text text-sm">
+      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
+        <div className="flex w-full flex-col items-center">
+          <div className="mb-2 w-full text-sm font-semibold text-wit-text">
             <span>{status}</span>
-            <span className="tabular-nums">{formatTime(timeSeconds)}</span>
           </div>
           <div
-            className="w-full max-w-[520px] touch-none select-none"
+            className="w-full touch-none select-none"
             style={{ minHeight: canvasSize, WebkitTapHighlightColor: "transparent" }}
           >
             <div className="relative w-full max-w-[500px] mx-auto border-2 border-slate-600 rounded-xl shadow-lg overflow-hidden bg-slate-900">
@@ -2210,14 +2213,8 @@ export default function PairLinkGame() {
               )}
             </div>
           </div>
-          {/* 広告枠1（モバイルのみ）: 盤面直下・操作UIの上に配置 */}
-          {isMobile && (
-            <div className="mt-4 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
-              <PairLinkAdSlot slotIndex={1} isDebugMode={isDebugMode} />
-            </div>
-          )}
         </div>
-        <div className="w-full max-w-[520px] mx-auto min-w-0 mt-4 mb-2 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
+        <div className="mx-auto mt-4 mb-2 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
           {useLegacyMode ? (
             <>
               <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
@@ -2358,19 +2355,23 @@ export default function PairLinkGame() {
             </>
           )}
         </div>
+        {/* 広告枠2: 操作UIの直下（余白を確保して接触を回避） */}
+        <div
+          className="relative z-0 mt-0 w-full"
+          style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}
+        >
+          <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
+        </div>
         {!useLegacyMode && GRADE_MAP.get(currentGrade) && (
-          <p className="w-full max-w-[520px] mx-auto text-center text-xs text-wit-muted mt-1 px-1">
+          <p className="mx-auto mt-3 w-full px-1 text-center text-xs text-wit-muted">
             {GRADE_MAP.get(currentGrade)!.theme}
           </p>
         )}
-        {/* 広告枠2: サイズ/新規作成の直下（余白を確保して接触を回避） */}
-        <div className="mt-8 w-full max-w-[520px] mx-auto" style={{ minHeight: 100 }}>
-          <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
-        </div>
-        <p className="text-xs text-wit-muted mt-3">
+        <p className="mt-3 text-xs text-wit-muted">
           同じ数字をドラッグで線で繋ぎ、全マスを埋めましょう。サイズが大きいと生成に数秒かかることがあります。
         </p>
       </section>
+        </div>
 
       {showClearOverlay && (
         <div
