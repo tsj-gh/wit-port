@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 import PuzzleStockPrefetcher from "@/components/PuzzleStockPrefetcher";
 import { HomePageLinks } from "@/components/HomePageLinks";
@@ -23,6 +24,18 @@ export default function HomePage() {
         </Suspense>
 
         <section className="py-12 border-t border-white/10 animate-fade-in-up-delay-more">
+          <h2 className="text-xl font-bold mb-4 text-wit-text">知育コラム</h2>
+          <p className="text-wit-muted leading-relaxed mb-4">
+            各パズルの知育効果を、脳科学・モンテッソーリ教育・難易度設計の観点からまとめた固定ページです。保護者・教育者向けの参考資料としてご活用ください。
+          </p>
+          <p className="mb-6">
+            <Link
+              href="/columns/educational-value"
+              className="inline-flex items-center text-sky-300 font-medium underline-offset-2 hover:text-sky-200 hover:underline"
+            >
+              知育コラムを読む（ロジックパズルと思考力の育成）
+            </Link>
+          </p>
           <h2 className="text-xl font-bold mb-4 text-wit-text">Wispoについて</h2>
           <p className="text-wit-muted leading-relaxed mb-4">
             Wispoは、論理的思考力と直感を育む知育パズルの無料サイトです。ペアリンク・スカイスクレイパー・Pres-Sure Judgeなど、様々なロジックパズルをブラウザで手軽にお楽しみいただけます。

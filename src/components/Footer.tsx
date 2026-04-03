@@ -29,6 +29,13 @@ function FooterNav() {
       >
         お問い合わせ
       </DevLink>
+      <span className="text-wit-muted/50" aria-hidden="true">|</span>
+      <DevLink
+        href="/columns/educational-value"
+        className="text-[13px] text-wit-muted no-underline transition-colors hover:text-wit-text"
+      >
+        知育コラム
+      </DevLink>
     </nav>
   );
 }

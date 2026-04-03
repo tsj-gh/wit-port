@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { EducationalValueSection } from "@/components/educational/EducationalValueSection";
 import PairLinkGame from "./PairLinkGame";
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
@@ -47,18 +48,32 @@ export default function PairLinkPage() {
       <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-wit-bg text-wit-muted">読み込み中…</div>}>
         <PairLinkGame />
       </Suspense>
-      <section className="mx-auto max-w-[1080px] w-full px-4 py-6 pb-12" aria-label="このパズルの知育効果">
-        <details className="group rounded-2xl border border-white/10 bg-white/5 backdrop-blur overflow-hidden">
-          <summary className="cursor-pointer list-none px-6 py-4 text-wit-muted text-sm hover:text-wit-text transition-colors select-none">
-            <span className="font-medium">このパズルの知育効果について（知育・算数・無料・幼児向け）</span>
-          </summary>
-          <div className="px-6 pb-6 pt-0">
-            <p className="text-wit-muted text-sm leading-relaxed">
-              ペアリンク（ナンバーリンク）は、幼児から小学生まで楽しめる無料の知育パズルです。同じ数字同士を線で繋ぎ、盤面を埋めていくシンプルなルールで、論理的思考力と数の感覚を自然に養うことができます。算数の土台となる「数の対応」「順序の理解」が遊びながら身につき、線を引く経路を考える過程で空間認識力や計画性が育ちます。無料で何度でも遊べるため、家庭で気軽に知育に取り組め、継続的な学習効果が期待できます。4×4の入門サイズから段階的に難易度を上げられるので、幼児の初めての算数遊びから小学校低学年の論理パズルまで幅広く対応。線の交差や行き止まりを避ける思考は、プログラミング的思考の基礎にもつながります。幼児期の知育には、遊び感覚で数を意識できる教材が効果的です。無料で使えるため、算数が苦手な子も抵抗なく挑戦でき、論理的思考の入り口として最適。タブレットやスマホ、PC（Windows、macOS、Android、iOS）で利用でき、外出先での知育にも便利。集中力や先読み力も育ち、毎日少しずつ続けることで、数の感覚と論理力が着実に伸びていきます。
-            </p>
-          </div>
-        </details>
-      </section>
+      <EducationalValueSection summaryLabel="このパズルの知育効果について（専門解説・知育コラム連携）">
+        <h3>開発背景</h3>
+        <p>
+          ペアリンク（ナンバーリンク／Numberlink）は、同じ数字の端点同士を一方通行の線で結び、盤上のすべてのマスを通り、線同士が交差しないという三つの制約を同時に満たす古典的な論理パズルです。紙面やワークでは線の訂正に時間がかかり、誤りに気づくまでのフィードバックも遅れがちでした。Wispo
+          ではブラウザ上でドラッグによる描画・撤回が即座に行え、行き詰まりからの再試行が思考のリズムを断ち切らないよう設計しています。指やスタイラスによる操作は微細運動と空間表象を結び、学童期の図形表現活動とも連続した経験となり得ます。
+        </p>
+        <h3>脳科学的視点</h3>
+        <p>
+          交差禁止と全盘充填という二重制約下での探索は、誤った仮説を更新し続ける課題として<strong className="text-wit-text">前頭前野</strong>
+          が関与する行動結果監視を反復刺激します。仮に引いた経路をワーキングメモリ上に保持しつつ、「数手先で四方が塞がる」といった未来の帰結を先取りする必要が生じ、この
+          <strong className="text-wit-text">視空間ワーキングメモリ</strong>
+          の負荷は地図読みや展開図の推理と同系の認知過程を介します。適切な難易度での反復は、探索パターンの選別（いわゆるスキーマ化）を促し、単なる暗記ではない学習循環を支えます。
+        </p>
+        <h3>モンテッソーリ教育の融合</h3>
+        <p>
+          モンテッソーリにおける<strong className="text-wit-text">デモンストレーション</strong>
+          は、教師が全体を代行するのではなく、子どもが自力で試すために必要最小限の秩序だけを示す技法です。ペアリンクでは「線は交差しない」「マスに余白を残さない」というルールが画面に明示され、経路の発見そのものは児童の反復に委ねられます。規則違反は操作としてすぐに返るため、外部からの叱責に頼らない
+          <strong className="text-wit-text">自己訂正</strong>へつながりやすく、自己教育の環境としての性格を帯びます。
+        </p>
+        <h3>ステップアップの設計（グレード G1〜）</h3>
+        <p>
+          グレード（G1〜）は盤面サイズとペア数、および生成上の制約を段階的に増やす設計です。入門段階では視覚的な探索範囲が狭く、小さな成功体験による
+          <strong className="text-wit-text">達成感の定着</strong>
+          が得やすくなります。高次グレードでは探索空間が広がり、仮説の保持時間と計画の持続が求められます。線をグラフの辺・マスを頂点とみなす視点は、将来の離散数学やネットワークの直観の下地ともなり得ます。保護者が伴走するときは正答を急いで与えるより、「次に危険なマスはどこか」を言語化して共有することが、子どものメタ認知の言語化を助けます。
+        </p>
+      </EducationalValueSection>
     </>
   );
 }
