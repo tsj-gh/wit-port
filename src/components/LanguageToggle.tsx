@@ -3,13 +3,13 @@
 import { useI18n } from "@/lib/i18n-context";
 
 export function LanguageToggle() {
-  const { locale, setLocale } = useI18n();
+  const { locale, setLocale, t } = useI18n();
 
   return (
     <div
       className="flex shrink-0 items-center rounded-lg border border-white/15 bg-white/5 p-0.5 text-[11px] font-bold tracking-wide sm:text-xs"
       role="group"
-      aria-label="Language"
+      aria-label={t("common.languageAria")}
     >
       <button
         type="button"

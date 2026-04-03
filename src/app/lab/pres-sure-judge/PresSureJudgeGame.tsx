@@ -16,6 +16,7 @@ import {
 import { useUserSyncContext } from "@/components/UserSyncProvider";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
 import { recordPuzzleClear } from "@/lib/wispo-user-data";
+import { useI18n } from "@/lib/i18n-context";
 
 const BALANCE_LIMIT = 100;
 const NPC_WEIGHT_MIN = 10;
@@ -595,6 +596,7 @@ function DebugThrowBlock({
 }
 
 export default function PresSureJudgeGame() {
+  const { t } = useI18n();
   const [phase, setPhase] = useState<Phase>("ready");
   const [totalBalance, setTotalBalance] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -1328,7 +1330,7 @@ export default function PresSureJudgeGame() {
       {isDebugMode && (
         <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono">
           <div className="flex items-center justify-between gap-2">
-            {isDebugPanelExpanded && <span className="font-bold text-emerald-400 shrink-0">天秤位置パラメータ</span>}
+            {isDebugPanelExpanded && <span className="font-bold text-emerald-400 shrink-0">{t("games.presSure.debugScaleParams")}</span>}
             <div className="flex items-center gap-1 shrink-0 ml-auto">
               <button
                 onClick={() => setIsDebugMode(false)}
@@ -1340,7 +1342,7 @@ export default function PresSureJudgeGame() {
               <button
                 onClick={() => setIsDebugPanelExpanded((v) => !v)}
                 className="p-1 rounded border border-white/20 hover:bg-white/10 text-white/80"
-                title={isDebugPanelExpanded ? "パネルを閉じる" : "パネルを開く"}
+                title={isDebugPanelExpanded ? t("common.closePanel") : t("common.openPanel")}
               >
                 {isDebugPanelExpanded ? "▲" : "▼"}
               </button>
@@ -1355,7 +1357,7 @@ export default function PresSureJudgeGame() {
               disabled={phase === "result"}
               className="px-2 py-0.5 rounded text-[9px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              強制終了 (Finish Session)
+              {t("games.presSure.debugFinishSession")}
             </button>
           </div>
           <div className="mt-2 space-y-1.5">
@@ -1384,7 +1386,7 @@ export default function PresSureJudgeGame() {
               <span className="text-white/50">({DEBUG_LAYOUT_DEFAULTS.scaleWrapperMaxOffset})</span>
             </label>
             <label className="flex items-center justify-between gap-2">
-              <span className="text-amber-300/90">モバイル版アーム長比率 (0.1～1.0):</span>
+              <span className="text-amber-300/90">{t("games.presSure.debugArmRatio")}</span>
               <input
                 type="number"
                 min="0.1"
@@ -1406,7 +1408,7 @@ export default function PresSureJudgeGame() {
             onClick={() => setLayoutParams(layoutParamsDraft)}
             className="mt-2 w-full rounded border border-amber-500/50 bg-amber-500/20 py-1.5 text-amber-400 hover:bg-amber-500/30"
           >
-            値を反映
+            {t("games.presSure.debugApplyValues")}
           </button>
           <div className="mt-2 border-t border-white/10 pt-2">
             <label className="flex items-center gap-2">
@@ -1424,7 +1426,7 @@ export default function PresSureJudgeGame() {
                 checked={showConnectionPoints}
                 onChange={(e) => setShowConnectionPoints(e.target.checked)}
               />
-              <span className="text-amber-400">アームと器の接続位置を●で表示</span>
+              <span className="text-amber-400">{t("games.presSure.debugShowArmJoint")}</span>
             </label>
             <label className="mt-1 flex items-center gap-2">
               <input
@@ -1432,7 +1434,7 @@ export default function PresSureJudgeGame() {
                 checked={showArmLines}
                 onChange={(e) => setShowArmLines(e.target.checked)}
               />
-              <span className="text-amber-400">支点からアームの線を描画</span>
+              <span className="text-amber-400">{t("games.presSure.debugShowArmLine")}</span>
             </label>
             <label className="mt-1 flex items-center gap-2">
               <input
@@ -1440,7 +1442,7 @@ export default function PresSureJudgeGame() {
                 checked={showBezierTrajectory}
                 onChange={(e) => setShowBezierTrajectory(e.target.checked)}
               />
-              <span className="text-amber-400">ベジエ軌道を表示</span>
+              <span className="text-amber-400">{t("games.presSure.debugShowBezier")}</span>
             </label>
             <label className="mt-1 flex items-center gap-2">
               <input
@@ -1448,10 +1450,10 @@ export default function PresSureJudgeGame() {
                 checked={showBoundingBox}
                 onChange={(e) => setShowBoundingBox(e.target.checked)}
               />
-              <span className="text-amber-400">境界枠を表示</span>
+              <span className="text-amber-400">{t("games.presSure.debugShowBounds")}</span>
             </label>
             <label className="mt-1 flex items-center gap-2">
-              <span className="text-amber-400">初速倍率:</span>
+              <span className="text-amber-400">{t("games.presSure.debugInitialSpeedMul")}</span>
               <input
                 type="number"
                 step="0.1"
@@ -1468,12 +1470,12 @@ export default function PresSureJudgeGame() {
                 checked={debugDoubleInventory}
                 onChange={(e) => setDebugDoubleInventory(e.target.checked)}
               />
-              <span className="text-amber-400">次のラウンドの在庫を2倍にする</span>
+              <span className="text-amber-400">{t("games.presSure.debugDoubleNextInv")}</span>
             </label>
             <div className="mt-2 border-t border-white/10 pt-2">
-              <span className="text-emerald-400">ラウンド切替 NPC アイテム</span>
+              <span className="text-emerald-400">{t("games.presSure.debugNpcRoundItem")}</span>
               <label className="mt-1 flex items-center justify-between gap-2">
-                <span className="text-amber-300/90">出現遅延(ms):</span>
+                <span className="text-amber-300/90">{t("games.presSure.debugSpawnDelay")}</span>
                 <input
                   type="number"
                   value={npcItemAppearDelayMs}
@@ -1482,7 +1484,7 @@ export default function PresSureJudgeGame() {
                 />
               </label>
               <label className="mt-1 flex items-center justify-between gap-2">
-                <span className="text-amber-300/90">発射遅延(ms):</span>
+                <span className="text-amber-300/90">{t("games.presSure.debugLaunchDelay")}</span>
                 <input
                   type="number"
                   value={npcItemFlyDelayMs}
@@ -1493,7 +1495,7 @@ export default function PresSureJudgeGame() {
             </div>
             <div className="mt-2 border-t border-white/10 pt-2 space-y-0.5 text-slate-400/90 text-[10px]">
               <div>
-                リフレッシュ試行: 最終トライ{" "}
+                {t("games.presSure.debugRefreshTry")}{" "}
                 {adsRefreshState.lastTryTime
                   ? new Date(adsRefreshState.lastTryTime).toLocaleTimeString("ja-JP")
                   : "—"}
@@ -1505,12 +1507,15 @@ export default function PresSureJudgeGame() {
                         : ""
                     }`}
                   >
-                    ({Math.floor((Date.now() - adsRefreshState.lastTryTime) / 1000)}秒前)
+                    {t("games.presSure.secondsAgo").replace(
+                      "{n}",
+                      String(Math.floor((Date.now() - adsRefreshState.lastTryTime) / 1000))
+                    )}
                   </span>
                 ) : null}
               </div>
               <div>
-                リフレッシュ成功: 最終更新{" "}
+                {t("games.presSure.debugRefreshOk")}{" "}
                 {adsRefreshState.lastRefreshAt
                   ? new Date(adsRefreshState.lastRefreshAt).toLocaleTimeString("ja-JP")
                   : "—"}
@@ -1522,12 +1527,15 @@ export default function PresSureJudgeGame() {
                         : ""
                     }`}
                   >
-                    ({Math.floor((Date.now() - adsRefreshState.lastRefreshAt) / 1000)}秒前)
+                    {t("games.presSure.secondsAgo").replace(
+                      "{n}",
+                      String(Math.floor((Date.now() - adsRefreshState.lastRefreshAt) / 1000))
+                    )}
                   </span>
                 ) : null}
               </div>
               <div>
-                リフレッシュ回数:{" "}
+                {t("games.presSure.debugRefreshCount")}{" "}
                 <span
                   className={`tabular-nums transition-colors duration-200 ${
                     countFlashing ? "text-amber-400 font-bold" : ""
@@ -1541,7 +1549,7 @@ export default function PresSureJudgeGame() {
                   onClick={() => refreshAds()}
                   className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
                 >
-                  フラッシュテスト
+                  {t("games.presSure.debugFlashTest")}
                 </button>
               </div>
             </div>
@@ -1623,7 +1631,9 @@ export default function PresSureJudgeGame() {
         className="relative z-20 shrink-0 border-b border-white/10 px-4 py-4 md:px-6 md:py-4"
         trailing={
           phase !== "ready" && phase !== "result" ? (
-            <span className="font-medium tabular-nums text-wit-muted">Round {round}</span>
+            <span className="font-medium tabular-nums text-wit-muted">
+              {t("games.presSure.round")} {round}
+            </span>
           ) : null
         }
       />
@@ -1694,9 +1704,14 @@ export default function PresSureJudgeGame() {
               className="absolute text-xs font-mono text-emerald-400"
               style={{ left: debugOverlay.p0.x + 8, top: debugOverlay.p0.y - 4 }}
             >
-              <span className="block">適用初速: vx={debugOverlay.vx.toFixed(0)} vy={debugOverlay.vy.toFixed(0)}</span>
+              <span className="block">
+                {t("games.presSure.debugVelApplied")} vx={debugOverlay.vx.toFixed(0)} vy={debugOverlay.vy.toFixed(0)}
+              </span>
               <span className="block text-amber-400">
-                発射: {debugOverlay.launchSource === "double-click" ? "ダブルクリック" : "フリック"}
+                {t("games.presSure.debugLaunch")}{" "}
+                {debugOverlay.launchSource === "double-click"
+                  ? t("games.presSure.launchDoubleClick")
+                  : t("games.presSure.launchFlick")}
               </span>
               {debugOverlay.p1OffsetY != null && (
                 <span className="block text-emerald-500/80">p1OffsetY: {debugOverlay.p1OffsetY}</span>
@@ -1728,15 +1743,13 @@ export default function PresSureJudgeGame() {
               exit={{ opacity: 0 }}
               className="flex flex-col items-center gap-8 py-16"
             >
-              <h1 className="text-2xl font-bold text-center">Pres-Sure Judge</h1>
-              <p className="text-wit-muted text-sm text-center max-w-md leading-relaxed">
-                在庫から重りをドラッグして天秤の皿へ。10秒以内に均衡を保て。判定ミスは累積するサバイバルゲーム。
-              </p>
+              <h1 className="text-2xl font-bold text-center">{t("games.presSure.titleScreen")}</h1>
+              <p className="text-wit-muted text-sm text-center max-w-md leading-relaxed">{t("games.presSure.intro")}</p>
               <button
                 onClick={startGame}
                 className="px-8 py-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-bold transition-colors shadow-[0_0_20px_rgba(245,158,11,0.3)]"
               >
-                スタート
+                {t("games.presSure.start")}
               </button>
             </motion.div>
           )}
@@ -1933,7 +1946,7 @@ export default function PresSureJudgeGame() {
                           top: panBottomBase + leftEndY,
                           transform: "translate(-50%, -50%)",
                         }}
-                        title="NPC接続点"
+                        title={t("games.presSure.titleNpcAnchor")}
                       />
                       <div
                         className="absolute w-3 h-3 rounded-full border-2 border-blue-300 bg-blue-500 pointer-events-none z-30"
@@ -1942,7 +1955,7 @@ export default function PresSureJudgeGame() {
                           top: panBottomBase + rightEndY,
                           transform: "translate(-50%, -50%)",
                         }}
-                        title="You接続点"
+                        title={t("games.presSure.titleYouAnchor")}
                       />
                     </>
                   )}
@@ -2033,7 +2046,7 @@ export default function PresSureJudgeGame() {
                         }}
                       >
                     {phase === "user" && inventorySlots.every((s) => !s) ? (
-                      <span className="text-wit-muted text-sm">在庫なし</span>
+                      <span className="text-wit-muted text-sm">{t("games.presSure.noInventory")}</span>
                     ) : phase === "user" ? (
                       inventorySlots.map((slot, i) =>
                         slot ? (
@@ -2095,7 +2108,7 @@ export default function PresSureJudgeGame() {
                         : "bg-amber-500 hover:bg-amber-600 text-black"
                     }`}
                   >
-                    Judge（確定）
+                    {t("games.presSure.judge")}
                   </button>
                 </div>
                 {/* 広告枠B: 操作UIの直下 */}
@@ -2107,13 +2120,13 @@ export default function PresSureJudgeGame() {
 
               {phase === "gameover" && collapseAnimDone && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-4">
-                  <p className="text-red-400 font-bold text-xl">Game Over</p>
-                  <p className="text-wit-muted text-sm">天秤が崩壊しました</p>
+                  <p className="text-red-400 font-bold text-xl">{t("games.presSure.gameOver")}</p>
+                  <p className="text-wit-muted text-sm">{t("games.presSure.scaleCollapsed")}</p>
                   <button
                     onClick={showResult}
                     className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 font-medium transition-colors"
                   >
-                    リザルトを見る
+                    {t("games.presSure.viewResult")}
                   </button>
                 </motion.div>
               )}
@@ -2123,8 +2136,10 @@ export default function PresSureJudgeGame() {
 
           {phase === "result" && (
             <motion.div key="result" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-8">
-              <h2 className="text-xl font-bold mb-6 text-center">積み上がった判断の軌跡</h2>
-              <p className="text-wit-muted text-xs text-center mb-4">地面（R1）から上空へ — 全{history.length}ターンの履歴</p>
+              <h2 className="text-xl font-bold mb-6 text-center">{t("games.presSure.resultTitle")}</h2>
+              <p className="text-wit-muted text-xs text-center mb-4">
+                {t("games.presSure.resultSubtitle").replace("{n}", String(history.length))}
+              </p>
               <div ref={scrollContainerRef} className="relative h-[360px] overflow-y-auto overflow-x-hidden rounded-xl border border-white/10 bg-black/40">
                 <div className="flex flex-col-reverse gap-2 p-4 min-h-full">
                   {history.map((e) => (
@@ -2148,10 +2163,10 @@ export default function PresSureJudgeGame() {
                   onClick={startGame}
                   className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-bold transition-colors"
                 >
-                  もう一度
+                  {t("games.presSure.again")}
                 </button>
                 <DevLink href="/" className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 font-medium transition-colors no-underline inline-block">
-                  トップへ
+                  {t("games.presSure.top")}
                 </DevLink>
               </div>
             </motion.div>

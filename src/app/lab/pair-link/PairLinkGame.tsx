@@ -26,6 +26,7 @@ import { useUserSyncContext } from "@/components/UserSyncProvider";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
 import { recordPuzzleClear } from "@/lib/wispo-user-data";
 import { useI18n } from "@/lib/i18n-context";
+import { pairLinkLoadingLine, translatePairLinkStatus } from "@/lib/i18n-runtime-status";
 import type { Pair } from "@/lib/puzzle-engine/pair-link";
 import {
   EDGE_SWAP_SCORE_DEFAULTS,
@@ -477,6 +478,8 @@ export default function PairLinkGame() {
   const [paths, setPaths] = useState<Record<string, PathPoint[][]>>({});
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
+  const statusDisplay = useMemo(() => translatePairLinkStatus(status, t), [status, t]);
+  const loadingOverlayText = useMemo(() => pairLinkLoadingLine(status, t), [status, t]);
   const [solved, setSolved] = useState(false);
   const [showClearOverlay, setShowClearOverlay] = useState(false);
   const [timeSeconds, setTimeSeconds] = useState(0);
@@ -1500,19 +1503,9 @@ export default function PairLinkGame() {
   };
 
   if (loading || !numbers.length) {
-    const loadingText =
-      status === "探索中"
-        ? `${status}…`
-        : status === "生成中..."
-        ? "生成中…"
-        : status === "読み込み中"
-        ? "読み込み中…"
-        : status && status !== "Playing"
-        ? `${status}…`
-        : "パズルを読み込み中…";
     return (
       <div className="min-h-screen flex items-center justify-center bg-wit-bg text-wit-text">
-        <p className="text-wit-muted">{loadingText}</p>
+        <p className="text-wit-muted">{loadingOverlayText}</p>
       </div>
     );
   }
@@ -1542,7 +1535,7 @@ export default function PairLinkGame() {
         <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono">
           <div className="flex items-center justify-between gap-2">
             {isDebugPanelExpanded && (
-              <span className="font-bold text-emerald-400 shrink-0">デバッグパネル</span>
+              <span className="font-bold text-emerald-400 shrink-0">{t("games.pairLink.debugPanelTitle")}</span>
             )}
             <div className="flex items-center gap-1 shrink-0 ml-auto">
               <button
@@ -1570,7 +1563,7 @@ export default function PairLinkGame() {
                   onChange={(e) => setVerboseConsoleLogs(e.target.checked)}
                   className="rounded border-white/30"
                 />
-                <span className="text-[10px]">詳細なコンソール出力</span>
+                <span className="text-[10px]">{t("games.pairLink.debugVerboseLog")}</span>
               </label>
               <div className="mt-2 flex flex-wrap gap-1">
                 <button
@@ -1578,7 +1571,7 @@ export default function PairLinkGame() {
                   disabled={loading || pairs.length === 0}
                   className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  強制クリア (Solve & Sync)
+                  {t("games.pairLink.debugForceClear")}
                 </button>
                 <button
                   type="button"
@@ -2166,7 +2159,7 @@ export default function PairLinkGame() {
           trailing={
             <>
               <span className="tabular-nums">{formatTime(timeSeconds)}</span>
-              {solved && <span className="text-wit-emerald">クリア</span>}
+              {solved && <span className="text-wit-emerald">{t("games.pairLink.clear")}</span>}
             </>
           }
         />
@@ -2181,7 +2174,7 @@ export default function PairLinkGame() {
       <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
         <div className="flex w-full flex-col items-center">
           <div className="mb-2 w-full text-sm font-semibold text-wit-text">
-            <span>{status}</span>
+            <span>{statusDisplay}</span>
           </div>
           <div
             className="w-full touch-none select-none"
@@ -2292,7 +2285,7 @@ export default function PairLinkGame() {
                   disabled={loading}
                   className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
                 >
-                  新規作成
+                  {t("games.pairLink.newPuzzleLegacy")}
                 </button>
                 {isDebugMode && (
                   <button
@@ -2351,7 +2344,7 @@ export default function PairLinkGame() {
                   disabled={loading}
                   className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
                 >
-                  次の問題
+                  {t("games.pairLink.nextPuzzle")}
                 </button>
               </div>
             </>
@@ -2369,9 +2362,7 @@ export default function PairLinkGame() {
             {GRADE_MAP.get(currentGrade)!.theme}
           </p>
         )}
-        <p className="mt-3 text-xs text-wit-muted">
-          同じ数字をドラッグで線で繋ぎ、全マスを埋めましょう。サイズが大きいと生成に数秒かかることがあります。
-        </p>
+        <p className="mt-3 text-xs text-wit-muted">{t("games.pairLink.ruleHint")}</p>
       </section>
         </div>
 
@@ -2390,14 +2381,14 @@ export default function PairLinkGame() {
               Perfect!
             </h2>
             <p className="text-wit-muted mb-4">
-              パズルを解き明かしました。（{formatTime(timeSeconds)}）
+              {t("games.pairLink.clearSolved").replace("{time}", formatTime(timeSeconds))}
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               <button
                 onClick={() => setShowClearOverlay(false)}
                 className="px-6 py-3 rounded-lg bg-slate-700 text-wit-text font-medium hover:bg-slate-600"
               >
-                戻る
+                {t("games.pairLink.back")}
               </button>
               <button
                 onClick={() => {
@@ -2411,7 +2402,7 @@ export default function PairLinkGame() {
                 }}
                 className="px-6 py-3 rounded-lg bg-wit-emerald text-white font-medium hover:bg-emerald-600"
               >
-                次に進む
+                {t("games.pairLink.continueNext")}
               </button>
               {isDevTj && (
                 <button
@@ -2419,7 +2410,7 @@ export default function PairLinkGame() {
                   disabled={loading}
                   className="px-4 py-2 rounded-lg text-sm border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  強制クリア (新規→Solve & Sync)
+                  {t("games.pairLink.forceClearNew")}
                 </button>
               )}
             </div>

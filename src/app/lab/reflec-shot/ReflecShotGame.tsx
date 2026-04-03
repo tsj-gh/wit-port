@@ -33,6 +33,7 @@ import {
   GAME_COLUMN_CLASS,
 } from "@/lib/gameLayout";
 import { useI18n } from "@/lib/i18n-context";
+import { translateReflecStatus } from "@/lib/i18n-runtime-status";
 
 /** 1マス移動の基準時間（ms）。実効速度はこれを速度倍率で除算。 */
 const BASE_CELL_TRAVEL_MS = 280;
@@ -196,6 +197,7 @@ export default function ReflecShotGame() {
   const [stage, setStage] = useState<GridStage | null>(null);
   const [phase, setPhase] = useState<Phase>("edit");
   const [statusMsg, setStatusMsg] = useState("");
+  const statusMsgDisplay = useMemo(() => translateReflecStatus(statusMsg, t), [statusMsg, t]);
   const [bumperTick, setBumperTick] = useState(0);
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
@@ -845,7 +847,7 @@ export default function ReflecShotGame() {
       {isDevTj && isDebugMode && (
         <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono text-left">
           <div className="flex items-center justify-between gap-2">
-            {isDebugPanelExpanded && <span className="font-bold text-emerald-400">デバッグ</span>}
+            {isDebugPanelExpanded && <span className="font-bold text-emerald-400">{t("games.reflecShot.debugPanelTitle")}</span>}
             <div className="flex items-center gap-1 ml-auto">
               <button
                 type="button"
@@ -873,10 +875,10 @@ export default function ReflecShotGame() {
                   onChange={(e) => setShowSolutionPath(e.target.checked)}
                   className="accent-rose-400"
                 />
-                正解経路（メインシーケンス・直線）
+                {t("games.reflecShot.debugShowSolutionPath")}
               </label>
               <div className="mt-2 flex items-center gap-2 text-slate-400">
-                <span className="shrink-0 text-[10px]">球の速度</span>
+                <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugBallSpeed")}</span>
                 <input
                   type="range"
                   min={0.25}
@@ -891,7 +893,10 @@ export default function ReflecShotGame() {
               {grade === 4 && (
                 <div className="mt-2 flex flex-col gap-0.5 text-slate-400">
                   <span className="text-[10px] leading-tight">
-                    Grade2 折れ6の中間探索（全体目標 {debugGrade2Bend6MidSlider + 4} 折れ・尾はフック差し引き）
+                    {t("games.reflecShot.debugGrade2Mid").replace(
+                      "{n}",
+                      String(debugGrade2Bend6MidSlider + 4)
+                    )}
                   </span>
                   <div className="flex items-center gap-2">
                     <input
@@ -911,7 +916,7 @@ export default function ReflecShotGame() {
               )}
               {grade >= 5 && (
                 <div className="mt-2 flex flex-col gap-1 text-slate-400">
-                  <span className="text-[10px] leading-tight text-slate-300">生成モード（Lv.4・再訪1）</span>
+                  <span className="text-[10px] leading-tight text-slate-300">{t("games.reflecShot.debugGenModeLv4")}</span>
                   <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
@@ -958,7 +963,7 @@ export default function ReflecShotGame() {
                 </div>
                 <div>Time: {process.env.NEXT_PUBLIC_BUILD_DATE || "-"}</div>
                 <div>
-                  盤面 Worker:{" "}
+                  {t("games.reflecShot.debugWorkerLabel")}{" "}
                   {isGenerating
                     ? "RUNNING"
                     : lastMetrics
@@ -968,9 +973,11 @@ export default function ReflecShotGame() {
                 {lastMetrics && (
                   <div className="text-[9px] text-slate-400 leading-snug space-y-0.5">
                     <div>
-                      生成経路:{" "}
+                      {t("games.reflecShot.debugGenPath")}{" "}
                       <span className={lastMetrics.usedPrimary ? "text-emerald-300" : "text-amber-300"}>
-                        {lastMetrics.usedPrimary ? "プライマリ" : `フォールバック t=${lastMetrics.fallbackT}`}
+                        {lastMetrics.usedPrimary
+                          ? t("games.reflecShot.debugPrimary")
+                          : `${t("games.reflecShot.debugFallback")}${lastMetrics.fallbackT}`}
                       </span>
                     </div>
                     <div className="break-all">
@@ -1016,20 +1023,20 @@ export default function ReflecShotGame() {
                     onChange={(e) => setStockPrefetchPaused(e.target.checked)}
                     className="accent-amber-400"
                   />
-                  Stockの生成を停止
+                  {t("games.reflecShot.debugStockPause")}
                 </label>
                 <button
                   type="button"
                   onClick={() => refreshAds()}
                   className="mt-1 px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
                 >
-                  フラッシュテスト
+                  {t("games.reflecShot.debugFlashTest")}
                 </button>
               </div>
               <div className="mt-2 border-t border-white/10 pt-2 space-y-1.5">
-                <div className="font-semibold text-slate-300 text-[10px]">シード（初期盤再現）</div>
+                <div className="font-semibold text-slate-300 text-[10px]">{t("games.reflecShot.debugSeedLabel")}</div>
                 <div className="flex items-start gap-1 flex-wrap">
-                  <span className="text-slate-400 shrink-0 text-[10px]">Previous:</span>
+                  <span className="text-slate-400 shrink-0 text-[10px]">{t("games.reflecShot.debugBoardPrev")}</span>
                   <code className="text-[9px] break-all flex-1 min-w-0 bg-black/40 px-1 rounded text-amber-200/90 max-h-20 overflow-y-auto">
                     {debugPreviousBoard
                       ? `rs2.${debugPreviousBoard.grade}.${(debugPreviousBoard.seed >>> 0).toString(16)}`
@@ -1037,7 +1044,7 @@ export default function ReflecShotGame() {
                   </code>
                 </div>
                 <div className="flex items-start gap-1 flex-wrap">
-                  <span className="text-slate-400 shrink-0 text-[10px]">Current:</span>
+                  <span className="text-slate-400 shrink-0 text-[10px]">{t("games.reflecShot.debugBoardCurr")}</span>
                   <code
                     className="text-[9px] break-all flex-1 min-w-0 bg-black/40 px-1 rounded text-emerald-200/90 max-h-20 overflow-y-auto"
                     title={currentStageHash || "—"}
@@ -1054,11 +1061,11 @@ export default function ReflecShotGame() {
                     disabled={!currentStageHash}
                     className="px-1.5 py-0.5 rounded text-[9px] border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-40 shrink-0"
                   >
-                    コピー
+                    {t("games.reflecShot.debugCopy")}
                   </button>
                 </div>
                 <div className="flex items-center gap-1 flex-wrap">
-                  <span className="text-slate-400 shrink-0 text-[10px]">入力:</span>
+                  <span className="text-slate-400 shrink-0 text-[10px]">{t("games.reflecShot.debugInputLabel")}</span>
                   <input
                     type="text"
                     value={hashInput}
@@ -1075,12 +1082,14 @@ export default function ReflecShotGame() {
                     disabled={!hashInput.trim() || isGenerating || boardLoadWait}
                     className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-40"
                   >
-                    ハッシュから生成
+                    {t("games.reflecShot.debugGenFromHash")}
                   </button>
                 </div>
                 <p className="text-[9px] text-slate-500 leading-snug">
-                  <code className="text-slate-400">rs2.</code> はグレードと seed のみ（生成と同じ初期盤）。旧{" "}
-                  <code className="text-slate-400">rs1.</code> 長形式も解釈します。
+                  <code className="text-slate-400">rs2.</code>
+                  {t("games.reflecShot.debugHashHelpMid")}
+                  <code className="text-slate-400">rs1.</code>
+                  {t("games.reflecShot.debugHashHelpTail")}
                 </p>
               </div>
             </>
@@ -1099,12 +1108,12 @@ export default function ReflecShotGame() {
           <div className="mb-2 flex w-full justify-between text-sm font-semibold text-wit-text">
             <span>
               {phase === "edit"
-                ? "編集"
+                ? t("games.reflecShot.phaseEdit")
                 : phase === "move"
-                  ? "進行中"
+                  ? t("games.reflecShot.phaseMove")
                   : phase === "won"
-                    ? "クリア"
-                    : "失敗"}
+                    ? t("games.reflecShot.phaseWon")
+                    : t("games.reflecShot.phaseLost")}
             </span>
           </div>
           {(statusMsg || boardLoadWait) && (
@@ -1119,7 +1128,7 @@ export default function ReflecShotGame() {
                       : "text-wit-muted"
               }`}
             >
-              {boardLoadWait && !statusMsg ? "盤面を準備中…" : statusMsg}
+              {boardLoadWait && !statusMsg ? t("games.reflecShot.st.preparing") : statusMsgDisplay}
             </p>
           )}
           <div
@@ -1186,7 +1195,7 @@ export default function ReflecShotGame() {
                 onClick={goNextProblem}
                 disabled={boardLoadWait}
               >
-                次の問題へ
+                {t("games.reflecShot.nextProblemBtn")}
               </button>
             )}
             {phase === "lost" && (

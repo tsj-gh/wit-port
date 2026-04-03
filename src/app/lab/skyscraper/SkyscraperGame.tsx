@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import confetti from "canvas-confetti";
 import { GamePageHeader } from "@/components/GamePageHeader";
@@ -22,6 +22,7 @@ import { useUserSyncContext } from "@/components/UserSyncProvider";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
 import { recordPuzzleClear } from "@/lib/wispo-user-data";
 import { useI18n } from "@/lib/i18n-context";
+import { translateSkyStatus } from "@/lib/i18n-runtime-status";
 
 type Clues = {
   top: (number | null)[];
@@ -49,6 +50,7 @@ export default function SkyscraperGame() {
   const [solved, setSolved] = useState(false);
   const [showClearOverlay, setShowClearOverlay] = useState(false);
   const [status, setStatus] = useState("");
+  const statusDisplay = useMemo(() => translateSkyStatus(status, t), [status, t]);
   const [maybeMode, setMaybeMode] = useState(false);
   const [maybeGridSnapshot, setMaybeGridSnapshot] = useState<number[][] | null>(null);
   const [sinceMaybeHistory, setSinceMaybeHistory] = useState<MaybeHistoryEntry[]>([]);
@@ -357,7 +359,7 @@ export default function SkyscraperGame() {
   if (loading || !clues) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-wit-bg text-wit-text">
-        <p className="text-wit-muted">パズルを読み込み中...</p>
+        <p className="text-wit-muted">{t("games.skyscraper.loadPuzzle")}</p>
       </div>
     );
   }
@@ -379,7 +381,7 @@ export default function SkyscraperGame() {
       {isDevTj && isDebugMode && (
         <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-left text-xs font-mono">
           <div className="mb-2 flex items-center justify-between gap-2">
-            {isDebugPanelExpanded && <span className="font-bold text-emerald-400">デバッグパネル</span>}
+            {isDebugPanelExpanded && <span className="font-bold text-emerald-400">{t("games.skyscraper.debugPanel")}</span>}
             <div className="ml-auto flex items-center gap-1">
               <button
                 type="button"
@@ -408,7 +410,7 @@ export default function SkyscraperGame() {
                 disabled={solved || !clues}
                 className="px-2 py-0.5 rounded text-[9px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                強制クリア (Solve & Sync)
+                {t("games.skyscraper.debugForceClear")}
               </button>
             </div>
             <div className="flex items-center gap-1">
@@ -420,7 +422,7 @@ export default function SkyscraperGame() {
                 onClick={() => userSync?.syncNow()}
                 className="px-1 py-0.5 rounded text-[9px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30"
               >
-                同期
+                {t("games.skyscraper.sync")}
               </button>
             </div>
             <div className="flex items-center gap-1">
@@ -433,7 +435,7 @@ export default function SkyscraperGame() {
                 disabled={!currentSeed}
                 className="px-1 py-0.5 rounded text-[9px] border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50"
               >
-                コピー
+                {t("games.skyscraper.copy")}
               </button>
             </div>
             <div>
@@ -450,7 +452,7 @@ export default function SkyscraperGame() {
                 type="text"
                 value={hashInput}
                 onChange={(e) => setHashInput(e.target.value)}
-                placeholder="ハッシュを入力"
+                placeholder={t("games.skyscraper.hashPlaceholder")}
                 className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
               />
               <button
@@ -461,7 +463,7 @@ export default function SkyscraperGame() {
                 disabled={!hashInput.trim() || loading}
                 className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50"
               >
-                ハッシュから生成
+                {t("games.skyscraper.genFromHash")}
               </button>
             </div>
           </div>
@@ -475,7 +477,7 @@ export default function SkyscraperGame() {
         trailing={
           <>
             <span className="tabular-nums">{formatTime(timeSeconds)}</span>
-            {solved && <span className="text-wit-emerald">クリア</span>}
+            {solved && <span className="text-wit-emerald">{t("games.skyscraper.clearBanner")}</span>}
           </>
         }
       />
@@ -621,40 +623,40 @@ export default function SkyscraperGame() {
           </div>
 
           <div className="flex flex-col gap-2 items-center maybe-panel">
-            <span className="text-sm text-wit-muted font-medium">メイビー</span>
+            <span className="text-sm text-wit-muted font-medium">{t("games.skyscraper.maybeLabel")}</span>
             <div className="flex flex-col gap-2">
               <button
                 onClick={handleMaybeEnter}
                 disabled={solved || maybeMode}
                 className="px-4 py-2 rounded-lg bg-amber-600/80 text-white text-sm font-medium hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                🐝 入る
+                {t("games.skyscraper.maybeEnter")}
               </button>
               <button
                 onClick={handleMaybeConfirm}
                 disabled={!maybeMode}
                 className="px-4 py-2 rounded-lg bg-slate-700 border border-slate-600 text-wit-text text-sm hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                確定
+                {t("games.skyscraper.maybeConfirm")}
               </button>
               <button
                 onClick={handleMaybeRewind}
                 disabled={!maybeMode}
                 className="px-4 py-2 rounded-lg bg-slate-700 border border-slate-600 text-wit-text text-sm hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                巻き戻し
+                {t("games.skyscraper.maybeRewind")}
               </button>
             </div>
           </div>
         </div>
 
-        <div className="mt-3 min-h-[1.5em] text-center text-sm font-medium text-wit-muted">{status}</div>
+        <div className="mt-3 min-h-[1.5em] text-center text-sm font-medium text-wit-muted">{statusDisplay}</div>
       </section>
 
       <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-3 backdrop-blur sm:px-5 sm:pb-5 sm:pt-3">
         <div className="flex w-full min-w-0 flex-col gap-4">
           <div className="w-full min-w-0">
-            <label className="mb-1 block text-xs text-wit-muted">サイズ（N×N）</label>
+            <label className="mb-1 block text-xs text-wit-muted">{t("games.skyscraper.sizeLabel")}</label>
             <div
               className="flex w-full min-w-0 gap-2 overflow-x-auto py-1 [scrollbar-width:none] [-ms-overflow-style:none] snap-x snap-mandatory [&::-webkit-scrollbar]:[display:none]"
               style={{ WebkitOverflowScrolling: "touch" }}
@@ -688,11 +690,12 @@ export default function SkyscraperGame() {
             >
               {(
                 [
-                  { key: "easy" as const, label: "かんたん" },
-                  { key: "normal" as const, label: "ふつう" },
-                  { key: "hard" as const, label: "むずかしい" },
+                  { key: "easy" as const, labelKey: "games.skyscraper.diffEasy" as const },
+                  { key: "normal" as const, labelKey: "games.skyscraper.diffNormal" as const },
+                  { key: "hard" as const, labelKey: "games.skyscraper.diffHard" as const },
                 ] as const
-              ).map(({ key, label }) => {
+              ).map(({ key, labelKey }) => {
+                const label = t(labelKey);
                 const isActive = difficulty === key;
                 return (
                   <button
@@ -758,15 +761,13 @@ export default function SkyscraperGame() {
       </div>
 
       <section className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-5">
-        <h2 className="mb-3 text-lg font-bold text-wit-text">ルール（要点）</h2>
-        <p className="mb-3 text-xs leading-relaxed text-wit-muted">
-          マスをタップ/クリックで 1→2→…→N→空白 と巡回。数字キー(1〜N)/Backspace可。上スワイプで増、下スワイプで減。
-        </p>
+        <h2 className="mb-3 text-lg font-bold text-wit-text">{t("games.skyscraper.rulesTitle")}</h2>
+        <p className="mb-3 text-xs leading-relaxed text-wit-muted">{t("games.skyscraper.rulesIntro")}</p>
         <ol className="list-inside list-decimal space-y-2 text-sm leading-relaxed text-wit-muted">
-          <li>各マスは「ビルの高さ」を表し、1〜N の数字を入れます。</li>
-          <li>各行・各列には 1〜N が 1つずつ（重複なし）入ります。</li>
-          <li>4辺の数字（手がかり）は、その方向から見えるビルの本数（手前から順により高いビルが現れるたびに +1）。</li>
-          <li>すべての手がかりを満たすように数字を配置すると完成です。</li>
+          <li>{t("games.skyscraper.rulesLi1")}</li>
+          <li>{t("games.skyscraper.rulesLi2")}</li>
+          <li>{t("games.skyscraper.rulesLi3")}</li>
+          <li>{t("games.skyscraper.rulesLi4")}</li>
         </ol>
       </section>
       </div>
@@ -786,14 +787,14 @@ export default function SkyscraperGame() {
               Perfect!
             </h2>
             <p className="text-wit-muted mb-4">
-              パズルを解き明かしました。（{formatTime(timeSeconds)}）
+              {t("games.skyscraper.clearSolved").replace("{time}", formatTime(timeSeconds))}
             </p>
             <div className="flex gap-2 justify-center">
               <button
                 onClick={() => setShowClearOverlay(false)}
                 className="px-6 py-3 rounded-lg bg-slate-700 text-wit-text font-medium hover:bg-slate-600"
               >
-                戻る
+                {t("games.skyscraper.back")}
               </button>
               <button
                 onClick={() => {
@@ -802,7 +803,7 @@ export default function SkyscraperGame() {
                 }}
                 className="px-6 py-3 rounded-lg bg-wit-emerald text-white font-medium hover:bg-emerald-600"
               >
-                次に進む
+                {t("games.skyscraper.continueNext")}
               </button>
             </div>
           </div>
