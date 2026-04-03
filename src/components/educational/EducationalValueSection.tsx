@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { useI18n } from "@/lib/i18n-context";
 
 const COLUMN_PATH = "/columns/educational-value";
 
@@ -20,6 +23,8 @@ export function EducationalValueSection({
   children,
   columnHref = COLUMN_PATH,
 }: EducationalValueSectionProps) {
+  const { t } = useI18n();
+
   return (
     <section
       className="mx-auto w-full max-w-[1080px] px-4 py-6 pb-12"
@@ -38,7 +43,7 @@ export function EducationalValueSection({
               href={columnHref}
               className="text-sky-300 underline-offset-2 transition-colors hover:text-sky-200 hover:underline"
             >
-              より詳しい知育理論についてはこちら（知育コラムへ）
+              {t("educational.sectionLink")}
             </Link>
           </p>
         </div>

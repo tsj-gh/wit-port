@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import { DevLink } from "@/components/DevLink";
+import { LanguageToggle } from "@/components/LanguageToggle";
+import { useI18n } from "@/lib/i18n-context";
 
 export type GamePageHeaderProps = {
   /** 英語表記（例: Pair-Link） */
@@ -24,6 +26,8 @@ export function GamePageHeader({
   maxWidthClassName = "w-full",
   className = "",
 }: GamePageHeaderProps) {
+  const { locale } = useI18n();
+
   return (
     <header
       className={`mb-4 grid w-full grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-2 sm:gap-x-3 ${maxWidthClassName} ${className}`.trim()}
@@ -39,14 +43,13 @@ export function GamePageHeader({
       </div>
       <h1 className="max-w-[min(100vw-6rem,22rem)] min-w-0 text-center text-xl font-black leading-none tracking-tight text-wit-text sm:max-w-none sm:text-2xl">
         <span className="text-wit-text">{titleEn}</span>
-        <span className="text-wit-muted">（{titleJa}）</span>
+        {locale === "ja" ? <span className="text-wit-muted">（{titleJa}）</span> : null}
       </h1>
-      <div className="flex min-w-0 justify-end">
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+        <LanguageToggle />
         {trailing != null ? (
           <div className="flex shrink-0 items-center gap-2 text-sm leading-none text-wit-muted">{trailing}</div>
-        ) : (
-          <span className="invisible h-6 w-px select-none" aria-hidden />
-        )}
+        ) : null}
       </div>
     </header>
   );

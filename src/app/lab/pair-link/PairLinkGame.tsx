@@ -25,6 +25,7 @@ import {
 import { useUserSyncContext } from "@/components/UserSyncProvider";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
 import { recordPuzzleClear } from "@/lib/wispo-user-data";
+import { useI18n } from "@/lib/i18n-context";
 import type { Pair } from "@/lib/puzzle-engine/pair-link";
 import {
   EDGE_SWAP_SCORE_DEFAULTS,
@@ -469,6 +470,7 @@ function PairLinkEndpointTapOverlay({
 }
 
 export default function PairLinkGame() {
+  const { t } = useI18n();
   const [gridSize, setGridSize] = useState(6);
   const [numbers, setNumbers] = useState<NumberCell[]>([]);
   const [pairs, setPairs] = useState<Pair[]>([]);
@@ -1553,7 +1555,7 @@ export default function PairLinkGame() {
               <button
                 onClick={() => setIsDebugPanelExpanded((v) => !v)}
                 className="p-1 rounded border border-white/20 hover:bg-white/10 text-white/80"
-                title={isDebugPanelExpanded ? "パネルを閉じる" : "パネルを開く"}
+                title={isDebugPanelExpanded ? t("common.closePanel") : t("common.openPanel")}
               >
                 {isDebugPanelExpanded ? "▲" : "▼"}
               </button>
@@ -2311,7 +2313,7 @@ export default function PairLinkGame() {
           ) : (
             <>
               <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
-                <label className="block text-xs text-wit-muted mb-1">グレード</label>
+                <label className="block text-xs text-wit-muted mb-1">{t("common.chooseGrade")}</label>
                 <div
                   className="flex w-full min-w-0 overflow-x-auto gap-2 py-1 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
                   style={{ WebkitOverflowScrolling: "touch" }}

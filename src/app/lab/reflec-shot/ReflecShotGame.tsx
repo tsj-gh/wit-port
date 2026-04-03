@@ -32,6 +32,7 @@ import {
   GAME_AD_GAP_BEFORE_SLOT_2_PX,
   GAME_COLUMN_CLASS,
 } from "@/lib/gameLayout";
+import { useI18n } from "@/lib/i18n-context";
 
 /** 1マス移動の基準時間（ms）。実効速度はこれを速度倍率で除算。 */
 const BASE_CELL_TRAVEL_MS = 280;
@@ -185,6 +186,7 @@ function bumperSymbol(k: BumperKind): string {
 }
 
 export default function ReflecShotGame() {
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const isDevTj = searchParams.get("devtj") === "true";
 
@@ -1137,7 +1139,7 @@ export default function ReflecShotGame() {
         </div>
         <div className="mb-2 mt-4 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
           <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
-            <label className="block text-xs text-wit-muted mb-1">グレード</label>
+            <label className="block text-xs text-wit-muted mb-1">{t("common.chooseGrade")}</label>
             <div
               className="flex w-full min-w-0 overflow-x-auto gap-2 py-1 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
               style={{ WebkitOverflowScrolling: "touch" }}
@@ -1175,7 +1177,7 @@ export default function ReflecShotGame() {
               onClick={beginShot}
               disabled={phase !== "edit" || !stage}
             >
-              射出（start へ）
+              {t("games.reflecShot.fire")}
             </button>
             {phase === "won" && (
               <button
@@ -1193,7 +1195,7 @@ export default function ReflecShotGame() {
                 className="rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1 text-amber-200"
                 onClick={retryAfterLoss}
               >
-                再配置して再開
+                {t("games.reflecShot.retryEdit")}
               </button>
             )}
           </div>
@@ -1207,14 +1209,14 @@ export default function ReflecShotGame() {
               className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
               onClick={regen}
             >
-              ステージ再生成
+              {t("games.reflecShot.regenStage")}
             </button>
             <button
               type="button"
               className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-emerald-300 text-sm hover:bg-emerald-500/25"
               onClick={autoSolve}
             >
-              自動解答
+              {t("games.reflecShot.autoSolve")}
             </button>
           </div>
         )}
@@ -1227,7 +1229,7 @@ export default function ReflecShotGame() {
               className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
               onClick={regen}
             >
-              ステージ再生成
+              {t("games.reflecShot.regenStage")}
             </button>
           </div>
         )}
@@ -1240,7 +1242,7 @@ export default function ReflecShotGame() {
         </div>
 
         <p className="mt-3 text-sm leading-relaxed text-wit-muted">
-          グリッド論理版プロトタイプ。入口・ゴールはそれぞれ最下段の下辺・最上段の上辺を開けた隣のマスに置き、L字・T字などの形状をバンパー（／＼－｜）と壁のルールで解きます。Grade が上がるほど盤のマス数が増えます。
+          {t("games.reflecShot.footerBlurb")}
         </p>
       </section>
     </div>

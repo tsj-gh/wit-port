@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
 import Footer from "@/components/Footer";
+import { I18nProvider } from "@/lib/i18n-context";
 import { UserSyncProvider } from "@/components/UserSyncProvider";
 
 export const metadata: Metadata = {
@@ -47,8 +48,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen flex flex-col overflow-x-hidden bg-gradient-to-br from-wit-bg to-wit-bg-2 text-wit-text font-sans antialiased">
         <UserSyncProvider>
-          {children}
-          <Footer />
+          <I18nProvider>
+            {children}
+            <Footer />
+          </I18nProvider>
         </UserSyncProvider>
       </body>
     </html>

@@ -2,8 +2,11 @@
 
 import { Suspense } from "react";
 import { DevLink } from "./DevLink";
+import { useI18n } from "@/lib/i18n-context";
 
 function FooterNav() {
+  const { t } = useI18n();
+
   return (
     <nav
       className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 mb-4"
@@ -13,28 +16,28 @@ function FooterNav() {
         href="/"
         className="text-[13px] text-wit-muted no-underline transition-colors hover:text-wit-text"
       >
-        ウィスポ（トップ）
+        {t("footer.top")}
       </DevLink>
       <span className="text-wit-muted/50" aria-hidden="true">|</span>
       <DevLink
         href="/privacy"
         className="text-[13px] text-wit-muted no-underline transition-colors hover:text-wit-text"
       >
-        プライバシーポリシー
+        {t("footer.privacy")}
       </DevLink>
       <span className="text-wit-muted/50" aria-hidden="true">|</span>
       <DevLink
         href="/contact"
         className="text-[13px] text-wit-muted no-underline transition-colors hover:text-wit-text"
       >
-        お問い合わせ
+        {t("footer.contact")}
       </DevLink>
       <span className="text-wit-muted/50" aria-hidden="true">|</span>
       <DevLink
         href="/columns/educational-value"
         className="text-[13px] text-wit-muted no-underline transition-colors hover:text-wit-text"
       >
-        知育コラム
+        {t("footer.column")}
       </DevLink>
     </nav>
   );

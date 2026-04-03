@@ -21,6 +21,7 @@ import {
 import { useUserSyncContext } from "@/components/UserSyncProvider";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
 import { recordPuzzleClear } from "@/lib/wispo-user-data";
+import { useI18n } from "@/lib/i18n-context";
 
 type Clues = {
   top: (number | null)[];
@@ -40,6 +41,7 @@ function cloneGrid(grid: number[][]): number[][] {
 }
 
 export default function SkyscraperGame() {
+  const { t } = useI18n();
   const [n, setN] = useState(5);
   const [difficulty, setDifficulty] = useState<"easy" | "normal" | "hard">("normal");
   const [clues, setClues] = useState<Clues | null>(null);
@@ -679,7 +681,7 @@ export default function SkyscraperGame() {
             </div>
           </div>
           <div className="w-full min-w-0">
-            <label className="mb-1 block text-xs text-wit-muted">難易度</label>
+            <label className="mb-1 block text-xs text-wit-muted">{t("games.skyscraper.difficulty")}</label>
             <div
               className="flex w-full min-w-0 gap-2 overflow-x-auto py-1 [scrollbar-width:none] [-ms-overflow-style:none] snap-x snap-mandatory [&::-webkit-scrollbar]:[display:none]"
               style={{ WebkitOverflowScrolling: "touch" }}
@@ -711,32 +713,32 @@ export default function SkyscraperGame() {
               })}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             <button
               onClick={handleHint}
               disabled={solved}
               className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-wit-text hover:bg-slate-600 disabled:opacity-50"
             >
-              ヒント
+              {t("games.skyscraper.hint")}
             </button>
             <button
               onClick={handleCheck}
               className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-wit-text hover:bg-slate-600"
             >
-              途中判定
+              {t("games.skyscraper.check")}
             </button>
             <button
               onClick={handleClear}
               disabled={solved}
               className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-wit-text hover:bg-slate-600 disabled:opacity-50"
             >
-              リセット
+              {t("games.skyscraper.reset")}
             </button>
             <button
               onClick={handleSolve}
               className="rounded-lg bg-wit-emerald px-3 py-2 text-sm text-white hover:bg-emerald-600"
             >
-              自動解答
+              {t("games.skyscraper.autoSolve")}
             </button>
           </div>
           <div className="flex justify-center">
@@ -745,7 +747,7 @@ export default function SkyscraperGame() {
               disabled={loading}
               className="rounded-lg bg-wit-emerald px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
             >
-              新規生成
+              {t("games.skyscraper.newPuzzle")}
             </button>
           </div>
         </div>
