@@ -3,9 +3,12 @@ import { Suspense } from "react";
 import { EducationalValueSection } from "@/components/educational/EducationalValueSection";
 import ReflecShotGame from "./ReflecShotGame";
 
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
+
 export const metadata: Metadata = {
   title: "Reflec-Shot（リフレクショット・知育ラボ）",
   description: "反射とスワイプ射出を試す知育ラボ用プロトタイプ（検索インデックス対象外）。",
+  alternates: { canonical: `${BASE_URL}/lab/reflec-shot` },
   robots: {
     index: false,
     follow: false,

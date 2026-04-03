@@ -11,6 +11,7 @@ export const metadata: Metadata = {
     "外枠の数字をヒントに、重なり合うビルの高さを推理する無料知育パズル。メイビー蜂さんの力で論理の糸口を掴もう！",
   keywords: ["知育", "パズル", "無料", "スカイスクレイパー", "ビルパズル", "ロジックパズル", "算数", "幼児"],
   applicationName: "Wispo",
+  alternates: { canonical: `${BASE_URL}/lab/skyscraper` },
   other: {
     "application:category": "EducationalGame",
     "application:operating-system": "Windows, macOS, Android, iOS",
@@ -25,7 +26,7 @@ const skyscraperJsonLd = {
   operatingSystem: "Windows, macOS, Android, iOS",
   description:
     "外枠の数字をヒントに、重なり合うビルの高さを推理する無料知育パズル。メイビー蜂さんの力で論理の糸口を掴もう。",
-  url: `${BASE_URL}/games/skyscraper`,
+  url: `${BASE_URL}/lab/skyscraper`,
   offers: {
     "@type": "Offer",
     price: "0",

@@ -9,7 +9,7 @@
 
 - **目的**: 同じ数字のマスを **正交する線** でつなぎ、盤面の **全マスをちょうど一度ずつ** 通るようにする。
 - **主な実装場所**
-  - クライアント UI・入力・モード切替: `src/app/games/pair-link/PairLinkGame.tsx`
+  - クライアント UI・入力・モード切替: `src/app/lab/pair-link/PairLinkGame.tsx`
   - 盤面生成（ブラウザ Web Worker）: `public/workers/board-worker.js`
   - クリア検証（サーバーアクション経由で同じロジック）: `src/lib/puzzle-engine/pair-link.ts` の `validatePaths`
   - グレード定義・ストック: `src/lib/pair-link-grade-constants.ts`, `src/hooks/usePuzzleStockByGrade.ts`
@@ -242,7 +242,7 @@
 
 ---
 
-## 10. サーバーアクション（`src/app/games/pair-link/actions.ts`）
+## 10. サーバーアクション（`src/app/lab/pair-link/actions.ts`）
 
 | 関数 | 役割 |
 |------|------|

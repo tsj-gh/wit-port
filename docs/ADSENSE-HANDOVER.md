@@ -13,7 +13,7 @@
 src/app/layout.tsx              # AdSense + GPT スクリプト読み込み（head 内）
 src/lib/ads.ts                   # refreshAds() 共通関数（30秒Cooldown付き）
 src/components/PairLinkAdSlots.tsx  # ペアリンク用広告ユニット（GPT 版）
-src/app/games/pair-link/PairLinkGame.tsx  # 広告配置・トリガー呼び出し
+src/app/lab/pair-link/PairLinkGame.tsx  # 広告配置・トリガー呼び出し
 public/ads.txt                   # 発行者検証（ルート直下）
 ```
 

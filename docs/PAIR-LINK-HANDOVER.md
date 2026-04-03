@@ -11,7 +11,7 @@
 ## ファイル構成
 
 ```
-src/app/games/pair-link/
+src/app/lab/pair-link/
 ├── page.tsx           # ページ＋メタデータ＋説明セクション
 ├── PairLinkGame.tsx   # メインコンポーネント（約580行）
 └── actions.ts         # Server Actions（生成・検証）

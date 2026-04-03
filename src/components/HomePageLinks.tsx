@@ -20,7 +20,7 @@ export function HomePageLinks() {
 
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 pb-10 animate-fade-in-up-delay-more">
         <DevLink
-          href="/games/pair-link"
+          href="/lab/pair-link"
           className="group relative flex flex-col rounded-[20px] p-8 overflow-hidden no-underline text-wit-text border border-[var(--wit-border)] bg-[var(--wit-card-bg)] backdrop-blur-[10px] transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] hover:-translate-y-2 hover:shadow-wit-card-hover hover:border-white/20 after:absolute after:inset-0 after:content-[''] after:bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.1),transparent_50%)] after:opacity-0 after:transition-opacity after:duration-300 group-hover:after:opacity-100"
         >
           <span className="text-5xl mb-6 inline-block animate-float">✨</span>
@@ -56,7 +56,7 @@ export function HomePageLinks() {
         </DevLink>
 
         <DevLink
-          href="/games/skyscraper"
+          href="/lab/skyscraper"
           className="group relative flex flex-col rounded-[20px] p-8 overflow-hidden no-underline text-wit-text border border-[var(--wit-border)] bg-[var(--wit-card-bg)] backdrop-blur-[10px] transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] hover:-translate-y-2 hover:shadow-wit-emerald-hover hover:border-white/20 after:absolute after:inset-0 after:content-[''] after:bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.1),transparent_50%)] after:opacity-0 after:transition-opacity after:duration-300 group-hover:after:opacity-100"
         >
           <span className="text-5xl mb-6 inline-block animate-float">🏢</span>
@@ -74,7 +74,7 @@ export function HomePageLinks() {
         </DevLink>
 
         <DevLink
-          href="/games/pres-sure-judge"
+          href="/lab/pres-sure-judge"
           className="group relative flex flex-col rounded-[20px] p-8 overflow-hidden no-underline text-wit-text border border-[var(--wit-border)] bg-[var(--wit-card-bg)] backdrop-blur-[10px] transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] hover:-translate-y-2 hover:shadow-wit-card-hover hover:border-white/20 after:absolute after:inset-0 after:content-[''] after:bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.15),transparent_50%)] after:opacity-0 after:transition-opacity after:duration-300 group-hover:after:opacity-100"
         >
           <span className="text-5xl mb-6 inline-block animate-float">⚖️</span>

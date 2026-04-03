@@ -12,12 +12,14 @@
 ## サイト構成（ルーティング）
 
 ```
-/                 # トップページ（ゲーム一覧）
-/games/pair-link  # ペアリンク（ナンバーリンク）
-/games/skyscraper # 空の上から（スカイスクレイパー・ビルパズル）
-/games/pres-sure-judge  # Pres-Sure Judge（天秤サバイバル）
-/privacy          # プライバシーポリシー
-/contact          # お問い合わせ（Google Forms 埋め込み）
+/                        # トップページ（ゲーム一覧）
+/lab/pair-link           # Pair-Link（ペアリンク）
+/lab/skyscraper          # Skyscraper（スカイスクレイパー）
+/lab/pres-sure-judge     # Pres-Sure Judge（プレッシャージャッジ）
+/lab/reflec-shot         # Reflec-Shot（リフレクショット・知育ラボ）
+/columns/educational-value  # 知育コラム
+/privacy                 # プライバシーポリシー
+/contact                 # お問い合わせ（Google Forms 埋め込み）
 ```
 
 ---
@@ -33,10 +35,11 @@ src/
 │   ├── page.tsx          # トップページ
 │   ├── privacy/page.tsx  # プライバシーポリシー
 │   ├── contact/page.tsx  # お問い合わせ
-│   └── games/
-│       ├── pair-link/    # ペアリンク
-│       ├── skyscraper/   # スカイスクレイパー
-│       └── pres-sure-judge/  # Pres-Sure Judge
+│   └── lab/
+│       ├── pair-link/        # Pair-Link
+│       ├── skyscraper/       # Skyscraper
+│       ├── pres-sure-judge/  # Pres-Sure Judge
+│       └── reflec-shot/      # Reflec-Shot（ラボ）
 ├── components/
 │   ├── Footer.tsx            # フッター（トップ / プライバシー / お問い合わせ）
 │   ├── PageTransition.tsx    # ページ遷移アニメーション（framer-motion）
@@ -60,10 +63,11 @@ public/
 
 - **ヘッダー**: Wit-Spot ロゴ（グラデーションスパン）リンク
 - **ヒーロー**: 「知育スポーツの拠点」キャッチコピー、サブコピー
-- **ゲームカード**: 3枚グリッド（md:grid-cols-3）
-  - ペアリンク: `/games/pair-link`、青アクセント
-  - 空の上から: `/games/skyscraper`、エメラルドアクセント
-  - Pres-Sure Judge: `/games/pres-sure-judge`、アンバーアクセント
+- **ゲームカード**: 4枚グリッド（`sm:grid-cols-2` / `lg:grid-cols-4`）
+  - Pair-Link: `/lab/pair-link`、青アクセント
+  - Reflec-Shot: `/lab/reflec-shot`、バイオレット系アクセント
+  - Skyscraper: `/lab/skyscraper`、エメラルドアクセント
+  - Pres-Sure Judge: `/lab/pres-sure-judge`、アンバーアクセント
 - **AD スペース**: `aria-label="広告スペース"` のプレースホルダ（現状は「AD」テキストのみ）
 
 ### カード共通の挙動
@@ -169,7 +173,7 @@ public/
 
 ## 注意点・制約
 
-1. **games フォルダ**: 各ゲームは page.tsx + Game コンポーネント + 必要に応じて actions.ts の構成。
+1. **lab フォルダ**: 各アプリは `page.tsx` + Game コンポーネント + 必要に応じて `actions.ts` の構成。旧 `/games/*` は `next.config.js` の `redirects` で `/lab/*` へ恒久的に転送。
 2. **パズルエンジン**: pair-link.ts / skyscrapers.ts はサーバー専用。クライアントにインポートしない。
 3. **PuzzleStockPrefetcher**: ペアリンク専用。スカイスクレイパー・Pres-Sure Judge は都度 Server Action で生成。
 4. **広告スペース**: トップの AD エリアはプレースホルダ。AdSense 自動広告または手動配置で利用可能（`docs/ADSENSE-HANDOVER.md` 参照）。

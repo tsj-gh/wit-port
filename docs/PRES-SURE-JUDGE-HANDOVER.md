@@ -3,7 +3,7 @@
 ## プロジェクト概要
 
 - **場所**: `c:\Users\g2yu\Documents\home\wispo`
-- **メインコンポーネント**: `src/app/games/pres-sure-judge/PresSureJudgeGame.tsx`（約2000行）
+- **メインコンポーネント**: `src/app/lab/pres-sure-judge/PresSureJudgeGame.tsx`（約2000行）
 - **ゲーム**: 天秤バランス型ゲーム。在庫から重りをドラッグして右の器へ投げ、10秒以内に均衡を保つ
 
 ---
@@ -104,7 +104,7 @@ ARM_HALF_MAX_PX = 186
 ## ファイル構成
 
 ```
-src/app/games/pres-sure-judge/
+src/app/lab/pres-sure-judge/
 ├── PresSureJudgeGame.tsx  # メイン（天秤・在庫・ジェスチャー）
 └── page.tsx              # ページラッパー
 ```

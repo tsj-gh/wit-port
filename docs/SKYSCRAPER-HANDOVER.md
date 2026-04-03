@@ -11,7 +11,7 @@
 ## ファイル構成
 
 ```
-src/app/games/skyscraper/
+src/app/lab/skyscraper/
 ├── page.tsx           # ページ＋メタデータ＋JSON-LD＋知育効果セクション
 ├── SkyscraperGame.tsx # メインコンポーネント（約450行）
 └── actions.ts         # Server Actions（生成・検証・ヒント・解答）

@@ -110,7 +110,7 @@ export default function EducationalValueColumnPage() {
         <p>
           グレード（G1〜）により盤面規模と対ペア数、生成上の制約が段階的に増えます。入門で成功体験を固め、高次で探索空間を拡大する勾配は、準備された難易度という観点から妥当です。線をグラフの辺とみなす視点は、将来の離散数学的直観の下地にもなり得ます。
         </p>
-        <PlayLink href="/games/pair-link" label="このパズルを今すぐ遊ぶ（Pair-Link・ペアリンク）" />
+        <PlayLink href="/lab/pair-link" label="このパズルを今すぐ遊ぶ（Pair-Link・ペアリンク）" />
 
         <SectionTitle id="reflec-shot">2. Reflec-Shot（リフレクショット）</SectionTitle>
         <h3 className="mt-4 font-semibold text-wit-text">開発背景</h3>
@@ -148,7 +148,7 @@ export default function EducationalValueColumnPage() {
         <p>
           盤サイズと難易プリセットにより探索空間を段階的に拡大します。小盤でヒントが強く効く型を体感的に蓄積し、大盤で複合制約への耐性を養う流れは、算数における場合分けの持久力とも通じます。
         </p>
-        <PlayLink href="/games/skyscraper" label="このパズルを今すぐ遊ぶ（Skyscraper・スカイスクレイパー）" />
+        <PlayLink href="/lab/skyscraper" label="このパズルを今すぐ遊ぶ（Skyscraper・スカイスクレイパー）" />
 
         <SectionTitle id="pres-sure">4. Pres-Sure Judge（プレッシャージャッジ）</SectionTitle>
         <h3 className="mt-4 font-semibold text-wit-text">開発背景</h3>
@@ -167,7 +167,7 @@ export default function EducationalValueColumnPage() {
         <p>
           ラウンド進行に伴い NPC の出方や在庫の緊張度が変化し、一枚比較から数手先の均衡イメージを要する局面へ移行します。Judge 操作は連続微調整に流されず判断の区切りを明示し、衝動と推理を分離する習慣づけに寄与します。難易度が段階的に上がることで準備された負荷勾配を保ち、ロジックパズルとは異なる軸として数・時間・身体操作を統合した知育体験を提供します。
         </p>
-        <PlayLink href="/games/pres-sure-judge" label="このパズルを今すぐ遊ぶ（Pres-Sure Judge・プレッシャージャッジ）" />
+        <PlayLink href="/lab/pres-sure-judge" label="このパズルを今すぐ遊ぶ（Pres-Sure Judge・プレッシャージャッジ）" />
 
         <p className="mt-12 border-t border-white/10 pt-8 text-center text-xs text-wit-muted">
           <Link href="/" className="text-sky-300 hover:underline">
