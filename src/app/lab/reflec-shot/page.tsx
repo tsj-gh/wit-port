@@ -4,7 +4,7 @@ import { EducationalValueSection } from "@/components/educational/EducationalVal
 import ReflecShotGame from "./ReflecShotGame";
 
 export const metadata: Metadata = {
-  title: "Reflec-Shot（知育ラボ・プロト）",
+  title: "Reflec-Shot（リフレクショット・知育ラボ）",
   description: "反射とスワイプ射出を試す知育ラボ用プロトタイプ（検索インデックス対象外）。",
   robots: {
     index: false,

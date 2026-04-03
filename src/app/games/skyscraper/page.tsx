@@ -6,7 +6,7 @@ import SkyscraperGame from "./SkyscraperGame";
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
 
 export const metadata: Metadata = {
-  title: "空の上から（Skyscrapers）",
+  title: "Skyscraper（スカイスクレイパー）",
   description:
     "外枠の数字をヒントに、重なり合うビルの高さを推理する無料知育パズル。メイビー蜂さんの力で論理の糸口を掴もう！",
   keywords: ["知育", "パズル", "無料", "スカイスクレイパー", "ビルパズル", "ロジックパズル", "算数", "幼児"],
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const skyscraperJsonLd = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  name: "空の上から（スカイスクレイパー / ビルパズル）",
+  name: "Skyscraper（スカイスクレイパー）",
   applicationCategory: "EducationalGame",
   operatingSystem: "Windows, macOS, Android, iOS",
   description:
@@ -51,7 +51,7 @@ export default function SkyscraperPage() {
       <EducationalValueSection summaryLabel="このパズルの知育効果について（専門解説・知育コラム連携）">
         <h3>開発背景</h3>
         <p>
-          スカイスクレイパー（ビルパズル）は、各行・各列に 1〜N の高さを一度ずつ配置し、盤外のヒント数字が「その方向から見えたビルの棟数」と一致するよう満たす制約充足型の論理パズルです。
+          Skyscraper（スカイスクレイパー）は、各行・各列に 1〜N の高さを一度ずつ配置し、盤外のヒント数字が「その方向から見えたビルの棟数」と一致するよう満たす制約充足型の論理パズルです。
           <strong className="text-wit-text">ラテン方陣性</strong>（行列で重複のない配置）と<strong className="text-wit-text">可視カウント</strong>
           という二系統の推論が交差するため、紙面では消去の記述が煩雑になりがちでした。デジタル化により仮置きと検証を高速に繰り返せ、記号操作の負荷を下げて本質的な制約推理へ注意を向けさせます。学童後期から大人の脳トレまで、幅広い年齢帯が同一ルールのもとで深さだけを変えて遊べる点も意図しています。
         </p>

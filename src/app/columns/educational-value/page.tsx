@@ -5,9 +5,9 @@ import type { ReactNode } from "react";
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
 
 export const metadata: Metadata = {
-  title: "知育コラム：ロジックパズルと思考力の育成",
+  title: "知育コラム：Pair-Link・Reflec-Shot・Skyscraper・Pres-Sure Judge の知育効果",
   description:
-    "ペアリンク・Reflec-Shot・スカイスクレイパー・Pres-Sure Judge の知育効果を、脳科学・モンテッソーリ教育・難易度設計の観点から体系的に解説する固定ページ。",
+    "Pair-Link・Reflec-Shot・Skyscraper・Pres-Sure Judge（プレッシャージャッジ）の知育効果を、脳科学・モンテッソーリ教育・難易度設計の観点から体系的に解説する固定ページ。",
   keywords: ["知育", "モンテッソーリ", "ロジックパズル", "前頭前野", "自己教育", "Wispo"],
   alternates: { canonical: `${BASE_URL}/columns/educational-value` },
 };
@@ -39,7 +39,7 @@ export default function EducationalValueColumnPage() {
       <article className="text-sm leading-relaxed text-wit-muted md:text-base">
         <p className="mb-2 text-xs font-medium uppercase tracking-widest text-wit-muted">知育コラム</p>
         <h1 className="mb-6 text-2xl font-bold tracking-tight text-wit-text md:text-3xl">
-          デジタル・ロジックパズルと子どもの思考力
+          知育コラム：デジタル・ロジックパズルと子どもの思考力
         </h1>
 
         <section className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
@@ -55,7 +55,7 @@ export default function EducationalValueColumnPage() {
             <strong className="text-wit-text">秩序と集中</strong>、<strong className="text-wit-text">達成感に支えられた自律性</strong>といった、時を経ても色褪せない原理に立脚しています。
           </p>
           <p>
-            以下では、当サイトで提供する主なロジックパズルを題材に、開発意図・認知神経科学的観点・モンテッソーリ的実践・難易度設計を横断的に整理します。保護者・教育者が家庭や教室で伴走する際の「対話の材料」としてご活用ください。
+            以下では、当サイトで提供する主なコンテンツ（Pair-Link・Reflec-Shot・Skyscraper・Pres-Sure Judge など）を題材に、開発意図・認知神経科学的観点・モンテッソーリ的実践・難易度設計を横断的に整理します。保護者・教育者が家庭や教室で伴走する際の「対話の材料」としてご活用ください。
           </p>
         </section>
 
@@ -67,28 +67,28 @@ export default function EducationalValueColumnPage() {
           <ul className="list-inside list-disc space-y-1 text-sm">
             <li>
               <a href="#pair-link" className="text-sky-300 hover:underline">
-                ペアリンク（ナンバーリンク）
+                Pair-Link（ペアリンク）
               </a>
             </li>
             <li>
               <a href="#reflec-shot" className="text-sky-300 hover:underline">
-                Reflec-Shot（反射と格子論理）
+                Reflec-Shot（リフレクショット）
               </a>
             </li>
             <li>
               <a href="#skyscraper" className="text-sky-300 hover:underline">
-                スカイスクレイパー（ビルパズル）
+                Skyscraper（スカイスクレイパー）
               </a>
             </li>
             <li>
               <a href="#pres-sure" className="text-sky-300 hover:underline">
-                Pres-Sure Judge（天秤・時間圧）
+                Pres-Sure Judge（プレッシャージャッジ）
               </a>
             </li>
           </ul>
         </nav>
 
-        <SectionTitle id="pair-link">1. ペアリンク（ナンバーリンク）</SectionTitle>
+        <SectionTitle id="pair-link">1. Pair-Link（ペアリンク）</SectionTitle>
         <h3 className="mt-4 font-semibold text-wit-text">開発背景</h3>
         <p>
           同値の端点を一方通行の線で結び、全マスを覆い、線同士が交差しないという制約は、紙面パズルとして長く親しまれてきました。デジタル化の意義は、描画・撤回・再試行のコストを極小化し、思考のリズムを途切れさせないことにあります。指やスタイラス操作は微細運動と空間表象を結び、学童期の図形・表現活動とも連関します。
@@ -105,9 +105,9 @@ export default function EducationalValueColumnPage() {
         <p>
           グレード（G1〜）により盤面規模と対ペア数、生成上の制約が段階的に増えます。入門で成功体験を固め、高次で探索空間を拡大する勾配は、準備された難易度という観点から妥当です。線をグラフの辺とみなす視点は、将来の離散数学的直観の下地にもなり得ます。
         </p>
-        <PlayLink href="/games/pair-link" label="このパズルを今すぐ遊ぶ（ペアリンク）" />
+        <PlayLink href="/games/pair-link" label="このパズルを今すぐ遊ぶ（Pair-Link）" />
 
-        <SectionTitle id="reflec-shot">2. Reflec-Shot（反射と格子論理）</SectionTitle>
+        <SectionTitle id="reflec-shot">2. Reflec-Shot（リフレクショット）</SectionTitle>
         <h3 className="mt-4 font-semibold text-wit-text">開発背景</h3>
         <p>
           鏡の反射は具体的操作として魅力的ですが、実験環境の準備と再現性の確保にはコストが伴います。格子・壁・バンパー記号（／＼－｜）へ抽象化しデジタル上で等速移動と反射規則を誤差なく再現することで、幾何直感と記号的推論の往復を安全に繰り返せます。
@@ -126,7 +126,7 @@ export default function EducationalValueColumnPage() {
         </p>
         <PlayLink href="/lab/reflec-shot" label="このパズルを今すぐ遊ぶ（Reflec-Shot・ラボ）" />
 
-        <SectionTitle id="skyscraper">3. スカイスクレイパー（ビルパズル）</SectionTitle>
+        <SectionTitle id="skyscraper">3. Skyscraper（スカイスクレイパー）</SectionTitle>
         <h3 className="mt-4 font-semibold text-wit-text">開発背景</h3>
         <p>
           各行・列に1〜Nを一度ずつ置き、外周ヒントが各方向の可視棟数と一致させる課題は、ラテン方陣性と可視カウントという二系統の論理を統合します。紙では消去の記述が煩雑になりがちですが、デジタルは仮置きと検証の反復を軽くし、制約推理そのものに注意を向けさせます。
@@ -143,9 +143,9 @@ export default function EducationalValueColumnPage() {
         <p>
           盤サイズと難易プリセットにより探索空間を段階的に拡大します。小盤でヒントが強く効く型を体感的に蓄積し、大盤で複合制約への耐性を養う流れは、算数における場合分けの持久力とも通じます。
         </p>
-        <PlayLink href="/games/skyscraper" label="このパズルを今すぐ遊ぶ（スカイスクレイパー）" />
+        <PlayLink href="/games/skyscraper" label="このパズルを今すぐ遊ぶ（Skyscraper）" />
 
-        <SectionTitle id="pres-sure">4. Pres-Sure Judge（タイムプレッシャー下の均衡判断）</SectionTitle>
+        <SectionTitle id="pres-sure">4. Pres-Sure Judge（プレッシャージャッジ）</SectionTitle>
         <h3 className="mt-4 font-semibold text-wit-text">開発背景</h3>
         <p>
           NPC が先に重りを載せ、プレイヤーは在庫からドラッグして天秤の皿へ配置し、制限時間内に均衡を保つという課題は、紙教材では時間圧と連続的な視覚フィードバックを同時に再現しにくい領域です。デジタル化により傾きと残り時間が同期し、誤判断が即座に盤面へ反映されます。判定ミスやタイムアウトがラウンドを通じて累積するサバイバル構造は、単発の正誤より戦略の持続と自己調整を問う意図に基づき、数の大小・空間配置・タイミングを一体の行為として反復できるように設計されています。
@@ -162,7 +162,7 @@ export default function EducationalValueColumnPage() {
         <p>
           ラウンド進行に伴い NPC の出方や在庫の緊張度が変化し、一枚比較から数手先の均衡イメージを要する局面へ移行します。Judge 操作は連続微調整に流されず判断の区切りを明示し、衝動と推理を分離する習慣づけに寄与します。難易度が段階的に上がることで準備された負荷勾配を保ち、ロジックパズルとは異なる軸として数・時間・身体操作を統合した知育体験を提供します。
         </p>
-        <PlayLink href="/games/pres-sure-judge" label="このパズルを今すぐ遊ぶ（Pres-Sure Judge）" />
+        <PlayLink href="/games/pres-sure-judge" label="このパズルを今すぐ遊ぶ（Pres-Sure Judge・プレッシャージャッジ）" />
 
         <p className="mt-12 border-t border-white/10 pt-8 text-center text-xs text-wit-muted">
           <Link href="/" className="text-sky-300 hover:underline">

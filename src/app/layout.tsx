@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     template: "%s | Wispo",
   },
   description:
-    "Wispo（ウィスポ）は、知育スポーツの拠点。直感と論理を交差させるペアリンクやビルパズルなど、洗練された知育ロジックゲームを無料でお楽しみください。",
+    "Wispo（ウィスポ）は、知育スポーツの拠点。直感と論理を交差させる Pair-Link・Skyscraper・Reflec-Shot・Pres-Sure Judge など、洗練された知育ロジックゲームを無料でお楽しみください。",
   keywords: ["知育", "パズル", "無料", "ロジックパズル", "ナンバーリンク", "スカイスクレイパー", "脳トレ"],
   openGraph: { type: "website", siteName: "Wispo" },
   manifest: "/manifest.json",
