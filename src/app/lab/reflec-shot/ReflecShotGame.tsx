@@ -1,5 +1,6 @@
 "use client";
 
+import confetti from "canvas-confetti";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -270,6 +271,8 @@ export default function ReflecShotGame() {
   const [phase, setPhase] = useState<Phase>("edit");
   const [statusMsg, setStatusMsg] = useState("");
   const statusMsgDisplay = useMemo(() => translateReflecStatus(statusMsg, t), [statusMsg, t]);
+  const [showWinOverlay, setShowWinOverlay] = useState(false);
+  const [showFailOverlay, setShowFailOverlay] = useState(false);
   const [bumperTick, setBumperTick] = useState(0);
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
@@ -592,7 +595,9 @@ export default function ReflecShotGame() {
   );
 
   const goNextProblem = useCallback(() => {
-    if (phase !== "won") return;
+    if (phase !== "won" && phase !== "lost") return;
+    setShowWinOverlay(false);
+    setShowFailOverlay(false);
     refreshAds();
     const skipStockForG2Debug = grade === 4 && isDevTj && isDebugMode;
     const skipStockForG5AltLv4 =
@@ -716,18 +721,20 @@ export default function ReflecShotGame() {
         // 到達フレームで lerp=0 のとき描画は fromCell を参照するため、ゴールパッドにスナップする
         sim.fromCell = { ...B };
         sim.toCell = { ...B };
+        setShowFailOverlay(false);
+        setShowWinOverlay(true);
         setPhase("won");
-        setStatusMsg("ゴール到達！");
+        setStatusMsg("");
         return;
       }
       if (res === "lost") {
         sim.fromCell = { ...B };
         sim.toCell = { ...B };
         sim.leftStart = false;
+        setShowWinOverlay(false);
+        setShowFailOverlay(true);
         setPhase("lost");
-        setStatusMsg(
-          "失敗です。壁へ向かう進行・反射になったか、射出位置へ戻ってしまいました。バンパーを調整してください。"
-        );
+        setStatusMsg("");
         return;
       }
       sim.fromCell = B;
@@ -736,6 +743,23 @@ export default function ReflecShotGame() {
     },
     [applyArrival, debugBallSpeedMult, isDebugMode, isDevTj, phase, stage]
   );
+
+  useEffect(() => {
+    if (!showWinOverlay) return;
+    refreshAds();
+  }, [showWinOverlay]);
+
+  useEffect(() => {
+    if (!showWinOverlay) return;
+    const defaults = { origin: { y: 0.6 }, zIndex: 9999 };
+    confetti({ ...defaults, particleCount: 150, spread: 100 });
+    confetti({ ...defaults, particleCount: 75, angle: 60, spread: 55 });
+    confetti({ ...defaults, particleCount: 75, angle: 120, spread: 55 });
+    const t = setTimeout(() => {
+      confetti({ ...defaults, particleCount: 50, scalar: 1.2, spread: 80 });
+    }, 200);
+    return () => clearTimeout(t);
+  }, [showWinOverlay]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -1333,6 +1357,8 @@ export default function ReflecShotGame() {
 
   const regen = () => {
     refreshAds();
+    setShowWinOverlay(false);
+    setShowFailOverlay(false);
     setSeed((Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0);
   };
 
@@ -1352,6 +1378,7 @@ export default function ReflecShotGame() {
   const retryAfterLoss = () => {
     if (!stage) return;
     refreshAds();
+    setShowFailOverlay(false);
     editBallPadRef.current = null;
     setPhase("edit");
     setStatusMsg("");
@@ -1695,7 +1722,7 @@ export default function ReflecShotGame() {
         <div className="flex w-full flex-col items-center">
           <div className="mb-2 w-full text-wit-text">
             {phase === "edit" ? (
-              <p className="text-xs font-normal leading-relaxed sm:text-sm">
+              <p className="text-xs font-normal leading-relaxed sm:text-sm whitespace-pre-line">
                 {t("games.reflecShot.phaseEdit")}
               </p>
             ) : (
@@ -1708,16 +1735,12 @@ export default function ReflecShotGame() {
               </span>
             )}
           </div>
-          {(statusMsg || boardLoadWait) && (
+          {(boardLoadWait || (statusMsg && phase !== "won" && phase !== "lost")) && (
             <p
               className={`mb-2 w-full text-sm ${
-                phase === "won"
-                  ? "text-emerald-400"
-                  : phase === "lost"
-                    ? "text-amber-300"
-                    : boardLoadWait
-                      ? "text-sky-300"
-                      : "text-wit-muted"
+                boardLoadWait
+                  ? "text-sky-300"
+                  : "text-wit-muted"
               }`}
             >
               {boardLoadWait && !statusMsg ? t("games.reflecShot.st.preparing") : statusMsgDisplay}
@@ -1778,6 +1801,8 @@ export default function ReflecShotGame() {
                     aria-pressed={isActive}
                     disabled={isGenerating || boardLoadWait}
                     onClick={() => {
+                      setShowWinOverlay(false);
+                      setShowFailOverlay(false);
                       setGrade(g);
                       setPhase("edit");
                       setStatusMsg("");
@@ -1794,27 +1819,6 @@ export default function ReflecShotGame() {
                 );
               })}
             </div>
-          </div>
-          <div className="shrink-0 w-full sm:w-auto flex flex-wrap gap-2 items-center text-sm">
-            {phase === "won" && (
-              <button
-                type="button"
-                className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-40"
-                onClick={goNextProblem}
-                disabled={boardLoadWait}
-              >
-                {t("games.reflecShot.nextProblemBtn")}
-              </button>
-            )}
-            {phase === "lost" && (
-              <button
-                type="button"
-                className="rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1 text-amber-200"
-                onClick={retryAfterLoss}
-              >
-                {t("games.reflecShot.retryEdit")}
-              </button>
-            )}
           </div>
         </div>
 
@@ -1858,6 +1862,77 @@ export default function ReflecShotGame() {
           <ReflecShotAdSlot slotIndex={2} isDebugMode={isDebugMode} />
         </div>
       </section>
+
+      {showWinOverlay && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reflec-win-title"
+        >
+          <div className="mx-4 max-w-sm rounded-2xl border border-slate-600 bg-slate-800 p-8 text-center shadow-2xl">
+            <h2
+              id="reflec-win-title"
+              className="mb-4 text-2xl font-bold text-wit-emerald"
+            >
+              {t("games.reflecShot.resultWinMessage")}
+            </h2>
+            <div className="flex flex-wrap justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowWinOverlay(false)}
+                className="rounded-lg bg-slate-700 px-6 py-3 font-medium text-wit-text hover:bg-slate-600"
+              >
+                {t("games.reflecShot.resultBack")}
+              </button>
+              <button
+                type="button"
+                onClick={() => goNextProblem()}
+                disabled={boardLoadWait}
+                className="rounded-lg bg-wit-emerald px-6 py-3 font-medium text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {t("games.reflecShot.nextProblemBtn")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showFailOverlay && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reflec-fail-title"
+        >
+          <div className="mx-4 max-w-sm rounded-2xl border border-slate-600 bg-slate-800 p-8 text-center shadow-2xl">
+            <h2
+              id="reflec-fail-title"
+              className="mb-2 text-2xl font-bold text-amber-400"
+            >
+              {t("games.reflecShot.resultFailTitle")}
+            </h2>
+            <p className="mb-4 text-wit-muted">{t("games.reflecShot.resultFailMessage")}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => retryAfterLoss()}
+                className="rounded-lg bg-slate-700 px-6 py-3 font-medium text-wit-text hover:bg-slate-600"
+              >
+                {t("games.reflecShot.resultRetry")}
+              </button>
+              <button
+                type="button"
+                onClick={() => goNextProblem()}
+                disabled={boardLoadWait}
+                className="rounded-lg bg-wit-emerald px-6 py-3 font-medium text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {t("games.reflecShot.nextProblemBtn")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

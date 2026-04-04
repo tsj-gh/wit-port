@@ -74,9 +74,6 @@ export function translateReflecStatus(raw: string, t: (key: string) => string): 
     "ハッシュからの生成に失敗しました": "games.reflecShot.st.hashGenFailed",
     "ストックが空のため盤面を生成しています…": "games.reflecShot.st.stockEmptyGen",
     "次の盤面の生成に失敗しました（Worker）": "games.reflecShot.st.nextGenFailedWorker",
-    "ゴール到達！": "games.reflecShot.st.goalReached",
-    "失敗です。壁へ向かう進行・反射になったか、射出位置へ戻ってしまいました。バンパーを調整してください。":
-      "games.reflecShot.st.failWallOrReturn",
   };
   const k = map[raw];
   return k ? t(k) : raw;
