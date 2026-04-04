@@ -25,7 +25,7 @@ export function PageHeaderWithDevLinks({ backLabel }: PageHeaderWithDevLinksProp
         Wispo
       </DevLink>
       <div className="flex items-center gap-2 sm:gap-3">
-        <LanguageToggle />
+        <LanguageToggle size="comfortable" />
         <DevLink
           href="/"
           className="text-wit-muted text-sm no-underline hover:text-wit-text transition-colors"
