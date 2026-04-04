@@ -54,6 +54,7 @@
       "resultWinMessage": "おめでとう！ゴールに到達しました！",
       "resultFailTitle": "Failed",
       "resultFailMessage": "残念、ゴールに辿り着けませんでした…",
+      "resultFailGems": "宝石が足りません。バンパーで反射して宝石を集めてからゴールへ向かってください。",
       "resultBack": "戻る",
       "resultRetry": "やり直す",
       "phaseMove": "進行中",

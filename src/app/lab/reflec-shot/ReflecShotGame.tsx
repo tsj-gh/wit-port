@@ -18,6 +18,8 @@ import { useReflectShotWorker } from "@/hooks/useReflectShotWorker";
 import { bendOrBumperHint } from "./gridStageGen";
 import {
   addCell,
+  cloneGridStageForRestore,
+  countBumpersOnSolutionPath,
   DIR,
   isAgentCell,
   keyCell,
@@ -28,7 +30,6 @@ import {
   type CellCoord,
   type Dir,
   type GridStage,
-  cloneGridStageForRestore,
 } from "./gridTypes";
 import { decodeReflecStageHash, encodeReflecStageHash, parseReflecHash } from "./reflecShotStageHash";
 import { ReflecShotAdSlot } from "@/components/ReflecShotAdSlots";
@@ -72,6 +73,84 @@ const ENTRY_VEC_MIN_SQ = 2.5 * 2.5;
 const BUMPER_GLYPH_SIZE_RATIO = 0.84;
 /** 軌跡確定時のマス強調＆P→Q 軌跡フェードの長さ（ms） */
 const TRAJECTORY_BUMPER_FLASH_MS = 400;
+
+const MAX_GEM_PARTICLES = 44;
+const GEM_BURST_N = 9;
+const GEM_PARTICLE_TTL_MS = 520;
+const GOAL_SPARKLE_TTL_MS = 720;
+
+type GemParticle = { x: number; y: number; vx: number; vy: number; born: number };
+type GoalSparkle = { x: number; y: number; vx: number; vy: number; born: number };
+
+function pushGemBurst(arr: GemParticle[], cx: number, cy: number, now: number) {
+  for (let i = 0; i < GEM_BURST_N; i++) {
+    if (arr.length >= MAX_GEM_PARTICLES) arr.shift();
+    const ang = Math.random() * Math.PI * 2;
+    const sp = 1.15 + Math.random() * 2.85;
+    arr.push({
+      x: cx + (Math.random() - 0.5) * 5,
+      y: cy + (Math.random() - 0.5) * 5,
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp,
+      born: now,
+    });
+  }
+}
+
+function pushGoalSparkles(arr: GoalSparkle[], cx: number, cy: number, now: number) {
+  for (let i = 0; i < 14; i++) {
+    if (arr.length > 36) arr.shift();
+    const ang = Math.random() * Math.PI * 2;
+    const sp = 0.35 + Math.random() * 1.65;
+    arr.push({
+      x: cx + (Math.random() - 0.5) * 7,
+      y: cy + (Math.random() - 0.5) * 7,
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp,
+      born: now,
+    });
+  }
+}
+
+function drawLightDrop(
+  ctx: CanvasRenderingContext2D,
+  ax: number,
+  ay: number,
+  rad: number,
+  moveDx: number,
+  moveDy: number,
+  tailScale: number
+) {
+  const g = ctx.createRadialGradient(ax, ay, 0, ax, ay, rad * 1.1);
+  g.addColorStop(0, "rgba(255,255,255,0.97)");
+  g.addColorStop(0.28, "rgba(224, 242, 254, 0.78)");
+  g.addColorStop(0.55, "rgba(56, 189, 248, 0.38)");
+  g.addColorStop(1, "rgba(14, 165, 233, 0.04)");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(ax, ay, rad, 0, Math.PI * 2);
+  ctx.fill();
+
+  const len = Math.hypot(moveDx, moveDy);
+  if (len > 0.4 && tailScale > 0) {
+    const nx = moveDx / len;
+    const ny = moveDy / len;
+    const tLen = Math.min(rad * 2.4, 18) * tailScale;
+    const tx = -nx * tLen;
+    const ty = -ny * tLen;
+    const lg = ctx.createLinearGradient(ax + tx, ay + ty, ax, ay);
+    lg.addColorStop(0, "rgba(14, 165, 233, 0)");
+    lg.addColorStop(0.45, "rgba(125, 211, 252, 0.4)");
+    lg.addColorStop(1, "rgba(255,255,255,0.55)");
+    ctx.strokeStyle = lg;
+    ctx.lineWidth = Math.max(2.2, rad * 0.48);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(ax + tx, ay + ty);
+    ctx.lineTo(ax - nx * rad * 0.32, ay - ny * rad * 0.32);
+    ctx.stroke();
+  }
+}
 
 type Phase = "edit" | "move" | "won" | "lost";
 
@@ -333,6 +412,17 @@ export default function ReflecShotGame() {
   const [prepMs, setPrepMs] = useState(0);
   const lastStagePrepKeyRef = useRef<string>("");
 
+  const requiredGemsRef = useRef(1);
+  const collectedGemsRef = useRef(0);
+  const gemParticlesRef = useRef<GemParticle[]>([]);
+  const goalSparklesRef = useRef<GoalSparkle[]>([]);
+  /** 条件達成時の演出用タイムスタンプ */
+  const goalUnlockPulseRef = useRef(0);
+
+  const [requiredGems, setRequiredGems] = useState(1);
+  const [collectedGems, setCollectedGems] = useState(0);
+  const [gemGoalFail, setGemGoalFail] = useState(false);
+
   const simRef = useRef({
     logicalCell: { c: 0, r: 0 } as CellCoord,
     travelDir: DIR.D as Dir,
@@ -468,6 +558,19 @@ export default function ReflecShotGame() {
     if (prev.grade === grade && prev.seed === seed) return;
     setDebugPreviousBoard(prev);
   }, [grade, seed]);
+
+  useEffect(() => {
+    if (!stage) return;
+    const req = countBumpersOnSolutionPath(stage);
+    requiredGemsRef.current = req;
+    setRequiredGems(req);
+    collectedGemsRef.current = 0;
+    setCollectedGems(0);
+    gemParticlesRef.current.length = 0;
+    goalSparklesRef.current.length = 0;
+    goalUnlockPulseRef.current = 0;
+    setGemGoalFail(false);
+  }, [stage]);
 
   useEffect(() => {
     if (!stage) return;
@@ -683,6 +786,12 @@ export default function ReflecShotGame() {
   const beginShot = useCallback(() => {
     const st = stage;
     if (!st || phase !== "edit") return;
+    collectedGemsRef.current = 0;
+    setCollectedGems(0);
+    gemParticlesRef.current.length = 0;
+    goalSparklesRef.current.length = 0;
+    goalUnlockPulseRef.current = 0;
+    setGemGoalFail(false);
     startPadDragRef.current = null;
     lastStartPadTapRef.current = null;
     const rect =
@@ -709,7 +818,9 @@ export default function ReflecShotGame() {
   const applyArrival = useCallback(
     (st: GridStage, B: CellCoord, incomingDir: Dir): { next: CellCoord; outDir: Dir } | "goal" | "lost" => {
       const sim = simRef.current;
-      if (B.c === st.goalPad.c && B.r === st.goalPad.r) return "goal";
+      if (B.c === st.goalPad.c && B.r === st.goalPad.r) {
+        return collectedGemsRef.current >= requiredGemsRef.current ? "goal" : "lost";
+      }
       if (B.c === st.startPad.c && B.r === st.startPad.r && sim.leftStart) return "lost";
 
       if (B.c !== st.startPad.c || B.r !== st.startPad.r) sim.leftStart = true;
@@ -756,6 +867,31 @@ export default function ReflecShotGame() {
         dy: sim.fromCell.r - B.r,
       };
       const res = applyArrival(st, B, incoming);
+
+      const bkHit = keyCell(B.c, B.r);
+      const isBumperHit =
+        st.bumpers.has(bkHit) && !(B.c === st.goalPad.c && B.r === st.goalPad.r);
+      if (isBumperHit) {
+        const c0 = collectedGemsRef.current;
+        collectedGemsRef.current += 1;
+        const nowG = performance.now();
+        if (collectedGemsRef.current >= requiredGemsRef.current && c0 < requiredGemsRef.current) {
+          goalUnlockPulseRef.current = nowG;
+          const layG = boardLayoutRef.current;
+          if (layG) {
+            const gp = st.goalPad;
+            const gcc = cellCenterPx(gp.c, gp.r, layG.cellPx, layG.ox, layG.oy, layG.rMin);
+            pushGoalSparkles(goalSparklesRef.current, gcc.x, gcc.y, nowG);
+          }
+        }
+        const layB = boardLayoutRef.current;
+        if (layB) {
+          const bc = cellCenterPx(B.c, B.r, layB.cellPx, layB.ox, layB.oy, layB.rMin);
+          pushGemBurst(gemParticlesRef.current, bc.x, bc.y, nowG);
+        }
+        setCollectedGems(collectedGemsRef.current);
+      }
+
       if (res === "goal") {
         // 到達フレームで lerp=0 のとき描画は fromCell を参照するため、ゴールパッドにスナップする
         sim.fromCell = { ...B };
@@ -771,6 +907,7 @@ export default function ReflecShotGame() {
         sim.toCell = { ...B };
         sim.leftStart = false;
         setShowWinOverlay(false);
+        setGemGoalFail(B.c === st.goalPad.c && B.r === st.goalPad.r);
         setShowFailOverlay(true);
         setPhase("lost");
         setStatusMsg("");
@@ -830,6 +967,41 @@ export default function ReflecShotGame() {
 
     const rowY = (r: number) => oy + (r - rMin) * cellPx;
     const openLenDraw = portalGapLengthPx(cellPx);
+    const now = performance.now();
+
+    const rad = Math.max(6, cellPx * 0.22);
+    let ballX = 0;
+    let ballY = 0;
+    let tailDx = 0;
+    let tailDy = 0;
+    let tailActive = false;
+    if (phase === "edit") {
+      const padC = cellCenterPx(st.startPad.c, st.startPad.r, cellPx, ox, oy, rMin);
+      const bp = editBallPadRef.current ?? padC;
+      ballX = bp.x;
+      ballY = bp.y;
+    } else {
+      const sim = simRef.current;
+      const f = sim.fromCell;
+      const t = sim.toCell;
+      let af = cellCenterPx(f.c, f.r, cellPx, ox, oy, rMin);
+      if (
+        sim.padLaunchPx &&
+        f.c === st.startPad.c &&
+        f.r === st.startPad.r &&
+        t.c === st.start.c &&
+        t.r === st.start.r
+      ) {
+        af = sim.padLaunchPx;
+      }
+      const at = cellCenterPx(t.c, t.r, cellPx, ox, oy, rMin);
+      const u = Math.min(1, sim.lerp01);
+      ballX = af.x + (at.x - af.x) * u;
+      ballY = af.y + (at.y - af.y) * u;
+      tailDx = at.x - af.x;
+      tailDy = at.y - af.y;
+      tailActive = phase === "move";
+    }
 
     for (let r = rMin; r <= rMax; r++) {
       for (let c = 0; c < st.width; c++) {
@@ -856,11 +1028,65 @@ export default function ReflecShotGame() {
           continue;
         }
         if (isGoalPad) {
-          const padFill = "#222038";
-          ctx.fillStyle = padFill;
+          const req = requiredGemsRef.current;
+          const col = collectedGemsRef.current;
+          const goalOpen = col >= req;
+          const gcx = x + cellPx / 2;
+          const gcy = y + cellPx / 2;
+          if (!goalOpen) {
+            ctx.fillStyle = "#2a1a1f";
+            ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
+            ctx.strokeStyle = "rgba(127, 29, 29, 0.45)";
+            ctx.lineWidth = 1;
+            for (let s = 0; s < 5; s++) {
+              ctx.beginPath();
+              ctx.moveTo(x + 5 + s * 4, y + cellPx * 0.32);
+              ctx.lineTo(x + cellPx - 6, y + cellPx * 0.68);
+              ctx.stroke();
+            }
+            const dotR = Math.max(2.2, cellPx * 0.054);
+            const spacing =
+              req <= 1 ? 0 : Math.min((cellPx * 0.78) / (req - 1), dotR * 2.75);
+            const rowYDots = gcy + cellPx * 0.12;
+            for (let i = 0; i < req; i++) {
+              const dx = req <= 1 ? gcx : gcx - (spacing * (req - 1)) / 2 + i * spacing;
+              const lit = i < col;
+              ctx.beginPath();
+              ctx.arc(dx, rowYDots, dotR, 0, Math.PI * 2);
+              if (lit) {
+                ctx.fillStyle = "rgba(253, 224, 71, 0.9)";
+                ctx.fill();
+                ctx.strokeStyle = "rgba(250, 204, 21, 0.55)";
+                ctx.lineWidth = 1;
+                ctx.stroke();
+              } else {
+                ctx.fillStyle = "rgba(30, 18, 22, 0.96)";
+                ctx.fill();
+                ctx.strokeStyle = "rgba(90, 48, 55, 0.9)";
+                ctx.lineWidth = 1.35;
+                ctx.stroke();
+              }
+            }
+            drawCellGappedBorder(ctx, x, y, cellPx, "#3d2529", openLenDraw);
+            continue;
+          }
+          const pulse = 0.5 + 0.5 * Math.sin(now * 0.0055);
+          ctx.save();
+          ctx.shadowColor = "rgba(52, 211, 153, 0.55)";
+          ctx.shadowBlur = 11 + pulse * 14;
+          ctx.fillStyle = `rgb(${22 + pulse * 28}, ${100 + pulse * 45}, ${88 + pulse * 35})`;
           ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
-          ctx.lineWidth = 1;
-          drawCellGappedBorder(ctx, x, y, cellPx, padFill, openLenDraw);
+          ctx.shadowBlur = 0;
+          ctx.restore();
+          ctx.strokeStyle = `rgba(204, 251, 241, ${0.5 + pulse * 0.35})`;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x + 2, y + 2, cellPx - 4, cellPx - 4);
+          const gg = ctx.createRadialGradient(gcx, gcy, 0, gcx, gcy, cellPx * 0.48);
+          gg.addColorStop(0, `rgba(254, 249, 195, ${0.3 + pulse * 0.22})`);
+          gg.addColorStop(1, "rgba(16, 185, 129, 0)");
+          ctx.fillStyle = gg;
+          ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
+          drawCellGappedBorder(ctx, x, y, cellPx, "#0f3d34", openLenDraw);
           continue;
         }
 
@@ -927,39 +1153,59 @@ export default function ReflecShotGame() {
       ctx.stroke();
     }
 
-    const rad = Math.max(6, cellPx * 0.22);
-    ctx.fillStyle = "#f8fafc";
-    if (phase === "edit") {
-      const padC = cellCenterPx(st.startPad.c, st.startPad.r, cellPx, ox, oy, rMin);
-      const bp = editBallPadRef.current ?? padC;
-      ctx.beginPath();
-      ctx.arc(bp.x, bp.y, rad, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      const sim = simRef.current;
-      const f = sim.fromCell;
-      const t = sim.toCell;
-      let af = cellCenterPx(f.c, f.r, cellPx, ox, oy, rMin);
-      if (
-        sim.padLaunchPx &&
-        f.c === st.startPad.c &&
-        f.r === st.startPad.r &&
-        t.c === st.start.c &&
-        t.r === st.start.r
-      ) {
-        af = sim.padLaunchPx;
+    const gems = gemParticlesRef.current;
+    for (let i = gems.length - 1; i >= 0; i--) {
+      const p = gems[i]!;
+      const age = now - p.born;
+      if (age > GEM_PARTICLE_TTL_MS) {
+        gems.splice(i, 1);
+        continue;
       }
-      const at = cellCenterPx(t.c, t.r, cellPx, ox, oy, rMin);
-      const u = Math.min(1, sim.lerp01);
-      const ax = af.x + (at.x - af.x) * u;
-      const ay = af.y + (at.y - af.y) * u;
+      if (age > 90) {
+        p.vx += (ballX - p.x) * 0.0028;
+        p.vy += (ballY - p.y) * 0.0028;
+      }
+      p.vx *= 0.986;
+      p.vy *= 0.986;
+      p.x += p.vx;
+      p.y += p.vy;
+      const lifeA = Math.max(0, 1 - age / GEM_PARTICLE_TTL_MS);
+      const tw = 1.6 + 0.55 * Math.sin(age * 0.045);
+      ctx.fillStyle = `rgba(255, ${230 + Math.floor(25 * lifeA)}, ${140 + Math.floor(40 * lifeA)}, ${0.4 + 0.55 * lifeA})`;
+      ctx.fillRect(p.x - tw / 2, p.y - tw / 2, tw, tw);
+    }
+
+    const sparks = goalSparklesRef.current;
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const p = sparks[i]!;
+      const age = now - p.born;
+      if (age > GOAL_SPARKLE_TTL_MS) {
+        sparks.splice(i, 1);
+        continue;
+      }
+      p.vy -= 0.018;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.992;
+      const a = 1 - age / GOAL_SPARKLE_TTL_MS;
+      ctx.fillStyle = `rgba(253, 224, 71, ${0.5 * a})`;
       ctx.beginPath();
-      ctx.arc(ax, ay, rad, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, 1.85, 0, Math.PI * 2);
       ctx.fill();
     }
 
+    drawLightDrop(
+      ctx,
+      ballX,
+      ballY,
+      rad,
+      tailDx,
+      tailDy,
+      tailActive ? 1 : 0
+    );
+
     boardLayoutRef.current = { cellPx, ox, oy, rMin };
-  }, [isDebugMode, isDevTj, phase, showSolutionPath, stage]);
+  }, [collectedGems, isDebugMode, isDevTj, phase, requiredGems, showSolutionPath, stage]);
 
   useEffect(() => {
     let raf = 0;
@@ -1447,6 +1693,12 @@ export default function ReflecShotGame() {
     refreshAds();
     setShowFailOverlay(false);
     editBallPadRef.current = null;
+    collectedGemsRef.current = 0;
+    setCollectedGems(0);
+    gemParticlesRef.current.length = 0;
+    goalSparklesRef.current.length = 0;
+    goalUnlockPulseRef.current = 0;
+    setGemGoalFail(false);
     setPrepSessionNonce((n) => n + 1);
     setPhase("edit");
     setStatusMsg("");
@@ -1980,7 +2232,9 @@ export default function ReflecShotGame() {
             >
               {t("games.reflecShot.resultFailTitle")}
             </h2>
-            <p className="mb-4 text-wit-muted">{t("games.reflecShot.resultFailMessage")}</p>
+            <p className="mb-4 text-wit-muted">
+              {gemGoalFail ? t("games.reflecShot.resultFailGems") : t("games.reflecShot.resultFailMessage")}
+            </p>
             <div className="flex flex-wrap justify-center gap-2">
               <button
                 type="button"

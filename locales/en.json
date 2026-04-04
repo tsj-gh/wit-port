@@ -54,6 +54,7 @@
       "resultWinMessage": "Congratulations! You reached the goal!",
       "resultFailTitle": "Failed",
       "resultFailMessage": "Sorry—you didn't make it to the goal…",
+      "resultFailGems": "Not enough gems. Bounce off bumpers to collect gems before entering the goal.",
       "resultBack": "Back",
       "resultRetry": "Try again",
       "phaseMove": "In play",

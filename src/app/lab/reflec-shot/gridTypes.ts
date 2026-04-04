@@ -119,6 +119,15 @@ export function stageRowRange(st: GridStage) {
 }
 
 /** 復元・ストック取り出し用のディープコピー（`setStage` 後にプレイヤー操作で汚染されないよう） */
+/** 正解経路上のバンパーマス数（反射回数の目安）。最低 1 を返す。 */
+export function countBumpersOnSolutionPath(st: GridStage): number {
+  let n = 0;
+  for (const p of st.solutionPath) {
+    if (st.bumpers.has(keyCell(p.c, p.r))) n++;
+  }
+  return Math.max(1, n);
+}
+
 export function cloneGridStageForRestore(st: GridStage): GridStage {
   return {
     ...st,
