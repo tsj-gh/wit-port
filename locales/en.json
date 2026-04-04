@@ -49,7 +49,7 @@
       "regenStage": "Regenerate stage",
       "autoSolve": "Auto-solve",
       "nextProblem": "Next puzzle",
-      "boardHelp": "Bounce as many times as the number on the red goal cell says, then reach the goal!\n\nClick or tap bumpers to rotate them, or change their angle by drawing a path through a cell.\n\nDouble-click or double-tap the projectile—or swipe—to launch!",
+      "boardHelp": "Bounce as many times as the number on the red goal cell says, then reach the goal!\nClick or tap bumpers to rotate them, or change their angle by drawing a path through a cell.\nDouble-click or double-tap the projectile—or swipe—to launch!",
       "resultWinMessage": "Congratulations! You reached the goal!",
       "resultFailTitle": "Failed",
       "resultFailMessage": "Sorry—you didn't make it to the goal…",

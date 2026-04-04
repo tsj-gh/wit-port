@@ -235,6 +235,39 @@ function drawLightDrop(
   }
 }
 
+/** 編集時 StartPad 上の射出体：軽いブルームときらめき（掴んで動かせそうな手がかり） */
+function drawEditPadProjectileBloom(
+  ctx: CanvasRenderingContext2D,
+  ax: number,
+  ay: number,
+  rad: number,
+  nowMs: number
+) {
+  const pulse = 0.5 + 0.5 * Math.sin(nowMs * 0.0038);
+  const tw = 0.5 + 0.5 * Math.sin(nowMs * 0.0065 + 1.1);
+  const glint = 0.5 + 0.5 * Math.sin(nowMs * 0.011);
+  ctx.save();
+  const outerR = rad * (2.35 + pulse * 0.4);
+  const halo = ctx.createRadialGradient(ax, ay, rad * 0.15, ax, ay, outerR);
+  halo.addColorStop(0, "rgba(255,255,255,0)");
+  halo.addColorStop(0.5, `rgba(125, 211, 252, ${0.1 + tw * 0.1})`);
+  halo.addColorStop(0.82, `rgba(56, 189, 248, ${0.14 + pulse * 0.12})`);
+  halo.addColorStop(1, "rgba(14, 165, 233, 0)");
+  ctx.globalCompositeOperation = "lighter";
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(ax, ay, outerR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.shadowColor = `rgba(224, 242, 254, ${0.28 + pulse * 0.22})`;
+  ctx.shadowBlur = 5 + pulse * 9 + tw * 4;
+  ctx.fillStyle = `rgba(255,255,255,${0.045 + glint * 0.035})`;
+  ctx.beginPath();
+  ctx.arc(ax + Math.sin(nowMs * 0.009) * rad * 0.06, ay + Math.cos(nowMs * 0.008) * rad * 0.05, rad * 1.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 /** ゴール到達時の虹色グロー（`elapsedMs` で色相が流れる） */
 function drawLightDropRainbow(
   ctx: CanvasRenderingContext2D,
@@ -1276,10 +1309,17 @@ export default function ReflecShotGame() {
               ctx.lineTo(x + cellPx - 6, y + cellPx * 0.68);
               ctx.stroke();
             }
+            ctx.save();
+            ctx.font = `600 ${Math.max(9, Math.floor(cellPx * 0.19))}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillStyle = "rgba(253, 224, 71, 0.9)";
+            ctx.fillText(String(requiredGemsRef.current), gcx, y + cellPx * 0.24);
+            ctx.restore();
             const dotR = Math.max(2.2, cellPx * 0.054);
             const spacing =
               req <= 1 ? 0 : Math.min((cellPx * 0.78) / (req - 1), dotR * 2.75);
-            const rowYDots = gcy + cellPx * 0.12;
+            const rowYDots = gcy + cellPx * 0.14;
             for (let i = 0; i < req; i++) {
               const dx = req <= 1 ? gcx : gcx - (spacing * (req - 1)) / 2 + i * spacing;
               const lit = i < col;
@@ -1299,13 +1339,6 @@ export default function ReflecShotGame() {
                 ctx.stroke();
               }
             }
-            ctx.save();
-            ctx.font = `600 ${Math.max(9, Math.floor(cellPx * 0.19))}px sans-serif`;
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillStyle = "rgba(253, 224, 71, 0.88)";
-            ctx.fillText(String(requiredGemsRef.current), gcx, gcy + cellPx * 0.36);
-            ctx.restore();
             drawCellGappedBorder(ctx, x, y, cellPx, "#3d2529", openLenDraw);
             continue;
           }
@@ -1463,6 +1496,9 @@ export default function ReflecShotGame() {
       ctx.fill();
     }
 
+    if (phase === "edit") {
+      drawEditPadProjectileBloom(ctx, ballX, ballY, rad, now);
+    }
     if (useRainbowDrop) {
       drawLightDropRainbow(ctx, ballX, ballY, rad, rainbowElapsedMs);
     } else {
