@@ -39,6 +39,8 @@ import { translateReflecStatus } from "@/lib/i18n-runtime-status";
 const BASE_CELL_TRAVEL_MS = 280;
 const CHARGE_MS = 520;
 const SWIPE_MIN = 12;
+/** マス内バンパー記号（／＼－｜）のフォントサイズ = cellPx × この比率（従来 0.42 を 2 倍） */
+const BUMPER_GLYPH_SIZE_RATIO = 0.84;
 
 type Phase = "edit" | "move" | "won" | "lost";
 
@@ -651,7 +653,7 @@ export default function ReflecShotGame() {
         const b = st.bumpers.get(k);
         if (b) {
           ctx.fillStyle = "rgba(56, 189, 248, 0.95)";
-          ctx.font = `bold ${Math.floor(cellPx * 0.42)}px sans-serif`;
+          ctx.font = `bold ${Math.floor(cellPx * BUMPER_GLYPH_SIZE_RATIO)}px sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(bumperSymbol(b.display), x + cellPx / 2, y + cellPx / 2 + 1);
