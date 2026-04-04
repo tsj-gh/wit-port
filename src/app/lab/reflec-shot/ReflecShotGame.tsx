@@ -295,18 +295,14 @@ export default function ReflecShotGame() {
   const trailUiLastPushRef = useRef(0);
 
   const [swipeTrailPoints, setSwipeTrailPoints] = useState<{ x: number; y: number }[]>([]);
-  const [trailOpacity, setTrailOpacity] = useState(1);
-  const [bumperHighlightKeys, setBumperHighlightKeys] = useState(() => new Set<string>());
-  const bumperHighlightClearTimerRef = useRef<number | null>(null);
-  const scheduleBumperHighlightClear = useCallback(() => {
-    if (bumperHighlightClearTimerRef.current != null) {
-      window.clearTimeout(bumperHighlightClearTimerRef.current);
-    }
-    bumperHighlightClearTimerRef.current = window.setTimeout(() => {
-      bumperHighlightClearTimerRef.current = null;
-      setBumperHighlightKeys(new Set());
-      setBumperTick((t) => t + 1);
-    }, 500);
+  /** 軌跡は polyline のみフェード。SVG ルートは opacity:1 のままにしてキャンバス側が透けないようにする */
+  const [trailStrokeOpacity, setTrailStrokeOpacity] = useState(1);
+  /** 判定マス用の短いフラッシュ（時刻は draw の rAF で減衰） */
+  const bumperFlashRef = useRef<Map<string, { t0: number; ms: number }>>(new Map());
+
+  const pulseBumperFlash = useCallback((cellKey: string, ms = 280) => {
+    bumperFlashRef.current.set(cellKey, { t0: performance.now(), ms });
+    setBumperTick((t) => t + 1);
   }, []);
 
   const workerGenOpts = useMemo(
@@ -720,9 +716,19 @@ export default function ReflecShotGame() {
         const k = keyCell(c, r);
         const b = st.bumpers.get(k);
         if (b) {
-          ctx.fillStyle = bumperHighlightKeys.has(k)
-            ? "rgba(251, 191, 36, 0.95)"
-            : "rgba(56, 189, 248, 0.95)";
+          const fl = bumperFlashRef.current.get(k);
+          if (fl) {
+            const now = performance.now();
+            const u = (now - fl.t0) / fl.ms;
+            if (u >= 1) {
+              bumperFlashRef.current.delete(k);
+            } else {
+              const a = 0.48 * (1 - u) * (1 - u);
+              ctx.fillStyle = `rgba(255, 252, 240, ${a})`;
+              ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
+            }
+          }
+          ctx.fillStyle = "rgb(125, 211, 252)";
           ctx.font = `bold ${Math.floor(cellPx * BUMPER_GLYPH_SIZE_RATIO)}px sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
@@ -763,7 +769,7 @@ export default function ReflecShotGame() {
     ctx.fill();
 
     boardLayoutRef.current = { cellPx, ox, oy, rMin };
-  }, [bumperHighlightKeys, isDebugMode, isDevTj, showSolutionPath, stage]);
+  }, [isDebugMode, isDevTj, showSolutionPath, stage]);
 
   useEffect(() => {
     let raf = 0;
@@ -822,15 +828,11 @@ export default function ReflecShotGame() {
     const k = keyCell(cell.c, cell.r);
     const bumperHere = stage.bumpers.has(k);
     if (!isDevTj && !bumperHere) return;
-    if (bumperHighlightClearTimerRef.current != null) {
-      window.clearTimeout(bumperHighlightClearTimerRef.current);
-      bumperHighlightClearTimerRef.current = null;
-    }
-    setBumperHighlightKeys(new Set());
+    bumperFlashRef.current.clear();
     setBumperTick((t) => t + 1);
     e.currentTarget.setPointerCapture(e.pointerId);
     if (isDevTj) {
-      setTrailOpacity(1);
+      setTrailStrokeOpacity(1);
       setSwipeTrailPoints([{ x: px, y: py }]);
     }
     gestureRef.current = {
@@ -885,13 +887,8 @@ export default function ReflecShotGame() {
           trailTrimmedThisMove = true;
           flushTrailToUi(g.trailPoints);
           trailUiLastPushRef.current = performance.now();
-          setBumperHighlightKeys((prev) => {
-            const s = new Set(prev);
-            s.add(newKey);
-            return s;
-          });
-          setBumperTick((t) => t + 1);
-          scheduleBumperHighlightClear();
+          setTrailStrokeOpacity(1);
+          pulseBumperFlash(newKey);
         }
       }
       g.lastPathableKey = newKey;
@@ -933,7 +930,7 @@ export default function ReflecShotGame() {
     if (!st || phase !== "edit") {
       if (isDevTj) {
         flushTrailToUi([]);
-        setTrailOpacity(1);
+        setTrailStrokeOpacity(1);
       }
       return;
     }
@@ -971,27 +968,25 @@ export default function ReflecShotGame() {
         }
       }
       if (upApplied.length > 0) {
-        setBumperHighlightKeys((prev) => {
-          const s = new Set(prev);
-          upApplied.forEach((k) => s.add(k));
-          return s;
-        });
+        const t0 = performance.now();
+        for (const k of upApplied) {
+          bumperFlashRef.current.set(k, { t0, ms: 280 });
+        }
         setBumperTick((t) => t + 1);
       }
-      scheduleBumperHighlightClear();
 
       flushTrailToUi(g.trailPoints);
       window.setTimeout(() => {
-        setTrailOpacity(0);
+        setTrailStrokeOpacity(0);
         window.setTimeout(() => {
           flushTrailToUi([]);
-          setTrailOpacity(1);
+          setTrailStrokeOpacity(1);
         }, 320);
       }, 500);
     } else {
       if (isDevTj) {
         flushTrailToUi([]);
-        setTrailOpacity(1);
+        setTrailStrokeOpacity(1);
       }
       if (g.downOnBumper && g.maxDistSq <= TAP_MAX_SQ) {
         const b = st.bumpers.get(g.downCellKey);
@@ -1001,7 +996,7 @@ export default function ReflecShotGame() {
           const next = (cur + 1) % 8;
           b.display = BUMPER_KIND_BY_SECTOR[next]!;
           bumperSectorByKeyRef.current.set(g.downCellKey, next);
-          setBumperTick((t) => t + 1);
+          pulseBumperFlash(g.downCellKey);
         }
       }
     }
@@ -1011,7 +1006,7 @@ export default function ReflecShotGame() {
     gestureRef.current = null;
     if (isDevTj) {
       flushTrailToUi([]);
-      setTrailOpacity(1);
+      setTrailStrokeOpacity(1);
     }
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -1373,17 +1368,18 @@ export default function ReflecShotGame() {
               />
               {isDevTj && (
                 <svg
-                  className="pointer-events-none absolute inset-0 h-full w-full rounded-2xl transition-opacity duration-300 ease-out"
-                  style={{ opacity: trailOpacity }}
+                  className="pointer-events-none absolute inset-0 h-full w-full rounded-2xl"
                   aria-hidden
                 >
                   {swipeTrailPoints.length >= 2 && (
                     <polyline
                       fill="none"
-                      stroke="rgba(248, 250, 252, 0.92)"
+                      stroke="rgba(248, 250, 252, 0.88)"
                       strokeWidth={2.5}
                       strokeLinecap="round"
                       strokeLinejoin="round"
+                      className="transition-[stroke-opacity] duration-300 ease-out"
+                      style={{ strokeOpacity: trailStrokeOpacity }}
                       points={swipeTrailPoints.map((p) => `${p.x},${p.y}`).join(" ")}
                     />
                   )}
