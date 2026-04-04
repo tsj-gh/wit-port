@@ -100,6 +100,43 @@ function computeBoardLayout(st: GridStage, wPx: number, hPx: number) {
   return { cellPx, ox, oy, rMin };
 }
 
+type BoardLayoutMetrics = { cellPx: number; ox: number; oy: number; rMin: number };
+
+function startPadPixelRect(st: GridStage, layout: BoardLayoutMetrics) {
+  const c = st.startPad.c;
+  const r = st.startPad.r;
+  const left = layout.ox + c * layout.cellPx;
+  const top = layout.oy + (r - layout.rMin) * layout.cellPx;
+  return { left, top, right: left + layout.cellPx, bottom: top + layout.cellPx };
+}
+
+function pointInStartPadPixel(px: number, py: number, st: GridStage, layout: BoardLayoutMetrics) {
+  const pr = startPadPixelRect(st, layout);
+  return px >= pr.left && px <= pr.right && py >= pr.top && py <= pr.bottom;
+}
+
+function clampBallCenterInStartPad(
+  cx: number,
+  cy: number,
+  st: GridStage,
+  layout: BoardLayoutMetrics,
+  rad: number
+) {
+  const pr = startPadPixelRect(st, layout);
+  const minX = pr.left + rad + 0.5;
+  const maxX = pr.right - rad - 0.5;
+  const minY = pr.top + rad + 0.5;
+  const maxY = pr.bottom - rad - 0.5;
+  return {
+    x: Math.min(maxX, Math.max(minX, cx)),
+    y: Math.min(maxY, Math.max(minY, cy)),
+  };
+}
+
+/** Pres-Sure Judge 在庫のダブルタップ相当 */
+const START_PAD_DOUBLE_TAP_DT_MS = 350;
+const START_PAD_DOUBLE_TAP_DIST_SQ = 28 * 28;
+
 /** 辺の欠け長 = (マス1辺 + 射出体直径) / 2 付近にクランプ */
 function portalGapLengthPx(cellPx: number) {
   const diam = 2 * Math.max(6, cellPx * 0.22);
@@ -284,7 +321,20 @@ export default function ReflecShotGame() {
     toCell: { c: 0, r: 0 } as CellCoord,
     lerp01: 0,
     leftStart: false,
+    /** StartPad→最初のマスへの1セグメント目の描画起点（盤面 px）。キーフレーム完了で null */
+    padLaunchPx: null as { x: number; y: number } | null,
   });
+
+  /** 編集時の射出体中心（盤面 px）。null なら StartPad セル中心 */
+  const editBallPadRef = useRef<{ x: number; y: number } | null>(null);
+  const startPadDragRef = useRef<{
+    pointerId: number;
+    startPx: number;
+    startPy: number;
+    startBallX: number;
+    startBallY: number;
+  } | null>(null);
+  const lastStartPadTapRef = useRef<{ t: number; x: number; y: number } | null>(null);
 
   type ActiveGesture = {
     pointerId: number;
@@ -408,7 +458,9 @@ export default function ReflecShotGame() {
         toCell: { ...cloned.startPad },
         lerp01: 0,
         leftStart: false,
+        padLaunchPx: null,
       };
+      editBallPadRef.current = null;
       return;
     }
 
@@ -458,7 +510,9 @@ export default function ReflecShotGame() {
           toCell: { ...cloned.startPad },
           lerp01: 0,
           leftStart: false,
+          padLaunchPx: null,
         };
+        editBallPadRef.current = null;
       } catch {
         if (!cancelled) setStatusMsg("盤面の生成に失敗しました（Worker）");
       } finally {
@@ -585,6 +639,15 @@ export default function ReflecShotGame() {
   const beginShot = useCallback(() => {
     const st = stage;
     if (!st || phase !== "edit") return;
+    startPadDragRef.current = null;
+    lastStartPadTapRef.current = null;
+    const rect =
+      boardWrapRef.current?.getBoundingClientRect() ?? canvasRef.current?.getBoundingClientRect();
+    const wPx = Math.max(1, Math.floor(rect?.width ?? 1));
+    const hPx = Math.max(1, Math.floor(rect?.height ?? 1));
+    const layout = boardLayoutRef.current ?? computeBoardLayout(st, wPx, hPx);
+    const padC = cellCenterPx(st.startPad.c, st.startPad.r, layout.cellPx, layout.ox, layout.oy, layout.rMin);
+    const ball = editBallPadRef.current ?? padC;
     simRef.current = {
       logicalCell: { ...st.startPad },
       travelDir: shotEntryDir(st),
@@ -592,6 +655,7 @@ export default function ReflecShotGame() {
       toCell: { ...st.start },
       lerp01: 0,
       leftStart: false,
+      padLaunchPx: { x: ball.x, y: ball.y },
     };
     setPhase("move");
     setStatusMsg("");
@@ -630,9 +694,18 @@ export default function ReflecShotGame() {
       sim.lerp01 += dtMs / cellTravelMs;
       if (sim.lerp01 < 1) return;
 
+      const fromPadToFirst =
+        sim.fromCell.c === st.startPad.c &&
+        sim.fromCell.r === st.startPad.r &&
+        sim.toCell.c === st.start.c &&
+        sim.toCell.r === st.start.r;
+
       sim.lerp01 = 0;
       const B = { ...sim.toCell };
       sim.logicalCell = B;
+      if (fromPadToFirst) {
+        sim.padLaunchPx = null;
+      }
       const incoming: Dir = {
         dx: B.c - sim.fromCell.c,
         dy: sim.fromCell.r - B.r,
@@ -789,22 +862,39 @@ export default function ReflecShotGame() {
       ctx.stroke();
     }
 
-    const sim = simRef.current;
-    const f = sim.fromCell;
-    const t = sim.toCell;
-    const af = cellCenterPx(f.c, f.r, cellPx, ox, oy, rMin);
-    const at = cellCenterPx(t.c, t.r, cellPx, ox, oy, rMin);
-    const u = Math.min(1, sim.lerp01);
-    const ax = af.x + (at.x - af.x) * u;
-    const ay = af.y + (at.y - af.y) * u;
     const rad = Math.max(6, cellPx * 0.22);
     ctx.fillStyle = "#f8fafc";
-    ctx.beginPath();
-    ctx.arc(ax, ay, rad, 0, Math.PI * 2);
-    ctx.fill();
+    if (phase === "edit") {
+      const padC = cellCenterPx(st.startPad.c, st.startPad.r, cellPx, ox, oy, rMin);
+      const bp = editBallPadRef.current ?? padC;
+      ctx.beginPath();
+      ctx.arc(bp.x, bp.y, rad, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      const sim = simRef.current;
+      const f = sim.fromCell;
+      const t = sim.toCell;
+      let af = cellCenterPx(f.c, f.r, cellPx, ox, oy, rMin);
+      if (
+        sim.padLaunchPx &&
+        f.c === st.startPad.c &&
+        f.r === st.startPad.r &&
+        t.c === st.start.c &&
+        t.r === st.start.r
+      ) {
+        af = sim.padLaunchPx;
+      }
+      const at = cellCenterPx(t.c, t.r, cellPx, ox, oy, rMin);
+      const u = Math.min(1, sim.lerp01);
+      const ax = af.x + (at.x - af.x) * u;
+      const ay = af.y + (at.y - af.y) * u;
+      ctx.beginPath();
+      ctx.arc(ax, ay, rad, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     boardLayoutRef.current = { cellPx, ox, oy, rMin };
-  }, [isDebugMode, isDevTj, showSolutionPath, stage]);
+  }, [isDebugMode, isDevTj, phase, showSolutionPath, stage]);
 
   useEffect(() => {
     let raf = 0;
@@ -860,6 +950,45 @@ export default function ReflecShotGame() {
     const py = e.clientY - rect.top;
     if (px < 0 || py < 0 || px > rect.width || py > rect.height) return;
 
+    const wPxPad = Math.max(1, Math.floor(rect.width));
+    const hPxPad = Math.max(1, Math.floor(rect.height));
+    const layoutForPad = boardLayoutRef.current ?? computeBoardLayout(stage, wPxPad, hPxPad);
+
+    if (pointInStartPadPixel(px, py, stage, layoutForPad)) {
+      const now = performance.now();
+      const tap = lastStartPadTapRef.current;
+      if (
+        tap &&
+        now - tap.t <= START_PAD_DOUBLE_TAP_DT_MS &&
+        (px - tap.x) ** 2 + (py - tap.y) ** 2 <= START_PAD_DOUBLE_TAP_DIST_SQ
+      ) {
+        lastStartPadTapRef.current = null;
+        startPadDragRef.current = null;
+        beginShot();
+        return;
+      }
+      lastStartPadTapRef.current = { t: now, x: px, y: py };
+
+      const padC = cellCenterPx(
+        stage.startPad.c,
+        stage.startPad.r,
+        layoutForPad.cellPx,
+        layoutForPad.ox,
+        layoutForPad.oy,
+        layoutForPad.rMin
+      );
+      const cur = editBallPadRef.current ?? padC;
+      startPadDragRef.current = {
+        pointerId: e.pointerId,
+        startPx: px,
+        startPy: py,
+        startBallX: cur.x,
+        startBallY: cur.y,
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
+
     const cell = pixelToCell(px, py);
     const k = cell ? keyCell(cell.c, cell.r) : null;
     const bumperHere = k != null && stage.bumpers.has(k);
@@ -910,6 +1039,33 @@ export default function ReflecShotGame() {
   };
 
   const onPointerMove = (e: PointerEvent<HTMLCanvasElement>) => {
+    const spd = startPadDragRef.current;
+    if (spd && spd.pointerId === e.pointerId && phase === "edit" && stage) {
+      const rect = boardClientRect();
+      if (!rect) return;
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const wPx = Math.max(1, Math.floor(rect.width));
+      const hPx = Math.max(1, Math.floor(rect.height));
+      const layout = boardLayoutRef.current ?? computeBoardLayout(stage, wPx, hPx);
+      const rad = Math.max(6, layout.cellPx * 0.22);
+      const nx = spd.startBallX + (px - spd.startPx);
+      const ny = spd.startBallY + (py - spd.startPy);
+      const clamped = clampBallCenterInStartPad(nx, ny, stage, layout, rad);
+      editBallPadRef.current = clamped;
+      const pr = startPadPixelRect(stage, layout);
+      if (clamped.y - rad <= pr.top + 0.75) {
+        startPadDragRef.current = null;
+        try {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+        beginShot();
+      }
+      return;
+    }
+
     const g = gestureRef.current;
     if (!g || g.pointerId !== e.pointerId || !stage) return;
     const rect = boardClientRect();
@@ -1010,6 +1166,17 @@ export default function ReflecShotGame() {
   };
 
   const onPointerUp = (e: PointerEvent<HTMLCanvasElement>) => {
+    const spdUp = startPadDragRef.current;
+    if (spdUp && spdUp.pointerId === e.pointerId) {
+      startPadDragRef.current = null;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+
     const g = gestureRef.current;
     if (!g || g.pointerId !== e.pointerId) {
       try {
@@ -1148,6 +1315,9 @@ export default function ReflecShotGame() {
   };
 
   const onPointerCancel = (e: PointerEvent<HTMLCanvasElement>) => {
+    if (startPadDragRef.current?.pointerId === e.pointerId) {
+      startPadDragRef.current = null;
+    }
     gestureRef.current = null;
     if (isDevTj) {
       flushTrailToUi([]);
@@ -1190,6 +1360,7 @@ export default function ReflecShotGame() {
       toCell: { ...stage.startPad },
       lerp01: 0,
       leftStart: false,
+      padLaunchPx: null,
     };
   };
 
