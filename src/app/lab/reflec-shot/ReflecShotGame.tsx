@@ -247,8 +247,8 @@ function drawEditPadProjectileBloom(
   const tw = 0.5 + 0.5 * Math.sin(nowMs * 0.0065 + 1.1);
   const glint = 0.5 + 0.5 * Math.sin(nowMs * 0.011);
   ctx.save();
-  const outerR = rad * (2.35 + pulse * 0.4);
-  const halo = ctx.createRadialGradient(ax, ay, rad * 0.15, ax, ay, outerR);
+  const outerR = rad * (1.175 + pulse * 0.2);
+  const halo = ctx.createRadialGradient(ax, ay, rad * 0.075, ax, ay, outerR);
   halo.addColorStop(0, "rgba(255,255,255,0)");
   halo.addColorStop(0.5, `rgba(125, 211, 252, ${0.1 + tw * 0.1})`);
   halo.addColorStop(0.82, `rgba(56, 189, 248, ${0.14 + pulse * 0.12})`);
@@ -260,11 +260,49 @@ function drawEditPadProjectileBloom(
   ctx.fill();
   ctx.globalCompositeOperation = "source-over";
   ctx.shadowColor = `rgba(224, 242, 254, ${0.28 + pulse * 0.22})`;
-  ctx.shadowBlur = 5 + pulse * 9 + tw * 4;
+  ctx.shadowBlur = 2.5 + pulse * 4.5 + tw * 2;
   ctx.fillStyle = `rgba(255,255,255,${0.045 + glint * 0.035})`;
   ctx.beginPath();
-  ctx.arc(ax + Math.sin(nowMs * 0.009) * rad * 0.06, ay + Math.cos(nowMs * 0.008) * rad * 0.05, rad * 1.15, 0, Math.PI * 2);
+  ctx.arc(ax + Math.sin(nowMs * 0.009) * rad * 0.03, ay + Math.cos(nowMs * 0.008) * rad * 0.025, rad * 0.575, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+}
+
+/** 待機中の射出体：画面上向きの起動ヒント矢印（わずかにアニメーション） */
+function drawLaunchUpArrow(
+  ctx: CanvasRenderingContext2D,
+  bx: number,
+  by: number,
+  rad: number,
+  nowMs: number
+) {
+  const bob = Math.sin(nowMs * 0.0065) * (rad * 0.11);
+  const pulse = 0.52 + 0.48 * Math.sin(nowMs * 0.0042);
+  const shaftLen = rad * 2.05;
+  const tipY = by - rad * 1.02 - shaftLen + bob;
+  const baseY = by - rad * 0.82 + bob;
+  ctx.save();
+  ctx.strokeStyle = `rgba(165, 230, 255, ${0.78 * pulse})`;
+  ctx.lineWidth = Math.max(2, rad * 0.2);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = `rgba(56, 189, 248, ${0.42 * pulse})`;
+  ctx.shadowBlur = 3 + pulse * 6;
+  ctx.beginPath();
+  ctx.moveTo(bx, baseY);
+  ctx.lineTo(bx, tipY + rad * 0.32);
+  ctx.stroke();
+  const head = rad * 0.42;
+  ctx.beginPath();
+  ctx.moveTo(bx, tipY);
+  ctx.lineTo(bx - head, tipY + head * 1.12);
+  ctx.lineTo(bx + head, tipY + head * 1.12);
+  ctx.closePath();
+  ctx.fillStyle = `rgba(224, 249, 255, ${0.88 * pulse})`;
+  ctx.fill();
+  ctx.strokeStyle = `rgba(125, 211, 252, ${0.9 * pulse})`;
+  ctx.lineWidth = Math.max(1.2, rad * 0.1);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -351,6 +389,25 @@ function startPadPixelRect(st: GridStage, layout: BoardLayoutMetrics) {
 function pointInStartPadPixel(px: number, py: number, st: GridStage, layout: BoardLayoutMetrics) {
   const pr = startPadPixelRect(st, layout);
   return px >= pr.left && px <= pr.right && py >= pr.top && py <= pr.bottom;
+}
+
+/** 描画グリッド外周＋1マスぶんのマージン（背景）から軌跡開始を許可 */
+function pointInTrajectoryStartMargin(
+  px: number,
+  py: number,
+  st: GridStage,
+  layout: BoardLayoutMetrics
+) {
+  const { rMin, rMax } = stageRowRange(st);
+  const nRows = rMax - rMin + 1;
+  const gw = layout.cellPx * st.width;
+  const gh = layout.cellPx * nRows;
+  const m = layout.cellPx;
+  const left = layout.ox - m;
+  const top = layout.oy - m;
+  const right = layout.ox + gw + m;
+  const bottom = layout.oy + gh + m;
+  return px >= left && px <= right && py >= top && py <= bottom;
 }
 
 function clampBallCenterInStartPad(
@@ -578,6 +635,8 @@ export default function ReflecShotGame() {
   const [requiredGems, setRequiredGems] = useState(1);
   const [collectedGems, setCollectedGems] = useState(0);
   const [gemGoalFail, setGemGoalFail] = useState(false);
+  /** StartPad 上でタップ／ドラッグしたら上向き矢印を消す。盤面が変わると再表示 */
+  const [launchArrowDismissed, setLaunchArrowDismissed] = useState(false);
 
   const simRef = useRef({
     logicalCell: { c: 0, r: 0 } as CellCoord,
@@ -729,6 +788,7 @@ export default function ReflecShotGame() {
     finishAnimRef.current = null;
     lostBallAnimRef.current = null;
     setGemGoalFail(false);
+    setLaunchArrowDismissed(false);
   }, [stage]);
 
   useEffect(() => {
@@ -1498,6 +1558,9 @@ export default function ReflecShotGame() {
 
     if (phase === "edit") {
       drawEditPadProjectileBloom(ctx, ballX, ballY, rad, now);
+      if (!launchArrowDismissed && !startPadDragRef.current) {
+        drawLaunchUpArrow(ctx, ballX, ballY, rad, now);
+      }
     }
     if (useRainbowDrop) {
       drawLightDropRainbow(ctx, ballX, ballY, rad, rainbowElapsedMs);
@@ -1513,6 +1576,7 @@ export default function ReflecShotGame() {
     debugWallFxMs,
     isDebugMode,
     isDevTj,
+    launchArrowDismissed,
     phase,
     requiredGems,
     showSolutionPath,
@@ -1605,6 +1669,7 @@ export default function ReflecShotGame() {
     const layoutForPad = boardLayoutRef.current ?? computeBoardLayout(stage, wPxPad, hPxPad);
 
     if (pointInStartPadPixel(px, py, stage, layoutForPad)) {
+      setLaunchArrowDismissed(true);
       const now = performance.now();
       const tap = lastStartPadTapRef.current;
       if (
@@ -1640,9 +1705,11 @@ export default function ReflecShotGame() {
     }
 
     const cell = pixelToCell(px, py);
-    if (!cell) return;
-    const k = keyCell(cell.c, cell.r);
-    const bumperHere = stage.bumpers.has(k);
+    const inTrailMargin =
+      !cell && pointInTrajectoryStartMargin(px, py, stage, layoutForPad);
+    if (!cell && !inTrailMargin) return;
+    const k = cell ? keyCell(cell.c, cell.r) : null;
+    const bumperHere = k != null && stage.bumpers.has(k);
 
     cancelTrailFade();
     bumperFlashRef.current.clear();
@@ -1652,7 +1719,7 @@ export default function ReflecShotGame() {
     setSwipeTrailPoints([{ x: px, y: py }]);
     if (isDebugMode) setTjTrajectoryDebug(null);
     const passagesInit = new Map<string, { p: Pt; samples: Pt[]; c: number; r: number }>();
-    if (bumperHere) {
+    if (bumperHere && cell) {
       const wPx = Math.max(1, Math.floor(rect.width));
       const hPx = Math.max(1, Math.floor(rect.height));
       const layout0 = boardLayoutRef.current ?? computeBoardLayout(stage, wPx, hPx);
@@ -1960,6 +2027,7 @@ export default function ReflecShotGame() {
           const next = (cur + 1) % 8;
           b.display = BUMPER_KIND_BY_SECTOR[next]!;
           bumperSectorByKeyRef.current.set(dk, next);
+          pulseBumperFlash(dk, TRAJECTORY_BUMPER_FLASH_MS, "trajectory");
         }
       }
     }
@@ -2014,6 +2082,7 @@ export default function ReflecShotGame() {
     finishAnimRef.current = null;
     lostBallAnimRef.current = null;
     setGemGoalFail(false);
+    setLaunchArrowDismissed(false);
     setPrepSessionNonce((n) => n + 1);
     setPhase("edit");
     setStatusMsg("");
