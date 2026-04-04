@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import {
   applyBumper,
   BUMPER_KIND_BY_SECTOR,
-  directionToSector,
   sectorIndexForDisplayKind,
   swipeToBumperKind,
 } from "./bumperRules";
@@ -21,6 +20,7 @@ import {
   DIR,
   isAgentCell,
   keyCell,
+  parseKey,
   stageRowRange,
   unitOrthoDirBetween,
   type BumperKind,
@@ -40,6 +40,14 @@ import {
 } from "@/lib/gameLayout";
 import { useI18n } from "@/lib/i18n-context";
 import { translateReflecStatus } from "@/lib/i18n-runtime-status";
+import {
+  cellRectPx,
+  closestPointOnRectBoundary,
+  entryPointOnRect,
+  evaluateBumperPassage,
+  exitPointOnRect,
+  type Pt,
+} from "./trajectoryBumperFit";
 
 /** 1マス移動の基準時間（ms）。実効速度はこれを速度倍率で除算。 */
 const BASE_CELL_TRAVEL_MS = 280;
@@ -235,6 +243,17 @@ export default function ReflecShotGame() {
   const [debugGrade2Bend6MidSlider, setDebugGrade2Bend6MidSlider] = useState(3);
   /** devtj+DEBUG ON・Grade5+: Lv.4 生成。既定は R-Second（本番 Grade5 も同様）。 */
   const [debugLv4GenMode, setDebugLv4GenMode] = useState<"default" | "rFirst" | "rSecond">("rSecond");
+  /** devtj 軌跡判定: 弧長上限 = 対角線 × この倍率（既定 1.3） */
+  const [debugTjMaxArcFactor, setDebugTjMaxArcFactor] = useState(1.3);
+  const [tjTrajectoryDebug, setTjTrajectoryDebug] = useState<{
+    cellKey: string;
+    rejected?: "same-corner" | "arc-too-long";
+    picked?: BumperKind;
+    meanDists: Partial<Record<BumperKind, number>>;
+    similarities: Partial<Record<BumperKind, number>>;
+    arcLen?: number;
+    maxArcLimit?: number;
+  } | null>(null);
   const [hashInput, setHashInput] = useState("");
   const [layoutNonce, setLayoutNonce] = useState(0);
   const [stockPrefetchPaused, setStockPrefetchPaused] = useState(false);
@@ -281,7 +300,8 @@ export default function ReflecShotGame() {
     downOnBumper: boolean;
     /** 直前にいた pathable マス（盤外は null）。退出時にここを判定する */
     lastPathableKey: string | null;
-    bumperEntryVectors: Map<string, { dx: number; dy: number }>;
+    /** バンパーマスごとの入口 P とマス内軌跡サンプル */
+    passages: Map<string, { p: Pt; samples: Pt[]; c: number; r: number }>;
     orderedBumperKeys: string[];
     /** devtj: pointermove で既に向きを書き込んだマス（pointerup で二重適用しない） */
     devtjLiveAppliedKeys: Set<string>;
@@ -300,12 +320,19 @@ export default function ReflecShotGame() {
   /** 軌跡は polyline のみフェード。SVG ルートは opacity:1 のままにしてキャンバス側が透けないようにする */
   const [trailStrokeOpacity, setTrailStrokeOpacity] = useState(1);
   /** 判定マス用の短いフラッシュ（時刻は draw の rAF で減衰） */
-  const bumperFlashRef = useRef<Map<string, { t0: number; ms: number }>>(new Map());
+  const bumperFlashRef = useRef<Map<string, { t0: number; ms: number; mode?: "trajectory" }>>(new Map());
 
-  const pulseBumperFlash = useCallback((cellKey: string, ms = 280) => {
-    bumperFlashRef.current.set(cellKey, { t0: performance.now(), ms });
-    setBumperTick((t) => t + 1);
-  }, []);
+  const pulseBumperFlash = useCallback(
+    (cellKey: string, ms = 280, mode: "default" | "trajectory" = "default") => {
+      if (mode === "trajectory") {
+        bumperFlashRef.current.set(cellKey, { t0: performance.now(), ms, mode: "trajectory" });
+      } else {
+        bumperFlashRef.current.set(cellKey, { t0: performance.now(), ms });
+      }
+      setBumperTick((t) => t + 1);
+    },
+    []
+  );
 
   const workerGenOpts = useMemo(
     () =>
@@ -719,6 +746,7 @@ export default function ReflecShotGame() {
         const b = st.bumpers.get(k);
         if (b) {
           const fl = bumperFlashRef.current.get(k);
+          let glyphFill = "rgb(125, 211, 252)";
           if (fl) {
             const now = performance.now();
             const u = (now - fl.t0) / fl.ms;
@@ -726,11 +754,16 @@ export default function ReflecShotGame() {
               bumperFlashRef.current.delete(k);
             } else {
               const a = 0.48 * (1 - u) * (1 - u);
-              ctx.fillStyle = `rgba(255, 252, 240, ${a})`;
+              if (fl.mode === "trajectory") {
+                ctx.fillStyle = `rgba(34, 211, 238, ${a * 0.88})`;
+                glyphFill = "rgb(240, 249, 255)";
+              } else {
+                ctx.fillStyle = `rgba(255, 252, 240, ${a})`;
+              }
               ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
             }
           }
-          ctx.fillStyle = "rgb(125, 211, 252)";
+          ctx.fillStyle = glyphFill;
           ctx.font = `bold ${Math.floor(cellPx * BUMPER_GLYPH_SIZE_RATIO)}px sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
@@ -841,6 +874,20 @@ export default function ReflecShotGame() {
     if (isDevTj) {
       setTrailStrokeOpacity(1);
       setSwipeTrailPoints([{ x: px, y: py }]);
+      setTjTrajectoryDebug(null);
+    }
+    const passagesInit = new Map<string, { p: Pt; samples: Pt[]; c: number; r: number }>();
+    if (isDevTj && cell && bumperHere) {
+      const wPx = Math.max(1, Math.floor(rect.width));
+      const hPx = Math.max(1, Math.floor(rect.height));
+      const layout0 = boardLayoutRef.current ?? computeBoardLayout(stage, wPx, hPx);
+      const cr = cellRectPx(cell.c, cell.r, layout0);
+      passagesInit.set(k!, {
+        p: closestPointOnRectBoundary(px, py, cr),
+        samples: [{ x: px, y: py }],
+        c: cell.c,
+        r: cell.r,
+      });
     }
     gestureRef.current = {
       pointerId: e.pointerId,
@@ -854,7 +901,7 @@ export default function ReflecShotGame() {
       downCellKey: k,
       downOnBumper: bumperHere,
       lastPathableKey: k,
-      bumperEntryVectors: new Map(),
+      passages: passagesInit,
       orderedBumperKeys: [],
       devtjLiveAppliedKeys: new Set(),
       trailPoints: [{ x: px, y: py }],
@@ -876,36 +923,75 @@ export default function ReflecShotGame() {
     const newCell = pixelToCell(px, py);
     const newKey = newCell ? keyCell(newCell.c, newCell.r) : null;
     let trailTrimmedThisMove = false;
-    /** マスから抜けた／別マスへ入った境界：退出したマス oldKey を判定する */
+    /** マスから抜けた／別マスへ入った境界：退出したバンパーマスを軌跡フィットで判定 */
     if (newKey !== g.lastPathableKey) {
       const oldKey = g.lastPathableKey;
       const edx = px - g.prevX;
       const edy = py - g.prevY;
       const m2 = edx * edx + edy * edy;
-      if (
-        oldKey != null &&
-        stage.bumpers.has(oldKey) &&
-        m2 >= ENTRY_VEC_MIN_SQ &&
-        !g.bumperEntryVectors.has(oldKey)
-      ) {
-        g.bumperEntryVectors.set(oldKey, { dx: edx, dy: edy });
-        g.orderedBumperKeys.push(oldKey);
-        if (isDevTj) {
-          const b = stage.bumpers.get(oldKey);
-          if (b) {
-            b.display = swipeToBumperKind(edx, edy);
-            bumperSectorByKeyRef.current.set(oldKey, directionToSector(edx, edy));
+
+      if (oldKey != null) {
+        if (isDevTj && stage.bumpers.has(oldKey) && m2 >= ENTRY_VEC_MIN_SQ) {
+          const acc = g.passages.get(oldKey);
+          if (acc) {
+            const wPx = Math.max(1, Math.floor(rect.width));
+            const hPx = Math.max(1, Math.floor(rect.height));
+            const layoutMv = boardLayoutRef.current ?? computeBoardLayout(stage, wPx, hPx);
+            const rrect = cellRectPx(acc.c, acc.r, layoutMv);
+            const Q =
+              exitPointOnRect(g.prevX, g.prevY, px, py, rrect) ??
+              closestPointOnRectBoundary(g.prevX, g.prevY, rrect);
+            const res = evaluateBumperPassage(acc.p, Q, acc.samples, rrect, debugTjMaxArcFactor);
+            if (isDebugMode) {
+              setTjTrajectoryDebug({
+                cellKey: oldKey,
+                rejected: res.ok ? undefined : res.reason,
+                picked: res.ok ? res.kind : undefined,
+                meanDists: res.meanDists,
+                similarities: res.similarities,
+                arcLen: res.arcLen,
+                maxArcLimit: res.maxArcLimit,
+              });
+            }
+            g.trailPoints = [{ x: res.trimTo.x, y: res.trimTo.y }];
+            trailTrimmedThisMove = true;
+            flushTrailToUi(g.trailPoints);
+            trailUiLastPushRef.current = performance.now();
+            setTrailStrokeOpacity(1);
+            if (res.ok) {
+              const b = stage.bumpers.get(oldKey);
+              if (b) {
+                b.display = res.kind;
+                bumperSectorByKeyRef.current.set(oldKey, sectorIndexForDisplayKind(res.kind));
+              }
+              g.devtjLiveAppliedKeys.add(oldKey);
+              g.orderedBumperKeys.push(oldKey);
+              pulseBumperFlash(oldKey, 400, "trajectory");
+            }
           }
-          g.devtjLiveAppliedKeys.add(oldKey);
-          g.trailPoints = [{ x: px, y: py }];
-          trailTrimmedThisMove = true;
-          flushTrailToUi(g.trailPoints);
-          trailUiLastPushRef.current = performance.now();
-          setTrailStrokeOpacity(1);
-          pulseBumperFlash(oldKey);
         }
+        g.passages.delete(oldKey);
       }
+
+      if (isDevTj && newKey != null && stage.bumpers.has(newKey)) {
+        const wPx = Math.max(1, Math.floor(rect.width));
+        const hPx = Math.max(1, Math.floor(rect.height));
+        const layoutEn = boardLayoutRef.current ?? computeBoardLayout(stage, wPx, hPx);
+        const { c, r } = parseKey(newKey);
+        const nrect = cellRectPx(c, r, layoutEn);
+        const P =
+          entryPointOnRect(g.prevX, g.prevY, px, py, nrect) ?? closestPointOnRectBoundary(px, py, nrect);
+        g.passages.set(newKey, { p: P, samples: [], c, r });
+      }
+
       g.lastPathableKey = newKey;
+    }
+
+    if (isDevTj && newKey != null && stage.bumpers.has(newKey)) {
+      const acc = g.passages.get(newKey);
+      if (acc) {
+        acc.samples.push({ x: px, y: py });
+      }
     }
 
     if (isDevTj && !trailTrimmedThisMove) {
@@ -982,21 +1068,53 @@ export default function ReflecShotGame() {
         seen.add(linger);
       }
 
+      const rectUp = boardClientRect();
+      const wUp = Math.max(1, Math.floor(rectUp?.width ?? 1));
+      const hUp = Math.max(1, Math.floor(rectUp?.height ?? 1));
+      const layoutUp = boardLayoutRef.current ?? computeBoardLayout(st, wUp, hUp);
+
       const upApplied: string[] = [];
       for (const k of applyKeys) {
         if (g.devtjLiveAppliedKeys.has(k)) continue;
-        const v = g.bumperEntryVectors.get(k) ?? { dx: totalDx, dy: totalDy };
-        const b = st.bumpers.get(k);
-        if (b) {
-          b.display = swipeToBumperKind(v.dx, v.dy);
-          bumperSectorByKeyRef.current.set(k, directionToSector(v.dx, v.dy));
-          upApplied.push(k);
+        const acc = g.passages.get(k);
+        if (acc) {
+          const rrect = cellRectPx(acc.c, acc.r, layoutUp);
+          const Q = closestPointOnRectBoundary(g.lastX, g.lastY, rrect);
+          const res = evaluateBumperPassage(acc.p, Q, acc.samples, rrect, debugTjMaxArcFactor);
+          if (isDebugMode) {
+            setTjTrajectoryDebug({
+              cellKey: k,
+              rejected: res.ok ? undefined : res.reason,
+              picked: res.ok ? res.kind : undefined,
+              meanDists: res.meanDists,
+              similarities: res.similarities,
+              arcLen: res.arcLen,
+              maxArcLimit: res.maxArcLimit,
+            });
+          }
+          g.trailPoints = [{ x: res.trimTo.x, y: res.trimTo.y }];
+          if (res.ok) {
+            const b = st.bumpers.get(k);
+            if (b) {
+              b.display = res.kind;
+              bumperSectorByKeyRef.current.set(k, sectorIndexForDisplayKind(res.kind));
+              upApplied.push(k);
+            }
+          }
+        } else {
+          const b = st.bumpers.get(k);
+          if (b) {
+            b.display = swipeToBumperKind(totalDx, totalDy);
+            bumperSectorByKeyRef.current.set(k, sectorIndexForDisplayKind(b.display));
+            upApplied.push(k);
+          }
         }
+        g.passages.delete(k);
       }
       if (upApplied.length > 0) {
         const t0 = performance.now();
         for (const k of upApplied) {
-          bumperFlashRef.current.set(k, { t0, ms: 280 });
+          bumperFlashRef.current.set(k, { t0, ms: 400, mode: "trajectory" });
         }
         setBumperTick((t) => t + 1);
       }
@@ -1134,6 +1252,58 @@ export default function ReflecShotGame() {
                   className="flex-1 min-w-0 accent-sky-400"
                 />
                 <span className="tabular-nums w-10 text-right text-[10px] text-sky-200/90">{debugBallSpeedMult}×</span>
+              </div>
+              <div className="mt-2 flex flex-col gap-1 text-slate-400">
+                <span className="text-[10px] leading-tight text-slate-300">
+                  devtj 軌跡判定・弧長上限（対角線×倍率）
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={2.5}
+                    step={0.05}
+                    value={debugTjMaxArcFactor}
+                    onChange={(e) => setDebugTjMaxArcFactor(Number(e.target.value))}
+                    className="flex-1 min-w-0 accent-cyan-400"
+                  />
+                  <span className="tabular-nums w-12 text-right text-[10px] text-cyan-200/90">
+                    ×{debugTjMaxArcFactor.toFixed(2)}
+                  </span>
+                </div>
+                {tjTrajectoryDebug && (
+                  <div className="mt-1 rounded border border-white/10 bg-slate-900/80 p-2 text-[10px] leading-snug text-slate-300">
+                    <div className="font-semibold text-cyan-300/90">最終判定マス: {tjTrajectoryDebug.cellKey}</div>
+                    {tjTrajectoryDebug.rejected && (
+                      <div className="text-amber-300/90">却下: {tjTrajectoryDebug.rejected}</div>
+                    )}
+                    {tjTrajectoryDebug.picked && (
+                      <div className="text-emerald-300/90">採用: {tjTrajectoryDebug.picked}</div>
+                    )}
+                    {tjTrajectoryDebug.arcLen != null && tjTrajectoryDebug.maxArcLimit != null && (
+                      <div className="text-slate-400">
+                        弧長 {tjTrajectoryDebug.arcLen.toFixed(1)} / 上限 {tjTrajectoryDebug.maxArcLimit.toFixed(1)} px
+                      </div>
+                    )}
+                    <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-slate-400">
+                      {(["PIPE", "SLASH", "HYPHEN", "BACKSLASH"] as const).map((kind) => (
+                        <div key={kind} className="flex justify-between gap-1">
+                          <span>{kind}</span>
+                          <span className="tabular-nums text-slate-500">
+                            μ=
+                            {tjTrajectoryDebug.meanDists[kind] != null
+                              ? tjTrajectoryDebug.meanDists[kind]!.toFixed(3)
+                              : "—"}{" "}
+                            S=
+                            {tjTrajectoryDebug.similarities[kind] != null
+                              ? tjTrajectoryDebug.similarities[kind]!.toFixed(0)
+                              : "—"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               {grade === 4 && (
                 <div className="mt-2 flex flex-col gap-0.5 text-slate-400">
