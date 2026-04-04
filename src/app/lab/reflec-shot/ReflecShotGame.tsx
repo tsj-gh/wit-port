@@ -276,8 +276,10 @@ export default function ReflecShotGame() {
     lastX: number;
     lastY: number;
     maxDistSq: number;
-    downCellKey: string;
+    /** null = 盤外（pathable 外）から開始した devtj ジェスチャー */
+    downCellKey: string | null;
     downOnBumper: boolean;
+    /** 直前にいた pathable マス（盤外は null）。退出時にここを判定する */
     lastPathableKey: string | null;
     bumperEntryVectors: Map<string, { dx: number; dy: number }>;
     orderedBumperKeys: string[];
@@ -823,11 +825,16 @@ export default function ReflecShotGame() {
     if (!rect) return;
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
+    if (px < 0 || py < 0 || px > rect.width || py > rect.height) return;
+
     const cell = pixelToCell(px, py);
-    if (!cell) return;
-    const k = keyCell(cell.c, cell.r);
-    const bumperHere = stage.bumpers.has(k);
-    if (!isDevTj && !bumperHere) return;
+    const k = cell ? keyCell(cell.c, cell.r) : null;
+    const bumperHere = k != null && stage.bumpers.has(k);
+
+    if (!isDevTj) {
+      if (!cell || !bumperHere) return;
+    }
+
     bumperFlashRef.current.clear();
     setBumperTick((t) => t + 1);
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -869,26 +876,33 @@ export default function ReflecShotGame() {
     const newCell = pixelToCell(px, py);
     const newKey = newCell ? keyCell(newCell.c, newCell.r) : null;
     let trailTrimmedThisMove = false;
-    if (newKey && newKey !== g.lastPathableKey) {
+    /** マスから抜けた／別マスへ入った境界：退出したマス oldKey を判定する */
+    if (newKey !== g.lastPathableKey) {
+      const oldKey = g.lastPathableKey;
       const edx = px - g.prevX;
       const edy = py - g.prevY;
       const m2 = edx * edx + edy * edy;
-      if (stage.bumpers.has(newKey) && m2 >= ENTRY_VEC_MIN_SQ && !g.bumperEntryVectors.has(newKey)) {
-        g.bumperEntryVectors.set(newKey, { dx: edx, dy: edy });
-        g.orderedBumperKeys.push(newKey);
+      if (
+        oldKey != null &&
+        stage.bumpers.has(oldKey) &&
+        m2 >= ENTRY_VEC_MIN_SQ &&
+        !g.bumperEntryVectors.has(oldKey)
+      ) {
+        g.bumperEntryVectors.set(oldKey, { dx: edx, dy: edy });
+        g.orderedBumperKeys.push(oldKey);
         if (isDevTj) {
-          const b = stage.bumpers.get(newKey);
+          const b = stage.bumpers.get(oldKey);
           if (b) {
             b.display = swipeToBumperKind(edx, edy);
-            bumperSectorByKeyRef.current.set(newKey, directionToSector(edx, edy));
+            bumperSectorByKeyRef.current.set(oldKey, directionToSector(edx, edy));
           }
-          g.devtjLiveAppliedKeys.add(newKey);
+          g.devtjLiveAppliedKeys.add(oldKey);
           g.trailPoints = [{ x: px, y: py }];
           trailTrimmedThisMove = true;
           flushTrailToUi(g.trailPoints);
           trailUiLastPushRef.current = performance.now();
           setTrailStrokeOpacity(1);
-          pulseBumperFlash(newKey);
+          pulseBumperFlash(oldKey);
         }
       }
       g.lastPathableKey = newKey;
@@ -951,9 +965,21 @@ export default function ReflecShotGame() {
           applyKeys.push(k);
         }
       }
-      if (g.downOnBumper && !seen.has(g.downCellKey)) {
+      if (g.downOnBumper && g.downCellKey != null && !seen.has(g.downCellKey)) {
         applyKeys.unshift(g.downCellKey);
         seen.add(g.downCellKey);
+      }
+
+      /** 盤外開始→バンパーへ入ったが一度も抜けずに離した場合など、退出判定が一度も無いマスを up で確定 */
+      const linger = g.lastPathableKey;
+      if (
+        linger != null &&
+        st.bumpers.has(linger) &&
+        !g.devtjLiveAppliedKeys.has(linger) &&
+        !seen.has(linger)
+      ) {
+        applyKeys.push(linger);
+        seen.add(linger);
       }
 
       const upApplied: string[] = [];
@@ -988,15 +1014,16 @@ export default function ReflecShotGame() {
         flushTrailToUi([]);
         setTrailStrokeOpacity(1);
       }
-      if (g.downOnBumper && g.maxDistSq <= TAP_MAX_SQ) {
-        const b = st.bumpers.get(g.downCellKey);
+      if (g.downOnBumper && g.downCellKey != null && g.maxDistSq <= TAP_MAX_SQ) {
+        const dk = g.downCellKey;
+        const b = st.bumpers.get(dk);
         if (b) {
           const cur =
-            bumperSectorByKeyRef.current.get(g.downCellKey) ?? sectorIndexForDisplayKind(b.display);
+            bumperSectorByKeyRef.current.get(dk) ?? sectorIndexForDisplayKind(b.display);
           const next = (cur + 1) % 8;
           b.display = BUMPER_KIND_BY_SECTOR[next]!;
-          bumperSectorByKeyRef.current.set(g.downCellKey, next);
-          pulseBumperFlash(g.downCellKey);
+          bumperSectorByKeyRef.current.set(dk, next);
+          pulseBumperFlash(dk);
         }
       }
     }
