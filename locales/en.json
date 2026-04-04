@@ -46,13 +46,11 @@
   },
   "games": {
     "reflecShot": {
-      "fire": "Launch (to start)",
       "regenStage": "Regenerate stage",
       "autoSolve": "Auto-solve",
       "nextProblem": "Next puzzle",
       "retryEdit": "Re-edit & retry",
-      "footerBlurb": "Grid-logic prototype. Entry and goal sit on cells adjacent to open bottom/top edges; solve L/T shapes with bumpers (／＼－｜) and wall rules. Higher grades use larger boards.",
-      "phaseEdit": "Edit",
+      "phaseEdit": "Click a bumper to rotate its reflection direction by 45°. Launch the ball with a double-tap, double-click, or swipe.",
       "phaseMove": "In play",
       "phaseWon": "Cleared",
       "phaseLost": "Failed",

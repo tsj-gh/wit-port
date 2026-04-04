@@ -1693,16 +1693,20 @@ export default function ReflecShotGame() {
 
       <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
         <div className="flex w-full flex-col items-center">
-          <div className="mb-2 flex w-full justify-between text-sm font-semibold text-wit-text">
-            <span>
-              {phase === "edit"
-                ? t("games.reflecShot.phaseEdit")
-                : phase === "move"
+          <div className="mb-2 w-full text-wit-text">
+            {phase === "edit" ? (
+              <p className="text-xs font-normal leading-relaxed sm:text-sm">
+                {t("games.reflecShot.phaseEdit")}
+              </p>
+            ) : (
+              <span className="text-sm font-semibold">
+                {phase === "move"
                   ? t("games.reflecShot.phaseMove")
                   : phase === "won"
                     ? t("games.reflecShot.phaseWon")
                     : t("games.reflecShot.phaseLost")}
-            </span>
+              </span>
+            )}
           </div>
           {(statusMsg || boardLoadWait) && (
             <p
@@ -1792,14 +1796,6 @@ export default function ReflecShotGame() {
             </div>
           </div>
           <div className="shrink-0 w-full sm:w-auto flex flex-wrap gap-2 items-center text-sm">
-            <button
-              type="button"
-              className="rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-1 text-sky-200 hover:bg-sky-500/25"
-              onClick={beginShot}
-              disabled={phase !== "edit" || !stage}
-            >
-              {t("games.reflecShot.fire")}
-            </button>
             {phase === "won" && (
               <button
                 type="button"
@@ -1861,10 +1857,6 @@ export default function ReflecShotGame() {
         >
           <ReflecShotAdSlot slotIndex={2} isDebugMode={isDebugMode} />
         </div>
-
-        <p className="mt-3 text-sm leading-relaxed text-wit-muted">
-          {t("games.reflecShot.footerBlurb")}
-        </p>
       </section>
     </div>
   );
