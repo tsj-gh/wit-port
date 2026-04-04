@@ -23,6 +23,7 @@ import {
   DIR,
   isAgentCell,
   keyCell,
+  negateDir,
   parseKey,
   stageRowRange,
   unitOrthoDirBetween,
@@ -78,9 +79,30 @@ const MAX_GEM_PARTICLES = 44;
 const GEM_BURST_N = 9;
 const GEM_PARTICLE_TTL_MS = 520;
 const GOAL_SPARKLE_TTL_MS = 720;
+const WALL_SPARKLE_TTL_MS = 520;
+/** 宝石吸引の基準係数（`debugGemAttractMult` と掛け合わせる。既定 2 で従来比約 2 倍） */
+const BASE_GEM_ATTRACT = 0.0028;
+const DEFAULT_GEM_ATTRACT_MULT = 2;
+const DEFAULT_FINISH_FX_MS = 500;
 
 type GemParticle = { x: number; y: number; vx: number; vy: number; born: number };
 type GoalSparkle = { x: number; y: number; vx: number; vy: number; born: number };
+type WallSparkle = { x: number; y: number; vx: number; vy: number; born: number };
+
+type ArrivalResult =
+  | { kind: "goal" }
+  | { kind: "continue"; next: CellCoord; outDir: Dir }
+  | { kind: "lost"; wallDir: Dir };
+
+type FinishAnim =
+  | {
+      kind: "wallFx";
+      t0: number;
+      cell: CellCoord;
+      wallDir: Dir;
+      didSpawnWallSparks: boolean;
+    }
+  | { kind: "goalFx"; t0: number; cell: CellCoord };
 
 function pushGemBurst(arr: GemParticle[], cx: number, cy: number, now: number) {
   for (let i = 0; i < GEM_BURST_N; i++) {
@@ -110,6 +132,65 @@ function pushGoalSparkles(arr: GoalSparkle[], cx: number, cy: number, now: numbe
       born: now,
     });
   }
+}
+
+function pushWallSparks(arr: WallSparkle[], wx: number, wy: number, now: number) {
+  for (let i = 0; i < 18; i++) {
+    if (arr.length > 56) arr.shift();
+    const ang = Math.random() * Math.PI * 2;
+    const sp = 1.1 + Math.random() * 3.4;
+    arr.push({
+      x: wx + (Math.random() - 0.5) * 5,
+      y: wy + (Math.random() - 0.5) * 5,
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp,
+      born: now,
+    });
+  }
+}
+
+/** 画面 `Dir`（y 上向き正）→ キャンバス増分（y 下向き正） */
+function screenDirToPixelUnit(d: Dir): { px: number; py: number } {
+  return { px: d.dx, py: -d.dy };
+}
+
+function wallFxBallKinematics(
+  cellPx: number,
+  ox: number,
+  oy: number,
+  rMin: number,
+  cell: CellCoord,
+  wallDir: Dir,
+  rad: number,
+  t01: number
+): { x: number; y: number; tailDx: number; tailDy: number; tailActive: boolean } {
+  const cx = ox + cell.c * cellPx + cellPx / 2;
+  const cy = oy + (cell.r - rMin) * cellPx + cellPx / 2;
+  const { px, py } = screenDirToPixelUnit(wallDir);
+  const half = Math.max(2, cellPx / 2 - rad - 1.5);
+  const wx = cx + px * half;
+  const wy = cy + py * half;
+  const approachEnd = 0.38;
+  if (t01 < approachEnd) {
+    const u = t01 / approachEnd;
+    const e = 1 - (1 - u) ** 3;
+    return {
+      x: cx + (wx - cx) * e,
+      y: cy + (wy - cy) * e,
+      tailDx: wx - cx,
+      tailDy: wy - cy,
+      tailActive: true,
+    };
+  }
+  const v = (t01 - approachEnd) / (1 - approachEnd);
+  const bump = Math.sin(v * Math.PI) * (half * 0.24) * (1 - v * 0.45);
+  return {
+    x: wx - px * bump,
+    y: wy - py * bump,
+    tailDx: -px,
+    tailDy: -py,
+    tailActive: true,
+  };
 }
 
 function drawLightDrop(
@@ -152,7 +233,37 @@ function drawLightDrop(
   }
 }
 
-type Phase = "edit" | "move" | "won" | "lost";
+/** ゴール到達時の虹色グロー（`elapsedMs` で色相が流れる） */
+function drawLightDropRainbow(
+  ctx: CanvasRenderingContext2D,
+  ax: number,
+  ay: number,
+  rad: number,
+  elapsedMs: number
+) {
+  const hue0 = (elapsedMs * 0.14) % 360;
+  const g = ctx.createRadialGradient(ax, ay, 0, ax, ay, rad * 1.25);
+  g.addColorStop(0, "rgba(255,255,255,0.98)");
+  g.addColorStop(0.22, `hsla(${hue0}, 95%, 78%, 0.88)`);
+  g.addColorStop(0.48, `hsla(${(hue0 + 55) % 360}, 90%, 62%, 0.55)`);
+  g.addColorStop(0.78, `hsla(${(hue0 + 120) % 360}, 85%, 52%, 0.28)`);
+  g.addColorStop(1, `hsla(${(hue0 + 200) % 360}, 80%, 45%, 0.06)`);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(ax, ay, rad, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.save();
+  ctx.shadowColor = `hsla(${(hue0 + 40) % 360}, 100%, 70%, 0.55)`;
+  ctx.shadowBlur = 10 + 6 * Math.sin(elapsedMs * 0.018);
+  ctx.strokeStyle = `hsla(${(hue0 + 80) % 360}, 90%, 75%, 0.65)`;
+  ctx.lineWidth = Math.max(1.5, rad * 0.2);
+  ctx.beginPath();
+  ctx.arc(ax, ay, rad * 0.92, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+type Phase = "edit" | "move" | "wallFx" | "goalFx" | "won" | "lost";
 
 type BoardSurfaceSource = "stock" | "generated";
 
@@ -351,7 +462,7 @@ function bumperSymbol(k: BumperKind): string {
 }
 
 export default function ReflecShotGame() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const searchParams = useSearchParams();
   const isDevTj = searchParams.get("devtj") === "true";
 
@@ -370,6 +481,12 @@ export default function ReflecShotGame() {
   const [showSolutionPath, setShowSolutionPath] = useState(false);
   /** デバッグ時のみスライダーで変更。非デバッグ・非 devtj 時は 3.5 固定。 */
   const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(3.5);
+  /** 宝石パーティクル吸引: `BASE_GEM_ATTRACT` に掛ける倍率（既定 2 ≒ 従来単体の 2 倍） */
+  const [debugGemAttractMult, setDebugGemAttractMult] = useState(DEFAULT_GEM_ATTRACT_MULT);
+  /** 壁衝突〜失敗オーバーレイまでの演出時間（ms） */
+  const [debugWallFxMs, setDebugWallFxMs] = useState(DEFAULT_FINISH_FX_MS);
+  /** ゴール虹演出〜成功オーバーレイまでの時間（ms） */
+  const [debugGoalFxMs, setDebugGoalFxMs] = useState(DEFAULT_FINISH_FX_MS);
   /** devtj+DEBUG ON・G2 のみ Worker に渡す。2〜4 → 全体目標折れ 6〜8（`+4`）。 */
   const [debugGrade2Bend6MidSlider, setDebugGrade2Bend6MidSlider] = useState(3);
   /** devtj+DEBUG ON・Grade5+: Lv.4 生成。既定は R-Second（本番 Grade5 も同様）。 */
@@ -418,10 +535,17 @@ export default function ReflecShotGame() {
   const goalSparklesRef = useRef<GoalSparkle[]>([]);
   /** 条件達成時の演出用タイムスタンプ */
   const goalUnlockPulseRef = useRef(0);
+  const finishAnimRef = useRef<FinishAnim | null>(null);
+  const wallSparklesRef = useRef<WallSparkle[]>([]);
 
   const [requiredGems, setRequiredGems] = useState(1);
   const [collectedGems, setCollectedGems] = useState(0);
   const [gemGoalFail, setGemGoalFail] = useState(false);
+
+  const goalPadReflectionCaption = useMemo(() => {
+    const n = String(requiredGems);
+    return locale === "ja" ? `${n}回反射` : `${n} reflections`;
+  }, [locale, requiredGems]);
 
   const simRef = useRef({
     logicalCell: { c: 0, r: 0 } as CellCoord,
@@ -568,7 +692,9 @@ export default function ReflecShotGame() {
     setCollectedGems(0);
     gemParticlesRef.current.length = 0;
     goalSparklesRef.current.length = 0;
+    wallSparklesRef.current.length = 0;
     goalUnlockPulseRef.current = 0;
+    finishAnimRef.current = null;
     setGemGoalFail(false);
   }, [stage]);
 
@@ -790,7 +916,9 @@ export default function ReflecShotGame() {
     setCollectedGems(0);
     gemParticlesRef.current.length = 0;
     goalSparklesRef.current.length = 0;
+    wallSparklesRef.current.length = 0;
     goalUnlockPulseRef.current = 0;
+    finishAnimRef.current = null;
     setGemGoalFail(false);
     startPadDragRef.current = null;
     lastStartPadTapRef.current = null;
@@ -815,33 +943,74 @@ export default function ReflecShotGame() {
     setStatusMsg("");
   }, [phase, stage]);
 
-  const applyArrival = useCallback(
-    (st: GridStage, B: CellCoord, incomingDir: Dir): { next: CellCoord; outDir: Dir } | "goal" | "lost" => {
-      const sim = simRef.current;
-      if (B.c === st.goalPad.c && B.r === st.goalPad.r) {
-        return collectedGemsRef.current >= requiredGemsRef.current ? "goal" : "lost";
-      }
-      if (B.c === st.startPad.c && B.r === st.startPad.r && sim.leftStart) return "lost";
+  const applyArrival = useCallback((st: GridStage, B: CellCoord, incomingDir: Dir): ArrivalResult => {
+    const sim = simRef.current;
+    if (B.c === st.goalPad.c && B.r === st.goalPad.r) {
+      if (collectedGemsRef.current >= requiredGemsRef.current) return { kind: "goal" };
+      return { kind: "lost", wallDir: negateDir(incomingDir) };
+    }
+    if (B.c === st.startPad.c && B.r === st.startPad.r && sim.leftStart) {
+      return { kind: "lost", wallDir: negateDir(incomingDir) };
+    }
 
-      if (B.c !== st.startPad.c || B.r !== st.startPad.r) sim.leftStart = true;
+    if (B.c !== st.startPad.c || B.r !== st.startPad.r) sim.leftStart = true;
 
-      let dOut = incomingDir;
-      const bk = keyCell(B.c, B.r);
-      const bump = st.bumpers.get(bk);
-      if (bump) dOut = applyBumper(incomingDir, bump.display);
+    let dOut = incomingDir;
+    const bk = keyCell(B.c, B.r);
+    const bump = st.bumpers.get(bk);
+    if (bump) dOut = applyBumper(incomingDir, bump.display);
 
-      const next = addCell(B, dOut);
-      // 進行・跳ね返り後の隣マスが壁／盤外なら壁で追い返さず失敗（U ターンしない）
-      if (!isAgentCell(st, next.c, next.r)) return "lost";
-      return { next, outDir: dOut };
-    },
-    []
-  );
+    const next = addCell(B, dOut);
+    if (!isAgentCell(st, next.c, next.r)) return { kind: "lost", wallDir: dOut };
+    return { kind: "continue", next, outDir: dOut };
+  }, []);
 
   const tickSim = useCallback(
     (dtMs: number) => {
       const st = stage;
-      if (!st || phase !== "move") return;
+      if (!st) return;
+
+      if (phase === "wallFx" || phase === "goalFx") {
+        const fa = finishAnimRef.current;
+        const goalMs = isDevTj && isDebugMode ? debugGoalFxMs : DEFAULT_FINISH_FX_MS;
+        const wallMs = isDevTj && isDebugMode ? debugWallFxMs : DEFAULT_FINISH_FX_MS;
+        if (!fa) {
+          setPhase("edit");
+          return;
+        }
+        const dur = fa.kind === "goalFx" ? goalMs : wallMs;
+        const elapsed = performance.now() - fa.t0;
+
+        if (fa.kind === "wallFx" && !fa.didSpawnWallSparks && elapsed >= dur * 0.38) {
+          fa.didSpawnWallSparks = true;
+          const layout = boardLayoutRef.current;
+          if (layout) {
+            const radL = Math.max(6, layout.cellPx * 0.22);
+            const { px, py } = screenDirToPixelUnit(fa.wallDir);
+            const cx = layout.ox + fa.cell.c * layout.cellPx + layout.cellPx / 2;
+            const cy = layout.oy + (fa.cell.r - layout.rMin) * layout.cellPx + layout.cellPx / 2;
+            const half = Math.max(2, layout.cellPx / 2 - radL - 1.5);
+            const wpx = cx + px * half;
+            const wpy = cy + py * half;
+            pushWallSparks(wallSparklesRef.current, wpx, wpy, performance.now());
+          }
+        }
+
+        if (elapsed >= dur) {
+          finishAnimRef.current = null;
+          if (fa.kind === "wallFx") {
+            setShowFailOverlay(true);
+            setPhase("lost");
+          } else {
+            setShowFailOverlay(false);
+            setShowWinOverlay(true);
+            setPhase("won");
+          }
+        }
+        return;
+      }
+
+      if (phase !== "move") return;
 
       const speedMult = isDevTj && isDebugMode ? debugBallSpeedMult : 3.5;
       const cellTravelMs = BASE_CELL_TRAVEL_MS / speedMult;
@@ -892,24 +1061,31 @@ export default function ReflecShotGame() {
         setCollectedGems(collectedGemsRef.current);
       }
 
-      if (res === "goal") {
-        // 到達フレームで lerp=0 のとき描画は fromCell を参照するため、ゴールパッドにスナップする
+      if (res.kind === "goal") {
         sim.fromCell = { ...B };
         sim.toCell = { ...B };
+        sim.lerp01 = 1;
+        finishAnimRef.current = { kind: "goalFx", t0: performance.now(), cell: { ...B } };
         setShowFailOverlay(false);
-        setShowWinOverlay(true);
-        setPhase("won");
+        setPhase("goalFx");
         setStatusMsg("");
         return;
       }
-      if (res === "lost") {
+      if (res.kind === "lost") {
         sim.fromCell = { ...B };
         sim.toCell = { ...B };
+        sim.lerp01 = 1;
         sim.leftStart = false;
         setShowWinOverlay(false);
         setGemGoalFail(B.c === st.goalPad.c && B.r === st.goalPad.r);
-        setShowFailOverlay(true);
-        setPhase("lost");
+        finishAnimRef.current = {
+          kind: "wallFx",
+          t0: performance.now(),
+          cell: { ...B },
+          wallDir: res.wallDir,
+          didSpawnWallSparks: false,
+        };
+        setPhase("wallFx");
         setStatusMsg("");
         return;
       }
@@ -917,7 +1093,16 @@ export default function ReflecShotGame() {
       sim.toCell = res.next;
       sim.travelDir = res.outDir;
     },
-    [applyArrival, debugBallSpeedMult, isDebugMode, isDevTj, phase, stage]
+    [
+      applyArrival,
+      debugBallSpeedMult,
+      debugGoalFxMs,
+      debugWallFxMs,
+      isDebugMode,
+      isDevTj,
+      phase,
+      stage,
+    ]
   );
 
   useEffect(() => {
@@ -975,7 +1160,36 @@ export default function ReflecShotGame() {
     let tailDx = 0;
     let tailDy = 0;
     let tailActive = false;
-    if (phase === "edit") {
+    let useRainbowDrop = false;
+    let rainbowElapsedMs = 0;
+
+    const wallFxMs = isDevTj && isDebugMode ? debugWallFxMs : DEFAULT_FINISH_FX_MS;
+    const goalFxMs = isDevTj && isDebugMode ? debugGoalFxMs : DEFAULT_FINISH_FX_MS;
+
+    if (phase === "wallFx" || phase === "goalFx") {
+      const fa = finishAnimRef.current;
+      if (fa?.kind === "wallFx") {
+        const t01 = Math.min(1, (now - fa.t0) / wallFxMs);
+        const k = wallFxBallKinematics(cellPx, ox, oy, rMin, fa.cell, fa.wallDir, rad, t01);
+        ballX = k.x;
+        ballY = k.y;
+        tailDx = k.tailDx;
+        tailDy = k.tailDy;
+        tailActive = k.tailActive;
+      } else if (fa?.kind === "goalFx") {
+        const gc = cellCenterPx(fa.cell.c, fa.cell.r, cellPx, ox, oy, rMin);
+        ballX = gc.x;
+        ballY = gc.y;
+        tailActive = false;
+        useRainbowDrop = true;
+        rainbowElapsedMs = now - fa.t0;
+      } else {
+        const sim = simRef.current;
+        const c = cellCenterPx(sim.logicalCell.c, sim.logicalCell.r, cellPx, ox, oy, rMin);
+        ballX = c.x;
+        ballY = c.y;
+      }
+    } else if (phase === "edit") {
       const padC = cellCenterPx(st.startPad.c, st.startPad.r, cellPx, ox, oy, rMin);
       const bp = editBallPadRef.current ?? padC;
       ballX = bp.x;
@@ -1067,6 +1281,13 @@ export default function ReflecShotGame() {
                 ctx.stroke();
               }
             }
+            ctx.save();
+            ctx.font = `600 ${Math.max(9, Math.floor(cellPx * 0.19))}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillStyle = "rgba(253, 224, 71, 0.88)";
+            ctx.fillText(goalPadReflectionCaption, gcx, gcy + cellPx * 0.36);
+            ctx.restore();
             drawCellGappedBorder(ctx, x, y, cellPx, "#3d2529", openLenDraw);
             continue;
           }
@@ -1086,6 +1307,13 @@ export default function ReflecShotGame() {
           gg.addColorStop(1, "rgba(16, 185, 129, 0)");
           ctx.fillStyle = gg;
           ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
+          ctx.save();
+          ctx.font = `600 ${Math.max(9, Math.floor(cellPx * 0.17))}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = `rgba(204, 251, 241, ${0.65 + pulse * 0.2})`;
+          ctx.fillText(goalPadReflectionCaption, gcx, gcy + cellPx * 0.36);
+          ctx.restore();
           drawCellGappedBorder(ctx, x, y, cellPx, "#0f3d34", openLenDraw);
           continue;
         }
@@ -1162,8 +1390,11 @@ export default function ReflecShotGame() {
         continue;
       }
       if (age > 90) {
-        p.vx += (ballX - p.x) * 0.0028;
-        p.vy += (ballY - p.y) * 0.0028;
+        const attractM =
+          isDevTj && isDebugMode ? debugGemAttractMult : DEFAULT_GEM_ATTRACT_MULT;
+        const k = BASE_GEM_ATTRACT * attractM;
+        p.vx += (ballX - p.x) * k;
+        p.vy += (ballY - p.y) * k;
       }
       p.vx *= 0.986;
       p.vy *= 0.986;
@@ -1194,18 +1425,46 @@ export default function ReflecShotGame() {
       ctx.fill();
     }
 
-    drawLightDrop(
-      ctx,
-      ballX,
-      ballY,
-      rad,
-      tailDx,
-      tailDy,
-      tailActive ? 1 : 0
-    );
+    const wallSp = wallSparklesRef.current;
+    for (let i = wallSp.length - 1; i >= 0; i--) {
+      const p = wallSp[i]!;
+      const age = now - p.born;
+      if (age > WALL_SPARKLE_TTL_MS) {
+        wallSp.splice(i, 1);
+        continue;
+      }
+      p.vx *= 0.985;
+      p.vy *= 0.985;
+      p.vy += 0.04;
+      p.x += p.vx;
+      p.y += p.vy;
+      const a = 1 - age / WALL_SPARKLE_TTL_MS;
+      ctx.fillStyle = `rgba(254, 243, 199, ${0.55 * a})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (useRainbowDrop) {
+      drawLightDropRainbow(ctx, ballX, ballY, rad, rainbowElapsedMs);
+    } else {
+      drawLightDrop(ctx, ballX, ballY, rad, tailDx, tailDy, tailActive ? 1 : 0);
+    }
 
     boardLayoutRef.current = { cellPx, ox, oy, rMin };
-  }, [collectedGems, isDebugMode, isDevTj, phase, requiredGems, showSolutionPath, stage]);
+  }, [
+    collectedGems,
+    debugGemAttractMult,
+    debugGoalFxMs,
+    debugWallFxMs,
+    goalPadReflectionCaption,
+    isDebugMode,
+    isDevTj,
+    phase,
+    requiredGems,
+    showSolutionPath,
+    stage,
+  ]);
 
   useEffect(() => {
     let raf = 0;
@@ -1697,7 +1956,9 @@ export default function ReflecShotGame() {
     setCollectedGems(0);
     gemParticlesRef.current.length = 0;
     goalSparklesRef.current.length = 0;
+    wallSparklesRef.current.length = 0;
     goalUnlockPulseRef.current = 0;
+    finishAnimRef.current = null;
     setGemGoalFail(false);
     setPrepSessionNonce((n) => n + 1);
     setPhase("edit");
@@ -1772,6 +2033,51 @@ export default function ReflecShotGame() {
                   className="flex-1 min-w-0 accent-sky-400"
                 />
                 <span className="tabular-nums w-10 text-right text-[10px] text-sky-200/90">{debugBallSpeedMult}×</span>
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-slate-400">
+                <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugGemAttract")}</span>
+                <input
+                  type="range"
+                  min={0.25}
+                  max={5}
+                  step={0.25}
+                  value={debugGemAttractMult}
+                  onChange={(e) => setDebugGemAttractMult(Number(e.target.value))}
+                  className="flex-1 min-w-0 accent-amber-400"
+                />
+                <span className="tabular-nums w-10 text-right text-[10px] text-amber-200/90">
+                  {debugGemAttractMult}×
+                </span>
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-slate-400">
+                <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugWallFxMs")}</span>
+                <input
+                  type="range"
+                  min={100}
+                  max={2000}
+                  step={50}
+                  value={debugWallFxMs}
+                  onChange={(e) => setDebugWallFxMs(Number(e.target.value))}
+                  className="flex-1 min-w-0 accent-rose-400"
+                />
+                <span className="tabular-nums w-11 text-right text-[10px] text-rose-200/90">
+                  {debugWallFxMs}ms
+                </span>
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-slate-400">
+                <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugGoalFxMs")}</span>
+                <input
+                  type="range"
+                  min={100}
+                  max={2000}
+                  step={50}
+                  value={debugGoalFxMs}
+                  onChange={(e) => setDebugGoalFxMs(Number(e.target.value))}
+                  className="flex-1 min-w-0 accent-fuchsia-400"
+                />
+                <span className="tabular-nums w-11 text-right text-[10px] text-fuchsia-200/90">
+                  {debugGoalFxMs}ms
+                </span>
               </div>
               <div className="mt-2 flex flex-col gap-1 text-slate-400">
                 <span className="text-[10px] leading-tight text-slate-300">
@@ -2045,7 +2351,9 @@ export default function ReflecShotGame() {
             {/* 固定行高：進行中ラベル（左）＋準備タイマー（右）。text-sm / leading-5 */}
             <div className="grid w-full min-h-5 grid-cols-[1fr_auto] items-center gap-x-2 text-sm font-semibold leading-5 text-wit-text">
               <span className="min-w-0 truncate">
-                {phase === "move" ? t("games.reflecShot.phaseMove") : "\u00a0"}
+                {phase === "move" || phase === "wallFx" || phase === "goalFx"
+                  ? t("games.reflecShot.phaseMove")
+                  : "\u00a0"}
               </span>
               <span
                 className="inline-block min-w-[5.25ch] shrink-0 text-right font-mono tabular-nums tracking-tight"
@@ -2058,7 +2366,11 @@ export default function ReflecShotGame() {
             <div className="flex min-h-5 w-full items-center text-sm leading-5">
               {boardLoadWait && !statusMsg ? (
                 <span className="text-sky-300">{t("games.reflecShot.st.preparing")}</span>
-              ) : statusMsg && phase !== "won" && phase !== "lost" ? (
+              ) : statusMsg &&
+                phase !== "won" &&
+                phase !== "lost" &&
+                phase !== "wallFx" &&
+                phase !== "goalFx" ? (
                 <span className="text-wit-muted">{statusMsgDisplay}</span>
               ) : null}
             </div>
