@@ -648,6 +648,7 @@ export default function ReflecShotGame() {
     const layout = boardLayoutRef.current ?? computeBoardLayout(st, wPx, hPx);
     const padC = cellCenterPx(st.startPad.c, st.startPad.r, layout.cellPx, layout.ox, layout.oy, layout.rMin);
     const ball = editBallPadRef.current ?? padC;
+    editBallPadRef.current = null;
     simRef.current = {
       logicalCell: { ...st.startPad },
       travelDir: shotEntryDir(st),
@@ -1351,6 +1352,7 @@ export default function ReflecShotGame() {
   const retryAfterLoss = () => {
     if (!stage) return;
     refreshAds();
+    editBallPadRef.current = null;
     setPhase("edit");
     setStatusMsg("");
     simRef.current = {
