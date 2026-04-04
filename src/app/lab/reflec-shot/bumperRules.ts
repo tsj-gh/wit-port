@@ -69,14 +69,14 @@ export function diagonalBumperForTurn(dIn: Dir, dOut: Dir): "SLASH" | "BACKSLASH
 }
 
 /**
- * スワイプ（キャンバス: x 右+, y **下**+）→ 画面上 y 上+ に直した 8 セクタ（0..7）のインデックス。
- * セクタ 0 は右向き（東）を基準に 45° 刻み。
+ * スワイプ方位（`directionToSector` の 0..7、東から 45° 刻み）→ バンパー種。
+ * [0]〜[3] と [4]〜[7] は Pipe→Slash→Hyphen→Backslash の同一パターン（将来 [0] と [4] の Pipe を別機能に分ける前提）。
  */
 export const BUMPER_KIND_BY_SECTOR: readonly BumperKind[] = [
   "PIPE",
-  "BACKSLASH",
-  "HYPHEN",
   "SLASH",
+  "HYPHEN",
+  "BACKSLASH",
   "PIPE",
   "SLASH",
   "HYPHEN",
