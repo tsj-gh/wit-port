@@ -80,10 +80,12 @@ const GEM_BURST_N = 9;
 const GEM_PARTICLE_TTL_MS = 520;
 const GOAL_SPARKLE_TTL_MS = 720;
 const WALL_SPARKLE_TTL_MS = 520;
-/** 宝石吸引の基準係数（`debugGemAttractMult` と掛け合わせる。既定 2 で従来比約 2 倍） */
+/** 宝石吸引の基準係数（`debugGemAttractMult` と掛け合わせる） */
 const BASE_GEM_ATTRACT = 0.0028;
-const DEFAULT_GEM_ATTRACT_MULT = 2;
-const DEFAULT_FINISH_FX_MS = 500;
+const DEFAULT_GEM_ATTRACT_MULT = 5;
+const DEFAULT_WALL_FX_MS = 500;
+const DEFAULT_GOAL_FX_MS = 300;
+const DEFAULT_BALL_SPEED_MULT = 2.5;
 
 type GemParticle = { x: number; y: number; vx: number; vy: number; born: number };
 type GoalSparkle = { x: number; y: number; vx: number; vy: number; born: number };
@@ -462,7 +464,7 @@ function bumperSymbol(k: BumperKind): string {
 }
 
 export default function ReflecShotGame() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const isDevTj = searchParams.get("devtj") === "true";
 
@@ -480,13 +482,13 @@ export default function ReflecShotGame() {
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
   const [showSolutionPath, setShowSolutionPath] = useState(false);
   /** デバッグ時のみスライダーで変更。非デバッグ・非 devtj 時は 3.5 固定。 */
-  const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(3.5);
-  /** 宝石パーティクル吸引: `BASE_GEM_ATTRACT` に掛ける倍率（既定 2 ≒ 従来単体の 2 倍） */
+  const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(DEFAULT_BALL_SPEED_MULT);
+  /** 宝石パーティクル吸引: `BASE_GEM_ATTRACT` に掛ける倍率 */
   const [debugGemAttractMult, setDebugGemAttractMult] = useState(DEFAULT_GEM_ATTRACT_MULT);
   /** 壁衝突〜失敗オーバーレイまでの演出時間（ms） */
-  const [debugWallFxMs, setDebugWallFxMs] = useState(DEFAULT_FINISH_FX_MS);
+  const [debugWallFxMs, setDebugWallFxMs] = useState(DEFAULT_WALL_FX_MS);
   /** ゴール虹演出〜成功オーバーレイまでの時間（ms） */
-  const [debugGoalFxMs, setDebugGoalFxMs] = useState(DEFAULT_FINISH_FX_MS);
+  const [debugGoalFxMs, setDebugGoalFxMs] = useState(DEFAULT_GOAL_FX_MS);
   /** devtj+DEBUG ON・G2 のみ Worker に渡す。2〜4 → 全体目標折れ 6〜8（`+4`）。 */
   const [debugGrade2Bend6MidSlider, setDebugGrade2Bend6MidSlider] = useState(3);
   /** devtj+DEBUG ON・Grade5+: Lv.4 生成。既定は R-Second（本番 Grade5 も同様）。 */
@@ -537,15 +539,12 @@ export default function ReflecShotGame() {
   const goalUnlockPulseRef = useRef(0);
   const finishAnimRef = useRef<FinishAnim | null>(null);
   const wallSparklesRef = useRef<WallSparkle[]>([]);
+  /** 失敗確定後も壁ヒット最終姿勢を描画する（リサイズ時は毎フレーム再計算） */
+  const lostBallAnimRef = useRef<{ cell: CellCoord; wallDir: Dir } | null>(null);
 
   const [requiredGems, setRequiredGems] = useState(1);
   const [collectedGems, setCollectedGems] = useState(0);
   const [gemGoalFail, setGemGoalFail] = useState(false);
-
-  const goalPadReflectionCaption = useMemo(() => {
-    const n = String(requiredGems);
-    return locale === "ja" ? `${n}回反射` : `${n} reflections`;
-  }, [locale, requiredGems]);
 
   const simRef = useRef({
     logicalCell: { c: 0, r: 0 } as CellCoord,
@@ -695,6 +694,7 @@ export default function ReflecShotGame() {
     wallSparklesRef.current.length = 0;
     goalUnlockPulseRef.current = 0;
     finishAnimRef.current = null;
+    lostBallAnimRef.current = null;
     setGemGoalFail(false);
   }, [stage]);
 
@@ -919,6 +919,7 @@ export default function ReflecShotGame() {
     wallSparklesRef.current.length = 0;
     goalUnlockPulseRef.current = 0;
     finishAnimRef.current = null;
+    lostBallAnimRef.current = null;
     setGemGoalFail(false);
     startPadDragRef.current = null;
     lastStartPadTapRef.current = null;
@@ -972,9 +973,10 @@ export default function ReflecShotGame() {
 
       if (phase === "wallFx" || phase === "goalFx") {
         const fa = finishAnimRef.current;
-        const goalMs = isDevTj && isDebugMode ? debugGoalFxMs : DEFAULT_FINISH_FX_MS;
-        const wallMs = isDevTj && isDebugMode ? debugWallFxMs : DEFAULT_FINISH_FX_MS;
+        const goalMs = isDevTj && isDebugMode ? debugGoalFxMs : DEFAULT_GOAL_FX_MS;
+        const wallMs = isDevTj && isDebugMode ? debugWallFxMs : DEFAULT_WALL_FX_MS;
         if (!fa) {
+          lostBallAnimRef.current = null;
           setPhase("edit");
           return;
         }
@@ -999,6 +1001,7 @@ export default function ReflecShotGame() {
         if (elapsed >= dur) {
           finishAnimRef.current = null;
           if (fa.kind === "wallFx") {
+            lostBallAnimRef.current = { cell: { ...fa.cell }, wallDir: fa.wallDir };
             setShowFailOverlay(true);
             setPhase("lost");
           } else {
@@ -1012,7 +1015,7 @@ export default function ReflecShotGame() {
 
       if (phase !== "move") return;
 
-      const speedMult = isDevTj && isDebugMode ? debugBallSpeedMult : 3.5;
+      const speedMult = isDevTj && isDebugMode ? debugBallSpeedMult : DEFAULT_BALL_SPEED_MULT;
       const cellTravelMs = BASE_CELL_TRAVEL_MS / speedMult;
 
       const sim = simRef.current;
@@ -1163,8 +1166,8 @@ export default function ReflecShotGame() {
     let useRainbowDrop = false;
     let rainbowElapsedMs = 0;
 
-    const wallFxMs = isDevTj && isDebugMode ? debugWallFxMs : DEFAULT_FINISH_FX_MS;
-    const goalFxMs = isDevTj && isDebugMode ? debugGoalFxMs : DEFAULT_FINISH_FX_MS;
+    const wallFxMs = isDevTj && isDebugMode ? debugWallFxMs : DEFAULT_WALL_FX_MS;
+    const goalFxMs = isDevTj && isDebugMode ? debugGoalFxMs : DEFAULT_GOAL_FX_MS;
 
     if (phase === "wallFx" || phase === "goalFx") {
       const fa = finishAnimRef.current;
@@ -1194,6 +1197,21 @@ export default function ReflecShotGame() {
       const bp = editBallPadRef.current ?? padC;
       ballX = bp.x;
       ballY = bp.y;
+    } else if (phase === "lost") {
+      const lb = lostBallAnimRef.current;
+      if (lb) {
+        const k = wallFxBallKinematics(cellPx, ox, oy, rMin, lb.cell, lb.wallDir, rad, 1);
+        ballX = k.x;
+        ballY = k.y;
+        tailDx = k.tailDx;
+        tailDy = k.tailDy;
+        tailActive = false;
+      } else {
+        const sim = simRef.current;
+        const c = cellCenterPx(sim.logicalCell.c, sim.logicalCell.r, cellPx, ox, oy, rMin);
+        ballX = c.x;
+        ballY = c.y;
+      }
     } else {
       const sim = simRef.current;
       const f = sim.fromCell;
@@ -1286,7 +1304,7 @@ export default function ReflecShotGame() {
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillStyle = "rgba(253, 224, 71, 0.88)";
-            ctx.fillText(goalPadReflectionCaption, gcx, gcy + cellPx * 0.36);
+            ctx.fillText(String(requiredGemsRef.current), gcx, gcy + cellPx * 0.36);
             ctx.restore();
             drawCellGappedBorder(ctx, x, y, cellPx, "#3d2529", openLenDraw);
             continue;
@@ -1312,7 +1330,7 @@ export default function ReflecShotGame() {
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillStyle = `rgba(204, 251, 241, ${0.65 + pulse * 0.2})`;
-          ctx.fillText(goalPadReflectionCaption, gcx, gcy + cellPx * 0.36);
+          ctx.fillText(String(requiredGemsRef.current), gcx, gcy + cellPx * 0.36);
           ctx.restore();
           drawCellGappedBorder(ctx, x, y, cellPx, "#0f3d34", openLenDraw);
           continue;
@@ -1457,7 +1475,6 @@ export default function ReflecShotGame() {
     debugGemAttractMult,
     debugGoalFxMs,
     debugWallFxMs,
-    goalPadReflectionCaption,
     isDebugMode,
     isDevTj,
     phase,
@@ -1959,6 +1976,7 @@ export default function ReflecShotGame() {
     wallSparklesRef.current.length = 0;
     goalUnlockPulseRef.current = 0;
     finishAnimRef.current = null;
+    lostBallAnimRef.current = null;
     setGemGoalFail(false);
     setPrepSessionNonce((n) => n + 1);
     setPhase("edit");
@@ -2038,8 +2056,8 @@ export default function ReflecShotGame() {
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugGemAttract")}</span>
                 <input
                   type="range"
-                  min={0.25}
-                  max={5}
+                  min={1}
+                  max={7.5}
                   step={0.25}
                   value={debugGemAttractMult}
                   onChange={(e) => setDebugGemAttractMult(Number(e.target.value))}
@@ -2412,8 +2430,7 @@ export default function ReflecShotGame() {
           </div>
           {phase === "edit" && (
             <div className="mb-0 mt-2 w-full text-xs font-normal leading-relaxed text-wit-text sm:text-sm">
-              <p className="whitespace-pre-line">{t("games.reflecShot.phaseEdit")}</p>
-              <p className="mt-1 whitespace-pre-line">{t("games.reflecShot.phaseEditSwipe")}</p>
+              <p className="whitespace-pre-line">{t("games.reflecShot.boardHelp")}</p>
             </div>
           )}
         </div>
