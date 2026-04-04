@@ -281,6 +281,8 @@ export default function ReflecShotGame() {
     lastPathableKey: string | null;
     bumperEntryVectors: Map<string, { dx: number; dy: number }>;
     orderedBumperKeys: string[];
+    /** devtj: pointermove で既に向きを書き込んだマス（pointerup で二重適用しない） */
+    devtjLiveAppliedKeys: Set<string>;
     trailPoints: { x: number; y: number }[];
   };
 
@@ -295,6 +297,17 @@ export default function ReflecShotGame() {
   const [swipeTrailPoints, setSwipeTrailPoints] = useState<{ x: number; y: number }[]>([]);
   const [trailOpacity, setTrailOpacity] = useState(1);
   const [bumperHighlightKeys, setBumperHighlightKeys] = useState(() => new Set<string>());
+  const bumperHighlightClearTimerRef = useRef<number | null>(null);
+  const scheduleBumperHighlightClear = useCallback(() => {
+    if (bumperHighlightClearTimerRef.current != null) {
+      window.clearTimeout(bumperHighlightClearTimerRef.current);
+    }
+    bumperHighlightClearTimerRef.current = window.setTimeout(() => {
+      bumperHighlightClearTimerRef.current = null;
+      setBumperHighlightKeys(new Set());
+      setBumperTick((t) => t + 1);
+    }, 500);
+  }, []);
 
   const workerGenOpts = useMemo(
     () =>
@@ -809,6 +822,12 @@ export default function ReflecShotGame() {
     const k = keyCell(cell.c, cell.r);
     const bumperHere = stage.bumpers.has(k);
     if (!isDevTj && !bumperHere) return;
+    if (bumperHighlightClearTimerRef.current != null) {
+      window.clearTimeout(bumperHighlightClearTimerRef.current);
+      bumperHighlightClearTimerRef.current = null;
+    }
+    setBumperHighlightKeys(new Set());
+    setBumperTick((t) => t + 1);
     e.currentTarget.setPointerCapture(e.pointerId);
     if (isDevTj) {
       setTrailOpacity(1);
@@ -828,6 +847,7 @@ export default function ReflecShotGame() {
       lastPathableKey: k,
       bumperEntryVectors: new Map(),
       orderedBumperKeys: [],
+      devtjLiveAppliedKeys: new Set(),
       trailPoints: [{ x: px, y: py }],
     };
     trailUiLastPushRef.current = performance.now();
@@ -844,17 +864,9 @@ export default function ReflecShotGame() {
     const dyFromStart = py - g.startY;
     g.maxDistSq = Math.max(g.maxDistSq, dxFromStart * dxFromStart + dyFromStart * dyFromStart);
 
-    if (isDevTj) {
-      g.trailPoints.push({ x: px, y: py });
-      const now = performance.now();
-      if (now - trailUiLastPushRef.current >= 24) {
-        trailUiLastPushRef.current = now;
-        flushTrailToUi(g.trailPoints);
-      }
-    }
-
     const newCell = pixelToCell(px, py);
     const newKey = newCell ? keyCell(newCell.c, newCell.r) : null;
+    let trailTrimmedThisMove = false;
     if (newKey && newKey !== g.lastPathableKey) {
       const edx = px - g.prevX;
       const edy = py - g.prevY;
@@ -862,8 +874,36 @@ export default function ReflecShotGame() {
       if (stage.bumpers.has(newKey) && m2 >= ENTRY_VEC_MIN_SQ && !g.bumperEntryVectors.has(newKey)) {
         g.bumperEntryVectors.set(newKey, { dx: edx, dy: edy });
         g.orderedBumperKeys.push(newKey);
+        if (isDevTj) {
+          const b = stage.bumpers.get(newKey);
+          if (b) {
+            b.display = swipeToBumperKind(edx, edy);
+            bumperSectorByKeyRef.current.set(newKey, directionToSector(edx, edy));
+          }
+          g.devtjLiveAppliedKeys.add(newKey);
+          g.trailPoints = [{ x: px, y: py }];
+          trailTrimmedThisMove = true;
+          flushTrailToUi(g.trailPoints);
+          trailUiLastPushRef.current = performance.now();
+          setBumperHighlightKeys((prev) => {
+            const s = new Set(prev);
+            s.add(newKey);
+            return s;
+          });
+          setBumperTick((t) => t + 1);
+          scheduleBumperHighlightClear();
+        }
       }
       g.lastPathableKey = newKey;
+    }
+
+    if (isDevTj && !trailTrimmedThisMove) {
+      g.trailPoints.push({ x: px, y: py });
+      const now = performance.now();
+      if (now - trailUiLastPushRef.current >= 24) {
+        trailUiLastPushRef.current = now;
+        flushTrailToUi(g.trailPoints);
+      }
     }
 
     g.prevX = px;
@@ -919,22 +959,26 @@ export default function ReflecShotGame() {
         seen.add(g.downCellKey);
       }
 
-      if (applyKeys.length > 0) {
-        for (const k of applyKeys) {
-          const v = g.bumperEntryVectors.get(k) ?? { dx: totalDx, dy: totalDy };
-          const b = st.bumpers.get(k);
-          if (b) {
-            b.display = swipeToBumperKind(v.dx, v.dy);
-            bumperSectorByKeyRef.current.set(k, directionToSector(v.dx, v.dy));
-          }
+      const upApplied: string[] = [];
+      for (const k of applyKeys) {
+        if (g.devtjLiveAppliedKeys.has(k)) continue;
+        const v = g.bumperEntryVectors.get(k) ?? { dx: totalDx, dy: totalDy };
+        const b = st.bumpers.get(k);
+        if (b) {
+          b.display = swipeToBumperKind(v.dx, v.dy);
+          bumperSectorByKeyRef.current.set(k, directionToSector(v.dx, v.dy));
+          upApplied.push(k);
         }
-        setBumperHighlightKeys(new Set(applyKeys));
-        setBumperTick((t) => t + 1);
-        window.setTimeout(() => {
-          setBumperHighlightKeys(new Set());
-          setBumperTick((t) => t + 1);
-        }, 500);
       }
+      if (upApplied.length > 0) {
+        setBumperHighlightKeys((prev) => {
+          const s = new Set(prev);
+          upApplied.forEach((k) => s.add(k));
+          return s;
+        });
+        setBumperTick((t) => t + 1);
+      }
+      scheduleBumperHighlightClear();
 
       flushTrailToUi(g.trailPoints);
       window.setTimeout(() => {
@@ -1336,7 +1380,7 @@ export default function ReflecShotGame() {
                   {swipeTrailPoints.length >= 2 && (
                     <polyline
                       fill="none"
-                      stroke="rgba(56, 189, 248, 0.9)"
+                      stroke="rgba(248, 250, 252, 0.92)"
                       strokeWidth={2.5}
                       strokeLinecap="round"
                       strokeLinejoin="round"
