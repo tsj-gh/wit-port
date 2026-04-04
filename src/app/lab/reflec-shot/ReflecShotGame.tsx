@@ -316,6 +316,10 @@ export default function ReflecShotGame() {
     !stockPrefetchPaused
   );
   const [boardLoadWait, setBoardLoadWait] = useState(false);
+  /** 盤面キー変更・やり直しのたびに増やし、編集フェーズの準備タイマーを 0 から再開する */
+  const [prepSessionNonce, setPrepSessionNonce] = useState(0);
+  const [prepMs, setPrepMs] = useState(0);
+  const lastStagePrepKeyRef = useRef<string>("");
 
   const simRef = useRef({
     logicalCell: { c: 0, r: 0 } as CellCoord,
@@ -418,6 +422,28 @@ export default function ReflecShotGame() {
     generateStageInWorker,
     takeBoardForGrade,
   };
+
+  useEffect(() => {
+    if (!stage) {
+      lastStagePrepKeyRef.current = "";
+      return;
+    }
+    const key = `${stage.seed >>> 0}-${stage.grade}-${stage.width}x${stage.height}`;
+    if (lastStagePrepKeyRef.current !== key) {
+      lastStagePrepKeyRef.current = key;
+      setPrepSessionNonce((n) => n + 1);
+    }
+  }, [stage]);
+
+  useEffect(() => {
+    if (!stage || phase !== "edit" || boardLoadWait) return;
+    setPrepMs(0);
+    const t0 = performance.now();
+    const id = window.setInterval(() => {
+      setPrepMs(Math.floor(performance.now() - t0));
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [stage, phase, boardLoadWait, prepSessionNonce]);
 
   useEffect(() => {
     const prev = debugPrevBoardRef.current;
@@ -1380,6 +1406,7 @@ export default function ReflecShotGame() {
     refreshAds();
     setShowFailOverlay(false);
     editBallPadRef.current = null;
+    setPrepSessionNonce((n) => n + 1);
     setPhase("edit");
     setStatusMsg("");
     simRef.current = {
@@ -1720,32 +1747,28 @@ export default function ReflecShotGame() {
 
       <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
         <div className="flex w-full flex-col items-center">
-          <div className="mb-2 w-full text-wit-text">
-            {phase === "edit" ? (
-              <p className="text-xs font-normal leading-relaxed sm:text-sm whitespace-pre-line">
-                {t("games.reflecShot.phaseEdit")}
-              </p>
-            ) : (
-              <span className="text-sm font-semibold">
-                {phase === "move"
-                  ? t("games.reflecShot.phaseMove")
-                  : phase === "won"
-                    ? t("games.reflecShot.phaseWon")
-                    : t("games.reflecShot.phaseLost")}
-              </span>
-            )}
-          </div>
-          {(boardLoadWait || (statusMsg && phase !== "won" && phase !== "lost")) && (
-            <p
-              className={`mb-2 w-full text-sm ${
-                boardLoadWait
-                  ? "text-sky-300"
-                  : "text-wit-muted"
-              }`}
+          {/* 固定行高：進行中ラベル（左）＋準備タイマー（右）。text-sm / leading-5 で「進行中」と同じ段組 */}
+          <div className="mb-2 grid w-full min-h-5 grid-cols-[1fr_auto] items-center gap-x-2 text-sm font-semibold leading-5 text-wit-text">
+            <span className="min-w-0 truncate">
+              {phase === "move" ? t("games.reflecShot.phaseMove") : "\u00a0"}
+            </span>
+            <span
+              className="inline-block min-w-[5.5ch] shrink-0 text-right font-mono tabular-nums tracking-tight"
+              aria-live="polite"
             >
-              {boardLoadWait && !statusMsg ? t("games.reflecShot.st.preparing") : statusMsgDisplay}
-            </p>
-          )}
+              {stage
+                ? `${(prepMs / 1000).toFixed(1)}${t("games.reflecShot.prepTimerUnit")}`
+                : "\u00a0"}
+            </span>
+          </div>
+          {/* ステータス1行ぶんの高さを常に確保し、有無で盤面が縦に動かないようにする */}
+          <div className="mb-2 flex min-h-5 w-full items-center text-sm leading-5">
+            {boardLoadWait && !statusMsg ? (
+              <span className="text-sky-300">{t("games.reflecShot.st.preparing")}</span>
+            ) : statusMsg && phase !== "won" && phase !== "lost" ? (
+              <span className="text-wit-muted">{statusMsgDisplay}</span>
+            ) : null}
+          </div>
           <div
             className="w-full touch-none select-none"
             style={{ WebkitTapHighlightColor: "transparent" }}
@@ -1784,6 +1807,11 @@ export default function ReflecShotGame() {
               )}
             </div>
           </div>
+          {phase === "edit" && (
+            <p className="mb-0 mt-2 w-full text-xs font-normal leading-relaxed text-wit-text sm:text-sm whitespace-pre-line">
+              {t("games.reflecShot.phaseEdit")}
+            </p>
+          )}
         </div>
         <div className="mb-2 mt-4 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
           <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">

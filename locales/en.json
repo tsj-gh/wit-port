@@ -56,8 +56,7 @@
       "resultBack": "Back",
       "resultRetry": "Try again",
       "phaseMove": "In play",
-      "phaseWon": "Cleared",
-      "phaseLost": "Failed",
+      "prepTimerUnit": "s",
       "nextProblemBtn": "Next puzzle",
       "st": {
         "preparing": "Preparing board…",
