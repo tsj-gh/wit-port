@@ -52,6 +52,15 @@ import {
 
 /** 1マス移動の基準時間（ms）。実効速度はこれを速度倍率で除算。 */
 const BASE_CELL_TRAVEL_MS = 280;
+
+/** 準備タイマー表示（秒の切り捨て、mm:ss） */
+function formatPrepDurationMmSs(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  const mm = m < 100 ? String(m).padStart(2, "0") : String(m);
+  return `${mm}:${String(s).padStart(2, "0")}`;
+}
 /** タップ扱いにする最大移動（px²）。これ未満なら devtj でもスワイプ確定にしない */
 const TAP_MAX_SQ = 20 * 20;
 /** devtj: これ以上動いたら「一筆スワイプ」扱い（単セルでも強制向き可） */
@@ -441,7 +450,7 @@ export default function ReflecShotGame() {
     const t0 = performance.now();
     const id = window.setInterval(() => {
       setPrepMs(Math.floor(performance.now() - t0));
-    }, 100);
+    }, 1000);
     return () => window.clearInterval(id);
   }, [stage, phase, boardLoadWait, prepSessionNonce]);
 
@@ -1747,27 +1756,28 @@ export default function ReflecShotGame() {
 
       <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
         <div className="flex w-full flex-col items-center">
-          {/* 固定行高：進行中ラベル（左）＋準備タイマー（右）。text-sm / leading-5 で「進行中」と同じ段組 */}
-          <div className="mb-2 grid w-full min-h-5 grid-cols-[1fr_auto] items-center gap-x-2 text-sm font-semibold leading-5 text-wit-text">
-            <span className="min-w-0 truncate">
-              {phase === "move" ? t("games.reflecShot.phaseMove") : "\u00a0"}
-            </span>
-            <span
-              className="inline-block min-w-[5.5ch] shrink-0 text-right font-mono tabular-nums tracking-tight"
-              aria-live="polite"
-            >
-              {stage
-                ? `${(prepMs / 1000).toFixed(1)}${t("games.reflecShot.prepTimerUnit")}`
-                : "\u00a0"}
-            </span>
-          </div>
-          {/* ステータス1行ぶんの高さを常に確保し、有無で盤面が縦に動かないようにする */}
-          <div className="mb-2 flex min-h-5 w-full items-center text-sm leading-5">
-            {boardLoadWait && !statusMsg ? (
-              <span className="text-sky-300">{t("games.reflecShot.st.preparing")}</span>
-            ) : statusMsg && phase !== "won" && phase !== "lost" ? (
-              <span className="text-wit-muted">{statusMsgDisplay}</span>
-            ) : null}
+          {/* 上に僅かな余白、タイマー〜盤面は gap+mb で約1行分に詰める */}
+          <div className="flex w-full flex-col gap-y-1 pb-0 pt-1.5 mb-1">
+            {/* 固定行高：進行中ラベル（左）＋準備タイマー（右）。text-sm / leading-5 */}
+            <div className="grid w-full min-h-5 grid-cols-[1fr_auto] items-center gap-x-2 text-sm font-semibold leading-5 text-wit-text">
+              <span className="min-w-0 truncate">
+                {phase === "move" ? t("games.reflecShot.phaseMove") : "\u00a0"}
+              </span>
+              <span
+                className="inline-block min-w-[5.25ch] shrink-0 text-right font-mono tabular-nums tracking-tight"
+                aria-live="polite"
+              >
+                {stage ? formatPrepDurationMmSs(prepMs) : "\u00a0"}
+              </span>
+            </div>
+            {/* ステータス1行ぶんの高さを常に確保 */}
+            <div className="flex min-h-5 w-full items-center text-sm leading-5">
+              {boardLoadWait && !statusMsg ? (
+                <span className="text-sky-300">{t("games.reflecShot.st.preparing")}</span>
+              ) : statusMsg && phase !== "won" && phase !== "lost" ? (
+                <span className="text-wit-muted">{statusMsgDisplay}</span>
+              ) : null}
+            </div>
           </div>
           <div
             className="w-full touch-none select-none"
