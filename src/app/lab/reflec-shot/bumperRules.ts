@@ -68,20 +68,34 @@ export function diagonalBumperForTurn(dIn: Dir, dOut: Dir): "SLASH" | "BACKSLASH
   return null;
 }
 
-/** スワイプ（キャンバス: x 右+, y **下**+）→ 画面上 y 上+ に直して 8 方向セクタで種にスナップ */
-export function swipeToBumperKind(dx: number, dy: number): BumperKind {
-  if (dx * dx + dy * dy < 1e-8) return "HYPHEN";
+/**
+ * スワイプ（キャンバス: x 右+, y **下**+）→ 画面上 y 上+ に直した 8 セクタ（0..7）のインデックス。
+ * セクタ 0 は右向き（東）を基準に 45° 刻み。
+ */
+export const BUMPER_KIND_BY_SECTOR: readonly BumperKind[] = [
+  "PIPE",
+  "BACKSLASH",
+  "HYPHEN",
+  "SLASH",
+  "PIPE",
+  "SLASH",
+  "HYPHEN",
+  "BACKSLASH",
+] as const;
+
+export function directionToSector(dx: number, dy: number): number {
+  if (dx * dx + dy * dy < 1e-8) return 2;
   const deg = ((Math.atan2(-dy, dx) * 180) / Math.PI + 360) % 360;
-  const sector = Math.floor((deg + 22.5) / 45) % 8;
-  const map: BumperKind[] = [
-    "PIPE",
-    "BACKSLASH",
-    "HYPHEN",
-    "SLASH",
-    "PIPE",
-    "SLASH",
-    "HYPHEN",
-    "BACKSLASH",
-  ];
-  return map[sector]!;
+  return Math.floor((deg + 22.5) / 45) % 8;
+}
+
+/** 表示種から「代表セクタ」を得る（複数セクタが同じ種のときは先頭） */
+export function sectorIndexForDisplayKind(kind: BumperKind): number {
+  const i = BUMPER_KIND_BY_SECTOR.indexOf(kind);
+  return i >= 0 ? i : 2;
+}
+
+/** スワイプ（キャンバス座標）→ 8 方向にスナップしたバンパー種 */
+export function swipeToBumperKind(dx: number, dy: number): BumperKind {
+  return BUMPER_KIND_BY_SECTOR[directionToSector(dx, dy)]!;
 }

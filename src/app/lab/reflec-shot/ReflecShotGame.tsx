@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { applyBumper, swipeToBumperKind } from "./bumperRules";
+import {
+  applyBumper,
+  BUMPER_KIND_BY_SECTOR,
+  directionToSector,
+  sectorIndexForDisplayKind,
+  swipeToBumperKind,
+} from "./bumperRules";
 import {
   MAX_STOCK_SIZE,
   REFLECT_SHOT_STOCK_GRADES,
@@ -37,8 +43,12 @@ import { translateReflecStatus } from "@/lib/i18n-runtime-status";
 
 /** 1マス移動の基準時間（ms）。実効速度はこれを速度倍率で除算。 */
 const BASE_CELL_TRAVEL_MS = 280;
-const CHARGE_MS = 520;
-const SWIPE_MIN = 12;
+/** タップ扱いにする最大移動（px²）。これ未満なら devtj でもスワイプ確定にしない */
+const TAP_MAX_SQ = 20 * 20;
+/** devtj: これ以上動いたら「一筆スワイプ」扱い（単セルでも強制向き可） */
+const DEV_SWIPE_MIN_SQ = 28 * 28;
+/** セル境界跨ぎで採用する移動ベクトルの最小ノルム²（px²） */
+const ENTRY_VEC_MIN_SQ = 2.5 * 2.5;
 /** マス内バンパー記号（／＼－｜）のフォントサイズ = cellPx × この比率（従来 0.42 を 2 倍） */
 const BUMPER_GLYPH_SIZE_RATIO = 0.84;
 
@@ -65,6 +75,21 @@ function cellCenterPx(
 ) {
   const yRow = r - rMin;
   return { x: ox + c * cellPx + cellPx / 2, y: oy + yRow * cellPx + cellPx / 2 };
+}
+
+/** `draw` 前のポインタ用に、`draw` と同じ式でレイアウトを推定する */
+function computeBoardLayout(st: GridStage, wPx: number, hPx: number) {
+  const { rMin, rMax } = stageRowRange(st);
+  const nRows = rMax - rMin + 1;
+  const cellPx = Math.max(
+    24,
+    Math.floor(Math.min(wPx / st.width, hPx / nRows) * 0.92)
+  );
+  const gw = cellPx * st.width;
+  const gh = cellPx * nRows;
+  const ox = (wPx - gw) / 2;
+  const oy = (hPx - gh) / 2;
+  return { cellPx, ox, oy, rMin };
 }
 
 /** 辺の欠け長 = (マス1辺 + 射出体直径) / 2 付近にクランプ */
@@ -242,16 +267,34 @@ export default function ReflecShotGame() {
     leftStart: false,
   });
 
-  const chargeRef = useRef<{
+  type ActiveGesture = {
     pointerId: number;
-    t0: number;
-    cellKey: string;
-    originX: number;
-    originY: number;
-    curX: number;
-    curY: number;
-    hasSwipe: boolean;
-  } | null>(null);
+    startX: number;
+    startY: number;
+    prevX: number;
+    prevY: number;
+    lastX: number;
+    lastY: number;
+    maxDistSq: number;
+    downCellKey: string;
+    downOnBumper: boolean;
+    lastPathableKey: string | null;
+    bumperEntryVectors: Map<string, { dx: number; dy: number }>;
+    orderedBumperKeys: string[];
+    trailPoints: { x: number; y: number }[];
+  };
+
+  const gestureRef = useRef<ActiveGesture | null>(null);
+  const boardWrapRef = useRef<HTMLDivElement>(null);
+  const boardLayoutRef = useRef<{ cellPx: number; ox: number; oy: number; rMin: number } | null>(null);
+  const bumperSectorByKeyRef = useRef<Map<string, number>>(new Map());
+  const stageGeomKeyRef = useRef("");
+  const trailRafRef = useRef<number | null>(null);
+  const trailUiLastPushRef = useRef(0);
+
+  const [swipeTrailPoints, setSwipeTrailPoints] = useState<{ x: number; y: number }[]>([]);
+  const [trailOpacity, setTrailOpacity] = useState(1);
+  const [bumperHighlightKeys, setBumperHighlightKeys] = useState(() => new Set<string>());
 
   const workerGenOpts = useMemo(
     () =>
@@ -295,6 +338,18 @@ export default function ReflecShotGame() {
     if (prev.grade === grade && prev.seed === seed) return;
     setDebugPreviousBoard(prev);
   }, [grade, seed]);
+
+  useEffect(() => {
+    if (!stage) return;
+    const key = `${stage.seed}-${stage.grade}-${stage.width}x${stage.height}`;
+    if (stageGeomKeyRef.current === key) return;
+    stageGeomKeyRef.current = key;
+    const m = bumperSectorByKeyRef.current;
+    m.clear();
+    stage.bumpers.forEach((bump, k) => {
+      m.set(k, sectorIndexForDisplayKind(bump.display));
+    });
+  }, [stage]);
 
   useEffect(() => {
     const pending = pendingRestoreRef.current;
@@ -652,7 +707,9 @@ export default function ReflecShotGame() {
         const k = keyCell(c, r);
         const b = st.bumpers.get(k);
         if (b) {
-          ctx.fillStyle = "rgba(56, 189, 248, 0.95)";
+          ctx.fillStyle = bumperHighlightKeys.has(k)
+            ? "rgba(251, 191, 36, 0.95)"
+            : "rgba(56, 189, 248, 0.95)";
           ctx.font = `bold ${Math.floor(cellPx * BUMPER_GLYPH_SIZE_RATIO)}px sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
@@ -692,11 +749,8 @@ export default function ReflecShotGame() {
     ctx.arc(ax, ay, rad, 0, Math.PI * 2);
     ctx.fill();
 
-    canvas.dataset.cellPx = String(cellPx);
-    canvas.dataset.ox = String(ox);
-    canvas.dataset.oy = String(oy);
-    canvas.dataset.rMin = String(rMin);
-  }, [isDebugMode, isDevTj, showSolutionPath, stage]);
+    boardLayoutRef.current = { cellPx, ox, oy, rMin };
+  }, [bumperHighlightKeys, isDebugMode, isDevTj, showSolutionPath, stage]);
 
   useEffect(() => {
     let raf = 0;
@@ -716,57 +770,111 @@ export default function ReflecShotGame() {
     draw();
   }, [bumperTick, draw, phase, stage]);
 
-  const pixelToCell = (px: number, py: number): CellCoord | null => {
+  const boardClientRect = () => {
+    const wrap = boardWrapRef.current;
     const canvas = canvasRef.current;
-    if (!canvas || !stage) return null;
-    const cellPx = Number(canvas.dataset.cellPx) || 32;
-    const ox = Number(canvas.dataset.ox) || 0;
-    const oy = Number(canvas.dataset.oy) || 0;
-    const rMin = Number(canvas.dataset.rMin) || stageRowRange(stage).rMin;
-    const c = Math.floor((px - ox) / cellPx);
-    const r = Math.floor((py - oy) / cellPx) + rMin;
-    if (!pathableAt(stage, c, r)) return null;
+    return wrap?.getBoundingClientRect() ?? canvas?.getBoundingClientRect() ?? null;
+  };
+
+  const pixelToCell = (px: number, py: number): CellCoord | null => {
+    const st = stage;
+    if (!st) return null;
+    const rect = boardClientRect();
+    if (!rect) return null;
+    const wPx = Math.max(1, Math.floor(rect.width));
+    const hPx = Math.max(1, Math.floor(rect.height));
+    const layout = boardLayoutRef.current ?? computeBoardLayout(st, wPx, hPx);
+    const c = Math.floor((px - layout.ox) / layout.cellPx);
+    const r = Math.floor((py - layout.oy) / layout.cellPx) + layout.rMin;
+    if (!pathableAt(st, c, r)) return null;
     return { c, r };
+  };
+
+  const flushTrailToUi = (points: { x: number; y: number }[]) => {
+    if (trailRafRef.current != null) cancelAnimationFrame(trailRafRef.current);
+    trailRafRef.current = requestAnimationFrame(() => {
+      trailRafRef.current = null;
+      setSwipeTrailPoints(points.length ? [...points] : []);
+    });
   };
 
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
     if (phase !== "edit" || !stage) return;
-    const rect = canvasRef.current?.getBoundingClientRect();
+    const rect = boardClientRect();
     if (!rect) return;
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
     const cell = pixelToCell(px, py);
     if (!cell) return;
     const k = keyCell(cell.c, cell.r);
-    if (!stage.bumpers.has(k)) return;
+    const bumperHere = stage.bumpers.has(k);
+    if (!isDevTj && !bumperHere) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    chargeRef.current = {
+    if (isDevTj) {
+      setTrailOpacity(1);
+      setSwipeTrailPoints([{ x: px, y: py }]);
+    }
+    gestureRef.current = {
       pointerId: e.pointerId,
-      t0: performance.now(),
-      cellKey: k,
-      originX: px,
-      originY: py,
-      curX: px,
-      curY: py,
-      hasSwipe: false,
+      startX: px,
+      startY: py,
+      prevX: px,
+      prevY: py,
+      lastX: px,
+      lastY: py,
+      maxDistSq: 0,
+      downCellKey: k,
+      downOnBumper: bumperHere,
+      lastPathableKey: k,
+      bumperEntryVectors: new Map(),
+      orderedBumperKeys: [],
+      trailPoints: [{ x: px, y: py }],
     };
+    trailUiLastPushRef.current = performance.now();
   };
 
   const onPointerMove = (e: PointerEvent<HTMLCanvasElement>) => {
-    const ch = chargeRef.current;
-    if (!ch || ch.pointerId !== e.pointerId || !stage) return;
-    const rect = canvasRef.current?.getBoundingClientRect();
+    const g = gestureRef.current;
+    if (!g || g.pointerId !== e.pointerId || !stage) return;
+    const rect = boardClientRect();
     if (!rect) return;
-    ch.curX = e.clientX - rect.left;
-    ch.curY = e.clientY - rect.top;
-    const dx = ch.curX - ch.originX;
-    const dy = ch.curY - ch.originY;
-    if (dx * dx + dy * dy >= SWIPE_MIN * SWIPE_MIN) ch.hasSwipe = true;
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const dxFromStart = px - g.startX;
+    const dyFromStart = py - g.startY;
+    g.maxDistSq = Math.max(g.maxDistSq, dxFromStart * dxFromStart + dyFromStart * dyFromStart);
+
+    if (isDevTj) {
+      g.trailPoints.push({ x: px, y: py });
+      const now = performance.now();
+      if (now - trailUiLastPushRef.current >= 24) {
+        trailUiLastPushRef.current = now;
+        flushTrailToUi(g.trailPoints);
+      }
+    }
+
+    const newCell = pixelToCell(px, py);
+    const newKey = newCell ? keyCell(newCell.c, newCell.r) : null;
+    if (newKey && newKey !== g.lastPathableKey) {
+      const edx = px - g.prevX;
+      const edy = py - g.prevY;
+      const m2 = edx * edx + edy * edy;
+      if (stage.bumpers.has(newKey) && m2 >= ENTRY_VEC_MIN_SQ && !g.bumperEntryVectors.has(newKey)) {
+        g.bumperEntryVectors.set(newKey, { dx: edx, dy: edy });
+        g.orderedBumperKeys.push(newKey);
+      }
+      g.lastPathableKey = newKey;
+    }
+
+    g.prevX = px;
+    g.prevY = py;
+    g.lastX = px;
+    g.lastY = py;
   };
 
   const onPointerUp = (e: PointerEvent<HTMLCanvasElement>) => {
-    const ch = chargeRef.current;
-    if (!ch || ch.pointerId !== e.pointerId || !stage) {
+    const g = gestureRef.current;
+    if (!g || g.pointerId !== e.pointerId) {
       try {
         e.currentTarget.releasePointerCapture(e.pointerId);
       } catch {
@@ -774,27 +882,93 @@ export default function ReflecShotGame() {
       }
       return;
     }
-    const elapsed = performance.now() - ch.t0;
-    chargeRef.current = null;
+    gestureRef.current = null;
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {
       /* ignore */
     }
-    if (elapsed < CHARGE_MS) return;
-    if (!ch.hasSwipe) return;
-    const dx = ch.curX - ch.originX;
-    const dy = ch.curY - ch.originY;
-    const kind = swipeToBumperKind(dx, dy);
-    const b = stage.bumpers.get(ch.cellKey);
-    if (b) {
-      b.display = kind;
-      setBumperTick((t) => t + 1);
+
+    const st = stage;
+    if (!st || phase !== "edit") {
+      if (isDevTj) {
+        flushTrailToUi([]);
+        setTrailOpacity(1);
+      }
+      return;
+    }
+
+    const totalDx = g.lastX - g.startX;
+    const totalDy = g.lastY - g.startY;
+    const totalSq = totalDx * totalDx + totalDy * totalDy;
+
+    const isDevSwipe =
+      isDevTj && (totalSq >= DEV_SWIPE_MIN_SQ || g.orderedBumperKeys.length > 0);
+
+    if (isDevSwipe) {
+      const applyKeys: string[] = [];
+      const seen = new Set<string>();
+      for (const k of g.orderedBumperKeys) {
+        if (!seen.has(k)) {
+          seen.add(k);
+          applyKeys.push(k);
+        }
+      }
+      if (g.downOnBumper && !seen.has(g.downCellKey)) {
+        applyKeys.unshift(g.downCellKey);
+        seen.add(g.downCellKey);
+      }
+
+      if (applyKeys.length > 0) {
+        for (const k of applyKeys) {
+          const v = g.bumperEntryVectors.get(k) ?? { dx: totalDx, dy: totalDy };
+          const b = st.bumpers.get(k);
+          if (b) {
+            b.display = swipeToBumperKind(v.dx, v.dy);
+            bumperSectorByKeyRef.current.set(k, directionToSector(v.dx, v.dy));
+          }
+        }
+        setBumperHighlightKeys(new Set(applyKeys));
+        setBumperTick((t) => t + 1);
+        window.setTimeout(() => {
+          setBumperHighlightKeys(new Set());
+          setBumperTick((t) => t + 1);
+        }, 500);
+      }
+
+      flushTrailToUi(g.trailPoints);
+      window.setTimeout(() => {
+        setTrailOpacity(0);
+        window.setTimeout(() => {
+          flushTrailToUi([]);
+          setTrailOpacity(1);
+        }, 320);
+      }, 500);
+    } else {
+      if (isDevTj) {
+        flushTrailToUi([]);
+        setTrailOpacity(1);
+      }
+      if (g.downOnBumper && g.maxDistSq <= TAP_MAX_SQ) {
+        const b = st.bumpers.get(g.downCellKey);
+        if (b) {
+          const cur =
+            bumperSectorByKeyRef.current.get(g.downCellKey) ?? sectorIndexForDisplayKind(b.display);
+          const next = (cur + 1) % 8;
+          b.display = BUMPER_KIND_BY_SECTOR[next]!;
+          bumperSectorByKeyRef.current.set(g.downCellKey, next);
+          setBumperTick((t) => t + 1);
+        }
+      }
     }
   };
 
   const onPointerCancel = (e: PointerEvent<HTMLCanvasElement>) => {
-    chargeRef.current = null;
+    gestureRef.current = null;
+    if (isDevTj) {
+      flushTrailToUi([]);
+      setTrailOpacity(1);
+    }
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {
@@ -812,6 +986,9 @@ export default function ReflecShotGame() {
     if (!st || phase !== "edit") return;
     st.bumpers.forEach((v) => {
       v.display = v.solution;
+    });
+    st.bumpers.forEach((bump, k) => {
+      bumperSectorByKeyRef.current.set(k, sectorIndexForDisplayKind(bump.display));
     });
     setBumperTick((t) => t + 1);
     setTimeout(() => beginShot(), 30);
@@ -1137,15 +1314,38 @@ export default function ReflecShotGame() {
             className="w-full touch-none select-none"
             style={{ WebkitTapHighlightColor: "transparent" }}
           >
-            <canvas
-              ref={canvasRef}
-              className="w-full aspect-square max-h-[min(72vh,520px)] mx-auto rounded-2xl border border-white/10 bg-slate-950 touch-none select-none cursor-default"
-              style={{ touchAction: "none" }}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerCancel}
-            />
+            <div
+              ref={boardWrapRef}
+              className="relative mx-auto aspect-square w-full max-h-[min(72vh,520px)] overflow-hidden rounded-2xl border border-white/10 bg-slate-950"
+            >
+              <canvas
+                ref={canvasRef}
+                className="absolute inset-0 h-full w-full touch-none select-none cursor-default bg-slate-950"
+                style={{ touchAction: "none" }}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerCancel}
+              />
+              {isDevTj && (
+                <svg
+                  className="pointer-events-none absolute inset-0 h-full w-full rounded-2xl transition-opacity duration-300 ease-out"
+                  style={{ opacity: trailOpacity }}
+                  aria-hidden
+                >
+                  {swipeTrailPoints.length >= 2 && (
+                    <polyline
+                      fill="none"
+                      stroke="rgba(56, 189, 248, 0.9)"
+                      strokeWidth={2.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      points={swipeTrailPoints.map((p) => `${p.x},${p.y}`).join(" ")}
+                    />
+                  )}
+                </svg>
+              )}
+            </div>
           </div>
         </div>
         <div className="mb-2 mt-4 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
