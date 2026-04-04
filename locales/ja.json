@@ -50,6 +50,7 @@
       "autoSolve": "自動解答",
       "nextProblem": "次の問題へ",
       "phaseEdit": "バンパーをクリックで反射方向を45度回転できます。\n射出体をダブルタップ、ダブルクリック、もしくはスワイプで射出できます",
+      "phaseEditSwipe": "また、バンパーのあるマスに直接軌跡を描くことでも向きを変えられます",
       "resultWinMessage": "おめでとう！ゴールに到達しました！",
       "resultFailTitle": "Failed",
       "resultFailMessage": "残念、ゴールに辿り着けませんでした…",

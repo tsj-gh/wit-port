@@ -50,6 +50,7 @@
       "autoSolve": "Auto-solve",
       "nextProblem": "Next puzzle",
       "phaseEdit": "Click a bumper to rotate its reflection direction by 45°.\nLaunch the ball with a double-tap, double-click, or swipe.",
+      "phaseEditSwipe": "You can also change direction by drawing a path directly through a bumper cell.",
       "resultWinMessage": "Congratulations! You reached the goal!",
       "resultFailTitle": "Failed",
       "resultFailMessage": "Sorry—you didn't make it to the goal…",

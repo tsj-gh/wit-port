@@ -141,7 +141,7 @@ function normDistToKind(nx: number, ny: number, kind: BumperKind): number {
   }
 }
 
-function dedupeConsecutivePoints(pts: Pt[]): Pt[] {
+export function dedupeConsecutivePoints(pts: Pt[]): Pt[] {
   if (pts.length === 0) return [];
   const out: Pt[] = [pts[0]!];
   for (let i = 1; i < pts.length; i++) {
@@ -150,6 +150,14 @@ function dedupeConsecutivePoints(pts: Pt[]): Pt[] {
     if (Math.hypot(p.x - q.x, p.y - q.y) > 0.5) out.push(p);
   }
   return out;
+}
+
+/** マス入口 P から出口 Q までの表示用ポリライン（評価ロジックと同じ結合） */
+export function passageDisplayPolyline(P: Pt, Q: Pt, samples: Pt[]): Pt[] {
+  const body = dedupeConsecutivePoints(samples);
+  let poly = dedupeConsecutivePoints([P, ...body, Q]);
+  if (poly.length < 2) return [P, Q];
+  return poly;
 }
 
 export function scoreTrajectoryVsBumpers(pts: Pt[], rect: CellRect): {

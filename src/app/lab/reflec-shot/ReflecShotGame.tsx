@@ -47,6 +47,7 @@ import {
   entryPointOnRect,
   evaluateBumperPassage,
   exitPointOnRect,
+  passageDisplayPolyline,
   type Pt,
 } from "./trajectoryBumperFit";
 
@@ -69,6 +70,8 @@ const DEV_SWIPE_MIN_SQ = 28 * 28;
 const ENTRY_VEC_MIN_SQ = 2.5 * 2.5;
 /** マス内バンパー記号（／＼－｜）のフォントサイズ = cellPx × この比率（従来 0.42 を 2 倍） */
 const BUMPER_GLYPH_SIZE_RATIO = 0.84;
+/** 軌跡確定時のマス強調＆P→Q 軌跡フェードの長さ（ms） */
+const TRAJECTORY_BUMPER_FLASH_MS = 400;
 
 type Phase = "edit" | "move" | "won" | "lost";
 
@@ -380,6 +383,7 @@ export default function ReflecShotGame() {
   const bumperSectorByKeyRef = useRef<Map<string, number>>(new Map());
   const stageGeomKeyRef = useRef("");
   const trailRafRef = useRef<number | null>(null);
+  const trailFadeRafRef = useRef<number | null>(null);
   const trailUiLastPushRef = useRef(0);
 
   const [swipeTrailPoints, setSwipeTrailPoints] = useState<{ x: number; y: number }[]>([]);
@@ -888,10 +892,11 @@ export default function ReflecShotGame() {
             } else {
               const a = 0.48 * (1 - u) * (1 - u);
               if (fl.mode === "trajectory") {
-                ctx.fillStyle = `rgba(34, 211, 238, ${a * 0.88})`;
-                glyphFill = "rgb(240, 249, 255)";
+                ctx.fillStyle = `rgba(251, 146, 60, ${a * 0.92})`;
+                glyphFill = "rgb(255, 247, 237)";
               } else {
-                ctx.fillStyle = `rgba(255, 252, 240, ${a})`;
+                ctx.fillStyle = `rgba(251, 146, 60, ${a * 0.92})`;
+                glyphFill = "rgb(255, 247, 237)";
               }
               ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
             }
@@ -1002,6 +1007,33 @@ export default function ReflecShotGame() {
     });
   };
 
+  const cancelTrailFade = useCallback(() => {
+    if (trailFadeRafRef.current != null) {
+      cancelAnimationFrame(trailFadeRafRef.current);
+      trailFadeRafRef.current = null;
+    }
+  }, []);
+
+  const startTrailFadeOut = useCallback(
+    (ms: number) => {
+      cancelTrailFade();
+      const t0 = performance.now();
+      const step = (now: number) => {
+        const u = Math.min(1, (now - t0) / ms);
+        setTrailStrokeOpacity(1 - u);
+        if (u < 1) {
+          trailFadeRafRef.current = requestAnimationFrame(step);
+        } else {
+          trailFadeRafRef.current = null;
+          setSwipeTrailPoints([]);
+          setTrailStrokeOpacity(1);
+        }
+      };
+      trailFadeRafRef.current = requestAnimationFrame(step);
+    },
+    [cancelTrailFade]
+  );
+
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
     if (phase !== "edit" || !stage) return;
     const rect = boardClientRect();
@@ -1050,23 +1082,19 @@ export default function ReflecShotGame() {
     }
 
     const cell = pixelToCell(px, py);
-    const k = cell ? keyCell(cell.c, cell.r) : null;
-    const bumperHere = k != null && stage.bumpers.has(k);
+    if (!cell) return;
+    const k = keyCell(cell.c, cell.r);
+    const bumperHere = stage.bumpers.has(k);
 
-    if (!isDevTj) {
-      if (!cell || !bumperHere) return;
-    }
-
+    cancelTrailFade();
     bumperFlashRef.current.clear();
     setBumperTick((t) => t + 1);
     e.currentTarget.setPointerCapture(e.pointerId);
-    if (isDevTj) {
-      setTrailStrokeOpacity(1);
-      setSwipeTrailPoints([{ x: px, y: py }]);
-      setTjTrajectoryDebug(null);
-    }
+    setTrailStrokeOpacity(1);
+    setSwipeTrailPoints([{ x: px, y: py }]);
+    if (isDebugMode) setTjTrajectoryDebug(null);
     const passagesInit = new Map<string, { p: Pt; samples: Pt[]; c: number; r: number }>();
-    if (isDevTj && cell && bumperHere) {
+    if (bumperHere) {
       const wPx = Math.max(1, Math.floor(rect.width));
       const hPx = Math.max(1, Math.floor(rect.height));
       const layout0 = boardLayoutRef.current ?? computeBoardLayout(stage, wPx, hPx);
@@ -1147,7 +1175,7 @@ export default function ReflecShotGame() {
       const m2 = edx * edx + edy * edy;
 
       if (oldKey != null) {
-        if (isDevTj && stage.bumpers.has(oldKey) && m2 >= ENTRY_VEC_MIN_SQ) {
+        if (stage.bumpers.has(oldKey) && m2 >= ENTRY_VEC_MIN_SQ) {
           const acc = g.passages.get(oldKey);
           if (acc) {
             const wPx = Math.max(1, Math.floor(rect.width));
@@ -1169,12 +1197,15 @@ export default function ReflecShotGame() {
                 maxArcLimit: res.maxArcLimit,
               });
             }
-            g.trailPoints = [{ x: res.trimTo.x, y: res.trimTo.y }];
             trailTrimmedThisMove = true;
-            flushTrailToUi(g.trailPoints);
+            cancelTrailFade();
+            g.trailPoints = [{ x: res.trimTo.x, y: res.trimTo.y }];
             trailUiLastPushRef.current = performance.now();
-            setTrailStrokeOpacity(1);
             if (res.ok) {
+              const pq = passageDisplayPolyline(acc.p, Q, acc.samples);
+              flushTrailToUi(pq);
+              setTrailStrokeOpacity(1);
+              startTrailFadeOut(TRAJECTORY_BUMPER_FLASH_MS);
               const b = stage.bumpers.get(oldKey);
               if (b) {
                 b.display = res.kind;
@@ -1182,14 +1213,17 @@ export default function ReflecShotGame() {
               }
               g.devtjLiveAppliedKeys.add(oldKey);
               g.orderedBumperKeys.push(oldKey);
-              pulseBumperFlash(oldKey, 400, "trajectory");
+              pulseBumperFlash(oldKey, TRAJECTORY_BUMPER_FLASH_MS, "trajectory");
+            } else {
+              flushTrailToUi([]);
+              setTrailStrokeOpacity(1);
             }
           }
         }
         g.passages.delete(oldKey);
       }
 
-      if (isDevTj && newKey != null && stage.bumpers.has(newKey)) {
+      if (newKey != null && stage.bumpers.has(newKey)) {
         const wPx = Math.max(1, Math.floor(rect.width));
         const hPx = Math.max(1, Math.floor(rect.height));
         const layoutEn = boardLayoutRef.current ?? computeBoardLayout(stage, wPx, hPx);
@@ -1203,14 +1237,14 @@ export default function ReflecShotGame() {
       g.lastPathableKey = newKey;
     }
 
-    if (isDevTj && newKey != null && stage.bumpers.has(newKey)) {
+    if (newKey != null && stage.bumpers.has(newKey)) {
       const acc = g.passages.get(newKey);
       if (acc) {
         acc.samples.push({ x: px, y: py });
       }
     }
 
-    if (isDevTj && !trailTrimmedThisMove) {
+    if (!trailTrimmedThisMove) {
       g.trailPoints.push({ x: px, y: py });
       const now = performance.now();
       if (now - trailUiLastPushRef.current >= 24) {
@@ -1255,10 +1289,9 @@ export default function ReflecShotGame() {
 
     const st = stage;
     if (!st || phase !== "edit") {
-      if (isDevTj) {
-        flushTrailToUi([]);
-        setTrailStrokeOpacity(1);
-      }
+      cancelTrailFade();
+      flushTrailToUi([]);
+      setTrailStrokeOpacity(1);
       return;
     }
 
@@ -1266,10 +1299,9 @@ export default function ReflecShotGame() {
     const totalDy = g.lastY - g.startY;
     const totalSq = totalDx * totalDx + totalDy * totalDy;
 
-    const isDevSwipe =
-      isDevTj && (totalSq >= DEV_SWIPE_MIN_SQ || g.orderedBumperKeys.length > 0);
+    const isSwipeGesture = totalSq >= DEV_SWIPE_MIN_SQ || g.orderedBumperKeys.length > 0;
 
-    if (isDevSwipe) {
+    if (isSwipeGesture) {
       const applyKeys: string[] = [];
       const seen = new Set<string>();
       for (const k of g.orderedBumperKeys) {
@@ -1301,6 +1333,7 @@ export default function ReflecShotGame() {
       const layoutUp = boardLayoutRef.current ?? computeBoardLayout(st, wUp, hUp);
 
       const upApplied: string[] = [];
+      let lastPqForFade: Pt[] | null = null;
       for (const k of applyKeys) {
         if (g.devtjLiveAppliedKeys.has(k)) continue;
         const acc = g.passages.get(k);
@@ -1326,6 +1359,7 @@ export default function ReflecShotGame() {
               b.display = res.kind;
               bumperSectorByKeyRef.current.set(k, sectorIndexForDisplayKind(res.kind));
               upApplied.push(k);
+              lastPqForFade = passageDisplayPolyline(acc.p, Q, acc.samples);
             }
           }
         } else {
@@ -1341,24 +1375,24 @@ export default function ReflecShotGame() {
       if (upApplied.length > 0) {
         const t0 = performance.now();
         for (const k of upApplied) {
-          bumperFlashRef.current.set(k, { t0, ms: 400, mode: "trajectory" });
+          bumperFlashRef.current.set(k, { t0, ms: TRAJECTORY_BUMPER_FLASH_MS, mode: "trajectory" });
         }
         setBumperTick((t) => t + 1);
       }
 
-      flushTrailToUi(g.trailPoints);
-      window.setTimeout(() => {
-        setTrailStrokeOpacity(0);
-        window.setTimeout(() => {
-          flushTrailToUi([]);
-          setTrailStrokeOpacity(1);
-        }, 320);
-      }, 500);
-    } else {
-      if (isDevTj) {
+      cancelTrailFade();
+      if (lastPqForFade && lastPqForFade.length >= 2) {
+        flushTrailToUi(lastPqForFade);
+        setTrailStrokeOpacity(1);
+        startTrailFadeOut(TRAJECTORY_BUMPER_FLASH_MS);
+      } else {
         flushTrailToUi([]);
         setTrailStrokeOpacity(1);
       }
+    } else {
+      cancelTrailFade();
+      flushTrailToUi([]);
+      setTrailStrokeOpacity(1);
       if (g.downOnBumper && g.downCellKey != null && g.maxDistSq <= TAP_MAX_SQ) {
         const dk = g.downCellKey;
         const b = st.bumpers.get(dk);
@@ -1368,7 +1402,6 @@ export default function ReflecShotGame() {
           const next = (cur + 1) % 8;
           b.display = BUMPER_KIND_BY_SECTOR[next]!;
           bumperSectorByKeyRef.current.set(dk, next);
-          pulseBumperFlash(dk);
         }
       }
     }
@@ -1379,10 +1412,9 @@ export default function ReflecShotGame() {
       startPadDragRef.current = null;
     }
     gestureRef.current = null;
-    if (isDevTj) {
-      flushTrailToUi([]);
-      setTrailStrokeOpacity(1);
-    }
+    cancelTrailFade();
+    flushTrailToUi([]);
+    setTrailStrokeOpacity(1);
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {
@@ -1796,31 +1828,29 @@ export default function ReflecShotGame() {
                 onPointerUp={onPointerUp}
                 onPointerCancel={onPointerCancel}
               />
-              {isDevTj && (
-                <svg
-                  className="pointer-events-none absolute inset-0 h-full w-full rounded-2xl"
-                  aria-hidden
-                >
-                  {swipeTrailPoints.length >= 2 && (
-                    <polyline
-                      fill="none"
-                      stroke="rgba(248, 250, 252, 0.88)"
-                      strokeWidth={2.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="transition-[stroke-opacity] duration-300 ease-out"
-                      style={{ strokeOpacity: trailStrokeOpacity }}
-                      points={swipeTrailPoints.map((p) => `${p.x},${p.y}`).join(" ")}
-                    />
-                  )}
-                </svg>
-              )}
+              <svg
+                className="pointer-events-none absolute inset-0 h-full w-full rounded-2xl"
+                aria-hidden
+              >
+                {swipeTrailPoints.length >= 2 && (
+                  <polyline
+                    fill="none"
+                    stroke="rgba(248, 250, 252, 0.88)"
+                    strokeWidth={2.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ strokeOpacity: trailStrokeOpacity }}
+                    points={swipeTrailPoints.map((p) => `${p.x},${p.y}`).join(" ")}
+                  />
+                )}
+              </svg>
             </div>
           </div>
           {phase === "edit" && (
-            <p className="mb-0 mt-2 w-full text-xs font-normal leading-relaxed text-wit-text sm:text-sm whitespace-pre-line">
-              {t("games.reflecShot.phaseEdit")}
-            </p>
+            <div className="mb-0 mt-2 w-full text-xs font-normal leading-relaxed text-wit-text sm:text-sm">
+              <p className="whitespace-pre-line">{t("games.reflecShot.phaseEdit")}</p>
+              <p className="mt-1 whitespace-pre-line">{t("games.reflecShot.phaseEditSwipe")}</p>
+            </div>
           )}
         </div>
         <div className="mb-2 mt-4 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
