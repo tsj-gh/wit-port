@@ -30,22 +30,25 @@ export function GamePageHeader({
 
   return (
     <header
-      className={`mb-4 grid w-full grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-2 sm:gap-x-3 ${maxWidthClassName} ${className}`.trim()}
+      className={`mb-4 flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-4 sm:gap-y-3 ${maxWidthClassName} ${className}`.trim()}
     >
-      <div className="flex min-w-0 justify-start">
+      {/* 左: ロゴ + ゲームタイトル（同一グループ・折り返し可） */}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 sm:flex-1 sm:min-w-[12rem]">
         <DevLink
           href={homeHref}
-          className="flex shrink-0 items-center gap-3 text-xl font-black leading-none tracking-wider text-wit-text no-underline hover:opacity-90 sm:text-2xl"
+          className="flex shrink-0 items-center gap-2 text-xl font-black leading-tight tracking-wider text-wit-text no-underline hover:opacity-90 sm:gap-3 sm:text-2xl"
         >
           <span className="block h-8 w-8 shrink-0 rounded-lg bg-gradient-to-br from-wit-emerald to-teal-600" />
           Wispo
         </DevLink>
+        <h1 className="min-w-0 max-w-full break-words text-left text-xl font-black leading-tight tracking-tight text-wit-text sm:text-2xl">
+          <span className="text-wit-text">{titleEn}</span>
+          {locale === "ja" ? <span className="text-wit-muted">（{titleJa}）</span> : null}
+        </h1>
       </div>
-      <h1 className="max-w-[min(100vw-6rem,22rem)] min-w-0 text-center text-xl font-black leading-none tracking-tight text-wit-text sm:max-w-none sm:text-2xl">
-        <span className="text-wit-text">{titleEn}</span>
-        {locale === "ja" ? <span className="text-wit-muted">（{titleJa}）</span> : null}
-      </h1>
-      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+
+      {/* 右: 言語切替 + タイマー等（モバイルは下段・右寄せ） */}
+      <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto sm:justify-end">
         <LanguageToggle />
         {trailing != null ? (
           <div className="flex shrink-0 items-center gap-2 text-sm leading-none text-wit-muted">{trailing}</div>
