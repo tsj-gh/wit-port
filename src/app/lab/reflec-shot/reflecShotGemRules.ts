@@ -17,13 +17,19 @@ export function idealPathPointsForGemRules(st: GridStage): CellCoord[] {
   return [{ ...st.startPad }, ...p.map((x) => ({ ...x })), { ...st.goalPad }];
 }
 
-export function orthoSegStrictInnerCross(a: CellCoord, b: CellCoord, c: CellCoord, d: CellCoord): boolean {
+/** 直交2辺の厳密内部交点（マス座標）。なければ null */
+export function strictInnerCrossPoint(
+  a: CellCoord,
+  b: CellCoord,
+  c: CellCoord,
+  d: CellCoord
+): CellCoord | null {
   let h1 = a.r === b.r;
   const h2 = c.r === d.r;
-  if (h1 === h2) return false;
-  if (!h1 && !h2) return false;
+  if (h1 === h2) return null;
+  if (!h1 && !h2) return null;
   if (!h1) {
-    return orthoSegStrictInnerCross(c, d, a, b);
+    return strictInnerCrossPoint(c, d, a, b);
   }
   const r0 = a.r;
   const cmin = Math.min(a.c, b.c);
@@ -31,7 +37,12 @@ export function orthoSegStrictInnerCross(a: CellCoord, b: CellCoord, c: CellCoor
   const c0 = c.c;
   const rmin = Math.min(c.r, d.r);
   const rmax = Math.max(c.r, d.r);
-  return cmin < c0 && c0 < cmax && rmin < r0 && r0 < rmax;
+  if (!(cmin < c0 && c0 < cmax && rmin < r0 && r0 < rmax)) return null;
+  return { c: c0, r: r0 };
+}
+
+export function orthoSegStrictInnerCross(a: CellCoord, b: CellCoord, c: CellCoord, d: CellCoord): boolean {
+  return strictInnerCrossPoint(a, b, c, d) != null;
 }
 
 /** 正解ポリライン（パッド含む）の辺どうしが直交し、互いに内部で交わる回数 */
@@ -103,19 +114,28 @@ export function computeRequiredGemCountForStage(st: GridStage): {
   return { baseBends, crossings, twoSidedBends, required };
 }
 
-/** `finalizeReflecShotDifficulty` の末尾で呼び、盤にメタを付与 */
+/** 新セグメントと過去セグメントの直交内部交差マス（先頭の1つ）。なければ null */
+export function findCrossCellForNewAgentSegment(
+  prior: { a: CellCoord; b: CellCoord }[],
+  from: CellCoord,
+  to: CellCoord
+): CellCoord | null {
+  if (from.c === to.c && from.r === to.r) return null;
+  if (Math.abs(from.c - to.c) + Math.abs(from.r - to.r) !== 1) return null;
+  for (const old of prior) {
+    const pt = strictInnerCrossPoint(from, to, old.a, old.b);
+    if (pt) return pt;
+  }
+  return null;
+}
+
 /** 移動直後のセグメントが、それ以前のセグメントと直交内部交差するか（ランタイム用） */
 export function newAgentSegmentCrossesPriorPath(
   prior: { a: CellCoord; b: CellCoord }[],
   from: CellCoord,
   to: CellCoord
 ): boolean {
-  if (from.c === to.c && from.r === to.r) return false;
-  if (Math.abs(from.c - to.c) + Math.abs(from.r - to.r) !== 1) return false;
-  for (const old of prior) {
-    if (orthoSegStrictInnerCross(from, to, old.a, old.b)) return true;
-  }
-  return false;
+  return findCrossCellForNewAgentSegment(prior, from, to) != null;
 }
 
 export function applyGemRuleMetadataToStage(st: GridStage): void {

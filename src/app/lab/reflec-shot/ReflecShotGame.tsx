@@ -40,8 +40,8 @@ import {
   computeRequiredGemCountForStage,
   countExpectedTwoSidedBendsOnIdealPath,
   countPolylineOrthogonalCrossings,
+  findCrossCellForNewAgentSegment,
   idealPathPointsForGemRules,
-  newAgentSegmentCrossesPriorPath,
 } from "./reflecShotGemRules";
 import { decodeReflecStageHash, encodeReflecStageHash, parseReflecHash } from "./reflecShotStageHash";
 import { ReflecShotAdSlot } from "@/components/ReflecShotAdSlots";
@@ -88,7 +88,8 @@ const TRAJECTORY_BUMPER_FLASH_MS = 400;
 
 const MAX_GEM_PARTICLES = 80;
 const GEM_BURST_N = 9;
-const GEM_BURST_CROSS_N = 18;
+/** 十字路形成瞬間の宝石バースト（1個獲得時） */
+const GEM_BURST_CROSS_INSTANT_N = 14;
 const GEM_BURST_TWO_SIDED_N = 32;
 const GEM_PARTICLE_TTL_MS = 520;
 const GOAL_SPARKLE_TTL_MS = 720;
@@ -679,7 +680,8 @@ export default function ReflecShotGame() {
   const gemParticlesRef = useRef<GemParticle[]>([]);
   /** Grade3+: 射出体のセル間移動履歴（十字路判定） */
   const pathSegHistoryRef = useRef<{ a: CellCoord; b: CellCoord }[]>([]);
-  const crossGemBonusPendingRef = useRef(false);
+  /** 十字路形成時の交差マスにオレンジ十字フラッシュ */
+  const crossFlashRef = useRef<{ c: number; r: number; t0: number } | null>(null);
   /** Grade5+: 折れ点バンパーへの初回入射方向 */
   const bumperIncomingFirstRef = useRef<Map<string, Dir>>(new Map());
   const twoSidedBumperUsedRef = useRef<Set<string>>(new Set());
@@ -866,7 +868,7 @@ export default function ReflecShotGame() {
     setGemGoalFail(false);
     setLaunchArrowDismissed(false);
     pathSegHistoryRef.current = [];
-    crossGemBonusPendingRef.current = false;
+    crossFlashRef.current = null;
     bumperIncomingFirstRef.current.clear();
     twoSidedBumperUsedRef.current.clear();
   }, [stage]);
@@ -1094,7 +1096,7 @@ export default function ReflecShotGame() {
     const st = stage;
     if (!st || phase !== "edit") return;
     pathSegHistoryRef.current = [];
-    crossGemBonusPendingRef.current = false;
+    crossFlashRef.current = null;
     bumperIncomingFirstRef.current.clear();
     twoSidedBumperUsedRef.current.clear();
     gemRemainVisualRef.current = Math.max(0, requiredGemsRef.current);
@@ -1225,10 +1227,49 @@ export default function ReflecShotGame() {
         dy: sim.fromCell.r - B.r,
       };
 
-      let crossingNow = false;
+      let crossCell: CellCoord | null = null;
       if (st.grade >= 3) {
-        crossingNow = newAgentSegmentCrossesPriorPath(pathSegHistoryRef.current, sim.fromCell, B);
+        crossCell = findCrossCellForNewAgentSegment(pathSegHistoryRef.current, sim.fromCell, B);
         pathSegHistoryRef.current.push({ a: { ...sim.fromCell }, b: { ...B } });
+      }
+
+      if (crossCell != null && st.grade >= 3) {
+        const cCross0 = collectedGemsRef.current;
+        collectedGemsRef.current += 1;
+        const nowCross = performance.now();
+        crossFlashRef.current = { c: crossCell.c, r: crossCell.r, t0: nowCross };
+        if (
+          collectedGemsRef.current >= requiredGemsRef.current &&
+          cCross0 < requiredGemsRef.current
+        ) {
+          gemRemainVisualRef.current = 0;
+          goalUnlockPulseRef.current = nowCross;
+          const layGx = boardLayoutRef.current;
+          if (layGx) {
+            const gp = st.goalPad;
+            const gcc = cellCenterPx(gp.c, gp.r, layGx.cellPx, layGx.ox, layGx.oy, layGx.rMin);
+            pushGoalSparkles(goalSparklesRef.current, gcc.x, gcc.y, nowCross);
+          }
+        }
+        const layCross = boardLayoutRef.current;
+        if (layCross) {
+          const cc = cellCenterPx(
+            crossCell.c,
+            crossCell.r,
+            layCross.cellPx,
+            layCross.ox,
+            layCross.oy,
+            layCross.rMin
+          );
+          pushGemBurst(
+            gemParticlesRef.current,
+            cc.x,
+            cc.y,
+            nowCross,
+            GEM_BURST_CROSS_INSTANT_N
+          );
+        }
+        setCollectedGems(collectedGemsRef.current);
       }
 
       const res = applyArrival(st, B, incoming);
@@ -1258,17 +1299,6 @@ export default function ReflecShotGame() {
         let addGems = 1;
         let burstN = GEM_BURST_N;
         let twoSidedHitFx = false;
-        if (st.grade >= 3) {
-          if (crossingNow) {
-            addGems = 2;
-            burstN = GEM_BURST_CROSS_N;
-            crossGemBonusPendingRef.current = false;
-          } else if (crossGemBonusPendingRef.current) {
-            addGems = 2;
-            burstN = GEM_BURST_CROSS_N;
-            crossGemBonusPendingRef.current = false;
-          }
-        }
         if (st.grade >= 5) {
           const prevIn = bumperIncomingFirstRef.current.get(bkHit);
           if (prevIn == null) {
@@ -1308,8 +1338,6 @@ export default function ReflecShotGame() {
           pulseBumperFlash(bkHit, TRAJECTORY_BUMPER_FLASH_MS, "trajectory");
         }
         setCollectedGems(collectedGemsRef.current);
-      } else if (st.grade >= 3 && crossingNow) {
-        crossGemBonusPendingRef.current = true;
       }
 
       if (res.kind === "goal") {
@@ -1687,6 +1715,35 @@ export default function ReflecShotGame() {
       const pG = cellCenterPx(st.goalPad.c, st.goalPad.r, cellPx, ox, oy, rMin);
       ctx.lineTo(pG.x, pG.y);
       ctx.stroke();
+    }
+
+    const cf = crossFlashRef.current;
+    if (cf) {
+      const age = now - cf.t0;
+      if (age >= 0 && age < 400) {
+        const u = age / 400;
+        const pulse = (1 - u) * (1 - u);
+        const fx = ox + cf.c * cellPx;
+        const fy = rowY(cf.r);
+        const gcx = fx + cellPx / 2;
+        const gcy = fy + cellPx / 2;
+        const half = cellPx * (0.2 + 0.2 * pulse);
+        ctx.save();
+        ctx.strokeStyle = `rgba(251, 146, 60, ${0.42 + 0.48 * pulse})`;
+        ctx.shadowColor = "rgba(251, 146, 60, 0.6)";
+        ctx.shadowBlur = 6 + 14 * pulse;
+        ctx.lineWidth = 2 + 3 * pulse;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(gcx - half, gcy);
+        ctx.lineTo(gcx + half, gcy);
+        ctx.moveTo(gcx, gcy - half);
+        ctx.lineTo(gcx, gcy + half);
+        ctx.stroke();
+        ctx.restore();
+      } else if (age >= 400) {
+        crossFlashRef.current = null;
+      }
     }
 
     const gems = gemParticlesRef.current;
@@ -2283,7 +2340,7 @@ export default function ReflecShotGame() {
     setShowFailOverlay(false);
     editBallPadRef.current = null;
     pathSegHistoryRef.current = [];
-    crossGemBonusPendingRef.current = false;
+    crossFlashRef.current = null;
     bumperIncomingFirstRef.current.clear();
     twoSidedBumperUsedRef.current.clear();
     gemRemainVisualRef.current = Math.max(0, requiredGemsRef.current);
@@ -2787,22 +2844,38 @@ export default function ReflecShotGame() {
             </div>
           </div>
           <div
-            className="mt-2 flex w-full min-h-[4.5rem] flex-col items-center justify-center rounded-xl border border-white/10 bg-slate-900/35 px-3 py-2.5 text-center"
+            className="mt-2 flex w-full min-h-[6.5rem] flex-col items-stretch justify-center gap-2 rounded-xl border border-white/10 bg-slate-900/35 px-3 py-3 text-center"
             role="note"
           >
-            <p className="max-w-md text-sm leading-relaxed text-wit-muted">
-              {(stage?.grade ?? grade) <= 2 && t("games.reflecShot.ruleGemsBasic")}
-              {(stage?.grade ?? grade) >= 3 &&
-                (stage?.grade ?? grade) <= 4 &&
-                t("games.reflecShot.ruleCrossBonus")}
-              {(stage?.grade ?? grade) >= 5 && t("games.reflecShot.ruleTwoSidedBonus")}
-            </p>
+            {(() => {
+              const rg = stage?.grade ?? grade;
+              return (
+                <>
+                  <p className="mx-auto max-w-md text-sm font-medium leading-relaxed text-wit-muted">
+                    {t("games.reflecShot.ruleIntro")}
+                  </p>
+                  {rg >= 3 && rg <= 4 && (
+                    <p className="mx-auto max-w-md text-sm leading-relaxed text-wit-muted">
+                      {t("games.reflecShot.ruleCrossBonus")}
+                    </p>
+                  )}
+                  {rg >= 5 && (
+                    <>
+                      <p className="mx-auto max-w-md text-sm leading-relaxed text-wit-muted">
+                        {t("games.reflecShot.ruleCrossBonus")}
+                      </p>
+                      <p className="mx-auto max-w-md text-sm leading-relaxed text-wit-muted">
+                        {t("games.reflecShot.ruleTwoSidedBonus")}
+                      </p>
+                    </>
+                  )}
+                  <p className="mx-auto max-w-md border-t border-white/10 pt-2 text-xs leading-relaxed text-wit-muted/90 whitespace-pre-line">
+                    {t("games.reflecShot.ruleControls")}
+                  </p>
+                </>
+              );
+            })()}
           </div>
-          {phase === "edit" && (
-            <div className="mb-0 mt-2 w-full text-xs font-normal leading-relaxed text-wit-text sm:text-sm">
-              <p className="whitespace-pre-line">{t("games.reflecShot.boardHelp")}</p>
-            </div>
-          )}
         </div>
         <div className="mb-2 mt-4 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
           <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
