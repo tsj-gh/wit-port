@@ -102,7 +102,15 @@ const DEFAULT_BALL_SPEED_MULT = 2.5;
 
 type GemParticle = { x: number; y: number; vx: number; vy: number; born: number };
 type GoalSparkle = { x: number; y: number; vx: number; vy: number; born: number };
-type WallSparkle = { x: number; y: number; vx: number; vy: number; born: number };
+type WallSparkle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  born: number;
+  /** 再訪両面ヒット時の赤火花（未指定は壁ヒット火花） */
+  kind?: "red";
+};
 
 type ArrivalResult =
   | { kind: "goal" }
@@ -161,6 +169,23 @@ function pushWallSparks(arr: WallSparkle[], wx: number, wy: number, now: number)
       vx: Math.cos(ang) * sp,
       vy: Math.sin(ang) * sp,
       born: now,
+    });
+  }
+}
+
+/** 再訪折れ点・両面ヒット: バンパー中心から赤系火花 */
+function pushTwoSidedRedSparks(arr: WallSparkle[], cx: number, cy: number, now: number) {
+  for (let i = 0; i < 26; i++) {
+    if (arr.length > 72) arr.shift();
+    const ang = Math.random() * Math.PI * 2;
+    const sp = 1.8 + Math.random() * 4.2;
+    arr.push({
+      x: cx + (Math.random() - 0.5) * 4,
+      y: cy + (Math.random() - 0.5) * 4,
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp,
+      born: now,
+      kind: "red",
     });
   }
 }
@@ -1212,14 +1237,21 @@ export default function ReflecShotGame() {
       const isBumperHit =
         st.bumpers.has(bkHit) && !(B.c === st.goalPad.c && B.r === st.goalPad.r);
       const bumpAt = st.bumpers.get(bkHit);
+      /** HYPHEN（水平バー）に左右から入射してスルーする場合は反射扱いにしない → 宝石なし */
+      const hyphenHorizontalPass =
+        bumpAt &&
+        bumpAt.display === "HYPHEN" &&
+        (dirsEqual(incoming, DIR.L) || dirsEqual(incoming, DIR.R));
       const gemFromReflection =
         isBumperHit &&
         bumpAt &&
         !bumpAt.isDummy &&
-        solutionBendKeys.has(bkHit);
+        solutionBendKeys.has(bkHit) &&
+        !hyphenHorizontalPass;
       if (gemFromReflection) {
         let addGems = 1;
         let burstN = GEM_BURST_N;
+        let twoSidedHitFx = false;
         if (st.grade >= 3) {
           if (crossingNow) {
             addGems = 2;
@@ -1242,6 +1274,7 @@ export default function ReflecShotGame() {
             addGems += 3;
             twoSidedBumperUsedRef.current.add(bkHit);
             burstN = Math.max(burstN, GEM_BURST_TWO_SIDED_N);
+            twoSidedHitFx = true;
           }
         }
         const c0 = collectedGemsRef.current;
@@ -1261,6 +1294,12 @@ export default function ReflecShotGame() {
         if (layB) {
           const bc = cellCenterPx(B.c, B.r, layB.cellPx, layB.ox, layB.oy, layB.rMin);
           pushGemBurst(gemParticlesRef.current, bc.x, bc.y, nowG, burstN);
+          if (twoSidedHitFx) {
+            pushTwoSidedRedSparks(wallSparklesRef.current, bc.x, bc.y, nowG);
+            pulseBumperFlash(bkHit, TRAJECTORY_BUMPER_FLASH_MS, "trajectory");
+          }
+        } else if (twoSidedHitFx) {
+          pulseBumperFlash(bkHit, TRAJECTORY_BUMPER_FLASH_MS, "trajectory");
         }
         setCollectedGems(collectedGemsRef.current);
       } else if (st.grade >= 3 && crossingNow) {
@@ -1307,6 +1346,7 @@ export default function ReflecShotGame() {
       isDebugMode,
       isDevTj,
       phase,
+      pulseBumperFlash,
       solutionBendKeys,
       stage,
     ]
@@ -1701,10 +1741,21 @@ export default function ReflecShotGame() {
       p.x += p.vx;
       p.y += p.vy;
       const a = 1 - age / WALL_SPARKLE_TTL_MS;
-      ctx.fillStyle = `rgba(254, 243, 199, ${0.55 * a})`;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 2.1, 0, Math.PI * 2);
-      ctx.fill();
+      if (p.kind === "red") {
+        ctx.fillStyle = `rgba(248, 113, 113, ${0.82 * a})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(254, 202, 202, ${0.35 * a})`;
+        ctx.beginPath();
+        ctx.arc(p.x - 0.4, p.y - 0.4, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = `rgba(254, 243, 199, ${0.55 * a})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     if (phase === "edit") {
