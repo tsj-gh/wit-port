@@ -18,6 +18,7 @@ import { useReflectShotWorker } from "@/hooks/useReflectShotWorker";
 import { bendOrBumperHint } from "./gridStageGen";
 import {
   addCell,
+  BUMPER_KINDS,
   cloneGridStageForRestore,
   countBumpersOnSolutionPath,
   gemAwardBumperCellKeys,
@@ -42,6 +43,50 @@ import {
   findCrossCellForNewAgentSegment,
 } from "./reflecShotGemRules";
 import { decodeReflecStageHash, encodeReflecStageHash, parseReflecHash } from "./reflecShotStageHash";
+
+/**
+ * 正解ポリライン上のダミーの `display` を、各通過で `applyBumper(dIn, display) === dOut` になる向きに揃える（スルー含む）。
+ * 複数通過で矛盾する場合は先頭 forEach で付けた `solution` のままにする。
+ */
+function alignDummyBumpersOnSolutionPathForAutoSolve(st: GridStage): void {
+  const path = st.solutionPath;
+  if (path.length < 3) return;
+  for (const [k, bump] of Array.from(st.bumpers.entries())) {
+    if (!bump.isDummy) continue;
+    let allowed: Set<BumperKind> | null = null;
+    for (let i = 1; i < path.length - 1; i++) {
+      const cur = path[i]!;
+      if (keyCell(cur.c, cur.r) !== k) continue;
+      const prev = path[i - 1]!;
+      const next = path[i + 1]!;
+      const dIn: Dir = { dx: cur.c - prev.c, dy: prev.r - cur.r };
+      const dOut: Dir = { dx: next.c - cur.c, dy: cur.r - next.r };
+      const visitOk = new Set<BumperKind>();
+      for (let ki = 0; ki < BUMPER_KINDS.length; ki++) {
+        const kind = BUMPER_KINDS[ki]!;
+        if (dirsEqual(applyBumper(dIn, kind), dOut)) visitOk.add(kind);
+      }
+      if (visitOk.size === 0) {
+        allowed = null;
+        break;
+      }
+      if (allowed == null) {
+        allowed = visitOk;
+      } else {
+        const nextAllowed = new Set<BumperKind>();
+        for (let ai = 0; ai < BUMPER_KINDS.length; ai++) {
+          const bk = BUMPER_KINDS[ai]!;
+          if (allowed.has(bk) && visitOk.has(bk)) nextAllowed.add(bk);
+        }
+        allowed = nextAllowed;
+      }
+      if (allowed.size === 0) break;
+    }
+    if (allowed != null && allowed.size > 0) {
+      bump.display = BUMPER_KINDS.filter((bk) => allowed!.has(bk))[0]!;
+    }
+  }
+}
 import { ReflecShotAdSlot } from "@/components/ReflecShotAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { refreshAds } from "@/lib/ads";
@@ -83,6 +128,8 @@ const ENTRY_VEC_MIN_SQ = 2.5 * 2.5;
 const BUMPER_GLYPH_SIZE_RATIO = 0.84;
 /** 軌跡確定時のマス強調＆P→Q 軌跡フェードの長さ（ms）。準備中バンパー向き確定／十字通過フラッシュと同じ尺 */
 const TRAJECTORY_BUMPER_FLASH_MS = 400;
+/** デバッグ正解経路と射出中軌跡の線幅（同一） */
+const SOLUTION_PATH_LINE_WIDTH = 1.5;
 
 const MAX_GEM_PARTICLES = 80;
 const GEM_BURST_N = 9;
@@ -638,7 +685,7 @@ export default function ReflecShotGame() {
   /** devtj 軌跡判定: 弧長上限 = 対角線 × この倍率（既定 1.3） */
   const [debugTjMaxArcFactor, setDebugTjMaxArcFactor] = useState(1.3);
   /** devtj+DEBUG: 十字通過フラッシュの腕の基準長 = cellPx×(pct/100)（脈動で最大2倍近く） */
-  const [debugCrossFlashArmPct, setDebugCrossFlashArmPct] = useState(30);
+  const [debugCrossFlashArmPct, setDebugCrossFlashArmPct] = useState(60);
   const [tjTrajectoryDebug, setTjTrajectoryDebug] = useState<{
     cellKey: string;
     rejected?: "same-corner" | "arc-too-long";
@@ -697,6 +744,8 @@ export default function ReflecShotGame() {
   >(new Map());
   /** 十字路形成時の交差マスにオレンジ十字フラッシュ */
   const crossFlashRef = useRef<{ c: number; r: number; t0: number } | null>(null);
+  /** 射出中の軌跡（盤面 px）。編集フェーズでは空 */
+  const moveShotTrailRef = useRef<{ x: number; y: number }[]>([]);
   /** Grade5+: 折れ点バンパーへの初回入射方向 */
   const bumperIncomingFirstRef = useRef<Map<string, Dir>>(new Map());
   const twoSidedBumperUsedRef = useRef<Set<string>>(new Set());
@@ -1109,6 +1158,7 @@ export default function ReflecShotGame() {
   const beginShot = useCallback(() => {
     const st = stage;
     if (!st || phase !== "edit") return;
+    moveShotTrailRef.current = [];
     pathSegHistoryRef.current = [];
     crossGemAwardedThisSegRef.current = false;
     revisitCrossCellStateRef.current.clear();
@@ -1466,6 +1516,10 @@ export default function ReflecShotGame() {
   }, [isDevTj, isDebugMode, showSolutionPath, stage]);
 
   useEffect(() => {
+    if (phase === "edit") moveShotTrailRef.current = [];
+  }, [phase]);
+
+  useEffect(() => {
     if (!showWinOverlay) return;
     refreshAds();
   }, [showWinOverlay]);
@@ -1590,6 +1644,15 @@ export default function ReflecShotGame() {
       tailDx = at.x - af.x;
       tailDy = at.y - af.y;
       tailActive = phase === "move";
+    }
+
+    if (phase === "move") {
+      const tr = moveShotTrailRef.current;
+      const minD2 = Math.max(0.5 * 0.5, (cellPx * 0.035) ** 2);
+      const last = tr[tr.length - 1];
+      if (!last || (ballX - last.x) ** 2 + (ballY - last.y) ** 2 >= minD2) {
+        tr.push({ x: ballX, y: ballY });
+      }
     }
 
     for (let r = rMin; r <= rMax; r++) {
@@ -1766,7 +1829,7 @@ export default function ReflecShotGame() {
 
     if (isDevTj && isDebugMode && showSolutionPath && st.solutionPath.length > 1) {
       ctx.strokeStyle = "rgba(244, 63, 94, 0.55)";
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = SOLUTION_PATH_LINE_WIDTH;
       ctx.beginPath();
       const pL = cellCenterPx(st.startPad.c, st.startPad.r, cellPx, ox, oy, rMin);
       const p0 = cellCenterPx(st.solutionPath[0]!.c, st.solutionPath[0]!.r, cellPx, ox, oy, rMin);
@@ -1792,13 +1855,13 @@ export default function ReflecShotGame() {
         const fy = rowY(cf.r);
         const gcx = fx + cellPx / 2;
         const gcy = fy + cellPx / 2;
-        const armScale = (isDevTj && isDebugMode ? debugCrossFlashArmPct : 30) / 100;
+        const armScale = (isDevTj && isDebugMode ? debugCrossFlashArmPct : 60) / 100;
         const half = cellPx * armScale * (0.5 + 0.5 * pulse);
         ctx.save();
         ctx.strokeStyle = `rgba(251, 146, 60, ${0.42 + 0.48 * pulse})`;
         ctx.shadowColor = "rgba(251, 146, 60, 0.6)";
-        ctx.shadowBlur = 6 + 14 * pulse;
-        ctx.lineWidth = 2 + 3 * pulse;
+        ctx.shadowBlur = 3 + 7 * pulse;
+        ctx.lineWidth = 1 + 1.5 * pulse;
         ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(gcx - half, gcy);
@@ -1810,6 +1873,22 @@ export default function ReflecShotGame() {
       } else if (age >= crossFlashDur) {
         crossFlashRef.current = null;
       }
+    }
+
+    const shotTrail = moveShotTrailRef.current;
+    if (shotTrail.length >= 2 && phase !== "edit") {
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
+      ctx.lineWidth = SOLUTION_PATH_LINE_WIDTH;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(shotTrail[0]!.x, shotTrail[0]!.y);
+      for (let ti = 1; ti < shotTrail.length; ti++) {
+        ctx.lineTo(shotTrail[ti]!.x, shotTrail[ti]!.y);
+      }
+      ctx.stroke();
+      ctx.restore();
     }
 
     const gems = gemParticlesRef.current;
@@ -2394,6 +2473,7 @@ export default function ReflecShotGame() {
     st.bumpers.forEach((v) => {
       v.display = v.solution;
     });
+    alignDummyBumpersOnSolutionPathForAutoSolve(st);
     st.bumpers.forEach((bump, k) => {
       bumperSectorByKeyRef.current.set(k, sectorIndexForDisplayKind(bump.display));
     });
