@@ -2291,13 +2291,6 @@
     }
     return null;
   }
-  function throughBumperKindForTravel(d) {
-    return d.dx !== 0 ? "HYPHEN" : "PIPE";
-  }
-  function travelDirIntoPathCell(path, i) {
-    if (i <= 0) return null;
-    return unitStepDir(path[i].c - path[i - 1].c, path[i].r - path[i - 1].r);
-  }
   function randomWrongDisplay(solution, rng) {
     const opts = BUMPER_KINDS.filter((k) => k !== solution);
     return opts[Math.floor(rng() * opts.length)];
@@ -2320,17 +2313,11 @@
         if (st.bumpers.has(k)) continue;
         if (c === st.start.c && r === st.start.r || c === st.goal.c && r === st.goal.r) continue;
         const pi = pathKeyToIndex.get(k);
-        if (pi == null) {
-          candidates.push({ c, r, kind: "random" });
-          continue;
+        if (pi != null) {
+          if (pi === 0 || pi === st.solutionPath.length - 1) continue;
+          if (bendSet.has(k)) continue;
         }
-        if (pi === 0 || pi === st.solutionPath.length - 1) continue;
-        if (bendSet.has(k)) continue;
-        const travel = travelDirIntoPathCell(st.solutionPath, pi);
-        if (!travel) continue;
-        const th = throughBumperKindForTravel(travel);
-        if (!dirsEqual(applyBumper(travel, th), travel)) continue;
-        candidates.push({ c, r, kind: "through", through: th });
+        candidates.push({ c, r });
       }
     }
     shuffleArrayInPlace(candidates, rng);
@@ -2339,13 +2326,8 @@
       const cand = candidates[i];
       const k = keyCell(cand.c, cand.r);
       if (st.bumpers.has(k)) continue;
-      if (cand.kind === "through") {
-        const kind = cand.through;
-        st.bumpers.set(k, { display: kind, solution: kind, isDummy: true });
-      } else {
-        const kind = BUMPER_KINDS[Math.floor(rng() * BUMPER_KINDS.length)];
-        st.bumpers.set(k, { display: kind, solution: kind, isDummy: true });
-      }
+      const kind = BUMPER_KINDS[Math.floor(rng() * BUMPER_KINDS.length)];
+      st.bumpers.set(k, { display: kind, solution: kind, isDummy: true });
     }
     const pWrong = initialWrongDisplayProbabilityForGrade(st.grade);
     st.bumpers.forEach((cell, k) => {

@@ -3486,16 +3486,6 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
   return null;
 }
 
-/** 直進時に入射方向を変えないバンパー種（経路直線部のダミー用） */
-function throughBumperKindForTravel(d: Dir): BumperKind {
-  return d.dx !== 0 ? "HYPHEN" : "PIPE";
-}
-
-function travelDirIntoPathCell(path: CellCoord[], i: number): Dir | null {
-  if (i <= 0) return null;
-  return unitStepDir(path[i]!.c - path[i - 1]!.c, path[i]!.r - path[i - 1]!.r);
-}
-
 function randomWrongDisplay(solution: BumperKind, rng: () => number): BumperKind {
   const opts = BUMPER_KINDS.filter((k) => k !== solution);
   return opts[Math.floor(rng() * opts.length)]!;
@@ -3513,14 +3503,11 @@ export function finalizeReflecShotDifficulty(st: GridStage, polyOpts?: ReflectSh
     v.isDummy = false;
   });
 
-  type Cand =
-    | { c: number; r: number; kind: "random" }
-    | { c: number; r: number; kind: "through"; through: BumperKind };
-
   const pathKeyToIndex = new Map<string, number>();
   st.solutionPath.forEach((p, i) => pathKeyToIndex.set(keyCell(p.c, p.r), i));
 
-  const candidates: Cand[] = [];
+  /** 経路外の空きマス、および正解経路上の「端点・反射点以外」（直線部含む） */
+  const candidates: { c: number; r: number }[] = [];
   for (let c = 0; c < st.width; c++) {
     for (let r = 0; r < st.height; r++) {
       if (!st.pathable[c]![r]) continue;
@@ -3529,18 +3516,11 @@ export function finalizeReflecShotDifficulty(st: GridStage, polyOpts?: ReflectSh
       if ((c === st.start.c && r === st.start.r) || (c === st.goal.c && r === st.goal.r)) continue;
 
       const pi = pathKeyToIndex.get(k);
-      if (pi == null) {
-        candidates.push({ c, r, kind: "random" });
-        continue;
+      if (pi != null) {
+        if (pi === 0 || pi === st.solutionPath.length - 1) continue;
+        if (bendSet.has(k)) continue;
       }
-      if (pi === 0 || pi === st.solutionPath.length - 1) continue;
-      if (bendSet.has(k)) continue;
-
-      const travel = travelDirIntoPathCell(st.solutionPath, pi);
-      if (!travel) continue;
-      const th = throughBumperKindForTravel(travel);
-      if (!dirsEqual(applyBumper(travel, th), travel)) continue;
-      candidates.push({ c, r, kind: "through", through: th });
+      candidates.push({ c, r });
     }
   }
 
@@ -3550,13 +3530,8 @@ export function finalizeReflecShotDifficulty(st: GridStage, polyOpts?: ReflectSh
     const cand = candidates[i]!;
     const k = keyCell(cand.c, cand.r);
     if (st.bumpers.has(k)) continue;
-    if (cand.kind === "through") {
-      const kind = cand.through;
-      st.bumpers.set(k, { display: kind, solution: kind, isDummy: true });
-    } else {
-      const kind = BUMPER_KINDS[Math.floor(rng() * BUMPER_KINDS.length)]!;
-      st.bumpers.set(k, { display: kind, solution: kind, isDummy: true });
-    }
+    const kind = BUMPER_KINDS[Math.floor(rng() * BUMPER_KINDS.length)]!;
+    st.bumpers.set(k, { display: kind, solution: kind, isDummy: true });
   }
 
   const pWrong = initialWrongDisplayProbabilityForGrade(st.grade);
