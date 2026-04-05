@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef } from "react";
 import type { GridStage } from "@/app/lab/reflec-shot/gridTypes";
-import { cloneGridStageForRestore } from "@/app/lab/reflec-shot/gridTypes";
+import {
+  cloneGridStageForRestore,
+  defaultDummyDensityPctForGrade,
+} from "@/app/lab/reflec-shot/gridTypes";
 import type { ReflectShotGenerateResult } from "@/hooks/useReflectShotWorker";
 
 /** グレードごとの目標プリフェッチ枚数 */
@@ -31,6 +34,7 @@ export function useReflectShotBoardStock(
       source?: "user" | "prefetch";
       grade2Bend6TotalBends?: 6 | 7 | 8;
       lv4GenMode?: "default" | "rFirst" | "rSecond";
+      dummyDensityPct?: number;
     }
   ) => Promise<ReflectShotGenerateResult>,
   enabled: boolean = true
@@ -66,6 +70,7 @@ export function useReflectShotBoardStock(
         const seed = randomSeed() ^ (i * 0x9e3779b9);
         void generate(g, seed >>> 0, {
           source: "prefetch",
+          dummyDensityPct: defaultDummyDensityPctForGrade(g),
           ...(g === 5 ? ({ lv4GenMode: "rSecond" as const } as const) : {}),
         })
           .then(({ stage }) => {
