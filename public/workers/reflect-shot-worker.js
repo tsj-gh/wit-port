@@ -152,7 +152,7 @@
   function entryDirsPerpendicular(e1, e2) {
     return e1.dc * e2.dc + e1.dr * e2.dr === 0;
   }
-  function countRevisitCrossCellsOnSolutionPath(st) {
+  function revisitCrossCellKeysOnSolutionPath(st) {
     const path = st.solutionPath;
     const indicesByKey = /* @__PURE__ */ new Map();
     for (let i = 0; i < path.length; i++) {
@@ -160,8 +160,8 @@
       if (!indicesByKey.has(k)) indicesByKey.set(k, []);
       indicesByKey.get(k).push(i);
     }
-    let n = 0;
-    for (const [, idxs] of Array.from(indicesByKey.entries())) {
+    const out = /* @__PURE__ */ new Set();
+    for (const [k, idxs] of Array.from(indicesByKey.entries())) {
       if (idxs.length < 2) continue;
       const i0 = idxs[0];
       const i1 = idxs[1];
@@ -171,9 +171,12 @@
       const e1 = unitOrthoGridStep(path[i1 - 1], path[i1]);
       if (!e0 || !e1) continue;
       if (!entryDirsPerpendicular(e0, e1)) continue;
-      n++;
+      out.add(k);
     }
-    return n;
+    return out;
+  }
+  function countRevisitCrossCellsOnSolutionPath(st) {
+    return revisitCrossCellKeysOnSolutionPath(st).size;
   }
   function countExpectedTwoSidedBendsOnIdealPath(st) {
     const eligible = gemAwardBumperCellKeys(st);
@@ -2472,12 +2475,14 @@
     });
     const pathKeyToIndex = /* @__PURE__ */ new Map();
     st.solutionPath.forEach((p, i) => pathKeyToIndex.set(keyCell(p.c, p.r), i));
+    const revisitCrossKeys = revisitCrossCellKeysOnSolutionPath(st);
     const candidates = [];
     for (let c = 0; c < st.width; c++) {
       for (let r = 0; r < st.height; r++) {
         if (!st.pathable[c][r]) continue;
         const k = keyCell(c, r);
         if (st.bumpers.has(k)) continue;
+        if (revisitCrossKeys.has(k)) continue;
         if (c === st.start.c && r === st.start.r || c === st.goal.c && r === st.goal.r) continue;
         const pi = pathKeyToIndex.get(k);
         if (pi != null) {

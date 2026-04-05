@@ -123,10 +123,10 @@ function entryDirsPerpendicular(e1: { dc: number; dr: number }, e2: { dc: number
 }
 
 /**
- * 再訪十字: 同一マスが solutionPath で 2 回現れ、1 回目・2 回目ともそのマスで直進し、
- * 1 回目と 2 回目の進入方向が直交するマスの個数（各マス 1 回まで数える）。
+ * 再訪十字に該当するマスの `keyCell` 集合（`countRevisitCrossCellsOnSolutionPath` と同じ判定）。
+ * ダミーバンパー配置禁止など生成側の除外に用いる。
  */
-export function countRevisitCrossCellsOnSolutionPath(st: GridStage): number {
+export function revisitCrossCellKeysOnSolutionPath(st: GridStage): Set<string> {
   const path = st.solutionPath;
   const indicesByKey = new Map<string, number[]>();
   for (let i = 0; i < path.length; i++) {
@@ -134,8 +134,8 @@ export function countRevisitCrossCellsOnSolutionPath(st: GridStage): number {
     if (!indicesByKey.has(k)) indicesByKey.set(k, []);
     indicesByKey.get(k)!.push(i);
   }
-  let n = 0;
-  for (const [, idxs] of Array.from(indicesByKey.entries())) {
+  const out = new Set<string>();
+  for (const [k, idxs] of Array.from(indicesByKey.entries())) {
     if (idxs.length < 2) continue;
     const i0 = idxs[0]!;
     const i1 = idxs[1]!;
@@ -145,9 +145,17 @@ export function countRevisitCrossCellsOnSolutionPath(st: GridStage): number {
     const e1 = unitOrthoGridStep(path[i1 - 1]!, path[i1]!);
     if (!e0 || !e1) continue;
     if (!entryDirsPerpendicular(e0, e1)) continue;
-    n++;
+    out.add(k);
   }
-  return n;
+  return out;
+}
+
+/**
+ * 再訪十字: 同一マスが solutionPath で 2 回現れ、1 回目・2 回目ともそのマスで直進し、
+ * 1 回目と 2 回目の進入方向が直交するマスの個数（各マス 1 回まで数える）。
+ */
+export function countRevisitCrossCellsOnSolutionPath(st: GridStage): number {
+  return revisitCrossCellKeysOnSolutionPath(st).size;
 }
 
 /**

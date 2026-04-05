@@ -1,4 +1,4 @@
-import { applyGemRuleMetadataToStage } from "./reflecShotGemRules";
+import { applyGemRuleMetadataToStage, revisitCrossCellKeysOnSolutionPath } from "./reflecShotGemRules";
 import { applyBumper, bumperKindForTurn, diagonalBumperForTurn } from "./bumperRules";
 import {
   addCell,
@@ -3508,6 +3508,9 @@ export function finalizeReflecShotDifficulty(st: GridStage, polyOpts?: ReflectSh
   const pathKeyToIndex = new Map<string, number>();
   st.solutionPath.forEach((p, i) => pathKeyToIndex.set(keyCell(p.c, p.r), i));
 
+  /** 対角バンパーは直進を許さないため、直進×2・進入直交の再訪十字マスにダミーを置くと正解経路が成立しない */
+  const revisitCrossKeys = revisitCrossCellKeysOnSolutionPath(st);
+
   /** 経路外の空きマス、および正解経路上の「端点・反射点以外」（直線部含む） */
   const candidates: { c: number; r: number }[] = [];
   for (let c = 0; c < st.width; c++) {
@@ -3515,6 +3518,7 @@ export function finalizeReflecShotDifficulty(st: GridStage, polyOpts?: ReflectSh
       if (!st.pathable[c]![r]) continue;
       const k = keyCell(c, r);
       if (st.bumpers.has(k)) continue;
+      if (revisitCrossKeys.has(k)) continue;
       if ((c === st.start.c && r === st.start.r) || (c === st.goal.c && r === st.goal.r)) continue;
 
       const pi = pathKeyToIndex.get(k);
