@@ -75,8 +75,9 @@
     return s;
   }
   function initialWrongDisplayProbabilityForGrade(grade) {
-    const g = Math.max(1, Math.min(5, Math.floor(grade)));
-    return 0.05 + (g - 1) / 4 * 0.9;
+    const g = Math.max(1, Math.min(6, Math.floor(grade)));
+    if (g <= 5) return 0.05 + (g - 1) / 4 * 0.9;
+    return 0.95;
   }
   function countBumpersOnSolutionPath(st) {
     const keys = gemAwardBumperCellKeys(st);
@@ -152,8 +153,7 @@
   function entryDirsPerpendicular(e1, e2) {
     return e1.dc * e2.dc + e1.dr * e2.dr === 0;
   }
-  function revisitCrossCellKeysOnSolutionPath(st) {
-    const path = st.solutionPath;
+  function revisitCrossCellKeysFromPath(path) {
     const indicesByKey = /* @__PURE__ */ new Map();
     for (let i = 0; i < path.length; i++) {
       const k = keyCell(path[i].c, path[i].r);
@@ -174,6 +174,9 @@
       out.add(k);
     }
     return out;
+  }
+  function revisitCrossCellKeysOnSolutionPath(st) {
+    return revisitCrossCellKeysFromPath(st.solutionPath);
   }
   function countRevisitCrossCellsOnSolutionPath(st) {
     return revisitCrossCellKeysOnSolutionPath(st).size;
@@ -209,7 +212,7 @@
     const crossings = countPolylineOrthogonalCrossings(pts);
     const revisitCrossCells = countRevisitCrossCellsOnSolutionPath(st);
     const twoSidedBends = countExpectedTwoSidedBendsOnIdealPath(st);
-    const g = Math.max(1, Math.min(5, Math.floor(st.grade)));
+    const g = Math.max(1, Math.min(6, Math.floor(st.grade)));
     let required = baseBends;
     if (g >= 3) {
       required += Math.max(revisitCrossCells, crossings);
@@ -279,7 +282,7 @@
     return c >= 0 && c < w && r >= 0 && r < h;
   }
   function boardSizeForGrade(grade) {
-    const g = Math.max(1, Math.min(5, Math.floor(grade)));
+    const g = Math.max(1, Math.min(6, Math.floor(grade)));
     switch (g) {
       case 1:
       case 2:
@@ -288,8 +291,10 @@
       case 4:
       case 5:
         return { w: 5, h: 5 };
+      case 6:
+        return { w: 6, h: 6 };
       default:
-        return { w: 5, h: 5 };
+        return { w: 6, h: 6 };
     }
   }
   function makeRect(w, h) {
@@ -853,6 +858,124 @@
     ]);
     if (neigh.size !== 4) return false;
     return true;
+  }
+  function grade6RevisitBendAtCellKey(path, cellKey) {
+    const idxs = [];
+    for (let i = 0; i < path.length; i++) {
+      if (keyCell(path[i].c, path[i].r) === cellKey) idxs.push(i);
+    }
+    if (idxs.length !== 2) return false;
+    const i0 = Math.min(idxs[0], idxs[1]);
+    const i1 = Math.max(idxs[0], idxs[1]);
+    if (i0 <= 0 || i1 >= path.length - 1) return false;
+    if (interiorPassageKind(path, i0) !== "bend") return false;
+    if (interiorPassageKind(path, i1) !== "bend") return false;
+    const cellBeforeFirst = path[i0 - 1];
+    const dIn1 = unitStepDir(path[i0].c - cellBeforeFirst.c, path[i0].r - cellBeforeFirst.r);
+    const dOut1 = unitStepDir(path[i0 + 1].c - path[i0].c, path[i0 + 1].r - path[i0].r);
+    const dIn2 = unitStepDir(path[i1].c - path[i1 - 1].c, path[i1].r - path[i1 - 1].r);
+    if (!dIn1 || !dOut1 || !dIn2) return false;
+    const okIn2 = dirsEqual(dIn2, negateDir(dIn1)) || dirsEqual(dIn2, dOut1);
+    if (!okIn2) return false;
+    const nb = (p) => keyCell(p.c, p.r);
+    const neigh = /* @__PURE__ */ new Set([
+      nb(cellBeforeFirst),
+      nb(path[i0 + 1]),
+      nb(path[i1 - 1]),
+      nb(path[i1 + 1])
+    ]);
+    return neigh.size === 4;
+  }
+  function grade6DualRevisitSolutionPath(path) {
+    var _a;
+    const freq = /* @__PURE__ */ new Map();
+    for (const p of path) {
+      const k = keyCell(p.c, p.r);
+      freq.set(k, ((_a = freq.get(k)) != null ? _a : 0) + 1);
+    }
+    const twice = [];
+    for (const [k, n] of Array.from(freq.entries())) {
+      if (n === 2) twice.push(k);
+      else if (n !== 1) return false;
+    }
+    if (twice.length !== 2) return false;
+    const crossKeys = revisitCrossCellKeysFromPath(path);
+    if (crossKeys.size !== 1) return false;
+    const crossK = Array.from(crossKeys)[0];
+    const bendK = twice.find((t) => t !== crossK);
+    if (!bendK) return false;
+    return grade6RevisitBendAtCellKey(path, bendK);
+  }
+  function g6VisitHistogram(path) {
+    var _a;
+    const m = /* @__PURE__ */ new Map();
+    for (const p of path) {
+      const k = keyCell(p.c, p.r);
+      m.set(k, ((_a = m.get(k)) != null ? _a : 0) + 1);
+    }
+    return m;
+  }
+  function g6CanAppend(path, next) {
+    var _a;
+    const m = g6VisitHistogram(path);
+    const k = keyCell(next.c, next.r);
+    const nextCount = ((_a = m.get(k)) != null ? _a : 0) + 1;
+    if (nextCount > 2) return false;
+    m.set(k, nextCount);
+    let twos = 0;
+    for (const [, v] of Array.from(m.entries())) {
+      if (v === 2) twos++;
+    }
+    return twos <= 2;
+  }
+  function tryRandomG6SolutionPath(pathable, w, h, rng) {
+    const maxLen = 38;
+    const maxAttempts = 650;
+    const bottoms = bottomCandidates(pathable);
+    const tops = topCandidates(pathable);
+    if (!bottoms.length || !tops.length) return null;
+    const manhattan = (a, g) => Math.abs(a.c - g.c) + Math.abs(a.r - g.r);
+    for (let att = 0; att < maxAttempts; att++) {
+      const start = bottoms[Math.floor(rng() * bottoms.length)];
+      const goal = tops[Math.floor(rng() * tops.length)];
+      const path = [start];
+      while (path.length < maxLen) {
+        const cur = path[path.length - 1];
+        if (cur.c === goal.c && cur.r === goal.r) break;
+        const cand = [];
+        for (const d of [DIR.U, DIR.D, DIR.L, DIR.R]) {
+          const n = addCell(cur, d);
+          if (!inBounds(n.c, n.r, w, h) || !pathable[n.c][n.r]) continue;
+          if (g6CanAppend(path, n)) cand.push(n);
+        }
+        if (!cand.length) break;
+        const biasGoal = rng() < 0.78;
+        if (biasGoal && cand.length > 1) {
+          let best = Infinity;
+          for (const n of cand) {
+            const d = manhattan(n, goal);
+            if (d < best) best = d;
+          }
+          const pool = cand.filter((n) => manhattan(n, goal) === best);
+          path.push(pool[Math.floor(rng() * pool.length)]);
+        } else {
+          path.push(cand[Math.floor(rng() * cand.length)]);
+        }
+      }
+      const end = path[path.length - 1];
+      if (end.c !== goal.c || end.r !== goal.r) continue;
+      const hist = g6VisitHistogram(path);
+      let twos = 0;
+      for (const [, v] of Array.from(hist.entries())) {
+        if (v === 2) twos++;
+      }
+      if (twos !== 2) continue;
+      if (!grade6DualRevisitSolutionPath(path)) continue;
+      const cr = countRightAngles(path);
+      if (cr < 7 || cr > 8) continue;
+      return path.map((x) => __spreadValues({}, x));
+    }
+    return null;
   }
   function tryConstructGrade3Path(pathable, start, goal, rng) {
     const w = pathable.length;
@@ -1996,7 +2119,7 @@
         const pr1 = pN[pN.length - 2];
         if (lv4GoalPadRulesViolate(g1, pr1, w, h)) return null;
       }
-      if (!grade3RevisitOneCellRule(pN)) return null;
+      if (!(opts == null ? void 0 : opts.skipGrade3RevisitRule) && !grade3RevisitOneCellRule(pN)) return null;
     }
     const start = pN[0];
     const goal = pN[pN.length - 1];
@@ -2506,7 +2629,7 @@
       const cell = st.bumpers.get(k);
       return cell != null && !cell.isDummy;
     }).sort((a, b) => a.localeCompare(b));
-    const g = Math.max(1, Math.min(5, Math.floor(st.grade)));
+    const g = Math.max(1, Math.min(6, Math.floor(st.grade)));
     if (g === 1 && awardKeys.length === 2) {
       const wrongIdx = Math.floor(rng() * 2);
       for (let i = 0; i < 2; i++) {
@@ -2773,18 +2896,62 @@
     }
     return null;
   }
+  function generateBoardG6Stage(seed, polyOpts) {
+    const rng = createStageRng(seed);
+    const W = 6;
+    const H = 6;
+    const pathable = makeRect(W, H);
+    const maxAttempts = 500;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const path = tryRandomG6SolutionPath(pathable, W, H, rng);
+      if (!path) continue;
+      const bends = countRightAngles(path);
+      const picked = pickGrade2OrientedStage(pathable, path, W, H, bends, rng, {
+        relaxBendVisit: true,
+        enforceLv4GoalPadRules: true,
+        skipGrade3RevisitRule: true
+      });
+      if (!picked) continue;
+      const sol = picked.solutionPath;
+      if (!grade6DualRevisitSolutionPath(sol)) continue;
+      const crPick = countRightAngles(sol);
+      if (crPick < 7 || crPick > 8) continue;
+      const dup = /* @__PURE__ */ new Map();
+      picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+      const st = {
+        width: picked.width,
+        height: picked.height,
+        pathable: picked.pathable,
+        start: picked.start,
+        goal: picked.goal,
+        startPad: picked.startPad,
+        goalPad: picked.goalPad,
+        bumpers: dup,
+        solutionPath: sol,
+        grade: 6,
+        seed,
+        grade2PadAdjustLabel: picked.grade2PadAdjustLabel
+      };
+      applyGemRuleMetadataToStage(st);
+      const r = computeRequiredGemCountForStage(st);
+      if (r.revisitCrossCells !== 1) continue;
+      return st;
+    }
+    return null;
+  }
   function generateGridStage(grade, seed, polyOpts) {
-    const g = Math.max(1, Math.min(5, Math.floor(grade)));
+    const g = Math.max(1, Math.min(6, Math.floor(grade)));
     let st = null;
     if (g === 1 || g === 2) st = generateBoardLv1Stage(g, seed);
     else if (g === 3) st = generateBoardLv2Stage(seed, polyOpts);
     else if (g === 4) st = generateBoardLv3Stage(seed, polyOpts);
-    else st = generateBoardLv4Stage(seed, polyOpts);
+    else if (g === 5) st = generateBoardLv4Stage(seed, polyOpts);
+    else st = generateBoardG6Stage(seed, polyOpts);
     if (st) finalizeReflecShotDifficulty(st, polyOpts);
     return st;
   }
   function fallbackGridStageInner(grade, seed, polyOpts) {
-    const g = Math.max(1, Math.min(5, Math.floor(grade)));
+    const g = Math.max(1, Math.min(6, Math.floor(grade)));
     if (g === 1) {
       for (let t = 0; t < 500; t++) {
         const bodySeed = seed + t * 2654435769 >>> 0;
@@ -2833,16 +3000,28 @@
       }
       throw new Error("fallbackGridStage(4): Lv.3 \u306E\u751F\u6210\u306B\u5931\u6557");
     }
-    for (let t = 0; t < 500; t++) {
+    if (g === 5) {
+      for (let t = 0; t < 500; t++) {
+        const bodySeed = seed + t * 130051 >>> 0;
+        const st = generateBoardLv4Stage(bodySeed, polyOpts);
+        if (st) {
+          const merged = __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed });
+          finalizeReflecShotDifficulty(merged, polyOpts);
+          return { stage: merged, t };
+        }
+      }
+      throw new Error("fallbackGridStage(5): Lv.4 \u306E\u751F\u6210\u306B\u5931\u6557");
+    }
+    for (let t = 0; t < 2e3; t++) {
       const bodySeed = seed + t * 130051 >>> 0;
-      const st = generateBoardLv4Stage(bodySeed, polyOpts);
+      const st = generateBoardG6Stage(bodySeed, polyOpts);
       if (st) {
-        const merged = __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed });
+        const merged = __spreadProps(__spreadValues({}, st), { grade: 6, seed: bodySeed });
         finalizeReflecShotDifficulty(merged, polyOpts);
         return { stage: merged, t };
       }
     }
-    throw new Error("fallbackGridStage(5): Lv.4 \u306E\u751F\u6210\u306B\u5931\u6557");
+    throw new Error("fallbackGridStage(6): Grade6 \u306E\u751F\u6210\u306B\u5931\u6557");
   }
   function generateGridStageWithFallbackMeta(grade, seed, polyOpts) {
     const requestSeed = seed >>> 0;

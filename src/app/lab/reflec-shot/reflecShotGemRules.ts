@@ -123,11 +123,9 @@ function entryDirsPerpendicular(e1: { dc: number; dr: number }, e2: { dc: number
 }
 
 /**
- * 再訪十字に該当するマスの `keyCell` 集合（`countRevisitCrossCellsOnSolutionPath` と同じ判定）。
- * ダミーバンパー配置禁止など生成側の除外に用いる。
+ * 正解頂点列のみから再訪十字マスの `keyCell` 集合（`st` 不要・生成探索用）。
  */
-export function revisitCrossCellKeysOnSolutionPath(st: GridStage): Set<string> {
-  const path = st.solutionPath;
+export function revisitCrossCellKeysFromPath(path: CellCoord[]): Set<string> {
   const indicesByKey = new Map<string, number[]>();
   for (let i = 0; i < path.length; i++) {
     const k = keyCell(path[i]!.c, path[i]!.r);
@@ -148,6 +146,19 @@ export function revisitCrossCellKeysOnSolutionPath(st: GridStage): Set<string> {
     out.add(k);
   }
   return out;
+}
+
+/**
+ * 再訪十字に該当するマスの `keyCell` 集合（`countRevisitCrossCellsOnSolutionPath` と同じ判定）。
+ * ダミーバンパー配置禁止など生成側の除外に用いる。
+ */
+export function revisitCrossCellKeysOnSolutionPath(st: GridStage): Set<string> {
+  return revisitCrossCellKeysFromPath(st.solutionPath);
+}
+
+/** `solutionPath` 頂点列のみから再訪十字の個数（G6 経路検証用） */
+export function countRevisitCrossCellsOnPath(path: CellCoord[]): number {
+  return revisitCrossCellKeysFromPath(path).size;
 }
 
 /**
@@ -199,7 +210,7 @@ export function computeRequiredGemCountForStage(st: GridStage): {
   const crossings = countPolylineOrthogonalCrossings(pts);
   const revisitCrossCells = countRevisitCrossCellsOnSolutionPath(st);
   const twoSidedBends = countExpectedTwoSidedBendsOnIdealPath(st);
-  const g = Math.max(1, Math.min(5, Math.floor(st.grade)));
+  const g = Math.max(1, Math.min(6, Math.floor(st.grade)));
   let required = baseBends;
   if (g >= 3) {
     /** 十型など「十字だが solution の頂点列では 1 回しか出てこない」交差は crossings で数える */

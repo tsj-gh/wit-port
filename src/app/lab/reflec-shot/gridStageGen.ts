@@ -1,4 +1,9 @@
-import { applyGemRuleMetadataToStage, revisitCrossCellKeysOnSolutionPath } from "./reflecShotGemRules";
+import {
+  applyGemRuleMetadataToStage,
+  computeRequiredGemCountForStage,
+  revisitCrossCellKeysFromPath,
+  revisitCrossCellKeysOnSolutionPath,
+} from "./reflecShotGemRules";
 import { applyBumper, bumperKindForTurn, diagonalBumperForTurn } from "./bumperRules";
 import {
   addCell,
@@ -25,12 +30,13 @@ function inBounds(c: number, r: number, w: number, h: number) {
 
 /** UI 用：折れ回数目安・バンパー目安 */
 export function bendOrBumperHint(grade: number): string {
-  const g = Math.max(1, Math.min(5, Math.floor(grade)));
+  const g = Math.max(1, Math.min(6, Math.floor(grade)));
   if (g === 1) return "Lv.1・バンパー2";
   if (g === 2) return "Lv.1・バンパー4+";
   if (g === 3) return "Lv.2・折れ4";
   if (g === 4) return "Lv.3・折れ6〜8";
-  return "Lv.4・再訪1";
+  if (g === 5) return "Lv.4・再訪1";
+  return "Lv.5・6×6・折れ7〜8";
 }
 
 /** @deprecated 旧テンプレ盤用。新 Grade1〜5 では未使用 */
@@ -42,9 +48,9 @@ export function bumpersForGrade(grade: number): number {
   return 3;
 }
 
-/** Grade1〜2: 4×4 / Grade3〜5: 5×5 */
+/** Grade1〜2: 4×4 / Grade3〜5: 5×5 / Grade6: 6×6 */
 export function boardSizeForGrade(grade: number): { w: number; h: number } {
-  const g = Math.max(1, Math.min(5, Math.floor(grade)));
+  const g = Math.max(1, Math.min(6, Math.floor(grade)));
   switch (g) {
     case 1:
     case 2:
@@ -53,18 +59,20 @@ export function boardSizeForGrade(grade: number): { w: number; h: number } {
     case 4:
     case 5:
       return { w: 5, h: 5 };
+    case 6:
+      return { w: 6, h: 6 };
     default:
-      return { w: 5, h: 5 };
+      return { w: 6, h: 6 };
   }
 }
 
 function templatesForBoard(w: number, h: number, grade: number): (() => boolean[][])[] {
-  const g = Math.max(1, Math.min(5, Math.floor(grade)));
+  const g = Math.max(1, Math.min(6, Math.floor(grade)));
   const rect = () => makeRect(w, h);
   if (g <= 1) return [rect];
   if (g === 2) return [rect, () => templateL(w, h)];
   if (g === 3) return [rect];
-  if (g === 4 || g === 5) return [rect, () => templateL(w, h), () => templateT(w, h)];
+  if (g === 4 || g === 5 || g === 6) return [rect, () => templateL(w, h), () => templateT(w, h)];
   return [rect];
 }
 
@@ -966,6 +974,135 @@ function grade3RevisitOneCellRule(
   ]);
   if (neigh.size !== 4) return false;
   return true;
+}
+
+/** Grade6: `cellKey` がちょうど 2 回現れ、Lv.4 型の再訪折れ（両通過 bend・入射制約・4 近傍）を満たすか */
+function grade6RevisitBendAtCellKey(path: CellCoord[], cellKey: string): boolean {
+  const idxs: number[] = [];
+  for (let i = 0; i < path.length; i++) {
+    if (keyCell(path[i]!.c, path[i]!.r) === cellKey) idxs.push(i);
+  }
+  if (idxs.length !== 2) return false;
+  const i0 = Math.min(idxs[0]!, idxs[1]!);
+  const i1 = Math.max(idxs[0]!, idxs[1]!);
+  if (i0 <= 0 || i1 >= path.length - 1) return false;
+  if (interiorPassageKind(path, i0) !== "bend") return false;
+  if (interiorPassageKind(path, i1) !== "bend") return false;
+  const cellBeforeFirst = path[i0 - 1]!;
+  const dIn1 = unitStepDir(path[i0]!.c - cellBeforeFirst.c, path[i0]!.r - cellBeforeFirst.r);
+  const dOut1 = unitStepDir(path[i0 + 1]!.c - path[i0]!.c, path[i0 + 1]!.r - path[i0]!.r);
+  const dIn2 = unitStepDir(path[i1]!.c - path[i1 - 1]!.c, path[i1]!.r - path[i1 - 1]!.r);
+  if (!dIn1 || !dOut1 || !dIn2) return false;
+  const okIn2 =
+    dirsEqual(dIn2, negateDir(dIn1)) || dirsEqual(dIn2, dOut1);
+  if (!okIn2) return false;
+  const nb = (p: CellCoord) => keyCell(p.c, p.r);
+  const neigh = new Set([
+    nb(cellBeforeFirst),
+    nb(path[i0 + 1]!),
+    nb(path[i1 - 1]!),
+    nb(path[i1 + 1]!),
+  ]);
+  return neigh.size === 4;
+}
+
+/**
+ * Grade6 正解頂点列: ちょうど 2 マスが各 2 回、そのうち 1 が再訪十字・1 が再訪折れ（Lv.4 型）。
+ */
+function grade6DualRevisitSolutionPath(path: CellCoord[]): boolean {
+  const freq = new Map<string, number>();
+  for (const p of path) {
+    const k = keyCell(p.c, p.r);
+    freq.set(k, (freq.get(k) ?? 0) + 1);
+  }
+  const twice: string[] = [];
+  for (const [k, n] of Array.from(freq.entries())) {
+    if (n === 2) twice.push(k);
+    else if (n !== 1) return false;
+  }
+  if (twice.length !== 2) return false;
+  const crossKeys = revisitCrossCellKeysFromPath(path);
+  if (crossKeys.size !== 1) return false;
+  const crossK = Array.from(crossKeys)[0]!;
+  const bendK = twice.find((t) => t !== crossK);
+  if (!bendK) return false;
+  return grade6RevisitBendAtCellKey(path, bendK);
+}
+
+function g6VisitHistogram(path: CellCoord[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const p of path) {
+    const k = keyCell(p.c, p.r);
+    m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  return m;
+}
+
+function g6CanAppend(path: CellCoord[], next: CellCoord): boolean {
+  const m = g6VisitHistogram(path);
+  const k = keyCell(next.c, next.r);
+  const nextCount = (m.get(k) ?? 0) + 1;
+  if (nextCount > 2) return false;
+  m.set(k, nextCount);
+  let twos = 0;
+  for (const [, v] of Array.from(m.entries())) {
+    if (v === 2) twos++;
+  }
+  return twos <= 2;
+}
+
+/**
+ * 6×6 用: 下辺→上辺への貪欲ランダムウォーク（訪問上限付き）で G6 幾何を満たす直交経路を探索。
+ */
+function tryRandomG6SolutionPath(pathable: boolean[][], w: number, h: number, rng: () => number): CellCoord[] | null {
+  const maxLen = 38;
+  const maxAttempts = 650;
+  const bottoms = bottomCandidates(pathable);
+  const tops = topCandidates(pathable);
+  if (!bottoms.length || !tops.length) return null;
+  const manhattan = (a: CellCoord, g: CellCoord) => Math.abs(a.c - g.c) + Math.abs(a.r - g.r);
+
+  for (let att = 0; att < maxAttempts; att++) {
+    const start = bottoms[Math.floor(rng() * bottoms.length)]!;
+    const goal = tops[Math.floor(rng() * tops.length)]!;
+    const path: CellCoord[] = [start];
+    while (path.length < maxLen) {
+      const cur = path[path.length - 1]!;
+      if (cur.c === goal.c && cur.r === goal.r) break;
+      const cand: CellCoord[] = [];
+      for (const d of [DIR.U, DIR.D, DIR.L, DIR.R]) {
+        const n = addCell(cur, d);
+        if (!inBounds(n.c, n.r, w, h) || !pathable[n.c]![n.r]) continue;
+        if (g6CanAppend(path, n)) cand.push(n);
+      }
+      if (!cand.length) break;
+      const biasGoal = rng() < 0.78;
+      if (biasGoal && cand.length > 1) {
+        let best = Infinity;
+        for (const n of cand) {
+          const d = manhattan(n, goal);
+          if (d < best) best = d;
+        }
+        const pool = cand.filter((n) => manhattan(n, goal) === best);
+        path.push(pool[Math.floor(rng() * pool.length)]!);
+      } else {
+        path.push(cand[Math.floor(rng() * cand.length)]!);
+      }
+    }
+    const end = path[path.length - 1]!;
+    if (end.c !== goal.c || end.r !== goal.r) continue;
+    const hist = g6VisitHistogram(path);
+    let twos = 0;
+    for (const [, v] of Array.from(hist.entries())) {
+      if (v === 2) twos++;
+    }
+    if (twos !== 2) continue;
+    if (!grade6DualRevisitSolutionPath(path)) continue;
+    const cr = countRightAngles(path);
+    if (cr < 7 || cr > 8) continue;
+    return path.map((x) => ({ ...x }));
+  }
+  return null;
 }
 
 /** 再訪点 R を挟む前後を折れ線で接合（合計折れ 6 = R で 2 + 途中 4） */
@@ -2465,6 +2602,8 @@ function finalizeGrade2OrientedAfterRotation(
     requireGoalOnTopLeftRight?: boolean;
     /** Grade 5・Lv.4: `goalPad` を最下行の真下に置かず、左右端では入射を L/R に限定（違反時は末尾 HV→VH 反転を 1 回試行） */
     enforceLv4GoalPadRules?: boolean;
+    /** Grade6: `grade3RevisitOneCellRule` をスキップ（採否は呼び出し側で `grade6DualRevisitSolutionPath` 等） */
+    skipGrade3RevisitRule?: boolean;
   }
 ): Grade2OrientedSnapshot | null {
   const norm = normalizeGrade2OppositePadPolyline(p, pb, w, h);
@@ -2486,7 +2625,7 @@ function finalizeGrade2OrientedAfterRotation(
       const pr1 = pN[pN.length - 2]!;
       if (lv4GoalPadRulesViolate(g1, pr1, w, h)) return null;
     }
-    if (!grade3RevisitOneCellRule(pN)) return null;
+    if (!opts?.skipGrade3RevisitRule && !grade3RevisitOneCellRule(pN)) return null;
   }
 
   const start = pN[0]!;
@@ -2535,6 +2674,7 @@ function pickGrade2OrientedStage(
     relaxBendVisit?: boolean;
     requireGoalOnTopLeftRight?: boolean;
     enforceLv4GoalPadRules?: boolean;
+    skipGrade3RevisitRule?: boolean;
   }
 ): Grade2OrientedSnapshot | null {
   const winners: Grade2OrientedSnapshot[] = [];
@@ -3547,7 +3687,7 @@ export function finalizeReflecShotDifficulty(st: GridStage, polyOpts?: ReflectSh
       return cell != null && !cell.isDummy;
     })
     .sort((a, b) => a.localeCompare(b));
-  const g = Math.max(1, Math.min(5, Math.floor(st.grade)));
+  const g = Math.max(1, Math.min(6, Math.floor(st.grade)));
 
   if (g === 1 && awardKeys.length === 2) {
     const wrongIdx = Math.floor(rng() * 2);
@@ -3846,17 +3986,63 @@ function generateBoardLv3Stage(seed: number, polyOpts?: ReflectShotPolylineGenOp
   return null;
 }
 
+/** 盤面生成 Grade6: 6×6・折れ 7〜8・再訪十字 1 + 再訪折れ 1（両面ヒット想定 1） */
+function generateBoardG6Stage(seed: number, polyOpts?: ReflectShotPolylineGenOpts): GridStage | null {
+  const rng = createStageRng(seed);
+  const W = 6;
+  const H = 6;
+  const pathable = makeRect(W, H);
+  const maxAttempts = 500;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const path = tryRandomG6SolutionPath(pathable, W, H, rng);
+    if (!path) continue;
+    const bends = countRightAngles(path);
+    const picked = pickGrade2OrientedStage(pathable, path, W, H, bends, rng, {
+      relaxBendVisit: true,
+      enforceLv4GoalPadRules: true,
+      skipGrade3RevisitRule: true,
+    });
+    if (!picked) continue;
+    const sol = picked.solutionPath;
+    if (!grade6DualRevisitSolutionPath(sol)) continue;
+    const crPick = countRightAngles(sol);
+    if (crPick < 7 || crPick > 8) continue;
+    const dup = new Map<string, BumperCell>();
+    picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+    const st: GridStage = {
+      width: picked.width,
+      height: picked.height,
+      pathable: picked.pathable,
+      start: picked.start,
+      goal: picked.goal,
+      startPad: picked.startPad,
+      goalPad: picked.goalPad,
+      bumpers: dup,
+      solutionPath: sol,
+      grade: 6,
+      seed,
+      grade2PadAdjustLabel: picked.grade2PadAdjustLabel,
+    };
+    applyGemRuleMetadataToStage(st);
+    const r = computeRequiredGemCountForStage(st);
+    if (r.revisitCrossCells !== 1) continue;
+    return st;
+  }
+  return null;
+}
+
 export function generateGridStage(
   grade: number,
   seed: number,
   polyOpts?: ReflectShotPolylineGenOpts
 ): GridStage | null {
-  const g = Math.max(1, Math.min(5, Math.floor(grade)));
+  const g = Math.max(1, Math.min(6, Math.floor(grade)));
   let st: GridStage | null = null;
   if (g === 1 || g === 2) st = generateBoardLv1Stage(g, seed);
   else if (g === 3) st = generateBoardLv2Stage(seed, polyOpts);
   else if (g === 4) st = generateBoardLv3Stage(seed, polyOpts);
-  else st = generateBoardLv4Stage(seed, polyOpts);
+  else if (g === 5) st = generateBoardLv4Stage(seed, polyOpts);
+  else st = generateBoardG6Stage(seed, polyOpts);
   if (st) finalizeReflecShotDifficulty(st, polyOpts);
   return st;
 }
@@ -3881,7 +4067,7 @@ function fallbackGridStageInner(
   seed: number,
   polyOpts?: ReflectShotPolylineGenOpts
 ): FallbackInner {
-  const g = Math.max(1, Math.min(5, Math.floor(grade)));
+  const g = Math.max(1, Math.min(6, Math.floor(grade)));
   if (g === 1) {
     for (let t = 0; t < 500; t++) {
       const bodySeed = (seed + t * 0x9e3779b9) >>> 0;
@@ -3930,16 +4116,28 @@ function fallbackGridStageInner(
     }
     throw new Error("fallbackGridStage(4): Lv.3 の生成に失敗");
   }
-  for (let t = 0; t < 500; t++) {
+  if (g === 5) {
+    for (let t = 0; t < 500; t++) {
+      const bodySeed = (seed + t * 130051) >>> 0;
+      const st = generateBoardLv4Stage(bodySeed, polyOpts);
+      if (st) {
+        const merged = { ...st, grade: g, seed: bodySeed };
+        finalizeReflecShotDifficulty(merged, polyOpts);
+        return { stage: merged, t };
+      }
+    }
+    throw new Error("fallbackGridStage(5): Lv.4 の生成に失敗");
+  }
+  for (let t = 0; t < 2000; t++) {
     const bodySeed = (seed + t * 130051) >>> 0;
-    const st = generateBoardLv4Stage(bodySeed, polyOpts);
+    const st = generateBoardG6Stage(bodySeed, polyOpts);
     if (st) {
-      const merged = { ...st, grade: g, seed: bodySeed };
+      const merged = { ...st, grade: 6, seed: bodySeed };
       finalizeReflecShotDifficulty(merged, polyOpts);
       return { stage: merged, t };
     }
   }
-  throw new Error("fallbackGridStage(5): Lv.4 の生成に失敗");
+  throw new Error("fallbackGridStage(6): Grade6 の生成に失敗");
 }
 
 export function fallbackGridStage(grade: number, seed: number, polyOpts?: ReflectShotPolylineGenOpts): GridStage {

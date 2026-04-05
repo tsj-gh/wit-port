@@ -585,7 +585,7 @@ function drawCellGappedBorder(
 }
 
 /**
- * Worker に渡す生成オプション。`consumerGrade` は盤として再生産する Grade（1〜5）で、
+ * Worker に渡す生成オプション。`consumerGrade` は盤として再生産する Grade（1〜6）で、
  * UI のドロップダウン値に依存させない（rs2 パース結果などと一致させる）。
  * `dummyDensityPct` は常に含む（本番は `defaultDummyDensityPctForGrade`、devtj+DEBUG はスライダー値）。
  */
@@ -612,7 +612,7 @@ function reflectShotWorkerGenOptsForConsumerGrade(
     const n = debugGrade2Bend6MidSlider + 4;
     o.grade2Bend6TotalBends = n === 6 || n === 7 || n === 8 ? n : 7;
   }
-  if (consumerGrade >= 5) {
+  if (consumerGrade === 5) {
     if (isDevTj && isDebugMode) {
       if (debugLv4GenMode === "rFirst") o.lv4GenMode = "rFirst";
       else if (debugLv4GenMode === "default") o.lv4GenMode = "default";
@@ -2760,7 +2760,7 @@ export default function ReflecShotGame() {
                   </div>
                 </div>
               )}
-              {grade >= 5 && (
+              {grade === 5 && (
                 <div className="mt-2 flex flex-col gap-1 text-slate-400">
                   <span className="text-[10px] leading-tight text-slate-300">{t("games.reflecShot.debugGenModeLv4")}</span>
                   <div className="flex flex-wrap gap-1.5">
@@ -3059,7 +3059,7 @@ export default function ReflecShotGame() {
               className="flex w-full min-w-0 overflow-x-auto gap-2 py-1 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
               style={{ WebkitOverflowScrolling: "touch" }}
             >
-              {([1, 2, 3, 4, 5] as const).map((g) => {
+              {([1, 2, 3, 4, 5, 6] as const).map((g) => {
                 const isActive = grade === g;
                 return (
                   <button
