@@ -98,7 +98,7 @@ const WALL_SPARKLE_TTL_MS = 520;
 const BASE_GEM_ATTRACT = 0.0028;
 const DEFAULT_GEM_ATTRACT_MULT = 5;
 const DEFAULT_WALL_FX_MS = 500;
-const DEFAULT_GOAL_FX_MS = 300;
+const DEFAULT_GOAL_FX_MS = 150;
 const DEFAULT_BALL_SPEED_MULT = 2.5;
 
 type GemParticle = { x: number; y: number; vx: number; vy: number; born: number };
