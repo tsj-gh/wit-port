@@ -1,7 +1,7 @@
 import {
-  bendCellKeysInSolutionPath,
   countBumpersOnSolutionPath,
   dirsEqual,
+  gemAwardBumperCellKeys,
   keyCell,
   negateDir,
   unitOrthoDirBetween,
@@ -72,7 +72,7 @@ export function countPolylineOrthogonalCrossings(pts: CellCoord[]): number {
  * 想定正解経路をなぞったとき、同一折れ点バンパーに正反対の入射方向で 2 回目に入る回数（Grade5・再訪折れ）。
  */
 export function countExpectedTwoSidedBendsOnIdealPath(st: GridStage): number {
-  const bendKeys = bendCellKeysInSolutionPath(st.solutionPath);
+  const eligible = gemAwardBumperCellKeys(st);
   const poly = idealPathPointsForGemRules(st);
   const firstIn = new Map<string, Dir>();
   const done = new Set<string>();
@@ -83,7 +83,7 @@ export function countExpectedTwoSidedBendsOnIdealPath(st: GridStage): number {
     const incoming = unitOrthoDirBetween(prev, cur);
     if (!incoming) continue;
     const cellKey = keyCell(cur.c, cur.r);
-    if (!bendKeys.has(cellKey)) continue;
+    if (!eligible.has(cellKey)) continue;
     const bump = st.bumpers.get(cellKey);
     if (!bump || bump.isDummy) continue;
     const was = firstIn.get(cellKey);

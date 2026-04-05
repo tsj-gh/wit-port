@@ -64,14 +64,24 @@
     }
     return s;
   }
+  function gemAwardBumperCellKeys(st) {
+    const s = new Set(bendCellKeysInSolutionPath(st.solutionPath));
+    const sk = keyCell(st.start.c, st.start.r);
+    const gk = keyCell(st.goal.c, st.goal.r);
+    for (const k of [sk, gk]) {
+      const b = st.bumpers.get(k);
+      if (b && !b.isDummy) s.add(k);
+    }
+    return s;
+  }
   function initialWrongDisplayProbabilityForGrade(grade) {
     const g = Math.max(1, Math.min(5, Math.floor(grade)));
     return 0.05 + (g - 1) / 4 * 0.9;
   }
   function countBumpersOnSolutionPath(st) {
-    const bends = bendCellKeysInSolutionPath(st.solutionPath);
+    const keys = gemAwardBumperCellKeys(st);
     let n = 0;
-    bends.forEach((k) => {
+    keys.forEach((k) => {
       const b = st.bumpers.get(k);
       if (b && !b.isDummy) n++;
     });
@@ -84,13 +94,13 @@
     if (p.length === 0) return [__spreadValues({}, st.startPad), __spreadValues({}, st.goalPad)];
     return [__spreadValues({}, st.startPad), ...p.map((x) => __spreadValues({}, x)), __spreadValues({}, st.goalPad)];
   }
-  function orthoSegStrictInnerCross(a, b, c, d) {
+  function strictInnerCrossPoint(a, b, c, d) {
     let h1 = a.r === b.r;
     const h2 = c.r === d.r;
-    if (h1 === h2) return false;
-    if (!h1 && !h2) return false;
+    if (h1 === h2) return null;
+    if (!h1 && !h2) return null;
     if (!h1) {
-      return orthoSegStrictInnerCross(c, d, a, b);
+      return strictInnerCrossPoint(c, d, a, b);
     }
     const r0 = a.r;
     const cmin = Math.min(a.c, b.c);
@@ -98,7 +108,11 @@
     const c0 = c.c;
     const rmin = Math.min(c.r, d.r);
     const rmax = Math.max(c.r, d.r);
-    return cmin < c0 && c0 < cmax && rmin < r0 && r0 < rmax;
+    if (!(cmin < c0 && c0 < cmax && rmin < r0 && r0 < rmax)) return null;
+    return { c: c0, r: r0 };
+  }
+  function orthoSegStrictInnerCross(a, b, c, d) {
+    return strictInnerCrossPoint(a, b, c, d) != null;
   }
   function countPolylineOrthogonalCrossings(pts) {
     if (pts.length < 4) return 0;
@@ -121,7 +135,7 @@
     return cnt;
   }
   function countExpectedTwoSidedBendsOnIdealPath(st) {
-    const bendKeys = bendCellKeysInSolutionPath(st.solutionPath);
+    const eligible = gemAwardBumperCellKeys(st);
     const poly = idealPathPointsForGemRules(st);
     const firstIn = /* @__PURE__ */ new Map();
     const done = /* @__PURE__ */ new Set();
@@ -132,7 +146,7 @@
       const incoming = unitOrthoDirBetween(prev, cur);
       if (!incoming) continue;
       const cellKey = keyCell(cur.c, cur.r);
-      if (!bendKeys.has(cellKey)) continue;
+      if (!eligible.has(cellKey)) continue;
       const bump = st.bumpers.get(cellKey);
       if (!bump || bump.isDummy) continue;
       const was = firstIn.get(cellKey);

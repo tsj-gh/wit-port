@@ -18,9 +18,9 @@ import { useReflectShotWorker } from "@/hooks/useReflectShotWorker";
 import { bendOrBumperHint } from "./gridStageGen";
 import {
   addCell,
-  bendCellKeysInSolutionPath,
   cloneGridStageForRestore,
   countBumpersOnSolutionPath,
+  gemAwardBumperCellKeys,
   defaultDummyDensityPctForGrade,
   dirsEqual,
   DIR,
@@ -701,8 +701,8 @@ export default function ReflecShotGame() {
   /** StartPad 上でタップ／ドラッグしたら上向き矢印を消す。盤面が変わると再表示 */
   const [launchArrowDismissed, setLaunchArrowDismissed] = useState(false);
 
-  const solutionBendKeys = useMemo(
-    () => (stage ? bendCellKeysInSolutionPath(stage.solutionPath) : new Set<string>()),
+  const solutionGemBumperKeys = useMemo(
+    () => (stage ? gemAwardBumperCellKeys(stage) : new Set<string>()),
     [stage]
   );
 
@@ -1292,7 +1292,7 @@ export default function ReflecShotGame() {
         isBumperHit &&
         bumpAt &&
         !bumpAt.isDummy &&
-        solutionBendKeys.has(bkHit) &&
+        solutionGemBumperKeys.has(bkHit) &&
         !hyphenHorizontalPass &&
         !pipeVerticalPass;
       if (gemFromReflection) {
@@ -1381,7 +1381,7 @@ export default function ReflecShotGame() {
       isDevTj,
       phase,
       pulseBumperFlash,
-      solutionBendKeys,
+      solutionGemBumperKeys,
       stage,
     ]
   );
@@ -1677,7 +1677,7 @@ export default function ReflecShotGame() {
             }
           }
           const dbgReveal = isDevTj && isDebugMode && showSolutionPath;
-          const solBendHere = dbgReveal && !b.isDummy && solutionBendKeys.has(k);
+          const solBendHere = dbgReveal && !b.isDummy && solutionGemBumperKeys.has(k);
           let didSaveForDbg = false;
           if (dbgReveal && b.isDummy) {
             ctx.save();
@@ -1845,7 +1845,7 @@ export default function ReflecShotGame() {
     phase,
     requiredGems,
     showSolutionPath,
-    solutionBendKeys,
+    solutionGemBumperKeys,
     stage,
   ]);
 

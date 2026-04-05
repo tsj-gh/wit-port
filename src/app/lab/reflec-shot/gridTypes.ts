@@ -145,6 +145,20 @@ export function bendCellKeysInSolutionPath(path: CellCoord[]): Set<string> {
 }
 
 /**
+ * 宝石付与・必要数カウントの対象となるバンパーマス（折れ点に加え、非ダミーの start／goal 上バンパー）。
+ */
+export function gemAwardBumperCellKeys(st: GridStage): Set<string> {
+  const s = new Set(bendCellKeysInSolutionPath(st.solutionPath));
+  const sk = keyCell(st.start.c, st.start.r);
+  const gk = keyCell(st.goal.c, st.goal.r);
+  for (const k of [sk, gk]) {
+    const b = st.bumpers.get(k);
+    if (b && !b.isDummy) s.add(k);
+  }
+  return s;
+}
+
+/**
  * 生成時: 正解経路の反射バンパーが初期表示で不正解向きになる確率（グレード連動・UI 表示用）。
  * Grade 1 ≈ 5% … Grade 5 ≈ 95%
  */
@@ -161,11 +175,11 @@ export function defaultDummyDensityPctForGrade(grade: number): number {
 }
 
 /** 復元・ストック取り出し用のディープコピー（`setStage` 後にプレイヤー操作で汚染されないよう） */
-/** 正解経路上の反射点バンパー数（ダミー除外）。最低 1 を返す。 */
+/** 正解経路の反射対象バンパー数（折れ点＋start／goal の非ダミー）。最低 1 を返す。 */
 export function countBumpersOnSolutionPath(st: GridStage): number {
-  const bends = bendCellKeysInSolutionPath(st.solutionPath);
+  const keys = gemAwardBumperCellKeys(st);
   let n = 0;
-  bends.forEach((k) => {
+  keys.forEach((k) => {
     const b = st.bumpers.get(k);
     if (b && !b.isDummy) n++;
   });
