@@ -1341,18 +1341,23 @@ export default function ReflecShotGame() {
         bumpAt &&
         bumpAt.display === "PIPE" &&
         (dirsEqual(incoming, DIR.U) || dirsEqual(incoming, DIR.D));
-      const gemFromReflection =
+      const passThroughNoGem = hyphenHorizontalPass || pipeVerticalPass;
+      /** 正解経路上の本番バンパー（従来） */
+      const gemFromSolutionBumper =
         isBumperHit &&
         bumpAt &&
         !bumpAt.isDummy &&
         solutionGemBumperKeys.has(bkHit) &&
-        !hyphenHorizontalPass &&
-        !pipeVerticalPass;
+        !passThroughNoGem;
+      /** ダミーでも表示向きに応じた反射（スルー除く）で宝石 1（両面ボーナス対象外） */
+      const gemFromDummyBumper =
+        isBumperHit && bumpAt && bumpAt.isDummy === true && !passThroughNoGem;
+      const gemFromReflection = gemFromSolutionBumper || gemFromDummyBumper;
       if (gemFromReflection) {
         let addGems = 1;
         let burstN = GEM_BURST_N;
         let twoSidedHitFx = false;
-        if (st.grade >= 5) {
+        if (gemFromSolutionBumper && st.grade >= 5) {
           const prevIn = bumperIncomingFirstRef.current.get(bkHit);
           if (prevIn == null) {
             bumperIncomingFirstRef.current.set(bkHit, incoming);
