@@ -69,6 +69,55 @@ export function countPolylineOrthogonalCrossings(pts: CellCoord[]): number {
 }
 
 /**
+ * 理想ポリライン上で直交2辺が厳密内部で交わるマス（重複なし）。
+ * Grade3+ の目標数「再訪マス（十字）」はこのセル数と一致（経路がそのマスを複数回踏む幾何）。
+ */
+export function distinctOrthogonalCrossCells(pts: CellCoord[]): CellCoord[] {
+  if (pts.length < 4) return [];
+  type Seg = { a: CellCoord; b: CellCoord };
+  const segs: Seg[] = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i]!;
+    const b = pts[i + 1]!;
+    if (a.c === b.c && a.r === b.r) continue;
+    if (Math.abs(a.c - b.c) + Math.abs(a.r - b.r) !== 1) continue;
+    segs.push({ a, b });
+  }
+  const seen = new Set<string>();
+  const out: CellCoord[] = [];
+  for (let i = 0; i < segs.length; i++) {
+    for (let j = i + 1; j < segs.length; j++) {
+      const s = segs[i]!;
+      const t = segs[j]!;
+      const pt = strictInnerCrossPoint(s.a, s.b, t.a, t.b);
+      if (!pt) continue;
+      const k = keyCell(pt.c, pt.r);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ ...pt });
+    }
+  }
+  return out;
+}
+
+/** `solutionPath` 上で 2 回以上現れるセル（再訪）のうち、理想経路の十字交差マスに含まれる個数 */
+export function countRevisitCrossCellsOnSolutionPath(st: GridStage): number {
+  const pts = idealPathPointsForGemRules(st);
+  const crossKeys = new Set(distinctOrthogonalCrossCells(pts).map((p) => keyCell(p.c, p.r)));
+  if (crossKeys.size === 0) return 0;
+  const visit = new Map<string, number>();
+  for (const p of st.solutionPath) {
+    const k = keyCell(p.c, p.r);
+    visit.set(k, (visit.get(k) ?? 0) + 1);
+  }
+  let n = 0;
+  for (const k of Array.from(crossKeys)) {
+    if ((visit.get(k) ?? 0) >= 2) n++;
+  }
+  return n;
+}
+
+/**
  * 想定正解経路をなぞったとき、同一折れ点バンパーに正反対の入射方向で 2 回目に入る回数（Grade5・再訪折れ）。
  */
 export function countExpectedTwoSidedBendsOnIdealPath(st: GridStage): number {
@@ -100,18 +149,23 @@ export function countExpectedTwoSidedBendsOnIdealPath(st: GridStage): number {
 export function computeRequiredGemCountForStage(st: GridStage): {
   baseBends: number;
   crossings: number;
+  revisitCrossCells: number;
   twoSidedBends: number;
   required: number;
 } {
   const baseBends = countBumpersOnSolutionPath(st);
   const pts = idealPathPointsForGemRules(st);
   const crossings = countPolylineOrthogonalCrossings(pts);
+  const revisitCrossCells = countRevisitCrossCellsOnSolutionPath(st);
   const twoSidedBends = countExpectedTwoSidedBendsOnIdealPath(st);
   const g = Math.max(1, Math.min(5, Math.floor(st.grade)));
   let required = baseBends;
-  if (g >= 3) required += crossings;
+  if (g >= 3) {
+    /** 十型など「十字だが solution の頂点列では 1 回しか出てこない」交差は crossings で数える */
+    required += Math.max(revisitCrossCells, crossings);
+  }
   if (g >= 5) required += 3 * twoSidedBends;
-  return { baseBends, crossings, twoSidedBends, required };
+  return { baseBends, crossings, revisitCrossCells, twoSidedBends, required };
 }
 
 /** 新セグメントと過去セグメントの直交内部交差マス（先頭の1つ）。なければ null */
@@ -139,9 +193,9 @@ export function newAgentSegmentCrossesPriorPath(
 }
 
 export function applyGemRuleMetadataToStage(st: GridStage): void {
-  const { baseBends, crossings, twoSidedBends, required } = computeRequiredGemCountForStage(st);
-  st.gemRuleBaseBends = baseBends;
-  st.gemExpectedCrossings = crossings;
-  st.gemExpectedTwoSidedBends = twoSidedBends;
-  st.requiredGemCount = required;
+  const r = computeRequiredGemCountForStage(st);
+  st.gemRuleBaseBends = r.baseBends;
+  st.gemExpectedCrossings = Math.max(r.revisitCrossCells, r.crossings);
+  st.gemExpectedTwoSidedBends = r.twoSidedBends;
+  st.requiredGemCount = r.required;
 }

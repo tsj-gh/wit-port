@@ -39,9 +39,7 @@ import {
 import {
   computeRequiredGemCountForStage,
   countExpectedTwoSidedBendsOnIdealPath,
-  countPolylineOrthogonalCrossings,
   findCrossCellForNewAgentSegment,
-  idealPathPointsForGemRules,
 } from "./reflecShotGemRules";
 import { decodeReflecStageHash, encodeReflecStageHash, parseReflecHash } from "./reflecShotStageHash";
 import { ReflecShotAdSlot } from "@/components/ReflecShotAdSlots";
@@ -83,7 +81,7 @@ const DEV_SWIPE_MIN_SQ = 28 * 28;
 const ENTRY_VEC_MIN_SQ = 2.5 * 2.5;
 /** マス内バンパー記号（／＼－｜）のフォントサイズ = cellPx × この比率（従来 0.42 を 2 倍） */
 const BUMPER_GLYPH_SIZE_RATIO = 0.84;
-/** 軌跡確定時のマス強調＆P→Q 軌跡フェードの長さ（ms） */
+/** 軌跡確定時のマス強調＆P→Q 軌跡フェードの長さ（ms）。準備中バンパー向き確定／十字通過フラッシュと同じ尺 */
 const TRAJECTORY_BUMPER_FLASH_MS = 400;
 
 const MAX_GEM_PARTICLES = 80;
@@ -639,6 +637,8 @@ export default function ReflecShotGame() {
   const [debugLv4GenMode, setDebugLv4GenMode] = useState<"default" | "rFirst" | "rSecond">("rSecond");
   /** devtj 軌跡判定: 弧長上限 = 対角線 × この倍率（既定 1.3） */
   const [debugTjMaxArcFactor, setDebugTjMaxArcFactor] = useState(1.3);
+  /** devtj+DEBUG: 十字通過フラッシュの腕の基準長 = cellPx×(pct/100)（脈動で最大2倍近く） */
+  const [debugCrossFlashArmPct, setDebugCrossFlashArmPct] = useState(30);
   const [tjTrajectoryDebug, setTjTrajectoryDebug] = useState<{
     cellKey: string;
     rejected?: "same-corner" | "arc-too-long";
@@ -680,6 +680,8 @@ export default function ReflecShotGame() {
   const gemParticlesRef = useRef<GemParticle[]>([]);
   /** Grade3+: 射出体のセル間移動履歴（十字路判定） */
   const pathSegHistoryRef = useRef<{ a: CellCoord; b: CellCoord }[]>([]);
+  /** 現在セグメントで十字宝石を既に付与したか（マス中央通過またはセグメント終端で一度だけ） */
+  const crossGemAwardedThisSegRef = useRef(false);
   /** 十字路形成時の交差マスにオレンジ十字フラッシュ */
   const crossFlashRef = useRef<{ c: number; r: number; t0: number } | null>(null);
   /** Grade5+: 折れ点バンパーへの初回入射方向 */
@@ -865,6 +867,7 @@ export default function ReflecShotGame() {
     setGemGoalFail(false);
     setLaunchArrowDismissed(false);
     pathSegHistoryRef.current = [];
+    crossGemAwardedThisSegRef.current = false;
     crossFlashRef.current = null;
     bumperIncomingFirstRef.current.clear();
     twoSidedBumperUsedRef.current.clear();
@@ -1093,6 +1096,7 @@ export default function ReflecShotGame() {
     const st = stage;
     if (!st || phase !== "edit") return;
     pathSegHistoryRef.current = [];
+    crossGemAwardedThisSegRef.current = false;
     crossFlashRef.current = null;
     bumperIncomingFirstRef.current.clear();
     twoSidedBumperUsedRef.current.clear();
@@ -1203,8 +1207,61 @@ export default function ReflecShotGame() {
       const cellTravelMs = BASE_CELL_TRAVEL_MS / speedMult;
 
       const sim = simRef.current;
+      const prevLerp = sim.lerp01;
       sim.lerp01 += dtMs / cellTravelMs;
-      if (sim.lerp01 < 1) return;
+      const nextLerp = sim.lerp01;
+
+      if (st.grade >= 3) {
+        const crossCellMid = findCrossCellForNewAgentSegment(
+          pathSegHistoryRef.current,
+          sim.fromCell,
+          sim.toCell
+        );
+        if (
+          crossCellMid != null &&
+          !crossGemAwardedThisSegRef.current &&
+          ((prevLerp < 0.5 && nextLerp >= 0.5) || nextLerp >= 1)
+        ) {
+          crossGemAwardedThisSegRef.current = true;
+          const cCross0 = collectedGemsRef.current;
+          collectedGemsRef.current += 1;
+          const nowCross = performance.now();
+          crossFlashRef.current = { c: crossCellMid.c, r: crossCellMid.r, t0: nowCross };
+          if (
+            collectedGemsRef.current >= requiredGemsRef.current &&
+            cCross0 < requiredGemsRef.current
+          ) {
+            goalUnlockPulseRef.current = nowCross;
+            const layGx = boardLayoutRef.current;
+            if (layGx) {
+              const gp = st.goalPad;
+              const gcc = cellCenterPx(gp.c, gp.r, layGx.cellPx, layGx.ox, layGx.oy, layGx.rMin);
+              pushGoalSparkles(goalSparklesRef.current, gcc.x, gcc.y, nowCross);
+            }
+          }
+          const layCross = boardLayoutRef.current;
+          if (layCross) {
+            const cc = cellCenterPx(
+              crossCellMid.c,
+              crossCellMid.r,
+              layCross.cellPx,
+              layCross.ox,
+              layCross.oy,
+              layCross.rMin
+            );
+            pushGemBurst(
+              gemParticlesRef.current,
+              cc.x,
+              cc.y,
+              nowCross,
+              GEM_BURST_CROSS_INSTANT_N
+            );
+          }
+          setCollectedGems(collectedGemsRef.current);
+        }
+      }
+
+      if (nextLerp < 1) return;
 
       const fromPadToFirst =
         sim.fromCell.c === st.startPad.c &&
@@ -1213,6 +1270,7 @@ export default function ReflecShotGame() {
         sim.toCell.r === st.start.r;
 
       sim.lerp01 = 0;
+      crossGemAwardedThisSegRef.current = false;
       const B = { ...sim.toCell };
       sim.logicalCell = B;
       if (fromPadToFirst) {
@@ -1223,48 +1281,8 @@ export default function ReflecShotGame() {
         dy: sim.fromCell.r - B.r,
       };
 
-      let crossCell: CellCoord | null = null;
       if (st.grade >= 3) {
-        crossCell = findCrossCellForNewAgentSegment(pathSegHistoryRef.current, sim.fromCell, B);
         pathSegHistoryRef.current.push({ a: { ...sim.fromCell }, b: { ...B } });
-      }
-
-      if (crossCell != null && st.grade >= 3) {
-        const cCross0 = collectedGemsRef.current;
-        collectedGemsRef.current += 1;
-        const nowCross = performance.now();
-        crossFlashRef.current = { c: crossCell.c, r: crossCell.r, t0: nowCross };
-        if (
-          collectedGemsRef.current >= requiredGemsRef.current &&
-          cCross0 < requiredGemsRef.current
-        ) {
-          goalUnlockPulseRef.current = nowCross;
-          const layGx = boardLayoutRef.current;
-          if (layGx) {
-            const gp = st.goalPad;
-            const gcc = cellCenterPx(gp.c, gp.r, layGx.cellPx, layGx.ox, layGx.oy, layGx.rMin);
-            pushGoalSparkles(goalSparklesRef.current, gcc.x, gcc.y, nowCross);
-          }
-        }
-        const layCross = boardLayoutRef.current;
-        if (layCross) {
-          const cc = cellCenterPx(
-            crossCell.c,
-            crossCell.r,
-            layCross.cellPx,
-            layCross.ox,
-            layCross.oy,
-            layCross.rMin
-          );
-          pushGemBurst(
-            gemParticlesRef.current,
-            cc.x,
-            cc.y,
-            nowCross,
-            GEM_BURST_CROSS_INSTANT_N
-          );
-        }
-        setCollectedGems(collectedGemsRef.current);
       }
 
       const res = applyArrival(st, B, incoming);
@@ -1385,15 +1403,18 @@ export default function ReflecShotGame() {
   useEffect(() => {
     if (!isDevTj || !isDebugMode || !showSolutionPath || !stage) return;
     const base = stage.gemRuleBaseBends ?? countBumpersOnSolutionPath(stage);
+    const r = computeRequiredGemCountForStage(stage);
     const cross =
-      stage.gemExpectedCrossings ?? countPolylineOrthogonalCrossings(idealPathPointsForGemRules(stage));
+      stage.gemExpectedCrossings ?? Math.max(r.revisitCrossCells, r.crossings);
     const twoSided =
       stage.gemExpectedTwoSidedBends ?? countExpectedTwoSidedBendsOnIdealPath(stage);
-    const reqG = stage.requiredGemCount ?? computeRequiredGemCountForStage(stage).required;
+    const reqG = stage.requiredGemCount ?? r.required;
     console.log("[ReflecShot] gem rule check (expected vs Goal)", {
       grade: stage.grade,
       baseBends: base,
-      expectedCrossings: cross,
+      crossPairs: r.crossings,
+      revisitCrossCells: r.revisitCrossCells,
+      crossEffective: cross,
       expectedTwoSidedBends: twoSided,
       requiredGemCount: reqG,
     });
@@ -1718,14 +1739,16 @@ export default function ReflecShotGame() {
     const cf = crossFlashRef.current;
     if (cf) {
       const age = now - cf.t0;
-      if (age >= 0 && age < 400) {
-        const u = age / 400;
+      const crossFlashDur = TRAJECTORY_BUMPER_FLASH_MS;
+      if (age >= 0 && age < crossFlashDur) {
+        const u = age / crossFlashDur;
         const pulse = (1 - u) * (1 - u);
         const fx = ox + cf.c * cellPx;
         const fy = rowY(cf.r);
         const gcx = fx + cellPx / 2;
         const gcy = fy + cellPx / 2;
-        const half = cellPx * (0.2 + 0.2 * pulse);
+        const armScale = (isDevTj && isDebugMode ? debugCrossFlashArmPct : 30) / 100;
+        const half = cellPx * armScale * (0.5 + 0.5 * pulse);
         ctx.save();
         ctx.strokeStyle = `rgba(251, 146, 60, ${0.42 + 0.48 * pulse})`;
         ctx.shadowColor = "rgba(251, 146, 60, 0.6)";
@@ -1739,7 +1762,7 @@ export default function ReflecShotGame() {
         ctx.lineTo(gcx, gcy + half);
         ctx.stroke();
         ctx.restore();
-      } else if (age >= 400) {
+      } else if (age >= crossFlashDur) {
         crossFlashRef.current = null;
       }
     }
@@ -1834,6 +1857,7 @@ export default function ReflecShotGame() {
     boardLayoutRef.current = { cellPx, ox, oy, rMin };
   }, [
     collectedGems,
+    debugCrossFlashArmPct,
     debugGemAttractMult,
     debugGoalFxMs,
     debugWallFxMs,
@@ -2338,6 +2362,7 @@ export default function ReflecShotGame() {
     setShowFailOverlay(false);
     editBallPadRef.current = null;
     pathSegHistoryRef.current = [];
+    crossGemAwardedThisSegRef.current = false;
     crossFlashRef.current = null;
     bumperIncomingFirstRef.current.clear();
     twoSidedBumperUsedRef.current.clear();
@@ -2420,11 +2445,18 @@ export default function ReflecShotGame() {
                     {t("games.reflecShot.debugGemRulePanelTitle")}
                   </div>
                   <div>
-                    base={stage.gemRuleBaseBends ?? countBumpersOnSolutionPath(stage)} cross=
-                    {stage.gemExpectedCrossings ??
-                      countPolylineOrthogonalCrossings(idealPathPointsForGemRules(stage))}{" "}
-                    twoSided=
-                    {stage.gemExpectedTwoSidedBends ?? countExpectedTwoSidedBendsOnIdealPath(stage)}
+                    {(() => {
+                      const r = computeRequiredGemCountForStage(stage);
+                      return (
+                        <>
+                          base={stage.gemRuleBaseBends ?? r.baseBends} crossPairs={r.crossings}{" "}
+                          revisitCross={r.revisitCrossCells} crossEff=
+                          {stage.gemExpectedCrossings ?? Math.max(r.revisitCrossCells, r.crossings)}{" "}
+                          twoSided=
+                          {stage.gemExpectedTwoSidedBends ?? r.twoSidedBends}
+                        </>
+                      );
+                    })()}
                   </div>
                   <div>
                     requiredGem=
@@ -2479,6 +2511,21 @@ export default function ReflecShotGame() {
                 />
                 <span className="tabular-nums w-10 text-right text-[10px] text-amber-200/90">
                   {debugGemAttractMult}×
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
+                <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugCrossFlashArm")}</span>
+                <input
+                  type="range"
+                  min={10}
+                  max={55}
+                  step={1}
+                  value={debugCrossFlashArmPct}
+                  onChange={(e) => setDebugCrossFlashArmPct(Number(e.target.value))}
+                  className="flex-1 min-w-0 accent-orange-400"
+                />
+                <span className="tabular-nums w-9 text-right text-[10px] text-orange-200/90">
+                  {debugCrossFlashArmPct}%
                 </span>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">

@@ -134,6 +134,48 @@
     }
     return cnt;
   }
+  function distinctOrthogonalCrossCells(pts) {
+    if (pts.length < 4) return [];
+    const segs = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      if (a.c === b.c && a.r === b.r) continue;
+      if (Math.abs(a.c - b.c) + Math.abs(a.r - b.r) !== 1) continue;
+      segs.push({ a, b });
+    }
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (let i = 0; i < segs.length; i++) {
+      for (let j = i + 1; j < segs.length; j++) {
+        const s = segs[i];
+        const t = segs[j];
+        const pt = strictInnerCrossPoint(s.a, s.b, t.a, t.b);
+        if (!pt) continue;
+        const k = keyCell(pt.c, pt.r);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(__spreadValues({}, pt));
+      }
+    }
+    return out;
+  }
+  function countRevisitCrossCellsOnSolutionPath(st) {
+    var _a, _b;
+    const pts = idealPathPointsForGemRules(st);
+    const crossKeys = new Set(distinctOrthogonalCrossCells(pts).map((p) => keyCell(p.c, p.r)));
+    if (crossKeys.size === 0) return 0;
+    const visit = /* @__PURE__ */ new Map();
+    for (const p of st.solutionPath) {
+      const k = keyCell(p.c, p.r);
+      visit.set(k, ((_a = visit.get(k)) != null ? _a : 0) + 1);
+    }
+    let n = 0;
+    for (const k of Array.from(crossKeys)) {
+      if (((_b = visit.get(k)) != null ? _b : 0) >= 2) n++;
+    }
+    return n;
+  }
   function countExpectedTwoSidedBendsOnIdealPath(st) {
     const eligible = gemAwardBumperCellKeys(st);
     const poly = idealPathPointsForGemRules(st);
@@ -163,19 +205,22 @@
     const baseBends = countBumpersOnSolutionPath(st);
     const pts = idealPathPointsForGemRules(st);
     const crossings = countPolylineOrthogonalCrossings(pts);
+    const revisitCrossCells = countRevisitCrossCellsOnSolutionPath(st);
     const twoSidedBends = countExpectedTwoSidedBendsOnIdealPath(st);
     const g = Math.max(1, Math.min(5, Math.floor(st.grade)));
     let required = baseBends;
-    if (g >= 3) required += crossings;
+    if (g >= 3) {
+      required += Math.max(revisitCrossCells, crossings);
+    }
     if (g >= 5) required += 3 * twoSidedBends;
-    return { baseBends, crossings, twoSidedBends, required };
+    return { baseBends, crossings, revisitCrossCells, twoSidedBends, required };
   }
   function applyGemRuleMetadataToStage(st) {
-    const { baseBends, crossings, twoSidedBends, required } = computeRequiredGemCountForStage(st);
-    st.gemRuleBaseBends = baseBends;
-    st.gemExpectedCrossings = crossings;
-    st.gemExpectedTwoSidedBends = twoSidedBends;
-    st.requiredGemCount = required;
+    const r = computeRequiredGemCountForStage(st);
+    st.gemRuleBaseBends = r.baseBends;
+    st.gemExpectedCrossings = Math.max(r.revisitCrossCells, r.crossings);
+    st.gemExpectedTwoSidedBends = r.twoSidedBends;
+    st.requiredGemCount = r.required;
   }
 
   // src/app/lab/reflec-shot/bumperRules.ts
