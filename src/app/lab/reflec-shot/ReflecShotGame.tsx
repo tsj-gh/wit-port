@@ -685,8 +685,6 @@ export default function ReflecShotGame() {
   /** Grade5+: 折れ点バンパーへの初回入射方向 */
   const bumperIncomingFirstRef = useRef<Map<string, Dir>>(new Map());
   const twoSidedBumperUsedRef = useRef<Set<string>>(new Set());
-  /** Goal ロック時の残り宝石表示用スムーズ値 */
-  const gemRemainVisualRef = useRef(0);
   const goalSparklesRef = useRef<GoalSparkle[]>([]);
   /** 条件達成時の演出用タイムスタンプ */
   const goalUnlockPulseRef = useRef(0);
@@ -856,7 +854,6 @@ export default function ReflecShotGame() {
       stage.requiredGemCount ?? computeRequiredGemCountForStage(stage).required;
     requiredGemsRef.current = req;
     setRequiredGems(req);
-    gemRemainVisualRef.current = Math.max(0, req);
     collectedGemsRef.current = 0;
     setCollectedGems(0);
     gemParticlesRef.current.length = 0;
@@ -1099,7 +1096,6 @@ export default function ReflecShotGame() {
     crossFlashRef.current = null;
     bumperIncomingFirstRef.current.clear();
     twoSidedBumperUsedRef.current.clear();
-    gemRemainVisualRef.current = Math.max(0, requiredGemsRef.current);
     collectedGemsRef.current = 0;
     setCollectedGems(0);
     gemParticlesRef.current.length = 0;
@@ -1242,7 +1238,6 @@ export default function ReflecShotGame() {
           collectedGemsRef.current >= requiredGemsRef.current &&
           cCross0 < requiredGemsRef.current
         ) {
-          gemRemainVisualRef.current = 0;
           goalUnlockPulseRef.current = nowCross;
           const layGx = boardLayoutRef.current;
           if (layGx) {
@@ -1317,7 +1312,6 @@ export default function ReflecShotGame() {
         collectedGemsRef.current += addGems;
         const nowG = performance.now();
         if (collectedGemsRef.current >= requiredGemsRef.current && c0 < requiredGemsRef.current) {
-          gemRemainVisualRef.current = 0;
           goalUnlockPulseRef.current = nowG;
           const layG = boardLayoutRef.current;
           if (layG) {
@@ -1563,12 +1557,11 @@ export default function ReflecShotGame() {
           const gcx = x + cellPx / 2;
           const gcy = y + cellPx / 2;
           if (!goalOpen) {
-            const trackRem = Math.max(0, req - col);
-            let vr = gemRemainVisualRef.current;
-            vr += (trackRem - vr) * 0.14;
-            if (Math.abs(vr - trackRem) < 0.04) vr = trackRem;
-            gemRemainVisualRef.current = vr;
-            const remDisplay = Math.max(0, Math.ceil(vr - 1e-9));
+            const gemCountLabel = `${col}/${req}`;
+            const gemCountFontPx = Math.max(
+              8,
+              Math.floor(cellPx * (gemCountLabel.length > 3 ? 0.15 : 0.19))
+            );
             ctx.fillStyle = "#2a1a1f";
             ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
             ctx.strokeStyle = "rgba(127, 29, 29, 0.45)";
@@ -1580,11 +1573,11 @@ export default function ReflecShotGame() {
               ctx.stroke();
             }
             ctx.save();
-            ctx.font = `600 ${Math.max(9, Math.floor(cellPx * 0.19))}px sans-serif`;
+            ctx.font = `600 ${gemCountFontPx}px sans-serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillStyle = "rgba(253, 224, 71, 0.9)";
-            ctx.fillText(String(remDisplay), gcx, y + cellPx * 0.24);
+            ctx.fillText(gemCountLabel, gcx, y + cellPx * 0.24);
             ctx.restore();
             const dotR = Math.max(2.2, cellPx * 0.054);
             const spacing =
@@ -1628,12 +1621,17 @@ export default function ReflecShotGame() {
           gg.addColorStop(1, "rgba(16, 185, 129, 0)");
           ctx.fillStyle = gg;
           ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
+          const gemOpenLabel = `${col}/${req}`;
+          const gemOpenFontPx = Math.max(
+            8,
+            Math.floor(cellPx * (gemOpenLabel.length > 3 ? 0.14 : 0.17))
+          );
           ctx.save();
-          ctx.font = `600 ${Math.max(9, Math.floor(cellPx * 0.17))}px sans-serif`;
+          ctx.font = `600 ${gemOpenFontPx}px sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillStyle = `rgba(204, 251, 241, ${0.65 + pulse * 0.2})`;
-          ctx.fillText("0", gcx, gcy + cellPx * 0.36);
+          ctx.fillText(gemOpenLabel, gcx, gcy + cellPx * 0.36);
           ctx.restore();
           drawCellGappedBorder(ctx, x, y, cellPx, "#0f3d34", openLenDraw);
           continue;
@@ -2343,7 +2341,6 @@ export default function ReflecShotGame() {
     crossFlashRef.current = null;
     bumperIncomingFirstRef.current.clear();
     twoSidedBumperUsedRef.current.clear();
-    gemRemainVisualRef.current = Math.max(0, requiredGemsRef.current);
     collectedGemsRef.current = 0;
     setCollectedGems(0);
     gemParticlesRef.current.length = 0;
