@@ -1557,7 +1557,7 @@ export default function ReflecShotGame() {
           const gcx = x + cellPx / 2;
           const gcy = y + cellPx / 2;
           if (!goalOpen) {
-            const gemCountLabel = `${col}/${req}`;
+            const gemCountLabel = col < 1 ? String(req) : `${col}/${req}`;
             const gemCountFontPx = Math.max(
               8,
               Math.floor(cellPx * (gemCountLabel.length > 3 ? 0.15 : 0.19))
@@ -2449,7 +2449,9 @@ export default function ReflecShotGame() {
                 </span>
               </div>
               <p className="mt-1 text-[10px] leading-snug text-slate-500">
-                {t("games.reflecShot.debugInitialWrongRate").replace("{pct}", String(initialWrongRatePct))}
+                {grade <= 2
+                  ? t("games.reflecShot.debugInitialWrongRateGrade12")
+                  : t("games.reflecShot.debugInitialWrongRate").replace("{pct}", String(initialWrongRatePct))}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugBallSpeed")}</span>
@@ -2848,7 +2850,7 @@ export default function ReflecShotGame() {
               const rg = stage?.grade ?? grade;
               return (
                 <>
-                  <p className="mx-auto max-w-md text-sm font-medium leading-relaxed text-wit-muted">
+                  <p className="mx-auto max-w-md text-sm font-medium leading-relaxed text-wit-muted md:whitespace-nowrap md:text-[13px]">
                     {t("games.reflecShot.ruleIntro")}
                   </p>
                   {rg >= 3 && rg <= 4 && (
@@ -2866,8 +2868,11 @@ export default function ReflecShotGame() {
                       </p>
                     </>
                   )}
-                  <p className="mx-auto max-w-md border-t border-white/10 pt-2 text-xs leading-relaxed text-wit-muted/90 whitespace-pre-line">
-                    {t("games.reflecShot.ruleControls")}
+                  <p className="mx-auto max-w-md border-t border-white/10 pt-2 text-xs leading-relaxed text-wit-muted/90">
+                    <span className="block whitespace-pre-line md:hidden">{t("games.reflecShot.ruleControls")}</span>
+                    <span className="hidden md:block md:whitespace-nowrap md:text-center md:text-[11px]">
+                      {t("games.reflecShot.ruleControlsPc")}
+                    </span>
                   </p>
                 </>
               );

@@ -2452,10 +2452,38 @@
       const kind = BUMPER_KINDS[Math.floor(rng() * BUMPER_KINDS.length)];
       st.bumpers.set(k, { display: kind, solution: kind, isDummy: true });
     }
+    const assignedKeys = /* @__PURE__ */ new Set();
+    const awardKeys = Array.from(gemAwardBumperCellKeys(st)).filter((k) => {
+      const cell = st.bumpers.get(k);
+      return cell != null && !cell.isDummy;
+    }).sort((a, b) => a.localeCompare(b));
+    const g = Math.max(1, Math.min(5, Math.floor(st.grade)));
+    if (g === 1 && awardKeys.length === 2) {
+      const wrongIdx = Math.floor(rng() * 2);
+      for (let i = 0; i < 2; i++) {
+        const k = awardKeys[i];
+        const cell = st.bumpers.get(k);
+        cell.display = i === wrongIdx ? randomWrongDisplay(cell.solution, rng) : cell.solution;
+        assignedKeys.add(k);
+      }
+    } else if (g === 2 && awardKeys.length >= 4) {
+      let wrongN = 1 + Math.floor(rng() * 2);
+      wrongN = Math.min(wrongN, awardKeys.length - 1);
+      const order = [...awardKeys];
+      shuffleArrayInPlace(order, rng);
+      for (let i = 0; i < awardKeys.length; i++) {
+        const k = order[i];
+        const cell = st.bumpers.get(k);
+        const wrong = i < wrongN;
+        cell.display = wrong ? randomWrongDisplay(cell.solution, rng) : cell.solution;
+        assignedKeys.add(k);
+      }
+    }
     const pWrong = initialWrongDisplayProbabilityForGrade(st.grade);
     st.bumpers.forEach((cell, k) => {
       if (cell.isDummy) return;
       if (!bendSet.has(k)) return;
+      if (assignedKeys.has(k)) return;
       if (rng() < pWrong) {
         cell.display = randomWrongDisplay(cell.solution, rng);
       } else {
