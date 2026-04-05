@@ -682,6 +682,19 @@ export default function ReflecShotGame() {
   const pathSegHistoryRef = useRef<{ a: CellCoord; b: CellCoord }[]>([]);
   /** 現在セグメントで十字宝石を既に付与したか（マス中央通過またはセグメント終端で一度だけ） */
   const crossGemAwardedThisSegRef = useRef(false);
+  /** Grade3+: 再訪十字（直進×2・進入直交）の検出用。キーはマス */
+  const revisitCrossCellStateRef = useRef<
+    Map<
+      string,
+      {
+        visitCount: number;
+        firstEntry?: { dc: number; dr: number };
+        firstStraight?: boolean;
+        awarded: boolean;
+        invalidated: boolean;
+      }
+    >
+  >(new Map());
   /** 十字路形成時の交差マスにオレンジ十字フラッシュ */
   const crossFlashRef = useRef<{ c: number; r: number; t0: number } | null>(null);
   /** Grade5+: 折れ点バンパーへの初回入射方向 */
@@ -868,6 +881,7 @@ export default function ReflecShotGame() {
     setLaunchArrowDismissed(false);
     pathSegHistoryRef.current = [];
     crossGemAwardedThisSegRef.current = false;
+    revisitCrossCellStateRef.current.clear();
     crossFlashRef.current = null;
     bumperIncomingFirstRef.current.clear();
     twoSidedBumperUsedRef.current.clear();
@@ -1097,6 +1111,7 @@ export default function ReflecShotGame() {
     if (!st || phase !== "edit") return;
     pathSegHistoryRef.current = [];
     crossGemAwardedThisSegRef.current = false;
+    revisitCrossCellStateRef.current.clear();
     crossFlashRef.current = null;
     bumperIncomingFirstRef.current.clear();
     twoSidedBumperUsedRef.current.clear();
@@ -1206,6 +1221,30 @@ export default function ReflecShotGame() {
       const speedMult = isDevTj && isDebugMode ? debugBallSpeedMult : DEFAULT_BALL_SPEED_MULT;
       const cellTravelMs = BASE_CELL_TRAVEL_MS / speedMult;
 
+      const grantCrossBonusAtCell = (c: number, r: number, nowT: number) => {
+        const cCross0 = collectedGemsRef.current;
+        collectedGemsRef.current += 1;
+        crossFlashRef.current = { c, r, t0: nowT };
+        if (
+          collectedGemsRef.current >= requiredGemsRef.current &&
+          cCross0 < requiredGemsRef.current
+        ) {
+          goalUnlockPulseRef.current = nowT;
+          const layGx = boardLayoutRef.current;
+          if (layGx) {
+            const gp = st.goalPad;
+            const gcc = cellCenterPx(gp.c, gp.r, layGx.cellPx, layGx.ox, layGx.oy, layGx.rMin);
+            pushGoalSparkles(goalSparklesRef.current, gcc.x, gcc.y, nowT);
+          }
+        }
+        const layCross = boardLayoutRef.current;
+        if (layCross) {
+          const cc = cellCenterPx(c, r, layCross.cellPx, layCross.ox, layCross.oy, layCross.rMin);
+          pushGemBurst(gemParticlesRef.current, cc.x, cc.y, nowT, GEM_BURST_CROSS_INSTANT_N);
+        }
+        setCollectedGems(collectedGemsRef.current);
+      };
+
       const sim = simRef.current;
       const prevLerp = sim.lerp01;
       sim.lerp01 += dtMs / cellTravelMs;
@@ -1223,41 +1262,7 @@ export default function ReflecShotGame() {
           ((prevLerp < 0.5 && nextLerp >= 0.5) || nextLerp >= 1)
         ) {
           crossGemAwardedThisSegRef.current = true;
-          const cCross0 = collectedGemsRef.current;
-          collectedGemsRef.current += 1;
-          const nowCross = performance.now();
-          crossFlashRef.current = { c: crossCellMid.c, r: crossCellMid.r, t0: nowCross };
-          if (
-            collectedGemsRef.current >= requiredGemsRef.current &&
-            cCross0 < requiredGemsRef.current
-          ) {
-            goalUnlockPulseRef.current = nowCross;
-            const layGx = boardLayoutRef.current;
-            if (layGx) {
-              const gp = st.goalPad;
-              const gcc = cellCenterPx(gp.c, gp.r, layGx.cellPx, layGx.ox, layGx.oy, layGx.rMin);
-              pushGoalSparkles(goalSparklesRef.current, gcc.x, gcc.y, nowCross);
-            }
-          }
-          const layCross = boardLayoutRef.current;
-          if (layCross) {
-            const cc = cellCenterPx(
-              crossCellMid.c,
-              crossCellMid.r,
-              layCross.cellPx,
-              layCross.ox,
-              layCross.oy,
-              layCross.rMin
-            );
-            pushGemBurst(
-              gemParticlesRef.current,
-              cc.x,
-              cc.y,
-              nowCross,
-              GEM_BURST_CROSS_INSTANT_N
-            );
-          }
-          setCollectedGems(collectedGemsRef.current);
+          grantCrossBonusAtCell(crossCellMid.c, crossCellMid.r, performance.now());
         }
       }
 
@@ -1286,6 +1291,41 @@ export default function ReflecShotGame() {
       }
 
       const res = applyArrival(st, B, incoming);
+
+      if (st.grade >= 3 && res.kind === "continue") {
+        const next = res.next;
+        const vIn = { dc: B.c - sim.fromCell.c, dr: B.r - sim.fromCell.r };
+        const vOut = { dc: next.c - B.c, dr: next.r - B.r };
+        const unitIn = Math.abs(vIn.dc) + Math.abs(vIn.dr) === 1;
+        const unitOut = Math.abs(vOut.dc) + Math.abs(vOut.dr) === 1;
+        const straight = unitIn && unitOut && vIn.dc === vOut.dc && vIn.dr === vOut.dr;
+        const rk = keyCell(B.c, B.r);
+        const rm = revisitCrossCellStateRef.current;
+        let rs = rm.get(rk);
+        if (!rs) rs = { visitCount: 0, awarded: false, invalidated: false };
+        rs.visitCount += 1;
+        if (rs.visitCount === 1) {
+          if (straight) {
+            rs.firstEntry = { ...vIn };
+            rs.firstStraight = true;
+          } else {
+            rs.invalidated = true;
+          }
+        } else if (
+          rs.visitCount === 2 &&
+          !rs.awarded &&
+          !rs.invalidated &&
+          rs.firstStraight &&
+          rs.firstEntry &&
+          straight
+        ) {
+          if (rs.firstEntry.dc * vIn.dc + rs.firstEntry.dr * vIn.dr === 0) {
+            grantCrossBonusAtCell(B.c, B.r, performance.now());
+            rs.awarded = true;
+          }
+        }
+        rm.set(rk, rs);
+      }
 
       const bkHit = keyCell(B.c, B.r);
       const isBumperHit =
@@ -2363,6 +2403,7 @@ export default function ReflecShotGame() {
     editBallPadRef.current = null;
     pathSegHistoryRef.current = [];
     crossGemAwardedThisSegRef.current = false;
+    revisitCrossCellStateRef.current.clear();
     crossFlashRef.current = null;
     bumperIncomingFirstRef.current.clear();
     twoSidedBumperUsedRef.current.clear();

@@ -70,7 +70,7 @@ export function countPolylineOrthogonalCrossings(pts: CellCoord[]): number {
 
 /**
  * 理想ポリライン上で直交2辺が厳密内部で交わるマス（重複なし）。
- * Grade3+ の目標数「再訪マス（十字）」はこのセル数と一致（経路がそのマスを複数回踏む幾何）。
+ * 十型など「頂点列では再訪がなくても辺が内部交差する」盤の宝石想定に用いる。
  */
 export function distinctOrthogonalCrossCells(pts: CellCoord[]): CellCoord[] {
   if (pts.length < 4) return [];
@@ -100,19 +100,52 @@ export function distinctOrthogonalCrossCells(pts: CellCoord[]): CellCoord[] {
   return out;
 }
 
-/** `solutionPath` 上で 2 回以上現れるセル（再訪）のうち、理想経路の十字交差マスに含まれる個数 */
+function unitOrthoGridStep(a: CellCoord, b: CellCoord): { dc: number; dr: number } | null {
+  const dc = b.c - a.c;
+  const dr = b.r - a.r;
+  if (Math.abs(dc) + Math.abs(dr) !== 1) return null;
+  return { dc, dr };
+}
+
+/** 頂点 i で前後 1 マスずつ直進（折れずに通過）しているか */
+function passesStraightThroughSolutionIndex(path: CellCoord[], i: number): boolean {
+  if (i <= 0 || i >= path.length - 1) return false;
+  const a = path[i - 1]!;
+  const b = path[i]!;
+  const c = path[i + 1]!;
+  const ins = unitOrthoGridStep(a, b);
+  const outs = unitOrthoGridStep(b, c);
+  return !!(ins && outs && ins.dc === outs.dc && ins.dr === outs.dr);
+}
+
+function entryDirsPerpendicular(e1: { dc: number; dr: number }, e2: { dc: number; dr: number }): boolean {
+  return e1.dc * e2.dc + e1.dr * e2.dr === 0;
+}
+
+/**
+ * 再訪十字: 同一マスが solutionPath で 2 回現れ、1 回目・2 回目ともそのマスで直進し、
+ * 1 回目と 2 回目の進入方向が直交するマスの個数（各マス 1 回まで数える）。
+ */
 export function countRevisitCrossCellsOnSolutionPath(st: GridStage): number {
-  const pts = idealPathPointsForGemRules(st);
-  const crossKeys = new Set(distinctOrthogonalCrossCells(pts).map((p) => keyCell(p.c, p.r)));
-  if (crossKeys.size === 0) return 0;
-  const visit = new Map<string, number>();
-  for (const p of st.solutionPath) {
-    const k = keyCell(p.c, p.r);
-    visit.set(k, (visit.get(k) ?? 0) + 1);
+  const path = st.solutionPath;
+  const indicesByKey = new Map<string, number[]>();
+  for (let i = 0; i < path.length; i++) {
+    const k = keyCell(path[i]!.c, path[i]!.r);
+    if (!indicesByKey.has(k)) indicesByKey.set(k, []);
+    indicesByKey.get(k)!.push(i);
   }
   let n = 0;
-  for (const k of Array.from(crossKeys)) {
-    if ((visit.get(k) ?? 0) >= 2) n++;
+  for (const [, idxs] of Array.from(indicesByKey.entries())) {
+    if (idxs.length < 2) continue;
+    const i0 = idxs[0]!;
+    const i1 = idxs[1]!;
+    if (!passesStraightThroughSolutionIndex(path, i0)) continue;
+    if (!passesStraightThroughSolutionIndex(path, i1)) continue;
+    const e0 = unitOrthoGridStep(path[i0 - 1]!, path[i0]!);
+    const e1 = unitOrthoGridStep(path[i1 - 1]!, path[i1]!);
+    if (!e0 || !e1) continue;
+    if (!entryDirsPerpendicular(e0, e1)) continue;
+    n++;
   }
   return n;
 }

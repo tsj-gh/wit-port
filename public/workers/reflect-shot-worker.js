@@ -134,45 +134,44 @@
     }
     return cnt;
   }
-  function distinctOrthogonalCrossCells(pts) {
-    if (pts.length < 4) return [];
-    const segs = [];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i];
-      const b = pts[i + 1];
-      if (a.c === b.c && a.r === b.r) continue;
-      if (Math.abs(a.c - b.c) + Math.abs(a.r - b.r) !== 1) continue;
-      segs.push({ a, b });
-    }
-    const seen = /* @__PURE__ */ new Set();
-    const out = [];
-    for (let i = 0; i < segs.length; i++) {
-      for (let j = i + 1; j < segs.length; j++) {
-        const s = segs[i];
-        const t = segs[j];
-        const pt = strictInnerCrossPoint(s.a, s.b, t.a, t.b);
-        if (!pt) continue;
-        const k = keyCell(pt.c, pt.r);
-        if (seen.has(k)) continue;
-        seen.add(k);
-        out.push(__spreadValues({}, pt));
-      }
-    }
-    return out;
+  function unitOrthoGridStep(a, b) {
+    const dc = b.c - a.c;
+    const dr = b.r - a.r;
+    if (Math.abs(dc) + Math.abs(dr) !== 1) return null;
+    return { dc, dr };
+  }
+  function passesStraightThroughSolutionIndex(path, i) {
+    if (i <= 0 || i >= path.length - 1) return false;
+    const a = path[i - 1];
+    const b = path[i];
+    const c = path[i + 1];
+    const ins = unitOrthoGridStep(a, b);
+    const outs = unitOrthoGridStep(b, c);
+    return !!(ins && outs && ins.dc === outs.dc && ins.dr === outs.dr);
+  }
+  function entryDirsPerpendicular(e1, e2) {
+    return e1.dc * e2.dc + e1.dr * e2.dr === 0;
   }
   function countRevisitCrossCellsOnSolutionPath(st) {
-    var _a, _b;
-    const pts = idealPathPointsForGemRules(st);
-    const crossKeys = new Set(distinctOrthogonalCrossCells(pts).map((p) => keyCell(p.c, p.r)));
-    if (crossKeys.size === 0) return 0;
-    const visit = /* @__PURE__ */ new Map();
-    for (const p of st.solutionPath) {
-      const k = keyCell(p.c, p.r);
-      visit.set(k, ((_a = visit.get(k)) != null ? _a : 0) + 1);
+    const path = st.solutionPath;
+    const indicesByKey = /* @__PURE__ */ new Map();
+    for (let i = 0; i < path.length; i++) {
+      const k = keyCell(path[i].c, path[i].r);
+      if (!indicesByKey.has(k)) indicesByKey.set(k, []);
+      indicesByKey.get(k).push(i);
     }
     let n = 0;
-    for (const k of Array.from(crossKeys)) {
-      if (((_b = visit.get(k)) != null ? _b : 0) >= 2) n++;
+    for (const [, idxs] of Array.from(indicesByKey.entries())) {
+      if (idxs.length < 2) continue;
+      const i0 = idxs[0];
+      const i1 = idxs[1];
+      if (!passesStraightThroughSolutionIndex(path, i0)) continue;
+      if (!passesStraightThroughSolutionIndex(path, i1)) continue;
+      const e0 = unitOrthoGridStep(path[i0 - 1], path[i0]);
+      const e1 = unitOrthoGridStep(path[i1 - 1], path[i1]);
+      if (!e0 || !e1) continue;
+      if (!entryDirsPerpendicular(e0, e1)) continue;
+      n++;
     }
     return n;
   }

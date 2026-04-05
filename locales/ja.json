@@ -71,7 +71,7 @@
       },
       "debugPanelTitle": "デバッグ",
       "ruleGemsBasic": "跳ね返ると宝石ゲット！目標数を集めてゴールを目指そう！",
-      "ruleCrossBonus": "十字路（経路の再訪交差）のマス中央を通過した瞬間、宝石を1つ獲得できます。",
+      "ruleCrossBonus": "同じマスを再訪し、1回目・2回目とも直進で通り、かつ2回の進入方向が直角のとき、そのマスで宝石を1つ獲得できます。",
       "ruleTwoSidedBonus": "バンパーの両面を使うと、宝石をさらにお得に（+3個）獲得できます",
       "debugShowSolutionPath": "正解経路（メインシーケンス・直線）",
       "debugGemRulePanelTitle": "宝石ルール（想定値・Goal 必要数）",
