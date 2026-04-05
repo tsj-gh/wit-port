@@ -1242,12 +1242,18 @@ export default function ReflecShotGame() {
         bumpAt &&
         bumpAt.display === "HYPHEN" &&
         (dirsEqual(incoming, DIR.L) || dirsEqual(incoming, DIR.R));
+      /** PIPE（鉛直バー）に上下から入射してスルーする場合も宝石なし */
+      const pipeVerticalPass =
+        bumpAt &&
+        bumpAt.display === "PIPE" &&
+        (dirsEqual(incoming, DIR.U) || dirsEqual(incoming, DIR.D));
       const gemFromReflection =
         isBumperHit &&
         bumpAt &&
         !bumpAt.isDummy &&
         solutionBendKeys.has(bkHit) &&
-        !hyphenHorizontalPass;
+        !hyphenHorizontalPass &&
+        !pipeVerticalPass;
       if (gemFromReflection) {
         let addGems = 1;
         let burstN = GEM_BURST_N;
