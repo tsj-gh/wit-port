@@ -21,6 +21,8 @@ import {
   bendCellKeysInSolutionPath,
   cloneGridStageForRestore,
   countBumpersOnSolutionPath,
+  defaultDummyDensityPctForGrade,
+  dirsEqual,
   DIR,
   initialWrongDisplayProbabilityForGrade,
   isAgentCell,
@@ -34,6 +36,13 @@ import {
   type Dir,
   type GridStage,
 } from "./gridTypes";
+import {
+  computeRequiredGemCountForStage,
+  countExpectedTwoSidedBendsOnIdealPath,
+  countPolylineOrthogonalCrossings,
+  idealPathPointsForGemRules,
+  newAgentSegmentCrossesPriorPath,
+} from "./reflecShotGemRules";
 import { decodeReflecStageHash, encodeReflecStageHash, parseReflecHash } from "./reflecShotStageHash";
 import { ReflecShotAdSlot } from "@/components/ReflecShotAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
@@ -77,8 +86,10 @@ const BUMPER_GLYPH_SIZE_RATIO = 0.84;
 /** 軌跡確定時のマス強調＆P→Q 軌跡フェードの長さ（ms） */
 const TRAJECTORY_BUMPER_FLASH_MS = 400;
 
-const MAX_GEM_PARTICLES = 44;
+const MAX_GEM_PARTICLES = 80;
 const GEM_BURST_N = 9;
+const GEM_BURST_CROSS_N = 18;
+const GEM_BURST_TWO_SIDED_N = 32;
 const GEM_PARTICLE_TTL_MS = 520;
 const GOAL_SPARKLE_TTL_MS = 720;
 const WALL_SPARKLE_TTL_MS = 520;
@@ -108,8 +119,9 @@ type FinishAnim =
     }
   | { kind: "goalFx"; t0: number; cell: CellCoord };
 
-function pushGemBurst(arr: GemParticle[], cx: number, cy: number, now: number) {
-  for (let i = 0; i < GEM_BURST_N; i++) {
+function pushGemBurst(arr: GemParticle[], cx: number, cy: number, now: number, count: number = GEM_BURST_N) {
+  const n = Math.max(1, Math.floor(count));
+  for (let i = 0; i < n; i++) {
     if (arr.length >= MAX_GEM_PARTICLES) arr.shift();
     const ang = Math.random() * Math.PI * 2;
     const sp = 1.15 + Math.random() * 2.85;
@@ -504,6 +516,7 @@ function drawCellGappedBorder(
 /**
  * Worker に渡す生成オプション。`consumerGrade` は盤として再生産する Grade（1〜5）で、
  * UI のドロップダウン値に依存させない（rs2 パース結果などと一致させる）。
+ * `dummyDensityPct` は常に含む（本番は `defaultDummyDensityPctForGrade`、devtj+DEBUG はスライダー値）。
  */
 function reflectShotWorkerGenOptsForConsumerGrade(
   consumerGrade: number,
@@ -537,9 +550,13 @@ function reflectShotWorkerGenOptsForConsumerGrade(
       o.lv4GenMode = "rSecond";
     }
   }
+  const dummyPct =
+    isDevTj && isDebugMode
+      ? Math.max(0, Math.min(100, debugDummyDensityPct))
+      : defaultDummyDensityPctForGrade(consumerGrade);
+  o.dummyDensityPct = dummyPct;
   if (isDevTj && isDebugMode) {
     o.debugReflecShotConsole = true;
-    o.dummyDensityPct = Math.max(0, Math.min(100, debugDummyDensityPct));
   }
   return Object.keys(o).length ? o : undefined;
 }
@@ -585,8 +602,11 @@ export default function ReflecShotGame() {
   const [debugWallFxMs, setDebugWallFxMs] = useState(DEFAULT_WALL_FX_MS);
   /** ゴール虹演出〜成功オーバーレイまでの時間（ms） */
   const [debugGoalFxMs, setDebugGoalFxMs] = useState(DEFAULT_GOAL_FX_MS);
-  /** devtj+DEBUG: ダミーバンパー密度（空き＋経路直進マスへの配置率 0〜100%） */
-  const [debugDummyDensityPct, setDebugDummyDensityPct] = useState(0);
+  /** devtj+DEBUG: ダミー密度スライダー。グレード変更時は当該グレードの既定へ同期 */
+  const [debugDummyDensityPct, setDebugDummyDensityPct] = useState(() => defaultDummyDensityPctForGrade(1));
+  useEffect(() => {
+    setDebugDummyDensityPct(defaultDummyDensityPctForGrade(grade));
+  }, [grade]);
   /** devtj+DEBUG ON・G2 のみ Worker に渡す。2〜4 → 全体目標折れ 6〜8（`+4`）。 */
   const [debugGrade2Bend6MidSlider, setDebugGrade2Bend6MidSlider] = useState(3);
   /** devtj+DEBUG ON・Grade5+: Lv.4 生成。既定は R-Second（本番 Grade5 も同様）。 */
@@ -632,6 +652,14 @@ export default function ReflecShotGame() {
   const requiredGemsRef = useRef(1);
   const collectedGemsRef = useRef(0);
   const gemParticlesRef = useRef<GemParticle[]>([]);
+  /** Grade3+: 射出体のセル間移動履歴（十字路判定） */
+  const pathSegHistoryRef = useRef<{ a: CellCoord; b: CellCoord }[]>([]);
+  const crossGemBonusPendingRef = useRef(false);
+  /** Grade5+: 折れ点バンパーへの初回入射方向 */
+  const bumperIncomingFirstRef = useRef<Map<string, Dir>>(new Map());
+  const twoSidedBumperUsedRef = useRef<Set<string>>(new Set());
+  /** Goal ロック時の残り宝石表示用スムーズ値 */
+  const gemRemainVisualRef = useRef(0);
   const goalSparklesRef = useRef<GoalSparkle[]>([]);
   /** 条件達成時の演出用タイムスタンプ */
   const goalUnlockPulseRef = useRef(0);
@@ -797,9 +825,11 @@ export default function ReflecShotGame() {
 
   useEffect(() => {
     if (!stage) return;
-    const req = countBumpersOnSolutionPath(stage);
+    const req =
+      stage.requiredGemCount ?? computeRequiredGemCountForStage(stage).required;
     requiredGemsRef.current = req;
     setRequiredGems(req);
+    gemRemainVisualRef.current = Math.max(0, req);
     collectedGemsRef.current = 0;
     setCollectedGems(0);
     gemParticlesRef.current.length = 0;
@@ -810,6 +840,10 @@ export default function ReflecShotGame() {
     lostBallAnimRef.current = null;
     setGemGoalFail(false);
     setLaunchArrowDismissed(false);
+    pathSegHistoryRef.current = [];
+    crossGemBonusPendingRef.current = false;
+    bumperIncomingFirstRef.current.clear();
+    twoSidedBumperUsedRef.current.clear();
   }, [stage]);
 
   useEffect(() => {
@@ -1034,6 +1068,11 @@ export default function ReflecShotGame() {
   const beginShot = useCallback(() => {
     const st = stage;
     if (!st || phase !== "edit") return;
+    pathSegHistoryRef.current = [];
+    crossGemBonusPendingRef.current = false;
+    bumperIncomingFirstRef.current.clear();
+    twoSidedBumperUsedRef.current.clear();
+    gemRemainVisualRef.current = Math.max(0, requiredGemsRef.current);
     collectedGemsRef.current = 0;
     setCollectedGems(0);
     gemParticlesRef.current.length = 0;
@@ -1160,6 +1199,13 @@ export default function ReflecShotGame() {
         dx: B.c - sim.fromCell.c,
         dy: sim.fromCell.r - B.r,
       };
+
+      let crossingNow = false;
+      if (st.grade >= 3) {
+        crossingNow = newAgentSegmentCrossesPriorPath(pathSegHistoryRef.current, sim.fromCell, B);
+        pathSegHistoryRef.current.push({ a: { ...sim.fromCell }, b: { ...B } });
+      }
+
       const res = applyArrival(st, B, incoming);
 
       const bkHit = keyCell(B.c, B.r);
@@ -1172,10 +1218,37 @@ export default function ReflecShotGame() {
         !bumpAt.isDummy &&
         solutionBendKeys.has(bkHit);
       if (gemFromReflection) {
+        let addGems = 1;
+        let burstN = GEM_BURST_N;
+        if (st.grade >= 3) {
+          if (crossingNow) {
+            addGems = 2;
+            burstN = GEM_BURST_CROSS_N;
+            crossGemBonusPendingRef.current = false;
+          } else if (crossGemBonusPendingRef.current) {
+            addGems = 2;
+            burstN = GEM_BURST_CROSS_N;
+            crossGemBonusPendingRef.current = false;
+          }
+        }
+        if (st.grade >= 5) {
+          const prevIn = bumperIncomingFirstRef.current.get(bkHit);
+          if (prevIn == null) {
+            bumperIncomingFirstRef.current.set(bkHit, incoming);
+          } else if (
+            !twoSidedBumperUsedRef.current.has(bkHit) &&
+            dirsEqual(incoming, negateDir(prevIn))
+          ) {
+            addGems += 3;
+            twoSidedBumperUsedRef.current.add(bkHit);
+            burstN = Math.max(burstN, GEM_BURST_TWO_SIDED_N);
+          }
+        }
         const c0 = collectedGemsRef.current;
-        collectedGemsRef.current += 1;
+        collectedGemsRef.current += addGems;
         const nowG = performance.now();
         if (collectedGemsRef.current >= requiredGemsRef.current && c0 < requiredGemsRef.current) {
+          gemRemainVisualRef.current = 0;
           goalUnlockPulseRef.current = nowG;
           const layG = boardLayoutRef.current;
           if (layG) {
@@ -1187,9 +1260,11 @@ export default function ReflecShotGame() {
         const layB = boardLayoutRef.current;
         if (layB) {
           const bc = cellCenterPx(B.c, B.r, layB.cellPx, layB.ox, layB.oy, layB.rMin);
-          pushGemBurst(gemParticlesRef.current, bc.x, bc.y, nowG);
+          pushGemBurst(gemParticlesRef.current, bc.x, bc.y, nowG, burstN);
         }
         setCollectedGems(collectedGemsRef.current);
+      } else if (st.grade >= 3 && crossingNow) {
+        crossGemBonusPendingRef.current = true;
       }
 
       if (res.kind === "goal") {
@@ -1238,6 +1313,23 @@ export default function ReflecShotGame() {
   );
 
   const initialWrongRatePct = Math.round(initialWrongDisplayProbabilityForGrade(grade) * 100);
+
+  useEffect(() => {
+    if (!isDevTj || !isDebugMode || !showSolutionPath || !stage) return;
+    const base = stage.gemRuleBaseBends ?? countBumpersOnSolutionPath(stage);
+    const cross =
+      stage.gemExpectedCrossings ?? countPolylineOrthogonalCrossings(idealPathPointsForGemRules(stage));
+    const twoSided =
+      stage.gemExpectedTwoSidedBends ?? countExpectedTwoSidedBendsOnIdealPath(stage);
+    const reqG = stage.requiredGemCount ?? computeRequiredGemCountForStage(stage).required;
+    console.log("[ReflecShot] gem rule check (expected vs Goal)", {
+      grade: stage.grade,
+      baseBends: base,
+      expectedCrossings: cross,
+      expectedTwoSidedBends: twoSided,
+      requiredGemCount: reqG,
+    });
+  }, [isDevTj, isDebugMode, showSolutionPath, stage]);
 
   useEffect(() => {
     if (!showWinOverlay) return;
@@ -1397,6 +1489,12 @@ export default function ReflecShotGame() {
           const gcx = x + cellPx / 2;
           const gcy = y + cellPx / 2;
           if (!goalOpen) {
+            const trackRem = Math.max(0, req - col);
+            let vr = gemRemainVisualRef.current;
+            vr += (trackRem - vr) * 0.14;
+            if (Math.abs(vr - trackRem) < 0.04) vr = trackRem;
+            gemRemainVisualRef.current = vr;
+            const remDisplay = Math.max(0, Math.ceil(vr - 1e-9));
             ctx.fillStyle = "#2a1a1f";
             ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
             ctx.strokeStyle = "rgba(127, 29, 29, 0.45)";
@@ -1412,7 +1510,7 @@ export default function ReflecShotGame() {
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillStyle = "rgba(253, 224, 71, 0.9)";
-            ctx.fillText(String(requiredGemsRef.current), gcx, y + cellPx * 0.24);
+            ctx.fillText(String(remDisplay), gcx, y + cellPx * 0.24);
             ctx.restore();
             const dotR = Math.max(2.2, cellPx * 0.054);
             const spacing =
@@ -1461,7 +1559,7 @@ export default function ReflecShotGame() {
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillStyle = `rgba(204, 251, 241, ${0.65 + pulse * 0.2})`;
-          ctx.fillText(String(requiredGemsRef.current), gcx, gcy + cellPx * 0.36);
+          ctx.fillText("0", gcx, gcy + cellPx * 0.36);
           ctx.restore();
           drawCellGappedBorder(ctx, x, y, cellPx, "#0f3d34", openLenDraw);
           continue;
@@ -2127,6 +2225,11 @@ export default function ReflecShotGame() {
     refreshAds();
     setShowFailOverlay(false);
     editBallPadRef.current = null;
+    pathSegHistoryRef.current = [];
+    crossGemBonusPendingRef.current = false;
+    bumperIncomingFirstRef.current.clear();
+    twoSidedBumperUsedRef.current.clear();
+    gemRemainVisualRef.current = Math.max(0, requiredGemsRef.current);
     collectedGemsRef.current = 0;
     setCollectedGems(0);
     gemParticlesRef.current.length = 0;
@@ -2200,6 +2303,25 @@ export default function ReflecShotGame() {
                 />
                 {t("games.reflecShot.debugShowSolutionPath")}
               </label>
+              {showSolutionPath && stage && (
+                <div className="mt-1 rounded border border-rose-500/25 bg-rose-950/35 px-2 py-1.5 text-[10px] leading-snug text-rose-50/90 font-mono space-y-0.5">
+                  <div className="font-semibold text-rose-200/90">
+                    {t("games.reflecShot.debugGemRulePanelTitle")}
+                  </div>
+                  <div>
+                    base={stage.gemRuleBaseBends ?? countBumpersOnSolutionPath(stage)} cross=
+                    {stage.gemExpectedCrossings ??
+                      countPolylineOrthogonalCrossings(idealPathPointsForGemRules(stage))}{" "}
+                    twoSided=
+                    {stage.gemExpectedTwoSidedBends ?? countExpectedTwoSidedBendsOnIdealPath(stage)}
+                  </div>
+                  <div>
+                    requiredGem=
+                    {stage.requiredGemCount ?? computeRequiredGemCountForStage(stage).required}{" "}
+                    (GoalPad)
+                  </div>
+                </div>
+              )}
               <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugDummyDensity")}</span>
                 <input
@@ -2606,6 +2728,18 @@ export default function ReflecShotGame() {
                 )}
               </svg>
             </div>
+          </div>
+          <div
+            className="mt-2 flex w-full min-h-[4.5rem] flex-col items-center justify-center rounded-xl border border-white/10 bg-slate-900/35 px-3 py-2.5 text-center"
+            role="note"
+          >
+            <p className="max-w-md text-sm leading-relaxed text-wit-muted">
+              {(stage?.grade ?? grade) <= 2 && t("games.reflecShot.ruleGemsBasic")}
+              {(stage?.grade ?? grade) >= 3 &&
+                (stage?.grade ?? grade) <= 4 &&
+                t("games.reflecShot.ruleCrossBonus")}
+              {(stage?.grade ?? grade) >= 5 && t("games.reflecShot.ruleTwoSidedBonus")}
+            </p>
           </div>
           {phase === "edit" && (
             <div className="mb-0 mt-2 w-full text-xs font-normal leading-relaxed text-wit-text sm:text-sm">

@@ -110,6 +110,9 @@ function decodeRs1Payload(t: string): GridStage | null {
   const gi = typeof grade === "number" ? Math.floor(grade) : 1;
   const si = typeof seed === "number" ? (seed >>> 0) : 0;
 
+  const optInt = (x: unknown) =>
+    typeof x === "number" && Number.isFinite(x) ? Math.floor(x) : undefined;
+
   return {
     width: gw,
     height: gh,
@@ -122,6 +125,12 @@ function decodeRs1Payload(t: string): GridStage | null {
     solutionPath: solutionPath as CellCoord[],
     grade: gi,
     seed: si,
+    ...(optInt(p.gemRuleBaseBends) != null ? { gemRuleBaseBends: optInt(p.gemRuleBaseBends) } : {}),
+    ...(optInt(p.gemExpectedCrossings) != null ? { gemExpectedCrossings: optInt(p.gemExpectedCrossings) } : {}),
+    ...(optInt(p.gemExpectedTwoSidedBends) != null
+      ? { gemExpectedTwoSidedBends: optInt(p.gemExpectedTwoSidedBends) }
+      : {}),
+    ...(optInt(p.requiredGemCount) != null ? { requiredGemCount: optInt(p.requiredGemCount) } : {}),
   };
 }
 

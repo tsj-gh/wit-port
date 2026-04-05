@@ -50,9 +50,118 @@
     if (dc === 0 && dr === 0) return null;
     return gridDeltaToScreenDir({ dx: dc, dy: dr });
   }
+  function bendCellKeysInSolutionPath(path) {
+    const s = /* @__PURE__ */ new Set();
+    for (let i = 1; i < path.length - 1; i++) {
+      const a = path[i - 1];
+      const b = path[i];
+      const c = path[i + 1];
+      const d0 = unitOrthoDirBetween(a, b);
+      const d1 = unitOrthoDirBetween(b, c);
+      if (d0 && d1 && d0.dx * d1.dx + d0.dy * d1.dy === 0) {
+        s.add(keyCell(b.c, b.r));
+      }
+    }
+    return s;
+  }
   function initialWrongDisplayProbabilityForGrade(grade) {
     const g = Math.max(1, Math.min(5, Math.floor(grade)));
     return 0.05 + (g - 1) / 4 * 0.9;
+  }
+  function countBumpersOnSolutionPath(st) {
+    const bends = bendCellKeysInSolutionPath(st.solutionPath);
+    let n = 0;
+    bends.forEach((k) => {
+      const b = st.bumpers.get(k);
+      if (b && !b.isDummy) n++;
+    });
+    return Math.max(1, n);
+  }
+
+  // src/app/lab/reflec-shot/reflecShotGemRules.ts
+  function idealPathPointsForGemRules(st) {
+    const p = st.solutionPath;
+    if (p.length === 0) return [__spreadValues({}, st.startPad), __spreadValues({}, st.goalPad)];
+    return [__spreadValues({}, st.startPad), ...p.map((x) => __spreadValues({}, x)), __spreadValues({}, st.goalPad)];
+  }
+  function orthoSegStrictInnerCross(a, b, c, d) {
+    let h1 = a.r === b.r;
+    const h2 = c.r === d.r;
+    if (h1 === h2) return false;
+    if (!h1 && !h2) return false;
+    if (!h1) {
+      return orthoSegStrictInnerCross(c, d, a, b);
+    }
+    const r0 = a.r;
+    const cmin = Math.min(a.c, b.c);
+    const cmax = Math.max(a.c, b.c);
+    const c0 = c.c;
+    const rmin = Math.min(c.r, d.r);
+    const rmax = Math.max(c.r, d.r);
+    return cmin < c0 && c0 < cmax && rmin < r0 && r0 < rmax;
+  }
+  function countPolylineOrthogonalCrossings(pts) {
+    if (pts.length < 4) return 0;
+    const segs = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      if (a.c === b.c && a.r === b.r) continue;
+      if (Math.abs(a.c - b.c) + Math.abs(a.r - b.r) !== 1) continue;
+      segs.push({ a, b });
+    }
+    let cnt = 0;
+    for (let i = 0; i < segs.length; i++) {
+      for (let j = i + 1; j < segs.length; j++) {
+        const s = segs[i];
+        const t = segs[j];
+        if (orthoSegStrictInnerCross(s.a, s.b, t.a, t.b)) cnt++;
+      }
+    }
+    return cnt;
+  }
+  function countExpectedTwoSidedBendsOnIdealPath(st) {
+    const bendKeys = bendCellKeysInSolutionPath(st.solutionPath);
+    const poly = idealPathPointsForGemRules(st);
+    const firstIn = /* @__PURE__ */ new Map();
+    const done = /* @__PURE__ */ new Set();
+    let n = 0;
+    for (let k = 1; k < poly.length; k++) {
+      const prev = poly[k - 1];
+      const cur = poly[k];
+      const incoming = unitOrthoDirBetween(prev, cur);
+      if (!incoming) continue;
+      const cellKey = keyCell(cur.c, cur.r);
+      if (!bendKeys.has(cellKey)) continue;
+      const bump = st.bumpers.get(cellKey);
+      if (!bump || bump.isDummy) continue;
+      const was = firstIn.get(cellKey);
+      if (was == null) {
+        firstIn.set(cellKey, incoming);
+      } else if (!done.has(cellKey) && dirsEqual(incoming, negateDir(was))) {
+        n++;
+        done.add(cellKey);
+      }
+    }
+    return n;
+  }
+  function computeRequiredGemCountForStage(st) {
+    const baseBends = countBumpersOnSolutionPath(st);
+    const pts = idealPathPointsForGemRules(st);
+    const crossings = countPolylineOrthogonalCrossings(pts);
+    const twoSidedBends = countExpectedTwoSidedBendsOnIdealPath(st);
+    const g = Math.max(1, Math.min(5, Math.floor(st.grade)));
+    let required = baseBends;
+    if (g >= 3) required += crossings;
+    if (g >= 5) required += 3 * twoSidedBends;
+    return { baseBends, crossings, twoSidedBends, required };
+  }
+  function applyGemRuleMetadataToStage(st) {
+    const { baseBends, crossings, twoSidedBends, required } = computeRequiredGemCountForStage(st);
+    st.gemRuleBaseBends = baseBends;
+    st.gemExpectedCrossings = crossings;
+    st.gemExpectedTwoSidedBends = twoSidedBends;
+    st.requiredGemCount = required;
   }
 
   // src/app/lab/reflec-shot/bumperRules.ts
@@ -2339,6 +2448,7 @@
         cell.display = cell.solution;
       }
     });
+    applyGemRuleMetadataToStage(st);
   }
   function generateBoardLv1Stage(consumerGrade, seed) {
     const rng = createStageRng(seed);

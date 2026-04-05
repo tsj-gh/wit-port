@@ -97,6 +97,14 @@ export type GridStage = {
   grade2PadAdjustLabel?: Grade2PadAdjustLabel;
   /** `goal->upside down` 後に start を経路の最深行に合わせて延長した（デバッグ Source 用） */
   reflecSourceStartExtended?: boolean;
+  /** 宝石ルール: 正解経路の反射点（ダミー除外）の数 */
+  gemRuleBaseBends?: number;
+  /** 想定正解ポリライン上の十字路（直交内部交差）の数 */
+  gemExpectedCrossings?: number;
+  /** 想定再訪折れ点（両面ヒット）の数（Grade 5+） */
+  gemExpectedTwoSidedBends?: number;
+  /** Goal 開錠に必要な宝石総数（未設定時は従来どおり `countBumpersOnSolutionPath`） */
+  requiredGemCount?: number;
 };
 
 /** エージェントが存在しうるマス（pathable ∪ startPad ∪ ゴールエリア） */
@@ -143,6 +151,13 @@ export function bendCellKeysInSolutionPath(path: CellCoord[]): Set<string> {
 export function initialWrongDisplayProbabilityForGrade(grade: number): number {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
   return 0.05 + ((g - 1) / 4) * 0.9;
+}
+
+/** ダミーバンパー密度（0〜100）のグレード別既定。生成・ストック・デバッグスライダ初期値に使用 */
+export function defaultDummyDensityPctForGrade(grade: number): number {
+  const g = Math.max(1, Math.min(5, Math.floor(grade)));
+  const table: Record<number, number> = { 1: 0, 2: 10, 3: 15, 4: 20, 5: 25 };
+  return table[g] ?? 0;
 }
 
 /** 復元・ストック取り出し用のディープコピー（`setStage` 後にプレイヤー操作で汚染されないよう） */

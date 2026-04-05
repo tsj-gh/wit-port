@@ -67,7 +67,11 @@
         "nextGenFailedWorker": "Failed to generate next board (worker)."
       },
       "debugPanelTitle": "Debug",
+      "ruleGemsBasic": "Collect every gem, then reach the goal.",
+      "ruleCrossBonus": "Create a crossing path: the next bumper you hit awards 2 gems.",
+      "ruleTwoSidedBonus": "Hit both sides of a bumper for a bigger haul (+3 bonus gems, 4 total from that hit).",
       "debugShowSolutionPath": "Solution path (main sequence, straight)",
+      "debugGemRulePanelTitle": "Gem rules (expected / Goal requirement)",
       "debugDummyDensity": "Dummy density",
       "debugInitialWrongRate": "Initial wrong-facing rate (bend bumpers, grade): ~{pct}%",
       "debugBallSpeed": "Ball speed",

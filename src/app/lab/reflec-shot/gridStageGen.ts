@@ -1,3 +1,4 @@
+import { applyGemRuleMetadataToStage } from "./reflecShotGemRules";
 import { applyBumper, bumperKindForTurn, diagonalBumperForTurn } from "./bumperRules";
 import {
   addCell,
@@ -3544,6 +3545,8 @@ export function finalizeReflecShotDifficulty(st: GridStage, polyOpts?: ReflectSh
       cell.display = cell.solution;
     }
   });
+
+  applyGemRuleMetadataToStage(st);
 }
 
 /** 盤面生成 Lv.1（旧 Grade1）：4×4・折れ 1〜4・`placeDiagonalBumpers` 後の本数で採否 */
