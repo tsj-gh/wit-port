@@ -68,6 +68,8 @@ export type BumperCell = {
   display: BumperKind;
   /** 生成時の正解 */
   solution: BumperKind;
+  /** 正解経路の反射点ではないダミー（デバッグ「正解経路」表示でのみ区別） */
+  isDummy?: boolean;
 };
 
 /** Grade 2: 同一パッド向きだが端が最下／最上に居ないときの経路上下反転の区分（デバッグ表示用） */
@@ -118,13 +120,40 @@ export function stageRowRange(st: GridStage) {
   return { rMin: Math.min(...rows), rMax: Math.max(...rows) };
 }
 
-/** 復元・ストック取り出し用のディープコピー（`setStage` 後にプレイヤー操作で汚染されないよう） */
-/** 正解経路上のバンパーマス数（反射回数の目安）。最低 1 を返す。 */
-export function countBumpersOnSolutionPath(st: GridStage): number {
-  let n = 0;
-  for (const p of st.solutionPath) {
-    if (st.bumpers.has(keyCell(p.c, p.r))) n++;
+/** 正解ポリライン上の 90° 折れセル（反射点）のキー集合 */
+export function bendCellKeysInSolutionPath(path: CellCoord[]): Set<string> {
+  const s = new Set<string>();
+  for (let i = 1; i < path.length - 1; i++) {
+    const a = path[i - 1]!;
+    const b = path[i]!;
+    const c = path[i + 1]!;
+    const d0 = unitOrthoDirBetween(a, b);
+    const d1 = unitOrthoDirBetween(b, c);
+    if (d0 && d1 && d0.dx * d1.dx + d0.dy * d1.dy === 0) {
+      s.add(keyCell(b.c, b.r));
+    }
   }
+  return s;
+}
+
+/**
+ * 生成時: 正解経路の反射バンパーが初期表示で不正解向きになる確率（グレード連動・UI 表示用）。
+ * Grade 1 ≈ 5% … Grade 5 ≈ 95%
+ */
+export function initialWrongDisplayProbabilityForGrade(grade: number): number {
+  const g = Math.max(1, Math.min(5, Math.floor(grade)));
+  return 0.05 + ((g - 1) / 4) * 0.9;
+}
+
+/** 復元・ストック取り出し用のディープコピー（`setStage` 後にプレイヤー操作で汚染されないよう） */
+/** 正解経路上の反射点バンパー数（ダミー除外）。最低 1 を返す。 */
+export function countBumpersOnSolutionPath(st: GridStage): number {
+  const bends = bendCellKeysInSolutionPath(st.solutionPath);
+  let n = 0;
+  bends.forEach((k) => {
+    const b = st.bumpers.get(k);
+    if (b && !b.isDummy) n++;
+  });
   return Math.max(1, n);
 }
 
@@ -133,7 +162,14 @@ export function cloneGridStageForRestore(st: GridStage): GridStage {
     ...st,
     pathable: st.pathable.map((col) => [...col!]),
     bumpers: new Map(
-      Array.from(st.bumpers.entries()).map(([k, v]) => [k, { display: v.display, solution: v.solution }])
+      Array.from(st.bumpers.entries()).map(([k, v]) => [
+        k,
+        {
+          display: v.display,
+          solution: v.solution,
+          ...(v.isDummy ? { isDummy: true as const } : {}),
+        },
+      ])
     ),
     solutionPath: st.solutionPath.map((p) => ({ ...p })),
   };

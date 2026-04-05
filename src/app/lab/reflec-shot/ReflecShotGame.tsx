@@ -18,9 +18,11 @@ import { useReflectShotWorker } from "@/hooks/useReflectShotWorker";
 import { bendOrBumperHint } from "./gridStageGen";
 import {
   addCell,
+  bendCellKeysInSolutionPath,
   cloneGridStageForRestore,
   countBumpersOnSolutionPath,
   DIR,
+  initialWrongDisplayProbabilityForGrade,
   isAgentCell,
   keyCell,
   negateDir,
@@ -508,16 +510,19 @@ function reflectShotWorkerGenOptsForConsumerGrade(
   isDevTj: boolean,
   isDebugMode: boolean,
   debugGrade2Bend6MidSlider: number,
-  debugLv4GenMode: "default" | "rFirst" | "rSecond"
+  debugLv4GenMode: "default" | "rFirst" | "rSecond",
+  debugDummyDensityPct: number
 ): {
   grade2Bend6TotalBends?: 6 | 7 | 8;
   debugReflecShotConsole?: boolean;
   lv4GenMode?: "default" | "rFirst" | "rSecond";
+  dummyDensityPct?: number;
 } | undefined {
   const o: {
     grade2Bend6TotalBends?: 6 | 7 | 8;
     debugReflecShotConsole?: boolean;
     lv4GenMode?: "default" | "rFirst" | "rSecond";
+    dummyDensityPct?: number;
   } = {};
   if (consumerGrade === 4 && isDevTj && isDebugMode) {
     const n = debugGrade2Bend6MidSlider + 4;
@@ -534,6 +539,7 @@ function reflectShotWorkerGenOptsForConsumerGrade(
   }
   if (isDevTj && isDebugMode) {
     o.debugReflecShotConsole = true;
+    o.dummyDensityPct = Math.max(0, Math.min(100, debugDummyDensityPct));
   }
   return Object.keys(o).length ? o : undefined;
 }
@@ -579,6 +585,8 @@ export default function ReflecShotGame() {
   const [debugWallFxMs, setDebugWallFxMs] = useState(DEFAULT_WALL_FX_MS);
   /** ゴール虹演出〜成功オーバーレイまでの時間（ms） */
   const [debugGoalFxMs, setDebugGoalFxMs] = useState(DEFAULT_GOAL_FX_MS);
+  /** devtj+DEBUG: ダミーバンパー密度（空き＋経路直進マスへの配置率 0〜100%） */
+  const [debugDummyDensityPct, setDebugDummyDensityPct] = useState(0);
   /** devtj+DEBUG ON・G2 のみ Worker に渡す。2〜4 → 全体目標折れ 6〜8（`+4`）。 */
   const [debugGrade2Bend6MidSlider, setDebugGrade2Bend6MidSlider] = useState(3);
   /** devtj+DEBUG ON・Grade5+: Lv.4 生成。既定は R-Second（本番 Grade5 も同様）。 */
@@ -637,6 +645,11 @@ export default function ReflecShotGame() {
   const [gemGoalFail, setGemGoalFail] = useState(false);
   /** StartPad 上でタップ／ドラッグしたら上向き矢印を消す。盤面が変わると再表示 */
   const [launchArrowDismissed, setLaunchArrowDismissed] = useState(false);
+
+  const solutionBendKeys = useMemo(
+    () => (stage ? bendCellKeysInSolutionPath(stage.solutionPath) : new Set<string>()),
+    [stage]
+  );
 
   const simRef = useRef({
     logicalCell: { c: 0, r: 0 } as CellCoord,
@@ -716,9 +729,17 @@ export default function ReflecShotGame() {
         isDevTj,
         isDebugMode,
         debugGrade2Bend6MidSlider,
-        debugLv4GenMode
+        debugLv4GenMode,
+        debugDummyDensityPct
       ),
-    [grade, isDevTj, isDebugMode, debugGrade2Bend6MidSlider, debugLv4GenMode]
+    [
+      grade,
+      isDevTj,
+      isDebugMode,
+      debugGrade2Bend6MidSlider,
+      debugLv4GenMode,
+      debugDummyDensityPct,
+    ]
   );
 
   /** 盤ロード effect は seed / layoutNonce のみで起動。Grade 変更だけでは走らせない（常に最新値は ref から読む） */
@@ -933,7 +954,8 @@ export default function ReflecShotGame() {
             isDevTj,
             isDebugMode,
             debugGrade2Bend6MidSlider,
-            debugLv4GenMode
+            debugLv4GenMode,
+            debugDummyDensityPct
           );
           const { stage } = await generateStageInWorker(parsed.grade, parsed.seed >>> 0, workerOpts);
           nextBoardSourceRef.current = "generated";
@@ -952,7 +974,14 @@ export default function ReflecShotGame() {
         }
       })();
     },
-    [generateStageInWorker, isDevTj, isDebugMode, debugGrade2Bend6MidSlider, debugLv4GenMode]
+    [
+      generateStageInWorker,
+      isDevTj,
+      isDebugMode,
+      debugGrade2Bend6MidSlider,
+      debugLv4GenMode,
+      debugDummyDensityPct,
+    ]
   );
 
   const goNextProblem = useCallback(() => {
@@ -1136,7 +1165,13 @@ export default function ReflecShotGame() {
       const bkHit = keyCell(B.c, B.r);
       const isBumperHit =
         st.bumpers.has(bkHit) && !(B.c === st.goalPad.c && B.r === st.goalPad.r);
-      if (isBumperHit) {
+      const bumpAt = st.bumpers.get(bkHit);
+      const gemFromReflection =
+        isBumperHit &&
+        bumpAt &&
+        !bumpAt.isDummy &&
+        solutionBendKeys.has(bkHit);
+      if (gemFromReflection) {
         const c0 = collectedGemsRef.current;
         collectedGemsRef.current += 1;
         const nowG = performance.now();
@@ -1197,9 +1232,12 @@ export default function ReflecShotGame() {
       isDebugMode,
       isDevTj,
       phase,
+      solutionBendKeys,
       stage,
     ]
   );
+
+  const initialWrongRatePct = Math.round(initialWrongDisplayProbabilityForGrade(grade) * 100);
 
   useEffect(() => {
     if (!showWinOverlay) return;
@@ -1466,11 +1504,26 @@ export default function ReflecShotGame() {
               ctx.fillRect(x + 0.5, y + 0.5, cellPx - 1, cellPx - 1);
             }
           }
+          const dbgReveal = isDevTj && isDebugMode && showSolutionPath;
+          const solBendHere = dbgReveal && !b.isDummy && solutionBendKeys.has(k);
+          let didSaveForDbg = false;
+          if (dbgReveal && b.isDummy) {
+            ctx.save();
+            ctx.globalAlpha = 0.6;
+            didSaveForDbg = true;
+          } else if (solBendHere) {
+            ctx.save();
+            glyphFill = "rgb(224, 242, 254)";
+            ctx.shadowColor = "rgba(34, 211, 238, 0.9)";
+            ctx.shadowBlur = Math.max(5, cellPx * 0.1);
+            didSaveForDbg = true;
+          }
           ctx.fillStyle = glyphFill;
           ctx.font = `bold ${Math.floor(cellPx * BUMPER_GLYPH_SIZE_RATIO)}px sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(bumperSymbol(b.display), x + cellPx / 2, y + cellPx / 2 + 1);
+          if (didSaveForDbg) ctx.restore();
         }
       }
     }
@@ -1580,6 +1633,7 @@ export default function ReflecShotGame() {
     phase,
     requiredGems,
     showSolutionPath,
+    solutionBendKeys,
     stage,
   ]);
 
@@ -2113,9 +2167,11 @@ export default function ReflecShotGame() {
       )}
       {isDevTj && isDebugMode && (
         <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono text-left">
-          <div className="flex items-center justify-between gap-2">
-            {isDebugPanelExpanded && <span className="font-bold text-emerald-400">{t("games.reflecShot.debugPanelTitle")}</span>}
-            <div className="flex items-center gap-1 ml-auto">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {isDebugPanelExpanded && (
+              <span className="font-bold text-emerald-400">{t("games.reflecShot.debugPanelTitle")}</span>
+            )}
+            <div className="flex flex-wrap items-center gap-1 ml-auto">
               <button
                 type="button"
                 onClick={() => setIsDebugMode(false)}
@@ -2135,7 +2191,7 @@ export default function ReflecShotGame() {
           </div>
           {isDebugPanelExpanded && (
             <>
-              <label className="mt-2 flex items-center gap-2 text-slate-400 cursor-pointer">
+              <label className="mt-2 flex flex-wrap items-center gap-2 text-slate-400 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={showSolutionPath}
@@ -2144,7 +2200,25 @@ export default function ReflecShotGame() {
                 />
                 {t("games.reflecShot.debugShowSolutionPath")}
               </label>
-              <div className="mt-2 flex items-center gap-2 text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
+                <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugDummyDensity")}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={debugDummyDensityPct}
+                  onChange={(e) => setDebugDummyDensityPct(Number(e.target.value))}
+                  className="min-w-[120px] flex-1 accent-lime-400"
+                />
+                <span className="tabular-nums w-9 text-right text-[10px] text-lime-200/90">
+                  {debugDummyDensityPct}%
+                </span>
+              </div>
+              <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                {t("games.reflecShot.debugInitialWrongRate").replace("{pct}", String(initialWrongRatePct))}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugBallSpeed")}</span>
                 <input
                   type="range"
@@ -2157,7 +2231,7 @@ export default function ReflecShotGame() {
                 />
                 <span className="tabular-nums w-10 text-right text-[10px] text-sky-200/90">{debugBallSpeedMult}×</span>
               </div>
-              <div className="mt-2 flex items-center gap-2 text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugGemAttract")}</span>
                 <input
                   type="range"
@@ -2172,7 +2246,7 @@ export default function ReflecShotGame() {
                   {debugGemAttractMult}×
                 </span>
               </div>
-              <div className="mt-2 flex items-center gap-2 text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugWallFxMs")}</span>
                 <input
                   type="range"
@@ -2187,7 +2261,7 @@ export default function ReflecShotGame() {
                   {debugWallFxMs}ms
                 </span>
               </div>
-              <div className="mt-2 flex items-center gap-2 text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugGoalFxMs")}</span>
                 <input
                   type="range"

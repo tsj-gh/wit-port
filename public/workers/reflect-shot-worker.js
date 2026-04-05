@@ -27,6 +27,7 @@
     L: { dx: -1, dy: 0 },
     R: { dx: 1, dy: 0 }
   };
+  var BUMPER_KINDS = ["SLASH", "BACKSLASH", "HYPHEN", "PIPE"];
   function keyCell(c, r) {
     return `${c},${r}`;
   }
@@ -48,6 +49,10 @@
     if (dc !== 0 && dr !== 0) return null;
     if (dc === 0 && dr === 0) return null;
     return gridDeltaToScreenDir({ dx: dc, dy: dr });
+  }
+  function initialWrongDisplayProbabilityForGrade(grade) {
+    const g = Math.max(1, Math.min(5, Math.floor(grade)));
+    return 0.05 + (g - 1) / 4 * 0.9;
   }
 
   // src/app/lab/reflec-shot/bumperRules.ts
@@ -2239,7 +2244,6 @@
         }
         const dup2 = /* @__PURE__ */ new Map();
         bumpers.forEach((v, k) => dup2.set(k, { display: v.display, solution: v.solution }));
-        shuffleWrongDisplay(dup2, rng);
         markBenchSuccess(attempt);
         if (rSecond && rSecondTrace) {
           rSecondTrace.push(
@@ -2264,7 +2268,6 @@
       }
       const dup = /* @__PURE__ */ new Map();
       picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
-      shuffleWrongDisplay(dup, rng);
       markBenchSuccess(attempt);
       if (rSecond && rSecondTrace) {
         rSecondTrace.push(
@@ -2288,22 +2291,72 @@
     }
     return null;
   }
-  function wrongDiagonal(sol) {
-    return sol === "SLASH" ? "BACKSLASH" : "SLASH";
+  function throughBumperKindForTravel(d) {
+    return d.dx !== 0 ? "HYPHEN" : "PIPE";
   }
-  function shuffleWrongDisplay(bumpers, rng) {
-    let hasWrong = false;
-    bumpers.forEach((cell) => {
-      if (rng() < 0.55) {
-        cell.display = wrongDiagonal(cell.solution);
-        hasWrong = true;
+  function travelDirIntoPathCell(path, i) {
+    if (i <= 0) return null;
+    return unitStepDir(path[i].c - path[i - 1].c, path[i].r - path[i - 1].r);
+  }
+  function randomWrongDisplay(solution, rng) {
+    const opts = BUMPER_KINDS.filter((k) => k !== solution);
+    return opts[Math.floor(rng() * opts.length)];
+  }
+  function finalizeReflecShotDifficulty(st, polyOpts) {
+    var _a;
+    const density = Math.max(0, Math.min(100, (_a = polyOpts == null ? void 0 : polyOpts.dummyDensityPct) != null ? _a : 0));
+    const rng = createStageRng((st.seed ^ 2654435769) >>> 0);
+    const bendSet = bendCellsInPath(st.solutionPath);
+    st.bumpers.forEach((v) => {
+      v.isDummy = false;
+    });
+    const pathKeyToIndex = /* @__PURE__ */ new Map();
+    st.solutionPath.forEach((p, i) => pathKeyToIndex.set(keyCell(p.c, p.r), i));
+    const candidates = [];
+    for (let c = 0; c < st.width; c++) {
+      for (let r = 0; r < st.height; r++) {
+        if (!st.pathable[c][r]) continue;
+        const k = keyCell(c, r);
+        if (st.bumpers.has(k)) continue;
+        if (c === st.start.c && r === st.start.r || c === st.goal.c && r === st.goal.r) continue;
+        const pi = pathKeyToIndex.get(k);
+        if (pi == null) {
+          candidates.push({ c, r, kind: "random" });
+          continue;
+        }
+        if (pi === 0 || pi === st.solutionPath.length - 1) continue;
+        if (bendSet.has(k)) continue;
+        const travel = travelDirIntoPathCell(st.solutionPath, pi);
+        if (!travel) continue;
+        const th = throughBumperKindForTravel(travel);
+        if (!dirsEqual(applyBumper(travel, th), travel)) continue;
+        candidates.push({ c, r, kind: "through", through: th });
+      }
+    }
+    shuffleArrayInPlace(candidates, rng);
+    const want = Math.floor(candidates.length * density / 100);
+    for (let i = 0; i < want && i < candidates.length; i++) {
+      const cand = candidates[i];
+      const k = keyCell(cand.c, cand.r);
+      if (st.bumpers.has(k)) continue;
+      if (cand.kind === "through") {
+        const kind = cand.through;
+        st.bumpers.set(k, { display: kind, solution: kind, isDummy: true });
+      } else {
+        const kind = BUMPER_KINDS[Math.floor(rng() * BUMPER_KINDS.length)];
+        st.bumpers.set(k, { display: kind, solution: kind, isDummy: true });
+      }
+    }
+    const pWrong = initialWrongDisplayProbabilityForGrade(st.grade);
+    st.bumpers.forEach((cell, k) => {
+      if (cell.isDummy) return;
+      if (!bendSet.has(k)) return;
+      if (rng() < pWrong) {
+        cell.display = randomWrongDisplay(cell.solution, rng);
+      } else {
+        cell.display = cell.solution;
       }
     });
-    if (!hasWrong && bumpers.size) {
-      const first = bumpers.keys().next().value;
-      const c = bumpers.get(first);
-      c.display = wrongDiagonal(c.solution);
-    }
   }
   function generateBoardLv1Stage(consumerGrade, seed) {
     const rng = createStageRng(seed);
@@ -2335,7 +2388,6 @@
       } else if (bumpers.size < 4) continue;
       const dup = /* @__PURE__ */ new Map();
       bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
-      shuffleWrongDisplay(dup, rng);
       return {
         width: W,
         height: H,
@@ -2408,7 +2460,6 @@
         if (!ok || bumpers.size !== bends) continue;
         const dup2 = /* @__PURE__ */ new Map();
         bumpers.forEach((v, k) => dup2.set(k, { display: v.display, solution: v.solution }));
-        shuffleWrongDisplay(dup2, rng);
         return {
           width: picked.width,
           height: picked.height,
@@ -2427,7 +2478,6 @@
       }
       const dup = /* @__PURE__ */ new Map();
       picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
-      shuffleWrongDisplay(dup, rng);
       return {
         width: picked.width,
         height: picked.height,
@@ -2504,7 +2554,6 @@
         const dup2 = /* @__PURE__ */ new Map();
         bump6.forEach((v, k) => dup2.set(k, { display: v.display, solution: v.solution }));
         lastGrade2Bend6Trace = { trace: bend6Trace, rawPath: path.map((x) => __spreadValues({}, x)) };
-        shuffleWrongDisplay(dup2, rng);
         return {
           width: picked.width,
           height: picked.height,
@@ -2524,7 +2573,6 @@
       const dup = /* @__PURE__ */ new Map();
       picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       lastGrade2Bend6Trace = { trace: bend6Trace, rawPath: path.map((x) => __spreadValues({}, x)) };
-      shuffleWrongDisplay(dup, rng);
       return {
         width: picked.width,
         height: picked.height,
@@ -2544,10 +2592,13 @@
   }
   function generateGridStage(grade, seed, polyOpts) {
     const g = Math.max(1, Math.min(5, Math.floor(grade)));
-    if (g === 1 || g === 2) return generateBoardLv1Stage(g, seed);
-    if (g === 3) return generateBoardLv2Stage(seed, polyOpts);
-    if (g === 4) return generateBoardLv3Stage(seed, polyOpts);
-    return generateBoardLv4Stage(seed, polyOpts);
+    let st = null;
+    if (g === 1 || g === 2) st = generateBoardLv1Stage(g, seed);
+    else if (g === 3) st = generateBoardLv2Stage(seed, polyOpts);
+    else if (g === 4) st = generateBoardLv3Stage(seed, polyOpts);
+    else st = generateBoardLv4Stage(seed, polyOpts);
+    if (st) finalizeReflecShotDifficulty(st, polyOpts);
+    return st;
   }
   function fallbackGridStageInner(grade, seed, polyOpts) {
     const g = Math.max(1, Math.min(5, Math.floor(grade)));
@@ -2555,7 +2606,11 @@
       for (let t = 0; t < 500; t++) {
         const bodySeed = seed + t * 2654435769 >>> 0;
         const st = generateBoardLv1Stage(1, bodySeed);
-        if (st) return { stage: __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed }), t };
+        if (st) {
+          const merged = __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed });
+          finalizeReflecShotDifficulty(merged, polyOpts);
+          return { stage: merged, t };
+        }
       }
       throw new Error("fallbackGridStage(1): Lv.1\u30FB\u30D0\u30F3\u30D1\u30FC2 \u306E\u751F\u6210\u306B\u5931\u6557");
     }
@@ -2563,7 +2618,11 @@
       for (let t = 0; t < 500; t++) {
         const bodySeed = seed + t * 2654435769 >>> 0;
         const st = generateBoardLv1Stage(2, bodySeed);
-        if (st) return { stage: __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed }), t };
+        if (st) {
+          const merged = __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed });
+          finalizeReflecShotDifficulty(merged, polyOpts);
+          return { stage: merged, t };
+        }
       }
       throw new Error("fallbackGridStage(2): Lv.1\u30FB\u30D0\u30F3\u30D1\u30FC4+ \u306E\u751F\u6210\u306B\u5931\u6557");
     }
@@ -2571,7 +2630,11 @@
       for (let t = 0; t < 200; t++) {
         const bodySeed = seed + t * 130051 >>> 0;
         const st = generateBoardLv2Stage(bodySeed, polyOpts);
-        if (st) return { stage: __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed }), t };
+        if (st) {
+          const merged = __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed });
+          finalizeReflecShotDifficulty(merged, polyOpts);
+          return { stage: merged, t };
+        }
       }
       throw new Error("fallbackGridStage(3): Lv.2 \u306E\u751F\u6210\u306B\u5931\u6557");
     }
@@ -2579,14 +2642,22 @@
       for (let t = 0; t < 200; t++) {
         const bodySeed = seed + t * 130051 >>> 0;
         const st = generateBoardLv3Stage(bodySeed, polyOpts);
-        if (st) return { stage: __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed }), t };
+        if (st) {
+          const merged = __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed });
+          finalizeReflecShotDifficulty(merged, polyOpts);
+          return { stage: merged, t };
+        }
       }
       throw new Error("fallbackGridStage(4): Lv.3 \u306E\u751F\u6210\u306B\u5931\u6557");
     }
     for (let t = 0; t < 500; t++) {
       const bodySeed = seed + t * 130051 >>> 0;
       const st = generateBoardLv4Stage(bodySeed, polyOpts);
-      if (st) return { stage: __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed }), t };
+      if (st) {
+        const merged = __spreadProps(__spreadValues({}, st), { grade: g, seed: bodySeed });
+        finalizeReflecShotDifficulty(merged, polyOpts);
+        return { stage: merged, t };
+      }
     }
     throw new Error("fallbackGridStage(5): Lv.4 \u306E\u751F\u6210\u306B\u5931\u6557");
   }
@@ -2626,11 +2697,11 @@
   self.onmessage = (ev) => {
     const msg = ev.data;
     if (!msg || msg.type !== "GENERATE") return;
-    const { requestId, grade, seed, grade2Bend6TotalBends, debugReflecShotConsole, lv4GenMode } = msg;
+    const { requestId, grade, seed, grade2Bend6TotalBends, debugReflecShotConsole, lv4GenMode, dummyDensityPct } = msg;
     post({ type: "STATUS", status: "RUNNING", requestId });
     try {
       const t0 = performance.now();
-      const genOpts = grade === 4 && grade2Bend6TotalBends != null || debugReflecShotConsole || lv4GenMode != null ? __spreadValues(__spreadValues(__spreadValues({}, grade === 4 && grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : {}), debugReflecShotConsole ? { debugReflecShotConsole: true } : {}), lv4GenMode != null ? { lv4GenMode } : {}) : void 0;
+      const genOpts = grade === 4 && grade2Bend6TotalBends != null || debugReflecShotConsole || lv4GenMode != null || dummyDensityPct != null ? __spreadValues(__spreadValues(__spreadValues(__spreadValues({}, grade === 4 && grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : {}), debugReflecShotConsole ? { debugReflecShotConsole: true } : {}), lv4GenMode != null ? { lv4GenMode } : {}), dummyDensityPct != null ? { dummyDensityPct } : {}) : void 0;
       const meta = generateGridStageWithFallbackMeta(grade, seed, genOpts);
       const totalMs = performance.now() - t0;
       if (debugReflecShotConsole) {

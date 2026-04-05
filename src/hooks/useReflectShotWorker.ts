@@ -85,6 +85,7 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
         grade2Bend6TotalBends?: 6 | 7 | 8;
         debugReflecShotConsole?: boolean;
         lv4GenMode?: ReflectShotLv4GenMode;
+        dummyDensityPct?: number;
       }
     ): Promise<ReflectShotGenerateResult> => {
       const w = workerRef.current;
@@ -115,6 +116,7 @@ export function useReflectShotWorker(workerScriptUrl: string = DEFAULT_SCRIPT) {
             : {}),
           ...(opts?.debugReflecShotConsole ? { debugReflecShotConsole: true } : {}),
           ...(opts?.lv4GenMode != null ? { lv4GenMode: opts.lv4GenMode } : {}),
+          ...(opts?.dummyDensityPct != null ? { dummyDensityPct: opts.dummyDensityPct } : {}),
         };
         w.postMessage(payload);
       });

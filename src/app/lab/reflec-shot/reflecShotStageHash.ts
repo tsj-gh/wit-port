@@ -102,8 +102,9 @@ function decodeRs1Payload(t: string): GridStage | null {
     if (!cell || typeof cell !== "object") return null;
     const d = (cell as { display?: unknown; solution?: unknown }).display;
     const s = (cell as { display?: unknown; solution?: unknown }).solution;
+    const isDummy = (cell as { isDummy?: unknown }).isDummy === true;
     if (!isBumperKind(d) || !isBumperKind(s)) return null;
-    map.set(k, { display: d, solution: s });
+    map.set(k, isDummy ? { display: d, solution: s, isDummy: true } : { display: d, solution: s });
   }
 
   const gi = typeof grade === "number" ? Math.floor(grade) : 1;

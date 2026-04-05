@@ -15,18 +15,21 @@ function post(data: ReflectShotWorkerToMain) {
 self.onmessage = (ev: MessageEvent<ReflectShotMainToWorkerGenerate>) => {
   const msg = ev.data;
   if (!msg || msg.type !== "GENERATE") return;
-  const { requestId, grade, seed, grade2Bend6TotalBends, debugReflecShotConsole, lv4GenMode } = msg;
+  const { requestId, grade, seed, grade2Bend6TotalBends, debugReflecShotConsole, lv4GenMode, dummyDensityPct } =
+    msg;
   post({ type: "STATUS", status: "RUNNING", requestId });
   try {
     const t0 = performance.now();
     const genOpts =
       (grade === 4 && grade2Bend6TotalBends != null) ||
       debugReflecShotConsole ||
-      lv4GenMode != null
+      lv4GenMode != null ||
+      dummyDensityPct != null
         ? {
             ...(grade === 4 && grade2Bend6TotalBends != null ? { grade2Bend6TotalBends } : {}),
             ...(debugReflecShotConsole ? { debugReflecShotConsole: true as const } : {}),
             ...(lv4GenMode != null ? { lv4GenMode } : {}),
+            ...(dummyDensityPct != null ? { dummyDensityPct } : {}),
           }
         : undefined;
     const meta = generateGridStageWithFallbackMeta(grade, seed, genOpts);

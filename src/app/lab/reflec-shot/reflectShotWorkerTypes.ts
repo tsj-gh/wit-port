@@ -2,7 +2,7 @@ import type { BumperCell, BumperKind, CellCoord, GridStage } from "./gridTypes";
 
 /** Worker 送信用（`Map` 非対応のためタプル列） */
 export type ReflectShotSerializedStage = Omit<GridStage, "bumpers"> & {
-  bumpers: [string, { display: BumperKind; solution: BumperKind }][];
+  bumpers: [string, { display: BumperKind; solution: BumperKind; isDummy?: boolean }][];
 };
 
 export type ReflectShotGenMetrics = {
@@ -31,6 +31,8 @@ export type ReflectShotMainToWorkerGenerate = {
   debugReflecShotConsole?: boolean;
   /** Grade5+・デバッグ時: Lv.4（再訪1）の生成アルゴリズム */
   lv4GenMode?: ReflectShotLv4GenMode;
+  /** devtj+DEBUG: ダミーバンパー密度 0〜100 */
+  dummyDensityPct?: number;
 };
 
 export type ReflectShotWorkerToMain =

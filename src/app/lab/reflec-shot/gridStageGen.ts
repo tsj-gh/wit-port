@@ -1,8 +1,10 @@
 import { applyBumper, bumperKindForTurn, diagonalBumperForTurn } from "./bumperRules";
 import {
   addCell,
+  BUMPER_KINDS,
   dirsEqual,
   gridDeltaToScreenDir,
+  initialWrongDisplayProbabilityForGrade,
   keyCell,
   negateDir,
   type BumperCell,
@@ -2678,6 +2680,11 @@ export type ReflectShotPolylineGenOpts = {
    */
   lv4GenMode?: "default" | "rFirst" | "rSecond";
   /**
+   * 0〜100。空き pathable マスおよび正解経路の直進マスにダミーバンパーを置く割合（dev 用）。
+   * 直進マス上のダミーは進行方向にスルー可能な向きのみ。
+   */
+  dummyDensityPct?: number;
+  /**
    * ベンチ・診断用: 参照が渡されたときのみ、`generateBoardLv4Stage` の 1 呼び出し内で集計を書き込む。
    */
   lv4BenchStats?: ReflectShotLv4BenchStats;
@@ -3430,7 +3437,6 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
       }
       const dup = new Map<string, BumperCell>();
       bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
-      shuffleWrongDisplay(dup, rng);
       markBenchSuccess(attempt);
       if (rSecond && rSecondTrace) {
         rSecondTrace.push(
@@ -3456,7 +3462,6 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
 
     const dup = new Map<string, BumperCell>();
     picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
-    shuffleWrongDisplay(dup, rng);
     markBenchSuccess(attempt);
     if (rSecond && rSecondTrace) {
       rSecondTrace.push(
@@ -3481,23 +3486,89 @@ function generateBoardLv4Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
   return null;
 }
 
-function wrongDiagonal(sol: BumperKind): BumperKind {
-  return sol === "SLASH" ? "BACKSLASH" : "SLASH";
+/** 直進時に入射方向を変えないバンパー種（経路直線部のダミー用） */
+function throughBumperKindForTravel(d: Dir): BumperKind {
+  return d.dx !== 0 ? "HYPHEN" : "PIPE";
 }
 
-function shuffleWrongDisplay(bumpers: Map<string, BumperCell>, rng: () => number) {
-  let hasWrong = false;
-  bumpers.forEach((cell) => {
-    if (rng() < 0.55) {
-      cell.display = wrongDiagonal(cell.solution);
-      hasWrong = true;
+function travelDirIntoPathCell(path: CellCoord[], i: number): Dir | null {
+  if (i <= 0) return null;
+  return unitStepDir(path[i]!.c - path[i - 1]!.c, path[i]!.r - path[i - 1]!.r);
+}
+
+function randomWrongDisplay(solution: BumperKind, rng: () => number): BumperKind {
+  const opts = BUMPER_KINDS.filter((k) => k !== solution);
+  return opts[Math.floor(rng() * opts.length)]!;
+}
+
+/**
+ * 正解経路・反射バンパー確定後: ダミー配置（密度）とグレード連動の初期表示ずらし。
+ */
+export function finalizeReflecShotDifficulty(st: GridStage, polyOpts?: ReflectShotPolylineGenOpts): void {
+  const density = Math.max(0, Math.min(100, polyOpts?.dummyDensityPct ?? 0));
+  const rng = createStageRng((st.seed ^ 0x9e3779b9) >>> 0);
+  const bendSet = bendCellsInPath(st.solutionPath);
+
+  st.bumpers.forEach((v) => {
+    v.isDummy = false;
+  });
+
+  type Cand =
+    | { c: number; r: number; kind: "random" }
+    | { c: number; r: number; kind: "through"; through: BumperKind };
+
+  const pathKeyToIndex = new Map<string, number>();
+  st.solutionPath.forEach((p, i) => pathKeyToIndex.set(keyCell(p.c, p.r), i));
+
+  const candidates: Cand[] = [];
+  for (let c = 0; c < st.width; c++) {
+    for (let r = 0; r < st.height; r++) {
+      if (!st.pathable[c]![r]) continue;
+      const k = keyCell(c, r);
+      if (st.bumpers.has(k)) continue;
+      if ((c === st.start.c && r === st.start.r) || (c === st.goal.c && r === st.goal.r)) continue;
+
+      const pi = pathKeyToIndex.get(k);
+      if (pi == null) {
+        candidates.push({ c, r, kind: "random" });
+        continue;
+      }
+      if (pi === 0 || pi === st.solutionPath.length - 1) continue;
+      if (bendSet.has(k)) continue;
+
+      const travel = travelDirIntoPathCell(st.solutionPath, pi);
+      if (!travel) continue;
+      const th = throughBumperKindForTravel(travel);
+      if (!dirsEqual(applyBumper(travel, th), travel)) continue;
+      candidates.push({ c, r, kind: "through", through: th });
+    }
+  }
+
+  shuffleArrayInPlace(candidates, rng);
+  const want = Math.floor((candidates.length * density) / 100);
+  for (let i = 0; i < want && i < candidates.length; i++) {
+    const cand = candidates[i]!;
+    const k = keyCell(cand.c, cand.r);
+    if (st.bumpers.has(k)) continue;
+    if (cand.kind === "through") {
+      const kind = cand.through;
+      st.bumpers.set(k, { display: kind, solution: kind, isDummy: true });
+    } else {
+      const kind = BUMPER_KINDS[Math.floor(rng() * BUMPER_KINDS.length)]!;
+      st.bumpers.set(k, { display: kind, solution: kind, isDummy: true });
+    }
+  }
+
+  const pWrong = initialWrongDisplayProbabilityForGrade(st.grade);
+  st.bumpers.forEach((cell, k) => {
+    if (cell.isDummy) return;
+    if (!bendSet.has(k)) return;
+    if (rng() < pWrong) {
+      cell.display = randomWrongDisplay(cell.solution, rng);
+    } else {
+      cell.display = cell.solution;
     }
   });
-  if (!hasWrong && bumpers.size) {
-    const first = bumpers.keys().next().value!;
-    const c = bumpers.get(first)!;
-    c.display = wrongDiagonal(c.solution);
-  }
 }
 
 /** 盤面生成 Lv.1（旧 Grade1）：4×4・折れ 1〜4・`placeDiagonalBumpers` 後の本数で採否 */
@@ -3536,8 +3607,6 @@ function generateBoardLv1Stage(consumerGrade: 1 | 2, seed: number): GridStage | 
 
     const dup = new Map<string, BumperCell>();
     bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
-    shuffleWrongDisplay(dup, rng);
-
     return {
       width: W,
       height: H,
@@ -3618,7 +3687,6 @@ function generateBoardLv2Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
       if (!ok || bumpers.size !== bends) continue;
       const dup = new Map<string, BumperCell>();
       bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
-      shuffleWrongDisplay(dup, rng);
       return {
         width: picked.width,
         height: picked.height,
@@ -3638,7 +3706,6 @@ function generateBoardLv2Stage(seed: number, genOpts?: ReflectShotPolylineGenOpt
 
     const dup = new Map<string, BumperCell>();
     picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
-    shuffleWrongDisplay(dup, rng);
     return {
       width: picked.width,
       height: picked.height,
@@ -3725,7 +3792,6 @@ function generateBoardLv3Stage(seed: number, polyOpts?: ReflectShotPolylineGenOp
       const dup = new Map<string, BumperCell>();
       bump6.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       lastGrade2Bend6Trace = { trace: bend6Trace, rawPath: path.map((x) => ({ ...x })) };
-      shuffleWrongDisplay(dup, rng);
       return {
         width: picked.width,
         height: picked.height,
@@ -3746,7 +3812,6 @@ function generateBoardLv3Stage(seed: number, polyOpts?: ReflectShotPolylineGenOp
     const dup = new Map<string, BumperCell>();
     picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
     lastGrade2Bend6Trace = { trace: bend6Trace, rawPath: path.map((x) => ({ ...x })) };
-    shuffleWrongDisplay(dup, rng);
     return {
       width: picked.width,
       height: picked.height,
@@ -3771,10 +3836,13 @@ export function generateGridStage(
   polyOpts?: ReflectShotPolylineGenOpts
 ): GridStage | null {
   const g = Math.max(1, Math.min(5, Math.floor(grade)));
-  if (g === 1 || g === 2) return generateBoardLv1Stage(g, seed);
-  if (g === 3) return generateBoardLv2Stage(seed, polyOpts);
-  if (g === 4) return generateBoardLv3Stage(seed, polyOpts);
-  return generateBoardLv4Stage(seed, polyOpts);
+  let st: GridStage | null = null;
+  if (g === 1 || g === 2) st = generateBoardLv1Stage(g, seed);
+  else if (g === 3) st = generateBoardLv2Stage(seed, polyOpts);
+  else if (g === 4) st = generateBoardLv3Stage(seed, polyOpts);
+  else st = generateBoardLv4Stage(seed, polyOpts);
+  if (st) finalizeReflecShotDifficulty(st, polyOpts);
+  return st;
 }
 
 /** `generateGridStageWithFallback` / Worker 計測用 */
@@ -3802,7 +3870,11 @@ function fallbackGridStageInner(
     for (let t = 0; t < 500; t++) {
       const bodySeed = (seed + t * 0x9e3779b9) >>> 0;
       const st = generateBoardLv1Stage(1, bodySeed);
-      if (st) return { stage: { ...st, grade: g, seed: bodySeed }, t };
+      if (st) {
+        const merged = { ...st, grade: g, seed: bodySeed };
+        finalizeReflecShotDifficulty(merged, polyOpts);
+        return { stage: merged, t };
+      }
     }
     throw new Error("fallbackGridStage(1): Lv.1・バンパー2 の生成に失敗");
   }
@@ -3810,7 +3882,11 @@ function fallbackGridStageInner(
     for (let t = 0; t < 500; t++) {
       const bodySeed = (seed + t * 0x9e3779b9) >>> 0;
       const st = generateBoardLv1Stage(2, bodySeed);
-      if (st) return { stage: { ...st, grade: g, seed: bodySeed }, t };
+      if (st) {
+        const merged = { ...st, grade: g, seed: bodySeed };
+        finalizeReflecShotDifficulty(merged, polyOpts);
+        return { stage: merged, t };
+      }
     }
     throw new Error("fallbackGridStage(2): Lv.1・バンパー4+ の生成に失敗");
   }
@@ -3818,7 +3894,11 @@ function fallbackGridStageInner(
     for (let t = 0; t < 200; t++) {
       const bodySeed = (seed + t * 130051) >>> 0;
       const st = generateBoardLv2Stage(bodySeed, polyOpts);
-      if (st) return { stage: { ...st, grade: g, seed: bodySeed }, t };
+      if (st) {
+        const merged = { ...st, grade: g, seed: bodySeed };
+        finalizeReflecShotDifficulty(merged, polyOpts);
+        return { stage: merged, t };
+      }
     }
     throw new Error("fallbackGridStage(3): Lv.2 の生成に失敗");
   }
@@ -3826,14 +3906,22 @@ function fallbackGridStageInner(
     for (let t = 0; t < 200; t++) {
       const bodySeed = (seed + t * 130051) >>> 0;
       const st = generateBoardLv3Stage(bodySeed, polyOpts);
-      if (st) return { stage: { ...st, grade: g, seed: bodySeed }, t };
+      if (st) {
+        const merged = { ...st, grade: g, seed: bodySeed };
+        finalizeReflecShotDifficulty(merged, polyOpts);
+        return { stage: merged, t };
+      }
     }
     throw new Error("fallbackGridStage(4): Lv.3 の生成に失敗");
   }
   for (let t = 0; t < 500; t++) {
     const bodySeed = (seed + t * 130051) >>> 0;
     const st = generateBoardLv4Stage(bodySeed, polyOpts);
-    if (st) return { stage: { ...st, grade: g, seed: bodySeed }, t };
+    if (st) {
+      const merged = { ...st, grade: g, seed: bodySeed };
+      finalizeReflecShotDifficulty(merged, polyOpts);
+      return { stage: merged, t };
+    }
   }
   throw new Error("fallbackGridStage(5): Lv.4 の生成に失敗");
 }

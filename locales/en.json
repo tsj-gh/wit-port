@@ -68,6 +68,8 @@
       },
       "debugPanelTitle": "Debug",
       "debugShowSolutionPath": "Solution path (main sequence, straight)",
+      "debugDummyDensity": "Dummy density",
+      "debugInitialWrongRate": "Initial wrong-facing rate (bend bumpers, grade): ~{pct}%",
       "debugBallSpeed": "Ball speed",
       "debugGemAttract": "Gem pull",
       "debugWallFxMs": "Wall hit → fail",

@@ -68,6 +68,8 @@
       },
       "debugPanelTitle": "デバッグ",
       "debugShowSolutionPath": "正解経路（メインシーケンス・直線）",
+      "debugDummyDensity": "ダミー密度",
+      "debugInitialWrongRate": "初期不正解率（反射点・グレード連動）: 約{pct}%",
       "debugBallSpeed": "球の速度",
       "debugGemAttract": "宝石吸引",
       "debugWallFxMs": "壁ヒット演出→失敗",
