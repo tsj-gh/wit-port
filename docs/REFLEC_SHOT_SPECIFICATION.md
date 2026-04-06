@@ -101,7 +101,7 @@
 | **4** | 5×5 | **Lv.3** | 旧 Grade2・**折れ6〜8**（`tryGrade2Bend6Path` 等）。開発 UI では全体目標折れ 6/7/8 を固定可能 |
 | **5** | 5×5 | **Lv.4** | 旧 Grade3・**再訪1マス**・折れ6（盤は Grade3/4 と同寸） |
 | **6** | 6×6 | **Grade6 専用** | 折れ **7〜9**・`pickGrade2OrientedStage`（`relaxBendVisit`・`enforceLv4GoalPadRules`・`requireGoalOnTopLeftRight`・`requireStartPadBelowBoard`）・**再訪折れ 1 マス**（`gradeG6RevisitBendOnlyCellKey`）・**再訪十字なし** |
-| **7** | 7×7 | **Grade7 専用** | 折れ **7〜10**・上記オプションと同型・**dual 再訪**（再訪十字 1+・再訪折れ 1、`grade6DualRevisitBendCellKey`） |
+| **7** | 7×7 | **Grade7 専用** | 折れ **8〜11**・上記オプションと同型・**dual 再訪**（再訪十字 1+・再訪折れ 1、`grade6DualRevisitBendCellKey`） |
 
 ### Grade 6（6×6）
 
@@ -116,7 +116,7 @@
 
 - **盤面**: 7×7 全域 `pathable`。
 - **経路**: `tryRandomHighGradeSolutionPath`（mode `g7`）。訪問は **ちょうど 2 マスが各 2 回**（dual）。`prependVerticalSoStartOnBottomRow` 後、`gradeG7DualRevisitSolutionPath`（実装名は `grade6DualRevisitBendCellKey` 非 null）を満たす。
-- **折れ数**: **7〜10**。
+- **折れ数**: **8〜11**。
 - **goal / goalPad**: Grade6 と同様 **`requireGoalOnTopLeftRight`** ほか。
 - **再訪十字**: 1 以上（`revisitCrossCellKeysFromPath`）。
 - **宝石目標**: **折れ数 + 再訪十字数 + 3×再訪折れ（両面ヒット）**（旧 Grade6 dual 式と同型）。

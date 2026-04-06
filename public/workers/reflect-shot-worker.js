@@ -1046,8 +1046,8 @@
   function tryRandomHighGradeSolutionPath(pathable, w, h, rng, mode) {
     const maxDoubleKeys = mode === "g6" ? 1 : 2;
     const expectedTwos = mode === "g6" ? 1 : 2;
-    const bendMin = 7;
-    const bendMax = mode === "g6" ? 9 : 10;
+    const bendMin = mode === "g6" ? 7 : 8;
+    const bendMax = mode === "g6" ? 9 : 11;
     const maxLen = mode === "g6" ? 52 : 64;
     const maxAttempts = mode === "g6" ? 620 : 900;
     const maxSucc = 22;
@@ -3126,7 +3126,7 @@
       const sol = picked.solutionPath;
       if (!gradeG7DualRevisitSolutionPath(sol)) continue;
       const crPick = countRightAngles(sol);
-      if (crPick < 7 || crPick > 10) continue;
+      if (crPick < 8 || crPick > 11) continue;
       const dup = /* @__PURE__ */ new Map();
       picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       const st = {

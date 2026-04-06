@@ -37,7 +37,7 @@ export function bendOrBumperHint(grade: number): string {
   if (g === 4) return "Lv.3・折れ6〜8";
   if (g === 5) return "Lv.4・再訪1";
   if (g === 6) return "6×6・折れ7〜9・再訪折れ1・再訪十字なし";
-  return "7×7・折れ7〜10・再訪折れ1・再訪十字1+";
+  return "7×7・折れ8〜11・再訪折れ1・再訪十字1+";
 }
 
 /** @deprecated 旧テンプレ盤用。新 Grade1〜5 では未使用 */
@@ -1159,8 +1159,8 @@ function tryRandomHighGradeSolutionPath(
 ): CellCoord[] | null {
   const maxDoubleKeys = mode === "g6" ? 1 : 2;
   const expectedTwos = mode === "g6" ? 1 : 2;
-  const bendMin = 7;
-  const bendMax = mode === "g6" ? 9 : 10;
+  const bendMin = mode === "g6" ? 7 : 8;
+  const bendMax = mode === "g6" ? 9 : 11;
   const maxLen = mode === "g6" ? 52 : 64;
   const maxAttempts = mode === "g6" ? 620 : 900;
   const maxSucc = 22;
@@ -4197,7 +4197,7 @@ function generateBoardG6Stage(seed: number, polyOpts?: ReflectShotPolylineGenOpt
   return null;
 }
 
-/** 盤面生成 Grade7: 7×7・折れ 7〜10・goalPad 上／左／右・再訪折れ 1・再訪十字 1+ */
+/** 盤面生成 Grade7: 7×7・折れ 8〜11・goalPad 上／左／右・再訪折れ 1・再訪十字 1+ */
 function generateBoardG7Stage(seed: number, polyOpts?: ReflectShotPolylineGenOpts): GridStage | null {
   const rng = createStageRng(seed);
   const W = 7;
@@ -4219,7 +4219,7 @@ function generateBoardG7Stage(seed: number, polyOpts?: ReflectShotPolylineGenOpt
     const sol = picked.solutionPath;
     if (!gradeG7DualRevisitSolutionPath(sol)) continue;
     const crPick = countRightAngles(sol);
-    if (crPick < 7 || crPick > 10) continue;
+    if (crPick < 8 || crPick > 11) continue;
     const dup = new Map<string, BumperCell>();
     picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
     const st: GridStage = {
