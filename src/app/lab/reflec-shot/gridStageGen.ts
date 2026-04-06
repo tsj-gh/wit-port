@@ -1002,10 +1002,9 @@ function grade6RevisitBendAtCellKey(path: CellCoord[], cellKey: string): boolean
 }
 
 /**
- * Grade6 正解頂点列: ちょうど 2 マスが各 2 回、そのうち **再訪十字が 1 マス以上**、**再訪折れがちょうど 1 マス**
- * （再訪十字マスは `revisitCrossCellKeysFromPath`、再訪折れは上記いずれにも該当しない 2 回訪問マス）。
+ * G6 正解頂点列が dual 再訪を満たすとき、再訪**折れ**マスの `keyCell`。満たさなければ `null`。
  */
-function grade6DualRevisitSolutionPath(path: CellCoord[]): boolean {
+export function grade6DualRevisitBendCellKey(path: CellCoord[]): string | null {
   const freq = new Map<string, number>();
   for (const p of path) {
     const k = keyCell(p.c, p.r);
@@ -1014,15 +1013,89 @@ function grade6DualRevisitSolutionPath(path: CellCoord[]): boolean {
   const twice: string[] = [];
   for (const [k, n] of Array.from(freq.entries())) {
     if (n === 2) twice.push(k);
-    else if (n !== 1) return false;
+    else if (n !== 1) return null;
   }
-  if (twice.length !== 2) return false;
+  if (twice.length !== 2) return null;
   const crossKeys = revisitCrossCellKeysFromPath(path);
-  if (crossKeys.size < 1) return false;
+  if (crossKeys.size < 1) return null;
   const bendCandidates = twice.filter((t) => !crossKeys.has(t));
-  if (bendCandidates.length !== 1) return false;
+  if (bendCandidates.length !== 1) return null;
   const bendK = bendCandidates[0]!;
-  return grade6RevisitBendAtCellKey(path, bendK);
+  if (!grade6RevisitBendAtCellKey(path, bendK)) return null;
+  return bendK;
+}
+
+/**
+ * 再訪折れマスについて、solution 上の **1 回目出現インデックスから 2 回目までの辺数**（`i1 - i0`）。
+ * 閉路の「伸び」目安。G6 以外・不成立時は `null`。
+ */
+export function grade6RevisitBendLoopSpanSteps(path: CellCoord[]): number | null {
+  const bendK = grade6DualRevisitBendCellKey(path);
+  if (!bendK) return null;
+  const idxs: number[] = [];
+  for (let i = 0; i < path.length; i++) {
+    if (keyCell(path[i]!.c, path[i]!.r) === bendK) idxs.push(i);
+  }
+  if (idxs.length !== 2) return null;
+  return Math.abs(idxs[1]! - idxs[0]!);
+}
+
+/** Grade6 正解頂点列: ちょうど 2 マスが各 2 回、再訪十字 1+、再訪折れ 1。 */
+function grade6DualRevisitSolutionPath(path: CellCoord[]): boolean {
+  return grade6DualRevisitBendCellKey(path) != null;
+}
+
+/** 生の頂点列候補から、再訪折れループ辺数が大きいほど選ばれやすいが短いループも残る重み付き 1 本選び */
+function g6PickRawPathByLoopSpan(paths: CellCoord[][], rng: () => number): CellCoord[] | null {
+  if (!paths.length) return null;
+  if (paths.length === 1) return paths[0]!;
+  const scored = paths
+    .map((p) => ({ p, span: grade6RevisitBendLoopSpanSteps(p) ?? 0 }))
+    .filter((x) => x.span > 0);
+  if (!scored.length) return paths[0]!;
+  const bySpan = new Map<number, CellCoord[][]>();
+  for (const { p, span } of scored) {
+    const g = bySpan.get(span) ?? [];
+    g.push(p);
+    bySpan.set(span, g);
+  }
+  const tiers = Array.from(bySpan.keys()).sort((a, b) => b - a);
+  const queues = tiers.map((span) => {
+    const g = [...bySpan.get(span)!];
+    shuffleArrayInPlace(g, rng);
+    return g;
+  });
+  const rot = Math.floor(rng() * queues.length);
+  const rotated = rot === 0 ? queues : [...queues.slice(rot), ...queues.slice(0, rot)];
+  const flat: CellCoord[][] = [];
+  let progressed = true;
+  while (progressed) {
+    progressed = false;
+    for (const q of rotated) {
+      const t = q.shift();
+      if (t !== undefined) {
+        flat.push(t);
+        progressed = true;
+      }
+    }
+  }
+  const pickFrom = flat.slice(0, Math.min(flat.length, 20));
+  if (pickFrom.length > 1 && rng() < 0.14) {
+    return pickFrom[Math.floor(rng() * pickFrom.length)]!;
+  }
+  const spans = pickFrom.map((p) => grade6RevisitBendLoopSpanSteps(p) ?? 1);
+  let wsum = 0;
+  const weights = spans.map((span) => {
+    const w = 1 + span ** 1.78;
+    wsum += w;
+    return w;
+  });
+  let r = rng() * wsum;
+  for (let i = 0; i < pickFrom.length; i++) {
+    r -= weights[i]!;
+    if (r <= 0) return pickFrom[i]!;
+  }
+  return pickFrom[pickFrom.length - 1]!;
 }
 
 function g6VisitHistogram(path: CellCoord[]): Map<string, number> {
@@ -1049,18 +1122,20 @@ function g6CanAppend(path: CellCoord[], next: CellCoord): boolean {
 
 /**
  * 6×6 用: 下辺→上辺への貪欲ランダムウォーク（訪問上限付き）で G6 幾何を満たす直交経路を探索。
- * 4 方向の試行順を毎ステップシャッフルし、ゴールバイアスを弱めて経路形状の多様化を図る。
+ * 複数本の成功経路を溜め、再訪折れループ辺数が長いほど選ばれやすい重み付きで 1 本に絞る（G5 の b1 帯と同様の多様化）。
  */
 function tryRandomG6SolutionPath(pathable: boolean[][], w: number, h: number, rng: () => number): CellCoord[] | null {
   const maxLen = 52;
-  const maxAttempts = 900;
+  const maxAttempts = 620;
+  const maxSucc = 22;
   const bottoms = bottomCandidates(pathable);
   const tops = topCandidates(pathable);
   if (!bottoms.length || !tops.length) return null;
   const manhattan = (a: CellCoord, g: CellCoord) => Math.abs(a.c - g.c) + Math.abs(a.r - g.r);
   const dirs4 = [DIR.U, DIR.D, DIR.L, DIR.R];
+  const successes: CellCoord[][] = [];
 
-  for (let att = 0; att < maxAttempts; att++) {
+  for (let att = 0; att < maxAttempts && successes.length < maxSucc; att++) {
     const start = bottoms[Math.floor(rng() * bottoms.length)]!;
     const goal = tops[Math.floor(rng() * tops.length)]!;
     const path: CellCoord[] = [start];
@@ -1075,17 +1150,32 @@ function tryRandomG6SolutionPath(pathable: boolean[][], w: number, h: number, rn
         if (g6CanAppend(path, n)) cand.push(n);
       }
       if (!cand.length) break;
-      const biasGoal = rng() < 0.52;
-      if (biasGoal && cand.length > 1) {
-        let best = Infinity;
+      let twosNow = 0;
+      for (const [, v] of Array.from(g6VisitHistogram(path).entries())) {
+        if (v === 2) twosNow++;
+      }
+      const detourBeforeRevisit = twosNow === 0 && cand.length > 1 && rng() < 0.26;
+      if (detourBeforeRevisit) {
+        let worst = -1;
         for (const n of cand) {
           const d = manhattan(n, goal);
-          if (d < best) best = d;
+          if (d > worst) worst = d;
         }
-        const pool = cand.filter((n) => manhattan(n, goal) === best);
-        path.push(pool[Math.floor(rng() * pool.length)]!);
+        const far = cand.filter((n) => manhattan(n, goal) === worst);
+        path.push(far[Math.floor(rng() * far.length)]!);
       } else {
-        path.push(cand[Math.floor(rng() * cand.length)]!);
+        const biasGoal = rng() < 0.44;
+        if (biasGoal && cand.length > 1) {
+          let best = Infinity;
+          for (const n of cand) {
+            const d = manhattan(n, goal);
+            if (d < best) best = d;
+          }
+          const pool = cand.filter((n) => manhattan(n, goal) === best);
+          path.push(pool[Math.floor(rng() * pool.length)]!);
+        } else {
+          path.push(cand[Math.floor(rng() * cand.length)]!);
+        }
       }
     }
     const end = path[path.length - 1]!;
@@ -1096,15 +1186,15 @@ function tryRandomG6SolutionPath(pathable: boolean[][], w: number, h: number, rn
       if (v === 2) twos++;
     }
     if (twos !== 2) continue;
-    if (!grade6DualRevisitSolutionPath(path)) continue;
-    const cr = countRightAngles(path);
-    if (cr < 7 || cr > 10) continue;
     const mapped = path.map((x) => ({ ...x }));
     const forStage = prependVerticalSoStartOnBottomRow(mapped, pathable, w, h);
     if (!forStage) continue;
-    return forStage;
+    if (!grade6DualRevisitSolutionPath(forStage)) continue;
+    const cr = countRightAngles(forStage);
+    if (cr < 7 || cr > 10) continue;
+    successes.push(forStage);
   }
-  return null;
+  return g6PickRawPathByLoopSpan(successes, rng);
 }
 
 /**

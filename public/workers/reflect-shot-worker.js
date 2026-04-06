@@ -878,7 +878,7 @@
     const okIn2 = dirsEqual(dIn2, negateDir(dIn1)) || dirsEqual(dIn2, dOut1);
     return okIn2;
   }
-  function grade6DualRevisitSolutionPath(path) {
+  function grade6DualRevisitBendCellKey(path) {
     var _a;
     const freq = /* @__PURE__ */ new Map();
     for (const p of path) {
@@ -888,15 +888,85 @@
     const twice = [];
     for (const [k, n] of Array.from(freq.entries())) {
       if (n === 2) twice.push(k);
-      else if (n !== 1) return false;
+      else if (n !== 1) return null;
     }
-    if (twice.length !== 2) return false;
+    if (twice.length !== 2) return null;
     const crossKeys = revisitCrossCellKeysFromPath(path);
-    if (crossKeys.size < 1) return false;
+    if (crossKeys.size < 1) return null;
     const bendCandidates = twice.filter((t) => !crossKeys.has(t));
-    if (bendCandidates.length !== 1) return false;
+    if (bendCandidates.length !== 1) return null;
     const bendK = bendCandidates[0];
-    return grade6RevisitBendAtCellKey(path, bendK);
+    if (!grade6RevisitBendAtCellKey(path, bendK)) return null;
+    return bendK;
+  }
+  function grade6RevisitBendLoopSpanSteps(path) {
+    const bendK = grade6DualRevisitBendCellKey(path);
+    if (!bendK) return null;
+    const idxs = [];
+    for (let i = 0; i < path.length; i++) {
+      if (keyCell(path[i].c, path[i].r) === bendK) idxs.push(i);
+    }
+    if (idxs.length !== 2) return null;
+    return Math.abs(idxs[1] - idxs[0]);
+  }
+  function grade6DualRevisitSolutionPath(path) {
+    return grade6DualRevisitBendCellKey(path) != null;
+  }
+  function g6PickRawPathByLoopSpan(paths, rng) {
+    var _a;
+    if (!paths.length) return null;
+    if (paths.length === 1) return paths[0];
+    const scored = paths.map((p) => {
+      var _a2;
+      return { p, span: (_a2 = grade6RevisitBendLoopSpanSteps(p)) != null ? _a2 : 0 };
+    }).filter((x) => x.span > 0);
+    if (!scored.length) return paths[0];
+    const bySpan = /* @__PURE__ */ new Map();
+    for (const { p, span } of scored) {
+      const g = (_a = bySpan.get(span)) != null ? _a : [];
+      g.push(p);
+      bySpan.set(span, g);
+    }
+    const tiers = Array.from(bySpan.keys()).sort((a, b) => b - a);
+    const queues = tiers.map((span) => {
+      const g = [...bySpan.get(span)];
+      shuffleArrayInPlace(g, rng);
+      return g;
+    });
+    const rot = Math.floor(rng() * queues.length);
+    const rotated = rot === 0 ? queues : [...queues.slice(rot), ...queues.slice(0, rot)];
+    const flat = [];
+    let progressed = true;
+    while (progressed) {
+      progressed = false;
+      for (const q of rotated) {
+        const t = q.shift();
+        if (t !== void 0) {
+          flat.push(t);
+          progressed = true;
+        }
+      }
+    }
+    const pickFrom = flat.slice(0, Math.min(flat.length, 20));
+    if (pickFrom.length > 1 && rng() < 0.14) {
+      return pickFrom[Math.floor(rng() * pickFrom.length)];
+    }
+    const spans = pickFrom.map((p) => {
+      var _a2;
+      return (_a2 = grade6RevisitBendLoopSpanSteps(p)) != null ? _a2 : 1;
+    });
+    let wsum = 0;
+    const weights = spans.map((span) => {
+      const w = 1 + span ** 1.78;
+      wsum += w;
+      return w;
+    });
+    let r = rng() * wsum;
+    for (let i = 0; i < pickFrom.length; i++) {
+      r -= weights[i];
+      if (r <= 0) return pickFrom[i];
+    }
+    return pickFrom[pickFrom.length - 1];
   }
   function g6VisitHistogram(path) {
     var _a;
@@ -922,13 +992,15 @@
   }
   function tryRandomG6SolutionPath(pathable, w, h, rng) {
     const maxLen = 52;
-    const maxAttempts = 900;
+    const maxAttempts = 620;
+    const maxSucc = 22;
     const bottoms = bottomCandidates(pathable);
     const tops = topCandidates(pathable);
     if (!bottoms.length || !tops.length) return null;
     const manhattan = (a, g) => Math.abs(a.c - g.c) + Math.abs(a.r - g.r);
     const dirs4 = [DIR.U, DIR.D, DIR.L, DIR.R];
-    for (let att = 0; att < maxAttempts; att++) {
+    const successes = [];
+    for (let att = 0; att < maxAttempts && successes.length < maxSucc; att++) {
       const start = bottoms[Math.floor(rng() * bottoms.length)];
       const goal = tops[Math.floor(rng() * tops.length)];
       const path = [start];
@@ -943,17 +1015,32 @@
           if (g6CanAppend(path, n)) cand.push(n);
         }
         if (!cand.length) break;
-        const biasGoal = rng() < 0.52;
-        if (biasGoal && cand.length > 1) {
-          let best = Infinity;
+        let twosNow = 0;
+        for (const [, v] of Array.from(g6VisitHistogram(path).entries())) {
+          if (v === 2) twosNow++;
+        }
+        const detourBeforeRevisit = twosNow === 0 && cand.length > 1 && rng() < 0.26;
+        if (detourBeforeRevisit) {
+          let worst = -1;
           for (const n of cand) {
             const d = manhattan(n, goal);
-            if (d < best) best = d;
+            if (d > worst) worst = d;
           }
-          const pool = cand.filter((n) => manhattan(n, goal) === best);
-          path.push(pool[Math.floor(rng() * pool.length)]);
+          const far = cand.filter((n) => manhattan(n, goal) === worst);
+          path.push(far[Math.floor(rng() * far.length)]);
         } else {
-          path.push(cand[Math.floor(rng() * cand.length)]);
+          const biasGoal = rng() < 0.44;
+          if (biasGoal && cand.length > 1) {
+            let best = Infinity;
+            for (const n of cand) {
+              const d = manhattan(n, goal);
+              if (d < best) best = d;
+            }
+            const pool = cand.filter((n) => manhattan(n, goal) === best);
+            path.push(pool[Math.floor(rng() * pool.length)]);
+          } else {
+            path.push(cand[Math.floor(rng() * cand.length)]);
+          }
         }
       }
       const end = path[path.length - 1];
@@ -964,15 +1051,15 @@
         if (v === 2) twos++;
       }
       if (twos !== 2) continue;
-      if (!grade6DualRevisitSolutionPath(path)) continue;
-      const cr = countRightAngles(path);
-      if (cr < 7 || cr > 10) continue;
       const mapped = path.map((x) => __spreadValues({}, x));
       const forStage = prependVerticalSoStartOnBottomRow(mapped, pathable, w, h);
       if (!forStage) continue;
-      return forStage;
+      if (!grade6DualRevisitSolutionPath(forStage)) continue;
+      const cr = countRightAngles(forStage);
+      if (cr < 7 || cr > 10) continue;
+      successes.push(forStage);
     }
-    return null;
+    return g6PickRawPathByLoopSpan(successes, rng);
   }
   function prependVerticalSoStartOnBottomRow(path, pathable, w, h) {
     if (path.length < 2) return null;
