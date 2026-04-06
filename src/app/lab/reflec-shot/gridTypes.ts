@@ -116,16 +116,45 @@ export function isAgentCell(st: GridStage, c: number, r: number) {
 }
 
 /**
- * キャンバスで描く行の範囲 `[rMin, rMax]`（グリッド行 `r`）。列は常に `0..width-1` を走査するが、
- * 行方向は **スタート／ゴール／両パッド** に加え、**正解経路 `solutionPath` が通るすべてのマス**の行を含める。
- * `start`・`goal` が一辺に寄っていても、経路が別の行を使う場合はそこが欠けず描画される。
+ * キャンバスで描く行の範囲 `[rMin, rMax]`（グリッド行 `r`）。
+ * **盤面の最上段・最下段（`0` と `height-1`）は常に含める**（経路が通らない行もマスとして描く）。
+ * さらに盤外の `startPad` / `goalPad`、端点、`solutionPath` の行を含め、パッド行まで連続したレイアウトにする。
  */
 export function stageRowRange(st: GridStage) {
-  const rows: number[] = [st.goalPad.r, st.startPad.r, st.start.r, st.goal.r];
+  const h = st.height;
+  const rows: number[] = [0, h - 1, st.goalPad.r, st.startPad.r, st.start.r, st.goal.r];
   for (const p of st.solutionPath) {
     rows.push(p.r);
   }
   return { rMin: Math.min(...rows), rMax: Math.max(...rows) };
+}
+
+/**
+ * 盤 `[0,width)` の列に加え、盤外パッド列と正解経路の列を含むキャンバス用の列範囲。
+ * 基準は常に盤面全幅（`0..width-1`）から始め、パッド／経路でだけ左右に拡張する（列＝パッド位置だけ、にはしない）。
+ */
+export function stageColDrawRange(st: GridStage): { cMin: number; cMax: number } {
+  let cMin = 0;
+  let cMax = st.width - 1;
+  const bump = (c: number) => {
+    cMin = Math.min(cMin, c);
+    cMax = Math.max(cMax, c);
+  };
+  bump(st.startPad.c);
+  bump(st.goalPad.c);
+  for (const p of st.solutionPath) bump(p.c);
+  return { cMin, cMax };
+}
+
+/**
+ * 盤の真上／真下の「パッド専用行」か。左右端の goalPad（盤と同じ行 `r`）では false を返し、盤内マスを背景で潰さない。
+ */
+export function isExclusiveOutsidePadCorridorRow(st: GridStage, r: number): boolean {
+  const startStrip =
+    r === st.startPad.r && (st.startPad.r < 0 || st.startPad.r >= st.height);
+  const goalStrip =
+    r === st.goalPad.r && (st.goalPad.r < 0 || st.goalPad.r >= st.height);
+  return startStrip || goalStrip;
 }
 
 /** 正解ポリライン上の 90° 折れセル（反射点）のキー集合 */

@@ -7,10 +7,10 @@ export type CellRect = { left: number; top: number; right: number; bottom: numbe
 export function cellRectPx(
   c: number,
   r: number,
-  layout: { ox: number; oy: number; cellPx: number; rMin: number }
+  layout: { ox: number; oy: number; cellPx: number; rMin: number; cMin: number }
 ): CellRect {
-  const { ox, oy, cellPx, rMin } = layout;
-  const left = ox + c * cellPx;
+  const { ox, oy, cellPx, rMin, cMin } = layout;
+  const left = ox + (c - cMin) * cellPx;
   const top = oy + (r - rMin) * cellPx;
   return { left, top, right: left + cellPx, bottom: top + cellPx };
 }

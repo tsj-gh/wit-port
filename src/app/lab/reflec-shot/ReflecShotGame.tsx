@@ -27,9 +27,11 @@ import {
   DIR,
   initialWrongDisplayProbabilityForGrade,
   isAgentCell,
+  isExclusiveOutsidePadCorridorRow,
   keyCell,
   negateDir,
   parseKey,
+  stageColDrawRange,
   stageRowRange,
   unitOrthoDirBetween,
   type BumperKind,
@@ -246,12 +248,13 @@ function wallFxBallKinematics(
   ox: number,
   oy: number,
   rMin: number,
+  cMin: number,
   cell: CellCoord,
   wallDir: Dir,
   rad: number,
   t01: number
 ): { x: number; y: number; tailDx: number; tailDy: number; tailActive: boolean } {
-  const cx = ox + cell.c * cellPx + cellPx / 2;
+  const cx = ox + (cell.c - cMin) * cellPx + cellPx / 2;
   const cy = oy + (cell.r - rMin) * cellPx + cellPx / 2;
   const { px, py } = screenDirToPixelUnit(wallDir);
   const half = Math.max(2, cellPx / 2 - rad - 1.5);
@@ -440,33 +443,51 @@ function cellCenterPx(
   cellPx: number,
   ox: number,
   oy: number,
-  rMin: number
+  rMin: number,
+  cMin: number
 ) {
   const yRow = r - rMin;
-  return { x: ox + c * cellPx + cellPx / 2, y: oy + yRow * cellPx + cellPx / 2 };
+  return {
+    x: ox + (c - cMin) * cellPx + cellPx / 2,
+    y: oy + yRow * cellPx + cellPx / 2,
+  };
+}
+
+function boardPixelLayout(st: GridStage, wPx: number, hPx: number) {
+  const { rMin, rMax } = stageRowRange(st);
+  const nRows = rMax - rMin + 1;
+  const { cMin, cMax } = stageColDrawRange(st);
+  const nCols = cMax - cMin + 1;
+  const cellPx = Math.max(
+    24,
+    Math.floor(Math.min(wPx / nCols, hPx / nRows) * 0.92)
+  );
+  const gw = cellPx * nCols;
+  const gh = cellPx * nRows;
+  const ox = (wPx - gw) / 2;
+  const oy = (hPx - gh) / 2;
+  return { cellPx, ox, oy, rMin, cMin, cMax, gw, gh, nCols };
 }
 
 /** `draw` 前のポインタ用に、`draw` と同じ式でレイアウトを推定する */
 function computeBoardLayout(st: GridStage, wPx: number, hPx: number) {
-  const { rMin, rMax } = stageRowRange(st);
-  const nRows = rMax - rMin + 1;
-  const cellPx = Math.max(
-    24,
-    Math.floor(Math.min(wPx / st.width, hPx / nRows) * 0.92)
-  );
-  const gw = cellPx * st.width;
-  const gh = cellPx * nRows;
-  const ox = (wPx - gw) / 2;
-  const oy = (hPx - gh) / 2;
-  return { cellPx, ox, oy, rMin };
+  const L = boardPixelLayout(st, wPx, hPx);
+  return { cellPx: L.cellPx, ox: L.ox, oy: L.oy, rMin: L.rMin, cMin: L.cMin, nCols: L.nCols };
 }
 
-type BoardLayoutMetrics = { cellPx: number; ox: number; oy: number; rMin: number };
+type BoardLayoutMetrics = {
+  cellPx: number;
+  ox: number;
+  oy: number;
+  rMin: number;
+  cMin: number;
+  nCols: number;
+};
 
 function startPadPixelRect(st: GridStage, layout: BoardLayoutMetrics) {
   const c = st.startPad.c;
   const r = st.startPad.r;
-  const left = layout.ox + c * layout.cellPx;
+  const left = layout.ox + (c - layout.cMin) * layout.cellPx;
   const top = layout.oy + (r - layout.rMin) * layout.cellPx;
   return { left, top, right: left + layout.cellPx, bottom: top + layout.cellPx };
 }
@@ -485,7 +506,7 @@ function pointInTrajectoryStartMargin(
 ) {
   const { rMin, rMax } = stageRowRange(st);
   const nRows = rMax - rMin + 1;
-  const gw = layout.cellPx * st.width;
+  const gw = layout.cellPx * layout.nCols;
   const gh = layout.cellPx * nRows;
   const m = layout.cellPx;
   const left = layout.ox - m;
@@ -814,7 +835,7 @@ export default function ReflecShotGame() {
 
   const gestureRef = useRef<ActiveGesture | null>(null);
   const boardWrapRef = useRef<HTMLDivElement>(null);
-  const boardLayoutRef = useRef<{ cellPx: number; ox: number; oy: number; rMin: number } | null>(null);
+  const boardLayoutRef = useRef<BoardLayoutMetrics | null>(null);
   const bumperSectorByKeyRef = useRef<Map<string, number>>(new Map());
   const stageGeomKeyRef = useRef("");
   const trailRafRef = useRef<number | null>(null);
@@ -1181,7 +1202,15 @@ export default function ReflecShotGame() {
     const wPx = Math.max(1, Math.floor(rect?.width ?? 1));
     const hPx = Math.max(1, Math.floor(rect?.height ?? 1));
     const layout = boardLayoutRef.current ?? computeBoardLayout(st, wPx, hPx);
-    const padC = cellCenterPx(st.startPad.c, st.startPad.r, layout.cellPx, layout.ox, layout.oy, layout.rMin);
+    const padC = cellCenterPx(
+      st.startPad.c,
+      st.startPad.r,
+      layout.cellPx,
+      layout.ox,
+      layout.oy,
+      layout.rMin,
+      layout.cMin
+    );
     const ball = editBallPadRef.current ?? padC;
     editBallPadRef.current = null;
     simRef.current = {
@@ -1242,7 +1271,8 @@ export default function ReflecShotGame() {
           if (layout) {
             const radL = Math.max(6, layout.cellPx * 0.22);
             const { px, py } = screenDirToPixelUnit(fa.wallDir);
-            const cx = layout.ox + fa.cell.c * layout.cellPx + layout.cellPx / 2;
+            const cx =
+              layout.ox + (fa.cell.c - layout.cMin) * layout.cellPx + layout.cellPx / 2;
             const cy = layout.oy + (fa.cell.r - layout.rMin) * layout.cellPx + layout.cellPx / 2;
             const half = Math.max(2, layout.cellPx / 2 - radL - 1.5);
             const wpx = cx + px * half;
@@ -1283,13 +1313,29 @@ export default function ReflecShotGame() {
           const layGx = boardLayoutRef.current;
           if (layGx) {
             const gp = st.goalPad;
-            const gcc = cellCenterPx(gp.c, gp.r, layGx.cellPx, layGx.ox, layGx.oy, layGx.rMin);
+            const gcc = cellCenterPx(
+              gp.c,
+              gp.r,
+              layGx.cellPx,
+              layGx.ox,
+              layGx.oy,
+              layGx.rMin,
+              layGx.cMin
+            );
             pushGoalSparkles(goalSparklesRef.current, gcc.x, gcc.y, nowT);
           }
         }
         const layCross = boardLayoutRef.current;
         if (layCross) {
-          const cc = cellCenterPx(c, r, layCross.cellPx, layCross.ox, layCross.oy, layCross.rMin);
+          const cc = cellCenterPx(
+            c,
+            r,
+            layCross.cellPx,
+            layCross.ox,
+            layCross.oy,
+            layCross.rMin,
+            layCross.cMin
+          );
           pushGemBurst(gemParticlesRef.current, cc.x, cc.y, nowT, GEM_BURST_CROSS_INSTANT_N);
         }
         setCollectedGems(collectedGemsRef.current);
@@ -1429,13 +1475,21 @@ export default function ReflecShotGame() {
           const layG = boardLayoutRef.current;
           if (layG) {
             const gp = st.goalPad;
-            const gcc = cellCenterPx(gp.c, gp.r, layG.cellPx, layG.ox, layG.oy, layG.rMin);
+            const gcc = cellCenterPx(
+              gp.c,
+              gp.r,
+              layG.cellPx,
+              layG.ox,
+              layG.oy,
+              layG.rMin,
+              layG.cMin
+            );
             pushGoalSparkles(goalSparklesRef.current, gcc.x, gcc.y, nowG);
           }
         }
         const layB = boardLayoutRef.current;
         if (layB) {
-          const bc = cellCenterPx(B.c, B.r, layB.cellPx, layB.ox, layB.oy, layB.rMin);
+          const bc = cellCenterPx(B.c, B.r, layB.cellPx, layB.ox, layB.oy, layB.rMin, layB.cMin);
           pushGemBurst(gemParticlesRef.current, bc.x, bc.y, nowG, burstN);
           if (twoSidedHitFx) {
             pushTwoSidedRedSparks(wallSparklesRef.current, bc.x, bc.y, nowG);
@@ -1551,15 +1605,7 @@ export default function ReflecShotGame() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const { rMin, rMax } = stageRowRange(st);
-    const nRows = rMax - rMin + 1;
-    const cellPx = Math.max(
-      24,
-      Math.floor(Math.min(wPx / st.width, hPx / nRows) * 0.92)
-    );
-    const gw = cellPx * st.width;
-    const gh = cellPx * nRows;
-    const ox = (wPx - gw) / 2;
-    const oy = (hPx - gh) / 2;
+    const { cMin, cMax, cellPx, ox, oy, nCols } = boardPixelLayout(st, wPx, hPx);
 
     ctx.fillStyle = "#020617";
     ctx.fillRect(0, 0, wPx, hPx);
@@ -1584,14 +1630,24 @@ export default function ReflecShotGame() {
       const fa = finishAnimRef.current;
       if (fa?.kind === "wallFx") {
         const t01 = Math.min(1, (now - fa.t0) / wallFxMs);
-        const k = wallFxBallKinematics(cellPx, ox, oy, rMin, fa.cell, fa.wallDir, rad, t01);
+        const k = wallFxBallKinematics(
+          cellPx,
+          ox,
+          oy,
+          rMin,
+          cMin,
+          fa.cell,
+          fa.wallDir,
+          rad,
+          t01
+        );
         ballX = k.x;
         ballY = k.y;
         tailDx = k.tailDx;
         tailDy = k.tailDy;
         tailActive = k.tailActive;
       } else if (fa?.kind === "goalFx") {
-        const gc = cellCenterPx(fa.cell.c, fa.cell.r, cellPx, ox, oy, rMin);
+        const gc = cellCenterPx(fa.cell.c, fa.cell.r, cellPx, ox, oy, rMin, cMin);
         ballX = gc.x;
         ballY = gc.y;
         tailActive = false;
@@ -1599,19 +1655,19 @@ export default function ReflecShotGame() {
         rainbowElapsedMs = now - fa.t0;
       } else {
         const sim = simRef.current;
-        const c = cellCenterPx(sim.logicalCell.c, sim.logicalCell.r, cellPx, ox, oy, rMin);
+        const c = cellCenterPx(sim.logicalCell.c, sim.logicalCell.r, cellPx, ox, oy, rMin, cMin);
         ballX = c.x;
         ballY = c.y;
       }
     } else if (phase === "edit") {
-      const padC = cellCenterPx(st.startPad.c, st.startPad.r, cellPx, ox, oy, rMin);
+      const padC = cellCenterPx(st.startPad.c, st.startPad.r, cellPx, ox, oy, rMin, cMin);
       const bp = editBallPadRef.current ?? padC;
       ballX = bp.x;
       ballY = bp.y;
     } else if (phase === "lost") {
       const lb = lostBallAnimRef.current;
       if (lb) {
-        const k = wallFxBallKinematics(cellPx, ox, oy, rMin, lb.cell, lb.wallDir, rad, 1);
+        const k = wallFxBallKinematics(cellPx, ox, oy, rMin, cMin, lb.cell, lb.wallDir, rad, 1);
         ballX = k.x;
         ballY = k.y;
         tailDx = k.tailDx;
@@ -1619,7 +1675,7 @@ export default function ReflecShotGame() {
         tailActive = false;
       } else {
         const sim = simRef.current;
-        const c = cellCenterPx(sim.logicalCell.c, sim.logicalCell.r, cellPx, ox, oy, rMin);
+        const c = cellCenterPx(sim.logicalCell.c, sim.logicalCell.r, cellPx, ox, oy, rMin, cMin);
         ballX = c.x;
         ballY = c.y;
       }
@@ -1627,7 +1683,7 @@ export default function ReflecShotGame() {
       const sim = simRef.current;
       const f = sim.fromCell;
       const t = sim.toCell;
-      let af = cellCenterPx(f.c, f.r, cellPx, ox, oy, rMin);
+      let af = cellCenterPx(f.c, f.r, cellPx, ox, oy, rMin, cMin);
       if (
         sim.padLaunchPx &&
         f.c === st.startPad.c &&
@@ -1637,7 +1693,7 @@ export default function ReflecShotGame() {
       ) {
         af = sim.padLaunchPx;
       }
-      const at = cellCenterPx(t.c, t.r, cellPx, ox, oy, rMin);
+      const at = cellCenterPx(t.c, t.r, cellPx, ox, oy, rMin, cMin);
       const u = Math.min(1, sim.lerp01);
       ballX = af.x + (at.x - af.x) * u;
       ballY = af.y + (at.y - af.y) * u;
@@ -1656,16 +1712,16 @@ export default function ReflecShotGame() {
     }
 
     for (let r = rMin; r <= rMax; r++) {
-      for (let c = 0; c < st.width; c++) {
-        const x = ox + c * cellPx;
+      for (let c = cMin; c <= cMax; c++) {
+        const x = ox + (c - cMin) * cellPx;
         const y = rowY(r);
         const isStartPad = c === st.startPad.c && r === st.startPad.r;
         const isGoalPad = c === st.goalPad.c && r === st.goalPad.r;
-        const inArr = r >= 0 && r < st.height;
-        const onPadRow = r === st.startPad.r || r === st.goalPad.r;
+        const inBoard = c >= 0 && c < st.width && r >= 0 && r < st.height;
+        const onExclusivePadCorridorRow = isExclusiveOutsidePadCorridorRow(st, r);
 
-        // パッド行は射出／ゴールの1マスのみ描画。他はキャンバス背景と同化（マス無し）
-        if (onPadRow && !isStartPad && !isGoalPad) {
+        // 盤の真上／真下の「パッド専用行」だけ、パッド1マス以外を背景に同化（左右端 goalPad 行では盤内マスを描く）
+        if (onExclusivePadCorridorRow && !isStartPad && !isGoalPad) {
           ctx.fillStyle = "#020617";
           ctx.fillRect(x, y, cellPx, cellPx);
           continue;
@@ -1766,7 +1822,7 @@ export default function ReflecShotGame() {
           continue;
         }
 
-        if (!inArr || !st.pathable[c]![r]) {
+        if (!inBoard || !st.pathable[c]![r]) {
           const voidFill = "#0f172a";
           ctx.fillStyle = voidFill;
           ctx.fillRect(x, y, cellPx, cellPx);
@@ -1831,15 +1887,31 @@ export default function ReflecShotGame() {
       ctx.strokeStyle = "rgba(244, 63, 94, 0.55)";
       ctx.lineWidth = SOLUTION_PATH_LINE_WIDTH;
       ctx.beginPath();
-      const pL = cellCenterPx(st.startPad.c, st.startPad.r, cellPx, ox, oy, rMin);
-      const p0 = cellCenterPx(st.solutionPath[0]!.c, st.solutionPath[0]!.r, cellPx, ox, oy, rMin);
+      const pL = cellCenterPx(st.startPad.c, st.startPad.r, cellPx, ox, oy, rMin, cMin);
+      const p0 = cellCenterPx(
+        st.solutionPath[0]!.c,
+        st.solutionPath[0]!.r,
+        cellPx,
+        ox,
+        oy,
+        rMin,
+        cMin
+      );
       ctx.moveTo(pL.x, pL.y);
       ctx.lineTo(p0.x, p0.y);
       for (let i = 1; i < st.solutionPath.length; i++) {
-        const p = cellCenterPx(st.solutionPath[i]!.c, st.solutionPath[i]!.r, cellPx, ox, oy, rMin);
+        const p = cellCenterPx(
+          st.solutionPath[i]!.c,
+          st.solutionPath[i]!.r,
+          cellPx,
+          ox,
+          oy,
+          rMin,
+          cMin
+        );
         ctx.lineTo(p.x, p.y);
       }
-      const pG = cellCenterPx(st.goalPad.c, st.goalPad.r, cellPx, ox, oy, rMin);
+      const pG = cellCenterPx(st.goalPad.c, st.goalPad.r, cellPx, ox, oy, rMin, cMin);
       ctx.lineTo(pG.x, pG.y);
       ctx.stroke();
     }
@@ -1851,7 +1923,7 @@ export default function ReflecShotGame() {
       if (age >= 0 && age < crossFlashDur) {
         const u = age / crossFlashDur;
         const pulse = (1 - u) * (1 - u);
-        const fx = ox + cf.c * cellPx;
+        const fx = ox + (cf.c - cMin) * cellPx;
         const fy = rowY(cf.r);
         const gcx = fx + cellPx / 2;
         const gcy = fy + cellPx / 2;
@@ -1978,7 +2050,7 @@ export default function ReflecShotGame() {
       drawLightDrop(ctx, ballX, ballY, rad, tailDx, tailDy, tailActive ? 1 : 0);
     }
 
-    boardLayoutRef.current = { cellPx, ox, oy, rMin };
+    boardLayoutRef.current = { cellPx, ox, oy, rMin, cMin, nCols };
   }, [
     collectedGems,
     debugCrossFlashArmPct,
@@ -2027,7 +2099,7 @@ export default function ReflecShotGame() {
     const wPx = Math.max(1, Math.floor(rect.width));
     const hPx = Math.max(1, Math.floor(rect.height));
     const layout = boardLayoutRef.current ?? computeBoardLayout(st, wPx, hPx);
-    const c = Math.floor((px - layout.ox) / layout.cellPx);
+    const c = Math.floor((px - layout.ox) / layout.cellPx) + layout.cMin;
     const r = Math.floor((py - layout.oy) / layout.cellPx) + layout.rMin;
     if (!pathableAt(st, c, r)) return null;
     return { c, r };
@@ -2102,7 +2174,8 @@ export default function ReflecShotGame() {
         layoutForPad.cellPx,
         layoutForPad.ox,
         layoutForPad.oy,
-        layoutForPad.rMin
+        layoutForPad.rMin,
+        layoutForPad.cMin
       );
       const cur = editBallPadRef.current ?? padC;
       startPadDragRef.current = {
