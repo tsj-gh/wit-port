@@ -63,6 +63,18 @@ export function unitOrthoDirBetween(a: CellCoord, b: CellCoord): Dir | null {
   return gridDeltaToScreenDir({ dx: dc, dy: dr });
 }
 
+/** 正解頂点列のみの内角 90° 折れ数（両端頂点を除く）。G6 の目標宝石数の第1項に使用 */
+export function countRightAnglesInSolutionPath(path: CellCoord[]): number {
+  let n = 0;
+  for (let i = 1; i < path.length - 1; i++) {
+    const d0 = unitOrthoDirBetween(path[i - 1]!, path[i]!);
+    const d1 = unitOrthoDirBetween(path[i]!, path[i + 1]!);
+    if (!d0 || !d1) continue;
+    if (d0.dx * d1.dx + d0.dy * d1.dy === 0) n++;
+  }
+  return n;
+}
+
 export type BumperCell = {
   /** 現在プレイヤーが設定した種類 */
   display: BumperKind;

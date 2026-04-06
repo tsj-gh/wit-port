@@ -50,6 +50,16 @@
     if (dc === 0 && dr === 0) return null;
     return gridDeltaToScreenDir({ dx: dc, dy: dr });
   }
+  function countRightAnglesInSolutionPath(path) {
+    let n = 0;
+    for (let i = 1; i < path.length - 1; i++) {
+      const d0 = unitOrthoDirBetween(path[i - 1], path[i]);
+      const d1 = unitOrthoDirBetween(path[i], path[i + 1]);
+      if (!d0 || !d1) continue;
+      if (d0.dx * d1.dx + d0.dy * d1.dy === 0) n++;
+    }
+    return n;
+  }
   function bendCellKeysInSolutionPath(path) {
     const s = /* @__PURE__ */ new Set();
     for (let i = 1; i < path.length - 1; i++) {
@@ -207,18 +217,29 @@
     return n;
   }
   function computeRequiredGemCountForStage(st) {
-    const baseBends = countBumpersOnSolutionPath(st);
+    const baseBendsBumpers = countBumpersOnSolutionPath(st);
     const pts = idealPathPointsForGemRules(st);
     const crossings = countPolylineOrthogonalCrossings(pts);
     const revisitCrossCells = countRevisitCrossCellsOnSolutionPath(st);
     const twoSidedBends = countExpectedTwoSidedBendsOnIdealPath(st);
     const g = Math.max(1, Math.min(6, Math.floor(st.grade)));
-    let required = baseBends;
+    if (g === 6) {
+      const bendsGeo = countRightAnglesInSolutionPath(st.solutionPath);
+      const required2 = bendsGeo + revisitCrossCells + 3 * twoSidedBends;
+      return {
+        baseBends: bendsGeo,
+        crossings,
+        revisitCrossCells,
+        twoSidedBends,
+        required: required2
+      };
+    }
+    let required = baseBendsBumpers;
     if (g >= 3) {
       required += Math.max(revisitCrossCells, crossings);
     }
     if (g >= 5) required += 3 * twoSidedBends;
-    return { baseBends, crossings, revisitCrossCells, twoSidedBends, required };
+    return { baseBends: baseBendsBumpers, crossings, revisitCrossCells, twoSidedBends, required };
   }
   function applyGemRuleMetadataToStage(st) {
     const r = computeRequiredGemCountForStage(st);

@@ -1,5 +1,6 @@
 import {
   countBumpersOnSolutionPath,
+  countRightAnglesInSolutionPath,
   dirsEqual,
   gemAwardBumperCellKeys,
   keyCell,
@@ -205,19 +206,33 @@ export function computeRequiredGemCountForStage(st: GridStage): {
   twoSidedBends: number;
   required: number;
 } {
-  const baseBends = countBumpersOnSolutionPath(st);
+  const baseBendsBumpers = countBumpersOnSolutionPath(st);
   const pts = idealPathPointsForGemRules(st);
   const crossings = countPolylineOrthogonalCrossings(pts);
   const revisitCrossCells = countRevisitCrossCellsOnSolutionPath(st);
   const twoSidedBends = countExpectedTwoSidedBendsOnIdealPath(st);
   const g = Math.max(1, Math.min(6, Math.floor(st.grade)));
-  let required = baseBends;
+
+  /** Grade6: 正解経路の折れ数 + 再訪十字数 + 3×再訪折れマス数（両面ヒット 1 マスにつき 1） */
+  if (g === 6) {
+    const bendsGeo = countRightAnglesInSolutionPath(st.solutionPath);
+    const required = bendsGeo + revisitCrossCells + 3 * twoSidedBends;
+    return {
+      baseBends: bendsGeo,
+      crossings,
+      revisitCrossCells,
+      twoSidedBends,
+      required,
+    };
+  }
+
+  let required = baseBendsBumpers;
   if (g >= 3) {
     /** 十型など「十字だが solution の頂点列では 1 回しか出てこない」交差は crossings で数える */
     required += Math.max(revisitCrossCells, crossings);
   }
   if (g >= 5) required += 3 * twoSidedBends;
-  return { baseBends, crossings, revisitCrossCells, twoSidedBends, required };
+  return { baseBends: baseBendsBumpers, crossings, revisitCrossCells, twoSidedBends, required };
 }
 
 /** 新セグメントと過去セグメントの直交内部交差マス（先頭の1つ）。なければ null */
