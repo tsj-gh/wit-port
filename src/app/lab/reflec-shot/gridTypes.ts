@@ -204,15 +204,15 @@ export function gemAwardBumperCellKeys(st: GridStage): Set<string> {
  * Grade 1 ≈ 5% … Grade 5 ≈ 95%
  */
 export function initialWrongDisplayProbabilityForGrade(grade: number): number {
-  const g = Math.max(1, Math.min(6, Math.floor(grade)));
+  const g = Math.max(1, Math.min(7, Math.floor(grade)));
   if (g <= 5) return 0.05 + ((g - 1) / 4) * 0.9;
   return 0.95;
 }
 
 /** ダミーバンパー密度（0〜100）のグレード別既定。生成・ストック・デバッグスライダ初期値に使用 */
 export function defaultDummyDensityPctForGrade(grade: number): number {
-  const g = Math.max(1, Math.min(6, Math.floor(grade)));
-  const table: Record<number, number> = { 1: 0, 2: 10, 3: 15, 4: 20, 5: 25, 6: 28 };
+  const g = Math.max(1, Math.min(7, Math.floor(grade)));
+  const table: Record<number, number> = { 1: 0, 2: 10, 3: 15, 4: 20, 5: 25, 6: 28, 7: 30 };
   return table[g] ?? 0;
 }
 

@@ -100,6 +100,26 @@
 | **3** | 5×5 | **Lv.2** | 旧 Grade2・**折れ4** と同じ制約（十型交差・内点バンパーのみ 等） |
 | **4** | 5×5 | **Lv.3** | 旧 Grade2・**折れ6〜8**（`tryGrade2Bend6Path` 等）。開発 UI では全体目標折れ 6/7/8 を固定可能 |
 | **5** | 5×5 | **Lv.4** | 旧 Grade3・**再訪1マス**・折れ6（盤は Grade3/4 と同寸） |
+| **6** | 6×6 | **Grade6 専用** | 折れ **7〜9**・`pickGrade2OrientedStage`（`relaxBendVisit`・`enforceLv4GoalPadRules`・`requireGoalOnTopLeftRight`・`requireStartPadBelowBoard`）・**再訪折れ 1 マス**（`gradeG6RevisitBendOnlyCellKey`）・**再訪十字なし** |
+| **7** | 7×7 | **Grade7 専用** | 折れ **7〜10**・上記オプションと同型・**dual 再訪**（再訪十字 1+・再訪折れ 1、`grade6DualRevisitBendCellKey`） |
+
+### Grade 6（6×6）
+
+- **盤面**: 6×6 全域 `pathable`（現状は矩形のみ）。
+- **経路**: `tryRandomHighGradeSolutionPath`（mode `g6`）で下辺始点・上辺終点の貪欲ウォーク。訪問は **高々 1 マスが 2 回**（それ以外は各 1 回）。成功候補は `prependVerticalSoStartOnBottomRow` 後、`gradeG6RevisitBendOnlyCellKey` が非 null（再訪十字セル数 0・再訪折れ 1）。
+- **折れ数**: `countRightAngles` で **7〜9**（向き付け後の `solutionPath` で再検証）。
+- **goal / goalPad**: `requireGoalOnTopLeftRight: true` により **ゴールは上辺・左端・右端のいずれか**（`rSecondGoalOnTopLeftOrRightEdge`）。`enforceLv4GoalPadRules` により Lv.4 と同系のパッド制約。
+- **バンパー**: `placeDiagonalBumpersInterior`（`relaxBendVisit: true`）。
+- **宝石目標**: `computeRequiredGemCountForStage` で **折れ数 + 3×再訪折れ（両面ヒット）**（再訪十字項は含めない）。
+
+### Grade 7（7×7）
+
+- **盤面**: 7×7 全域 `pathable`。
+- **経路**: `tryRandomHighGradeSolutionPath`（mode `g7`）。訪問は **ちょうど 2 マスが各 2 回**（dual）。`prependVerticalSoStartOnBottomRow` 後、`gradeG7DualRevisitSolutionPath`（実装名は `grade6DualRevisitBendCellKey` 非 null）を満たす。
+- **折れ数**: **7〜10**。
+- **goal / goalPad**: Grade6 と同様 **`requireGoalOnTopLeftRight`** ほか。
+- **再訪十字**: 1 以上（`revisitCrossCellKeysFromPath`）。
+- **宝石目標**: **折れ数 + 再訪十字数 + 3×再訪折れ（両面ヒット）**（旧 Grade6 dual 式と同型）。
 
 ### Grade 1 / 2（Lv.1）の補足
 
@@ -146,7 +166,7 @@
 
 ## ステージ識別子 `rs2` と生成オプション（再現性の注意）
 
-**`rs2.{grade}.{hex}` に含まれる情報**は、実装上 **`grade`（プレイ Grade 1〜5）と 32-bit `seed`（hex）**のみである。  
+**`rs2.{grade}.{hex}` に含まれる情報**は、実装上 **`grade`（プレイ Grade 1〜7）と 32-bit `seed`（hex）**のみである。  
 Worker へ渡しうる **任意の生成オプション**（以下）は **ハッシュにエンコードされない**。
 
 | オプション | 主な効き先 | UI / 条件の例 |

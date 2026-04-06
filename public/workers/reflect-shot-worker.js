@@ -85,7 +85,7 @@
     return s;
   }
   function initialWrongDisplayProbabilityForGrade(grade) {
-    const g = Math.max(1, Math.min(6, Math.floor(grade)));
+    const g = Math.max(1, Math.min(7, Math.floor(grade)));
     if (g <= 5) return 0.05 + (g - 1) / 4 * 0.9;
     return 0.95;
   }
@@ -222,8 +222,19 @@
     const crossings = countPolylineOrthogonalCrossings(pts);
     const revisitCrossCells = countRevisitCrossCellsOnSolutionPath(st);
     const twoSidedBends = countExpectedTwoSidedBendsOnIdealPath(st);
-    const g = Math.max(1, Math.min(6, Math.floor(st.grade)));
+    const g = Math.max(1, Math.min(7, Math.floor(st.grade)));
     if (g === 6) {
+      const bendsGeo = countRightAnglesInSolutionPath(st.solutionPath);
+      const required2 = bendsGeo + 3 * twoSidedBends;
+      return {
+        baseBends: bendsGeo,
+        crossings,
+        revisitCrossCells,
+        twoSidedBends,
+        required: required2
+      };
+    }
+    if (g === 7) {
       const bendsGeo = countRightAnglesInSolutionPath(st.solutionPath);
       const required2 = bendsGeo + revisitCrossCells + 3 * twoSidedBends;
       return {
@@ -303,7 +314,7 @@
     return c >= 0 && c < w && r >= 0 && r < h;
   }
   function boardSizeForGrade(grade) {
-    const g = Math.max(1, Math.min(6, Math.floor(grade)));
+    const g = Math.max(1, Math.min(7, Math.floor(grade)));
     switch (g) {
       case 1:
       case 2:
@@ -314,8 +325,10 @@
         return { w: 5, h: 5 };
       case 6:
         return { w: 6, h: 6 };
+      case 7:
+        return { w: 7, h: 7 };
       default:
-        return { w: 6, h: 6 };
+        return { w: 7, h: 7 };
     }
   }
   function makeRect(w, h) {
@@ -920,8 +933,27 @@
     if (!grade6RevisitBendAtCellKey(path, bendK)) return null;
     return bendK;
   }
+  function gradeG6RevisitBendOnlyCellKey(path) {
+    var _a;
+    const freq = /* @__PURE__ */ new Map();
+    for (const p of path) {
+      const k = keyCell(p.c, p.r);
+      freq.set(k, ((_a = freq.get(k)) != null ? _a : 0) + 1);
+    }
+    const twice = [];
+    for (const [k, n] of Array.from(freq.entries())) {
+      if (n === 2) twice.push(k);
+      else if (n !== 1) return null;
+    }
+    if (twice.length !== 1) return null;
+    if (revisitCrossCellKeysFromPath(path).size !== 0) return null;
+    const bendK = twice[0];
+    if (!grade6RevisitBendAtCellKey(path, bendK)) return null;
+    return bendK;
+  }
   function grade6RevisitBendLoopSpanSteps(path) {
-    const bendK = grade6DualRevisitBendCellKey(path);
+    var _a;
+    const bendK = (_a = gradeG6RevisitBendOnlyCellKey(path)) != null ? _a : grade6DualRevisitBendCellKey(path);
     if (!bendK) return null;
     const idxs = [];
     for (let i = 0; i < path.length; i++) {
@@ -930,7 +962,7 @@
     if (idxs.length !== 2) return null;
     return Math.abs(idxs[1] - idxs[0]);
   }
-  function grade6DualRevisitSolutionPath(path) {
+  function gradeG7DualRevisitSolutionPath(path) {
     return grade6DualRevisitBendCellKey(path) != null;
   }
   function g6PickRawPathByLoopSpan(paths, rng) {
@@ -998,7 +1030,7 @@
     }
     return m;
   }
-  function g6CanAppend(path, next) {
+  function g6CanAppend(path, next, maxDoubleKeys) {
     var _a;
     const m = g6VisitHistogram(path);
     const k = keyCell(next.c, next.r);
@@ -1009,11 +1041,15 @@
     for (const [, v] of Array.from(m.entries())) {
       if (v === 2) twos++;
     }
-    return twos <= 2;
+    return twos <= maxDoubleKeys;
   }
-  function tryRandomG6SolutionPath(pathable, w, h, rng) {
-    const maxLen = 52;
-    const maxAttempts = 620;
+  function tryRandomHighGradeSolutionPath(pathable, w, h, rng, mode) {
+    const maxDoubleKeys = mode === "g6" ? 1 : 2;
+    const expectedTwos = mode === "g6" ? 1 : 2;
+    const bendMin = 7;
+    const bendMax = mode === "g6" ? 9 : 10;
+    const maxLen = mode === "g6" ? 52 : 64;
+    const maxAttempts = mode === "g6" ? 620 : 900;
     const maxSucc = 22;
     const bottoms = bottomCandidates(pathable);
     const tops = topCandidates(pathable);
@@ -1033,14 +1069,14 @@
         for (const d of dirs4) {
           const n = addCell(cur, d);
           if (!inBounds(n.c, n.r, w, h) || !pathable[n.c][n.r]) continue;
-          if (g6CanAppend(path, n)) cand.push(n);
+          if (g6CanAppend(path, n, maxDoubleKeys)) cand.push(n);
         }
         if (!cand.length) break;
         let twosNow = 0;
         for (const [, v] of Array.from(g6VisitHistogram(path).entries())) {
           if (v === 2) twosNow++;
         }
-        const detourBeforeRevisit = twosNow === 0 && cand.length > 1 && rng() < 0.26;
+        const detourBeforeRevisit = twosNow < maxDoubleKeys && cand.length > 1 && rng() < 0.26;
         if (detourBeforeRevisit) {
           let worst = -1;
           for (const n of cand) {
@@ -1071,13 +1107,17 @@
       for (const [, v] of Array.from(hist.entries())) {
         if (v === 2) twos++;
       }
-      if (twos !== 2) continue;
+      if (twos !== expectedTwos) continue;
       const mapped = path.map((x) => __spreadValues({}, x));
       const forStage = prependVerticalSoStartOnBottomRow(mapped, pathable, w, h);
       if (!forStage) continue;
-      if (!grade6DualRevisitSolutionPath(forStage)) continue;
+      if (mode === "g6") {
+        if (gradeG6RevisitBendOnlyCellKey(forStage) == null) continue;
+      } else {
+        if (!gradeG7DualRevisitSolutionPath(forStage)) continue;
+      }
       const cr = countRightAngles(forStage);
-      if (cr < 7 || cr > 10) continue;
+      if (cr < bendMin || cr > bendMax) continue;
       successes.push(forStage);
     }
     return g6PickRawPathByLoopSpan(successes, rng);
@@ -2753,7 +2793,7 @@
       const cell = st.bumpers.get(k);
       return cell != null && !cell.isDummy;
     }).sort((a, b) => a.localeCompare(b));
-    const g = Math.max(1, Math.min(6, Math.floor(st.grade)));
+    const g = Math.max(1, Math.min(7, Math.floor(st.grade)));
     if (g === 1 && awardKeys.length === 2) {
       const wrongIdx = Math.floor(rng() * 2);
       for (let i = 0; i < 2; i++) {
@@ -3027,20 +3067,21 @@
     const pathable = makeRect(W, H);
     const maxAttempts = 500;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const path = tryRandomG6SolutionPath(pathable, W, H, rng);
+      const path = tryRandomHighGradeSolutionPath(pathable, W, H, rng, "g6");
       if (!path) continue;
       const bends = countRightAngles(path);
       const picked = pickGrade2OrientedStage(pathable, path, W, H, bends, rng, {
         relaxBendVisit: true,
         enforceLv4GoalPadRules: true,
         skipGrade3RevisitRule: true,
-        requireStartPadBelowBoard: true
+        requireStartPadBelowBoard: true,
+        requireGoalOnTopLeftRight: true
       });
       if (!picked) continue;
       const sol = picked.solutionPath;
-      if (!grade6DualRevisitSolutionPath(sol)) continue;
+      if (gradeG6RevisitBendOnlyCellKey(sol) == null) continue;
       const crPick = countRightAngles(sol);
-      if (crPick < 7 || crPick > 10) continue;
+      if (crPick < 7 || crPick > 9) continue;
       const dup = /* @__PURE__ */ new Map();
       picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       const st = {
@@ -3059,24 +3100,70 @@
       };
       applyGemRuleMetadataToStage(st);
       const r = computeRequiredGemCountForStage(st);
+      if (r.revisitCrossCells !== 0) continue;
+      return st;
+    }
+    return null;
+  }
+  function generateBoardG7Stage(seed, polyOpts) {
+    const rng = createStageRng(seed);
+    const W = 7;
+    const H = 7;
+    const pathable = makeRect(W, H);
+    const maxAttempts = 600;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const path = tryRandomHighGradeSolutionPath(pathable, W, H, rng, "g7");
+      if (!path) continue;
+      const bends = countRightAngles(path);
+      const picked = pickGrade2OrientedStage(pathable, path, W, H, bends, rng, {
+        relaxBendVisit: true,
+        enforceLv4GoalPadRules: true,
+        skipGrade3RevisitRule: true,
+        requireStartPadBelowBoard: true,
+        requireGoalOnTopLeftRight: true
+      });
+      if (!picked) continue;
+      const sol = picked.solutionPath;
+      if (!gradeG7DualRevisitSolutionPath(sol)) continue;
+      const crPick = countRightAngles(sol);
+      if (crPick < 7 || crPick > 10) continue;
+      const dup = /* @__PURE__ */ new Map();
+      picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
+      const st = {
+        width: picked.width,
+        height: picked.height,
+        pathable: picked.pathable,
+        start: picked.start,
+        goal: picked.goal,
+        startPad: picked.startPad,
+        goalPad: picked.goalPad,
+        bumpers: dup,
+        solutionPath: sol,
+        grade: 7,
+        seed,
+        grade2PadAdjustLabel: picked.grade2PadAdjustLabel
+      };
+      applyGemRuleMetadataToStage(st);
+      const r = computeRequiredGemCountForStage(st);
       if (r.revisitCrossCells < 1) continue;
       return st;
     }
     return null;
   }
   function generateGridStage(grade, seed, polyOpts) {
-    const g = Math.max(1, Math.min(6, Math.floor(grade)));
+    const g = Math.max(1, Math.min(7, Math.floor(grade)));
     let st = null;
     if (g === 1 || g === 2) st = generateBoardLv1Stage(g, seed);
     else if (g === 3) st = generateBoardLv2Stage(seed, polyOpts);
     else if (g === 4) st = generateBoardLv3Stage(seed, polyOpts);
     else if (g === 5) st = generateBoardLv4Stage(seed, polyOpts);
-    else st = generateBoardG6Stage(seed, polyOpts);
+    else if (g === 6) st = generateBoardG6Stage(seed, polyOpts);
+    else st = generateBoardG7Stage(seed, polyOpts);
     if (st) finalizeReflecShotDifficulty(st, polyOpts);
     return st;
   }
   function fallbackGridStageInner(grade, seed, polyOpts) {
-    const g = Math.max(1, Math.min(6, Math.floor(grade)));
+    const g = Math.max(1, Math.min(7, Math.floor(grade)));
     if (g === 1) {
       for (let t = 0; t < 500; t++) {
         const bodySeed = seed + t * 2654435769 >>> 0;
@@ -3137,16 +3224,28 @@
       }
       throw new Error("fallbackGridStage(5): Lv.4 \u306E\u751F\u6210\u306B\u5931\u6557");
     }
-    for (let t = 0; t < 2e3; t++) {
+    if (g === 6) {
+      for (let t = 0; t < 2e3; t++) {
+        const bodySeed = seed + t * 130051 >>> 0;
+        const st = generateBoardG6Stage(bodySeed, polyOpts);
+        if (st) {
+          const merged = __spreadProps(__spreadValues({}, st), { grade: 6, seed: bodySeed });
+          finalizeReflecShotDifficulty(merged, polyOpts);
+          return { stage: merged, t };
+        }
+      }
+      throw new Error("fallbackGridStage(6): Grade6 \u306E\u751F\u6210\u306B\u5931\u6557");
+    }
+    for (let t = 0; t < 2500; t++) {
       const bodySeed = seed + t * 130051 >>> 0;
-      const st = generateBoardG6Stage(bodySeed, polyOpts);
+      const st = generateBoardG7Stage(bodySeed, polyOpts);
       if (st) {
-        const merged = __spreadProps(__spreadValues({}, st), { grade: 6, seed: bodySeed });
+        const merged = __spreadProps(__spreadValues({}, st), { grade: 7, seed: bodySeed });
         finalizeReflecShotDifficulty(merged, polyOpts);
         return { stage: merged, t };
       }
     }
-    throw new Error("fallbackGridStage(6): Grade6 \u306E\u751F\u6210\u306B\u5931\u6557");
+    throw new Error("fallbackGridStage(7): Grade7 \u306E\u751F\u6210\u306B\u5931\u6557");
   }
   function generateGridStageWithFallbackMeta(grade, seed, polyOpts) {
     const requestSeed = seed >>> 0;

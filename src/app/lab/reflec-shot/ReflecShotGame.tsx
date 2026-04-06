@@ -606,7 +606,7 @@ function drawCellGappedBorder(
 }
 
 /**
- * Worker に渡す生成オプション。`consumerGrade` は盤として再生産する Grade（1〜6）で、
+ * Worker に渡す生成オプション。`consumerGrade` は盤として再生産する Grade（1〜7）で、
  * UI のドロップダウン値に依存させない（rs2 パース結果などと一致させる）。
  * `dummyDensityPct` は常に含む（本番は `defaultDummyDensityPctForGrade`、devtj+DEBUG はスライダー値）。
  */
@@ -3112,15 +3112,15 @@ export default function ReflecShotGame() {
                       {t("games.reflecShot.ruleCrossBonus")}
                     </p>
                   )}
+                  {rg >= 5 && rg !== 6 && (
+                    <p className="mx-auto max-w-md text-sm leading-relaxed text-wit-muted">
+                      {t("games.reflecShot.ruleCrossBonus")}
+                    </p>
+                  )}
                   {rg >= 5 && (
-                    <>
-                      <p className="mx-auto max-w-md text-sm leading-relaxed text-wit-muted">
-                        {t("games.reflecShot.ruleCrossBonus")}
-                      </p>
-                      <p className="mx-auto max-w-md text-sm leading-relaxed text-wit-muted">
-                        {t("games.reflecShot.ruleTwoSidedBonus")}
-                      </p>
-                    </>
+                    <p className="mx-auto max-w-md text-sm leading-relaxed text-wit-muted">
+                      {t("games.reflecShot.ruleTwoSidedBonus")}
+                    </p>
                   )}
                   <p className="mx-auto max-w-md border-t border-white/10 pt-2 text-xs leading-relaxed text-wit-muted/90">
                     <span className="block whitespace-pre-line md:hidden">{t("games.reflecShot.ruleControls")}</span>
@@ -3140,7 +3140,7 @@ export default function ReflecShotGame() {
               className="flex w-full min-w-0 overflow-x-auto gap-2 py-1 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
               style={{ WebkitOverflowScrolling: "touch" }}
             >
-              {([1, 2, 3, 4, 5, 6] as const).map((g) => {
+              {([1, 2, 3, 4, 5, 6, 7] as const).map((g) => {
                 const isActive = grade === g;
                 return (
                   <button

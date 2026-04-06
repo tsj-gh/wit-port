@@ -11,7 +11,7 @@ import type { ReflectShotGenerateResult } from "@/hooks/useReflectShotWorker";
 /** グレードごとの目標プリフェッチ枚数 */
 export const MAX_STOCK_SIZE = 5;
 
-export const REFLECT_SHOT_STOCK_GRADES = [1, 2, 3, 4, 5, 6] as const;
+export const REFLECT_SHOT_STOCK_GRADES = [1, 2, 3, 4, 5, 6, 7] as const;
 
 function randomSeed(): number {
   return (Date.now() ^ (Math.random() * 0x7fffffff) ^ (Math.random() * 0x46546546)) >>> 0;
@@ -20,7 +20,7 @@ function randomSeed(): number {
 type StockRef = Record<number, GridStage[]>;
 
 function emptyStock(): StockRef {
-  return { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+  return { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] };
 }
 
 /**
@@ -56,6 +56,7 @@ export function useReflectShotBoardStock(
       4: s[4]!.length,
       5: s[5]!.length,
       6: s[6]!.length,
+      7: s[7]!.length,
     };
   }, []);
 

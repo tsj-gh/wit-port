@@ -211,10 +211,23 @@ export function computeRequiredGemCountForStage(st: GridStage): {
   const crossings = countPolylineOrthogonalCrossings(pts);
   const revisitCrossCells = countRevisitCrossCellsOnSolutionPath(st);
   const twoSidedBends = countExpectedTwoSidedBendsOnIdealPath(st);
-  const g = Math.max(1, Math.min(6, Math.floor(st.grade)));
+  const g = Math.max(1, Math.min(7, Math.floor(st.grade)));
 
-  /** Grade6: 正解経路の折れ数 + 再訪十字数 + 3×再訪折れマス数（両面ヒット 1 マスにつき 1） */
+  /** Grade6: 再訪十字なし → 折れ数 + 3×再訪折れ（両面ヒット） */
   if (g === 6) {
+    const bendsGeo = countRightAnglesInSolutionPath(st.solutionPath);
+    const required = bendsGeo + 3 * twoSidedBends;
+    return {
+      baseBends: bendsGeo,
+      crossings,
+      revisitCrossCells,
+      twoSidedBends,
+      required,
+    };
+  }
+
+  /** Grade7: 折れ数 + 再訪十字数 + 3×再訪折れ（G6 旧 dual 式と同型） */
+  if (g === 7) {
     const bendsGeo = countRightAnglesInSolutionPath(st.solutionPath);
     const required = bendsGeo + revisitCrossCells + 3 * twoSidedBends;
     return {
