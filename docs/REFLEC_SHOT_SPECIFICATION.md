@@ -117,7 +117,7 @@
 
 - **盤面**: 7×7 全域 `pathable`。
 - **経路**: `tryRandomHighGradeSolutionPath`（mode `g7`）。訪問は **ちょうど 2 マスが各 2 回**（dual）。`prependVerticalSoStartOnBottomRow` 後、`gradeG7DualRevisitSolutionPath`（実装名は `grade6DualRevisitBendCellKey` 非 null）を満たす。
-- **閉路形状**: 再訪**折れ**マスに対する `revisitLoopUnitLegCount` と Grade6 と同型の候補絞り込み・`g6PickRawPathByLoopSpan`。G7 は dual 幾何のため Grade5 と同一分布にはなりにくいが、単位辺区間の過多を抑える方向でウォークパラメータを G6 よりさらにゴール寄りにする。
+- **閉路形状**: 再訪**折れ**マスに対する `revisitLoopUnitLegCount` と Grade6 と同型の候補絞り込み・`g6PickRawPathByLoopSpan`に加え、`g7RevisitCrossCountInsideBendLoop`（再訪十字が再訪折れ閉路内に入る個数）を評価し、**再訪十字が閉路外にある形**を優先する。最終ステージ選定でも `crossInLoop -> unitLegs -> loopSpan` の順で上位を採る。
 - **折れ数**: **8〜11**。
 - **goal / goalPad**: Grade6 と同様 **`requireGoalOnTopLeftRight`** ほか。
 - **再訪十字**: 1 以上（`revisitCrossCellKeysFromPath`）。

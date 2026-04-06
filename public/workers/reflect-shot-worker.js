@@ -1014,25 +1014,60 @@
     }
     return unit;
   }
+  function g7RevisitCrossCountInsideBendLoop(path) {
+    const bendK = grade6DualRevisitBendCellKey(path);
+    if (!bendK) return null;
+    const bendIdx = [];
+    for (let i = 0; i < path.length; i++) {
+      if (keyCell(path[i].c, path[i].r) === bendK) bendIdx.push(i);
+    }
+    if (bendIdx.length !== 2) return null;
+    const i0 = Math.min(bendIdx[0], bendIdx[1]);
+    const i1 = Math.max(bendIdx[0], bendIdx[1]);
+    const crossKeys = revisitCrossCellKeysFromPath(path);
+    if (crossKeys.size === 0) return 0;
+    const keyToIndices = /* @__PURE__ */ new Map();
+    for (let i = 0; i < path.length; i++) {
+      const k = keyCell(path[i].c, path[i].r);
+      const arr = keyToIndices.get(k);
+      if (arr) arr.push(i);
+      else keyToIndices.set(k, [i]);
+    }
+    let n = 0;
+    for (const k of Array.from(crossKeys.values())) {
+      const arr = keyToIndices.get(k);
+      if (!arr || arr.length < 2) continue;
+      const a0 = Math.min(arr[0], arr[1]);
+      const a1 = Math.max(arr[0], arr[1]);
+      if (a0 >= i0 && a1 <= i1) n++;
+    }
+    return n;
+  }
   function gradeG7DualRevisitSolutionPath(path) {
     return grade6DualRevisitBendCellKey(path) != null;
   }
-  function g6PickRawPathByLoopSpan(paths, rng) {
+  function g6PickRawPathByLoopSpan(paths, rng, mode) {
     var _a;
     if (!paths.length) return null;
     if (paths.length === 1) return paths[0];
     const scored = paths.map((p) => {
-      var _a2, _b;
+      var _a2, _b, _c;
       return {
         p,
         span: (_a2 = grade6RevisitBendLoopSpanSteps(p)) != null ? _a2 : 0,
-        unitLegs: (_b = revisitLoopUnitLegCount(p)) != null ? _b : 999
+        unitLegs: (_b = revisitLoopUnitLegCount(p)) != null ? _b : 999,
+        crossInLoop: mode === "g7" ? (_c = g7RevisitCrossCountInsideBendLoop(p)) != null ? _c : 9 : 0
       };
     }).filter((x) => x.span > 0);
     if (!scored.length) return paths[0];
     let pool = scored;
+    if (mode === "g7") {
+      const outsideCross = scored.filter((x) => x.crossInLoop === 0);
+      if (outsideCross.length > 0) pool = outsideCross;
+    }
+    const basePool = pool;
     for (const cap of [2, 3, 4, 5, 999]) {
-      const tier = scored.filter((x) => x.unitLegs <= cap);
+      const tier = basePool.filter((x) => x.unitLegs <= cap);
       if (tier.length > 0) {
         pool = tier;
         break;
@@ -1076,11 +1111,16 @@
       var _a2;
       return (_a2 = revisitLoopUnitLegCount(p)) != null ? _a2 : 99;
     });
+    const crosses = pickFrom.map((p) => {
+      var _a2;
+      return mode === "g7" ? (_a2 = g7RevisitCrossCountInsideBendLoop(p)) != null ? _a2 : 9 : 0;
+    });
     let wsum = 0;
     const weights = spans.map((span, idx) => {
       const u = units[idx];
       const shape = 1 / (1 + Math.max(0, u - 3) * 2.2);
-      const w = (1 + span ** 1.78) * shape;
+      const crossShape = mode === "g7" ? crosses[idx] === 0 ? 1 : 0.35 : 1;
+      const w = (1 + span ** 1.78) * shape * crossShape;
       wsum += w;
       return w;
     });
@@ -1119,7 +1159,7 @@
     const bendMin = mode === "g6" ? 7 : 8;
     const bendMax = mode === "g6" ? 9 : 11;
     const maxLen = mode === "g6" ? 52 : 64;
-    const maxAttempts = mode === "g6" ? 1100 : 1800;
+    const maxAttempts = mode === "g6" ? 1e3 : 900;
     const maxRawSuccess = 72;
     const detourP = mode === "g6" ? 0.1 : 0.06;
     const biasGoalP = mode === "g6" ? 0.55 : 0.64;
@@ -1194,18 +1234,23 @@
     }
     if (successes.length > 1) {
       const meta = successes.map((p) => {
-        var _a, _b;
+        var _a, _b, _c;
         return {
           p,
           u: (_a = revisitLoopUnitLegCount(p)) != null ? _a : 99,
-          s: (_b = grade6RevisitBendLoopSpanSteps(p)) != null ? _b : 0
+          s: (_b = grade6RevisitBendLoopSpanSteps(p)) != null ? _b : 0,
+          c: mode === "g7" ? (_c = g7RevisitCrossCountInsideBendLoop(p)) != null ? _c : 9 : 0
         };
       });
-      meta.sort((a, b) => a.u !== b.u ? a.u - b.u : b.s - a.s);
+      meta.sort((a, b) => {
+        if (mode === "g7" && a.c !== b.c) return a.c - b.c;
+        if (a.u !== b.u) return a.u - b.u;
+        return b.s - a.s;
+      });
       successes.length = 0;
       successes.push(...meta.slice(0, 48).map((m) => m.p));
     }
-    return g6PickRawPathByLoopSpan(successes, rng);
+    return g6PickRawPathByLoopSpan(successes, rng, mode);
   }
   function prependVerticalSoStartOnBottomRow(path, pathable, w, h) {
     if (path.length < 2) return null;
@@ -3195,7 +3240,8 @@
     const W = 7;
     const H = 7;
     const pathable = makeRect(W, H);
-    const maxAttempts = 600;
+    const maxAttempts = 220;
+    const candidates = [];
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const path = tryRandomHighGradeSolutionPath(pathable, W, H, rng, "g7");
       if (!path) continue;
@@ -3231,9 +3277,33 @@
       applyGemRuleMetadataToStage(st);
       const r = computeRequiredGemCountForStage(st);
       if (r.revisitCrossCells < 1) continue;
-      return st;
+      candidates.push(st);
+      if (candidates.length >= 8) break;
     }
-    return null;
+    if (!candidates.length) return null;
+    if (candidates.length === 1) return candidates[0];
+    const scored = candidates.map((st) => {
+      var _a, _b, _c;
+      const u = (_a = revisitLoopUnitLegCount(st.solutionPath)) != null ? _a : 99;
+      const cIn = (_b = g7RevisitCrossCountInsideBendLoop(st.solutionPath)) != null ? _b : 9;
+      const span = (_c = grade6RevisitBendLoopSpanSteps(st.solutionPath)) != null ? _c : 0;
+      return { st, u, cIn, span };
+    });
+    scored.sort((a, b) => {
+      if (a.cIn !== b.cIn) return a.cIn - b.cIn;
+      if (a.u !== b.u) return a.u - b.u;
+      return b.span - a.span;
+    });
+    const top = scored.slice(0, Math.min(6, scored.length));
+    const topGood = top.filter((x) => x.u <= 3 && x.cIn === 0);
+    if (topGood.length > 0) {
+      return topGood[Math.floor(rng() * topGood.length)].st;
+    }
+    const topU = top.filter((x) => x.u <= 3);
+    if (topU.length > 0) {
+      return topU[Math.floor(rng() * topU.length)].st;
+    }
+    return top[0].st;
   }
   function generateGridStage(grade, seed, polyOpts) {
     const g = Math.max(1, Math.min(7, Math.floor(grade)));

@@ -1126,13 +1126,47 @@ export function revisitLoopUnitLegCount(path: CellCoord[]): number | null {
   return unit;
 }
 
+/**
+ * G7 dual 再訪で、再訪折れマスの閉路区間（1回目〜2回目）に含まれる再訪十字マス数。
+ * 「再訪十字が閉路中に寄りすぎる」偏りの抑制に使う。
+ */
+export function g7RevisitCrossCountInsideBendLoop(path: CellCoord[]): number | null {
+  const bendK = grade6DualRevisitBendCellKey(path);
+  if (!bendK) return null;
+  const bendIdx: number[] = [];
+  for (let i = 0; i < path.length; i++) {
+    if (keyCell(path[i]!.c, path[i]!.r) === bendK) bendIdx.push(i);
+  }
+  if (bendIdx.length !== 2) return null;
+  const i0 = Math.min(bendIdx[0]!, bendIdx[1]!);
+  const i1 = Math.max(bendIdx[0]!, bendIdx[1]!);
+  const crossKeys = revisitCrossCellKeysFromPath(path);
+  if (crossKeys.size === 0) return 0;
+  const keyToIndices = new Map<string, number[]>();
+  for (let i = 0; i < path.length; i++) {
+    const k = keyCell(path[i]!.c, path[i]!.r);
+    const arr = keyToIndices.get(k);
+    if (arr) arr.push(i);
+    else keyToIndices.set(k, [i]);
+  }
+  let n = 0;
+  for (const k of Array.from(crossKeys.values())) {
+    const arr = keyToIndices.get(k);
+    if (!arr || arr.length < 2) continue;
+    const a0 = Math.min(arr[0]!, arr[1]!);
+    const a1 = Math.max(arr[0]!, arr[1]!);
+    if (a0 >= i0 && a1 <= i1) n++;
+  }
+  return n;
+}
+
 /** G7 正解頂点列: ちょうど 2 マスが各 2 回、再訪十字 1+、再訪折れ 1。 */
 function gradeG7DualRevisitSolutionPath(path: CellCoord[]): boolean {
   return grade6DualRevisitBendCellKey(path) != null;
 }
 
 /** 再訪折れ閉路の「1 辺しかない折れ間区間」が少ない候補を優先し、同一形状帯ではループ辺数が長いほど選ばれやすい */
-function g6PickRawPathByLoopSpan(paths: CellCoord[][], rng: () => number): CellCoord[] | null {
+function g6PickRawPathByLoopSpan(paths: CellCoord[][], rng: () => number, mode: "g6" | "g7"): CellCoord[] | null {
   if (!paths.length) return null;
   if (paths.length === 1) return paths[0]!;
   const scored = paths
@@ -1140,12 +1174,18 @@ function g6PickRawPathByLoopSpan(paths: CellCoord[][], rng: () => number): CellC
       p,
       span: grade6RevisitBendLoopSpanSteps(p) ?? 0,
       unitLegs: revisitLoopUnitLegCount(p) ?? 999,
+      crossInLoop: mode === "g7" ? (g7RevisitCrossCountInsideBendLoop(p) ?? 9) : 0,
     }))
     .filter((x) => x.span > 0);
   if (!scored.length) return paths[0]!;
   let pool = scored;
+  if (mode === "g7") {
+    const outsideCross = scored.filter((x) => x.crossInLoop === 0);
+    if (outsideCross.length > 0) pool = outsideCross;
+  }
+  const basePool = pool;
   for (const cap of [2, 3, 4, 5, 999] as const) {
-    const tier = scored.filter((x) => x.unitLegs <= cap);
+    const tier = basePool.filter((x) => x.unitLegs <= cap);
     if (tier.length > 0) {
       pool = tier;
       break;
@@ -1183,11 +1223,13 @@ function g6PickRawPathByLoopSpan(paths: CellCoord[][], rng: () => number): CellC
   }
   const spans = pickFrom.map((p) => grade6RevisitBendLoopSpanSteps(p) ?? 1);
   const units = pickFrom.map((p) => revisitLoopUnitLegCount(p) ?? 99);
+  const crosses = pickFrom.map((p) => (mode === "g7" ? (g7RevisitCrossCountInsideBendLoop(p) ?? 9) : 0));
   let wsum = 0;
   const weights = spans.map((span, idx) => {
     const u = units[idx]!;
     const shape = 1 / (1 + Math.max(0, u - 3) * 2.2);
-    const w = (1 + span ** 1.78) * shape;
+    const crossShape = mode === "g7" ? (crosses[idx]! === 0 ? 1 : 0.35) : 1;
+    const w = (1 + span ** 1.78) * shape * crossShape;
     wsum += w;
     return w;
   });
@@ -1238,7 +1280,7 @@ function tryRandomHighGradeSolutionPath(
   const bendMax = mode === "g6" ? 9 : 11;
   const maxLen = mode === "g6" ? 52 : 64;
   /** 単位辺区間を減らすため detour を抑え、候補本数を増やして形状の良い経路を選びやすくする */
-  const maxAttempts = mode === "g6" ? 1100 : 1800;
+  const maxAttempts = mode === "g6" ? 1000 : 900;
   /** 形状でソートして上位を残すため、一度多めに集める */
   const maxRawSuccess = 72;
   const detourP = mode === "g6" ? 0.1 : 0.06;
@@ -1319,12 +1361,17 @@ function tryRandomHighGradeSolutionPath(
       p,
       u: revisitLoopUnitLegCount(p) ?? 99,
       s: grade6RevisitBendLoopSpanSteps(p) ?? 0,
+      c: mode === "g7" ? (g7RevisitCrossCountInsideBendLoop(p) ?? 9) : 0,
     }));
-    meta.sort((a, b) => (a.u !== b.u ? a.u - b.u : b.s - a.s));
+    meta.sort((a, b) => {
+      if (mode === "g7" && a.c !== b.c) return a.c - b.c;
+      if (a.u !== b.u) return a.u - b.u;
+      return b.s - a.s;
+    });
     successes.length = 0;
     successes.push(...meta.slice(0, 48).map((m) => m.p));
   }
-  return g6PickRawPathByLoopSpan(successes, rng);
+  return g6PickRawPathByLoopSpan(successes, rng, mode);
 }
 
 /**
@@ -4292,7 +4339,8 @@ function generateBoardG7Stage(seed: number, polyOpts?: ReflectShotPolylineGenOpt
   const W = 7;
   const H = 7;
   const pathable = makeRect(W, H);
-  const maxAttempts = 600;
+  const maxAttempts = 220;
+  const candidates: GridStage[] = [];
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const path = tryRandomHighGradeSolutionPath(pathable, W, H, rng, "g7");
     if (!path) continue;
@@ -4328,9 +4376,32 @@ function generateBoardG7Stage(seed: number, polyOpts?: ReflectShotPolylineGenOpt
     applyGemRuleMetadataToStage(st);
     const r = computeRequiredGemCountForStage(st);
     if (r.revisitCrossCells < 1) continue;
-    return st;
+    candidates.push(st);
+    if (candidates.length >= 8) break;
   }
-  return null;
+  if (!candidates.length) return null;
+  if (candidates.length === 1) return candidates[0]!;
+  const scored = candidates.map((st) => {
+    const u = revisitLoopUnitLegCount(st.solutionPath) ?? 99;
+    const cIn = g7RevisitCrossCountInsideBendLoop(st.solutionPath) ?? 9;
+    const span = grade6RevisitBendLoopSpanSteps(st.solutionPath) ?? 0;
+    return { st, u, cIn, span };
+  });
+  scored.sort((a, b) => {
+    if (a.cIn !== b.cIn) return a.cIn - b.cIn;
+    if (a.u !== b.u) return a.u - b.u;
+    return b.span - a.span;
+  });
+  const top = scored.slice(0, Math.min(6, scored.length));
+  const topGood = top.filter((x) => x.u <= 3 && x.cIn === 0);
+  if (topGood.length > 0) {
+    return topGood[Math.floor(rng() * topGood.length)]!.st;
+  }
+  const topU = top.filter((x) => x.u <= 3);
+  if (topU.length > 0) {
+    return topU[Math.floor(rng() * topU.length)]!.st;
+  }
+  return top[0]!.st;
 }
 
 export function generateGridStage(
