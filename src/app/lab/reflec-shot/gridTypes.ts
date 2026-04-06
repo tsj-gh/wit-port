@@ -212,7 +212,7 @@ export function initialWrongDisplayProbabilityForGrade(grade: number): number {
 /** ダミーバンパー密度（0〜100）のグレード別既定。生成・ストック・デバッグスライダ初期値に使用 */
 export function defaultDummyDensityPctForGrade(grade: number): number {
   const g = Math.max(1, Math.min(7, Math.floor(grade)));
-  const table: Record<number, number> = { 1: 0, 2: 10, 3: 15, 4: 20, 5: 25, 6: 28, 7: 30 };
+  const table: Record<number, number> = { 1: 0, 2: 10, 3: 15, 4: 20, 5: 25, 6: 25, 7: 25 };
   return table[g] ?? 0;
 }
 
