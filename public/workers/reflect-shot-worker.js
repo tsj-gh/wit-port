@@ -973,9 +973,29 @@
       if (!grade6DualRevisitSolutionPath(path)) continue;
       const cr = countRightAngles(path);
       if (cr < 7 || cr > 8) continue;
-      return path.map((x) => __spreadValues({}, x));
+      const mapped = path.map((x) => __spreadValues({}, x));
+      const forStage = prependVerticalSoStartOnBottomRow(mapped, pathable, w, h);
+      if (!forStage) continue;
+      return forStage;
     }
     return null;
+  }
+  function prependVerticalSoStartOnBottomRow(path, pathable, w, h) {
+    if (path.length < 2) return null;
+    const c = path[0].c;
+    const rs = path[0].r;
+    const targetR = h - 1;
+    if (rs >= targetR) return path.map((x) => __spreadValues({}, x));
+    for (let r = rs + 1; r <= targetR; r++) {
+      if (!inBounds(c, r, w, h) || !pathable[c][r]) return null;
+    }
+    const pathKeys = new Set(path.map((p) => keyCell(p.c, p.r)));
+    for (let r = rs + 1; r <= targetR; r++) {
+      if (pathKeys.has(keyCell(c, r))) return null;
+    }
+    const prefix = [];
+    for (let r = targetR; r >= rs; r--) prefix.push({ c, r });
+    return prefix.concat(path.slice(1));
   }
   function tryConstructGrade3Path(pathable, start, goal, rng) {
     const w = pathable.length;
@@ -2167,7 +2187,9 @@
       const fs = pathFirstStepDir(p);
       if (!fs || !dirsEqual(fs, DIR.U)) continue;
       const snap = finalizeGrade2OrientedAfterRotation(pb, p, w, h, bends, opts);
-      if (snap) winners.push(snap);
+      if (!snap) continue;
+      if ((opts == null ? void 0 : opts.requireStartPadBelowBoard) && snap.startPad.r < h) continue;
+      winners.push(snap);
     }
     if (!winners.length) return null;
     return winners[Math.floor(rng() * winners.length)];
@@ -2909,7 +2931,8 @@
       const picked = pickGrade2OrientedStage(pathable, path, W, H, bends, rng, {
         relaxBendVisit: true,
         enforceLv4GoalPadRules: true,
-        skipGrade3RevisitRule: true
+        skipGrade3RevisitRule: true,
+        requireStartPadBelowBoard: true
       });
       if (!picked) continue;
       const sol = picked.solutionPath;

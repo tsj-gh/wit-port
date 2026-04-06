@@ -1100,9 +1100,39 @@ function tryRandomG6SolutionPath(pathable: boolean[][], w: number, h: number, rn
     if (!grade6DualRevisitSolutionPath(path)) continue;
     const cr = countRightAngles(path);
     if (cr < 7 || cr > 8) continue;
-    return path.map((x) => ({ ...x }));
+    const mapped = path.map((x) => ({ ...x }));
+    const forStage = prependVerticalSoStartOnBottomRow(mapped, pathable, w, h);
+    if (!forStage) continue;
+    return forStage;
   }
   return null;
+}
+
+/**
+ * `startPad = (start.c, start.r+1)` が盤内に入り込まないよう、`path[0]` を最下段 `r=h-1` まで同列で縦に延長する。
+ * 延長マスは pathable で、既存経路とセル衝突しないこと。満たせないときは `null`。
+ */
+function prependVerticalSoStartOnBottomRow(
+  path: CellCoord[],
+  pathable: boolean[][],
+  w: number,
+  h: number
+): CellCoord[] | null {
+  if (path.length < 2) return null;
+  const c = path[0]!.c;
+  const rs = path[0]!.r;
+  const targetR = h - 1;
+  if (rs >= targetR) return path.map((x) => ({ ...x }));
+  for (let r = rs + 1; r <= targetR; r++) {
+    if (!inBounds(c, r, w, h) || !pathable[c]![r]) return null;
+  }
+  const pathKeys = new Set(path.map((p) => keyCell(p.c, p.r)));
+  for (let r = rs + 1; r <= targetR; r++) {
+    if (pathKeys.has(keyCell(c, r))) return null;
+  }
+  const prefix: CellCoord[] = [];
+  for (let r = targetR; r >= rs; r--) prefix.push({ c, r });
+  return prefix.concat(path.slice(1));
 }
 
 /** 再訪点 R を挟む前後を折れ線で接合（合計折れ 6 = R で 2 + 途中 4） */
@@ -2675,6 +2705,8 @@ function pickGrade2OrientedStage(
     requireGoalOnTopLeftRight?: boolean;
     enforceLv4GoalPadRules?: boolean;
     skipGrade3RevisitRule?: boolean;
+    /** Grade6 等: `startPad` を盤の下辺外（`r >= height`）に限定する */
+    requireStartPadBelowBoard?: boolean;
   }
 ): Grade2OrientedSnapshot | null {
   const winners: Grade2OrientedSnapshot[] = [];
@@ -2694,7 +2726,9 @@ function pickGrade2OrientedStage(
     if (!fs || !dirsEqual(fs, DIR.U)) continue;
 
     const snap = finalizeGrade2OrientedAfterRotation(pb, p, w, h, bends, opts);
-    if (snap) winners.push(snap);
+    if (!snap) continue;
+    if (opts?.requireStartPadBelowBoard && snap.startPad.r < h) continue;
+    winners.push(snap);
   }
   if (!winners.length) return null;
   return winners[Math.floor(rng() * winners.length)]!;
@@ -4001,6 +4035,7 @@ function generateBoardG6Stage(seed: number, polyOpts?: ReflectShotPolylineGenOpt
       relaxBendVisit: true,
       enforceLv4GoalPadRules: true,
       skipGrade3RevisitRule: true,
+      requireStartPadBelowBoard: true,
     });
     if (!picked) continue;
     const sol = picked.solutionPath;

@@ -1735,6 +1735,14 @@ export default function ReflecShotGame() {
           drawCellGappedBorder(ctx, x, y, cellPx, padFill, openLenDraw);
           continue;
         }
+
+        const goalPadOutsideCol = st.goalPad.c < 0 || st.goalPad.c >= st.width;
+        if (goalPadOutsideCol && c === st.goalPad.c && !isGoalPad) {
+          ctx.fillStyle = "#020617";
+          ctx.fillRect(x, y, cellPx, cellPx);
+          continue;
+        }
+
         if (isGoalPad) {
           const req = requiredGemsRef.current;
           const col = collectedGemsRef.current;
