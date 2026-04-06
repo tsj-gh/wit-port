@@ -36,7 +36,7 @@ export function bendOrBumperHint(grade: number): string {
   if (g === 3) return "Lv.2・折れ4";
   if (g === 4) return "Lv.3・折れ6〜8";
   if (g === 5) return "Lv.4・再訪1";
-  return "Lv.5・6×6・折れ7〜8";
+  return "Lv.5・6×6・折れ7〜10";
 }
 
 /** @deprecated 旧テンプレ盤用。新 Grade1〜5 では未使用 */
@@ -976,7 +976,10 @@ function grade3RevisitOneCellRule(
   return true;
 }
 
-/** Grade6: `cellKey` がちょうど 2 回現れ、Lv.4 型の再訪折れ（両通過 bend・入射制約・4 近傍）を満たすか */
+/**
+ * Grade6: `cellKey` がちょうど 2 回現れ、両通過が 90° 折れで、2 回目入射が Lv.4 型（逆向き or 1 回目出射と同向き）。
+ * 「中」字専用だった 4 近傍すべて異なるマス制約は外し、経路の自由度を広げる。
+ */
 function grade6RevisitBendAtCellKey(path: CellCoord[], cellKey: string): boolean {
   const idxs: number[] = [];
   for (let i = 0; i < path.length; i++) {
@@ -995,19 +998,12 @@ function grade6RevisitBendAtCellKey(path: CellCoord[], cellKey: string): boolean
   if (!dIn1 || !dOut1 || !dIn2) return false;
   const okIn2 =
     dirsEqual(dIn2, negateDir(dIn1)) || dirsEqual(dIn2, dOut1);
-  if (!okIn2) return false;
-  const nb = (p: CellCoord) => keyCell(p.c, p.r);
-  const neigh = new Set([
-    nb(cellBeforeFirst),
-    nb(path[i0 + 1]!),
-    nb(path[i1 - 1]!),
-    nb(path[i1 + 1]!),
-  ]);
-  return neigh.size === 4;
+  return okIn2;
 }
 
 /**
- * Grade6 正解頂点列: ちょうど 2 マスが各 2 回、そのうち 1 が再訪十字・1 が再訪折れ（Lv.4 型）。
+ * Grade6 正解頂点列: ちょうど 2 マスが各 2 回、そのうち **再訪十字が 1 マス以上**、**再訪折れがちょうど 1 マス**
+ * （再訪十字マスは `revisitCrossCellKeysFromPath`、再訪折れは上記いずれにも該当しない 2 回訪問マス）。
  */
 function grade6DualRevisitSolutionPath(path: CellCoord[]): boolean {
   const freq = new Map<string, number>();
@@ -1022,10 +1018,10 @@ function grade6DualRevisitSolutionPath(path: CellCoord[]): boolean {
   }
   if (twice.length !== 2) return false;
   const crossKeys = revisitCrossCellKeysFromPath(path);
-  if (crossKeys.size !== 1) return false;
-  const crossK = Array.from(crossKeys)[0]!;
-  const bendK = twice.find((t) => t !== crossK);
-  if (!bendK) return false;
+  if (crossKeys.size < 1) return false;
+  const bendCandidates = twice.filter((t) => !crossKeys.has(t));
+  if (bendCandidates.length !== 1) return false;
+  const bendK = bendCandidates[0]!;
   return grade6RevisitBendAtCellKey(path, bendK);
 }
 
@@ -1053,14 +1049,16 @@ function g6CanAppend(path: CellCoord[], next: CellCoord): boolean {
 
 /**
  * 6×6 用: 下辺→上辺への貪欲ランダムウォーク（訪問上限付き）で G6 幾何を満たす直交経路を探索。
+ * 4 方向の試行順を毎ステップシャッフルし、ゴールバイアスを弱めて経路形状の多様化を図る。
  */
 function tryRandomG6SolutionPath(pathable: boolean[][], w: number, h: number, rng: () => number): CellCoord[] | null {
-  const maxLen = 38;
-  const maxAttempts = 650;
+  const maxLen = 52;
+  const maxAttempts = 900;
   const bottoms = bottomCandidates(pathable);
   const tops = topCandidates(pathable);
   if (!bottoms.length || !tops.length) return null;
   const manhattan = (a: CellCoord, g: CellCoord) => Math.abs(a.c - g.c) + Math.abs(a.r - g.r);
+  const dirs4 = [DIR.U, DIR.D, DIR.L, DIR.R];
 
   for (let att = 0; att < maxAttempts; att++) {
     const start = bottoms[Math.floor(rng() * bottoms.length)]!;
@@ -1070,13 +1068,14 @@ function tryRandomG6SolutionPath(pathable: boolean[][], w: number, h: number, rn
       const cur = path[path.length - 1]!;
       if (cur.c === goal.c && cur.r === goal.r) break;
       const cand: CellCoord[] = [];
-      for (const d of [DIR.U, DIR.D, DIR.L, DIR.R]) {
+      shuffleArrayInPlace(dirs4, rng);
+      for (const d of dirs4) {
         const n = addCell(cur, d);
         if (!inBounds(n.c, n.r, w, h) || !pathable[n.c]![n.r]) continue;
         if (g6CanAppend(path, n)) cand.push(n);
       }
       if (!cand.length) break;
-      const biasGoal = rng() < 0.78;
+      const biasGoal = rng() < 0.52;
       if (biasGoal && cand.length > 1) {
         let best = Infinity;
         for (const n of cand) {
@@ -1099,7 +1098,7 @@ function tryRandomG6SolutionPath(pathable: boolean[][], w: number, h: number, rn
     if (twos !== 2) continue;
     if (!grade6DualRevisitSolutionPath(path)) continue;
     const cr = countRightAngles(path);
-    if (cr < 7 || cr > 8) continue;
+    if (cr < 7 || cr > 10) continue;
     const mapped = path.map((x) => ({ ...x }));
     const forStage = prependVerticalSoStartOnBottomRow(mapped, pathable, w, h);
     if (!forStage) continue;
@@ -4020,7 +4019,7 @@ function generateBoardLv3Stage(seed: number, polyOpts?: ReflectShotPolylineGenOp
   return null;
 }
 
-/** 盤面生成 Grade6: 6×6・折れ 7〜8・再訪十字 1 + 再訪折れ 1（両面ヒット想定 1） */
+/** 盤面生成 Grade6: 6×6・折れ 7〜10・再訪十字 1+・再訪折れ 1（両面ヒット想定 1） */
 function generateBoardG6Stage(seed: number, polyOpts?: ReflectShotPolylineGenOpts): GridStage | null {
   const rng = createStageRng(seed);
   const W = 6;
@@ -4041,7 +4040,7 @@ function generateBoardG6Stage(seed: number, polyOpts?: ReflectShotPolylineGenOpt
     const sol = picked.solutionPath;
     if (!grade6DualRevisitSolutionPath(sol)) continue;
     const crPick = countRightAngles(sol);
-    if (crPick < 7 || crPick > 8) continue;
+    if (crPick < 7 || crPick > 10) continue;
     const dup = new Map<string, BumperCell>();
     picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
     const st: GridStage = {
@@ -4060,7 +4059,7 @@ function generateBoardG6Stage(seed: number, polyOpts?: ReflectShotPolylineGenOpt
     };
     applyGemRuleMetadataToStage(st);
     const r = computeRequiredGemCountForStage(st);
-    if (r.revisitCrossCells !== 1) continue;
+    if (r.revisitCrossCells < 1) continue;
     return st;
   }
   return null;

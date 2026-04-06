@@ -876,15 +876,7 @@
     const dIn2 = unitStepDir(path[i1].c - path[i1 - 1].c, path[i1].r - path[i1 - 1].r);
     if (!dIn1 || !dOut1 || !dIn2) return false;
     const okIn2 = dirsEqual(dIn2, negateDir(dIn1)) || dirsEqual(dIn2, dOut1);
-    if (!okIn2) return false;
-    const nb = (p) => keyCell(p.c, p.r);
-    const neigh = /* @__PURE__ */ new Set([
-      nb(cellBeforeFirst),
-      nb(path[i0 + 1]),
-      nb(path[i1 - 1]),
-      nb(path[i1 + 1])
-    ]);
-    return neigh.size === 4;
+    return okIn2;
   }
   function grade6DualRevisitSolutionPath(path) {
     var _a;
@@ -900,10 +892,10 @@
     }
     if (twice.length !== 2) return false;
     const crossKeys = revisitCrossCellKeysFromPath(path);
-    if (crossKeys.size !== 1) return false;
-    const crossK = Array.from(crossKeys)[0];
-    const bendK = twice.find((t) => t !== crossK);
-    if (!bendK) return false;
+    if (crossKeys.size < 1) return false;
+    const bendCandidates = twice.filter((t) => !crossKeys.has(t));
+    if (bendCandidates.length !== 1) return false;
+    const bendK = bendCandidates[0];
     return grade6RevisitBendAtCellKey(path, bendK);
   }
   function g6VisitHistogram(path) {
@@ -929,12 +921,13 @@
     return twos <= 2;
   }
   function tryRandomG6SolutionPath(pathable, w, h, rng) {
-    const maxLen = 38;
-    const maxAttempts = 650;
+    const maxLen = 52;
+    const maxAttempts = 900;
     const bottoms = bottomCandidates(pathable);
     const tops = topCandidates(pathable);
     if (!bottoms.length || !tops.length) return null;
     const manhattan = (a, g) => Math.abs(a.c - g.c) + Math.abs(a.r - g.r);
+    const dirs4 = [DIR.U, DIR.D, DIR.L, DIR.R];
     for (let att = 0; att < maxAttempts; att++) {
       const start = bottoms[Math.floor(rng() * bottoms.length)];
       const goal = tops[Math.floor(rng() * tops.length)];
@@ -943,13 +936,14 @@
         const cur = path[path.length - 1];
         if (cur.c === goal.c && cur.r === goal.r) break;
         const cand = [];
-        for (const d of [DIR.U, DIR.D, DIR.L, DIR.R]) {
+        shuffleArrayInPlace(dirs4, rng);
+        for (const d of dirs4) {
           const n = addCell(cur, d);
           if (!inBounds(n.c, n.r, w, h) || !pathable[n.c][n.r]) continue;
           if (g6CanAppend(path, n)) cand.push(n);
         }
         if (!cand.length) break;
-        const biasGoal = rng() < 0.78;
+        const biasGoal = rng() < 0.52;
         if (biasGoal && cand.length > 1) {
           let best = Infinity;
           for (const n of cand) {
@@ -972,7 +966,7 @@
       if (twos !== 2) continue;
       if (!grade6DualRevisitSolutionPath(path)) continue;
       const cr = countRightAngles(path);
-      if (cr < 7 || cr > 8) continue;
+      if (cr < 7 || cr > 10) continue;
       const mapped = path.map((x) => __spreadValues({}, x));
       const forStage = prependVerticalSoStartOnBottomRow(mapped, pathable, w, h);
       if (!forStage) continue;
@@ -2938,7 +2932,7 @@
       const sol = picked.solutionPath;
       if (!grade6DualRevisitSolutionPath(sol)) continue;
       const crPick = countRightAngles(sol);
-      if (crPick < 7 || crPick > 8) continue;
+      if (crPick < 7 || crPick > 10) continue;
       const dup = /* @__PURE__ */ new Map();
       picked.bumpers.forEach((v, k) => dup.set(k, { display: v.display, solution: v.solution }));
       const st = {
@@ -2957,7 +2951,7 @@
       };
       applyGemRuleMetadataToStage(st);
       const r = computeRequiredGemCountForStage(st);
-      if (r.revisitCrossCells !== 1) continue;
+      if (r.revisitCrossCells < 1) continue;
       return st;
     }
     return null;
