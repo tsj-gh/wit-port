@@ -962,6 +962,58 @@
     if (idxs.length !== 2) return null;
     return Math.abs(idxs[1] - idxs[0]);
   }
+  function grade5StyleRevisitIndexPair(path) {
+    const keyToIndices = /* @__PURE__ */ new Map();
+    for (let i = 0; i < path.length; i++) {
+      const k = keyCell(path[i].c, path[i].r);
+      const arr2 = keyToIndices.get(k);
+      if (arr2) arr2.push(i);
+      else keyToIndices.set(k, [i]);
+    }
+    let doubleKey = null;
+    for (const [k, arr2] of Array.from(keyToIndices.entries())) {
+      if (arr2.length === 2) {
+        if (doubleKey !== null) return null;
+        doubleKey = k;
+      } else if (arr2.length !== 1) return null;
+    }
+    if (!doubleKey) return null;
+    const arr = keyToIndices.get(doubleKey);
+    const i0 = Math.min(arr[0], arr[1]);
+    const i1 = Math.max(arr[0], arr[1]);
+    return [i0, i1];
+  }
+  function revisitLoopUnitLegCount(path) {
+    var _a;
+    let i0;
+    let i1;
+    const k = (_a = gradeG6RevisitBendOnlyCellKey(path)) != null ? _a : grade6DualRevisitBendCellKey(path);
+    if (k) {
+      const idxs = [];
+      for (let i = 0; i < path.length; i++) {
+        if (keyCell(path[i].c, path[i].r) === k) idxs.push(i);
+      }
+      if (idxs.length !== 2) return null;
+      i0 = Math.min(idxs[0], idxs[1]);
+      i1 = Math.max(idxs[0], idxs[1]);
+    } else {
+      const pair = grade5StyleRevisitIndexPair(path);
+      if (!pair) return null;
+      i0 = pair[0];
+      i1 = pair[1];
+    }
+    if (i1 <= i0) return null;
+    const boundaries = /* @__PURE__ */ new Set([i0, i1]);
+    for (let j = i0 + 1; j <= i1 - 1; j++) {
+      if (interiorPassageKind(path, j) === "bend") boundaries.add(j);
+    }
+    const sorted = Array.from(boundaries).sort((x, y) => x - y);
+    let unit = 0;
+    for (let t = 0; t < sorted.length - 1; t++) {
+      if (sorted[t + 1] - sorted[t] === 1) unit++;
+    }
+    return unit;
+  }
   function gradeG7DualRevisitSolutionPath(path) {
     return grade6DualRevisitBendCellKey(path) != null;
   }
@@ -970,12 +1022,24 @@
     if (!paths.length) return null;
     if (paths.length === 1) return paths[0];
     const scored = paths.map((p) => {
-      var _a2;
-      return { p, span: (_a2 = grade6RevisitBendLoopSpanSteps(p)) != null ? _a2 : 0 };
+      var _a2, _b;
+      return {
+        p,
+        span: (_a2 = grade6RevisitBendLoopSpanSteps(p)) != null ? _a2 : 0,
+        unitLegs: (_b = revisitLoopUnitLegCount(p)) != null ? _b : 999
+      };
     }).filter((x) => x.span > 0);
     if (!scored.length) return paths[0];
+    let pool = scored;
+    for (const cap of [2, 3, 4, 5, 999]) {
+      const tier = scored.filter((x) => x.unitLegs <= cap);
+      if (tier.length > 0) {
+        pool = tier;
+        break;
+      }
+    }
     const bySpan = /* @__PURE__ */ new Map();
-    for (const { p, span } of scored) {
+    for (const { p, span } of pool) {
       const g = (_a = bySpan.get(span)) != null ? _a : [];
       g.push(p);
       bySpan.set(span, g);
@@ -1008,9 +1072,15 @@
       var _a2;
       return (_a2 = grade6RevisitBendLoopSpanSteps(p)) != null ? _a2 : 1;
     });
+    const units = pickFrom.map((p) => {
+      var _a2;
+      return (_a2 = revisitLoopUnitLegCount(p)) != null ? _a2 : 99;
+    });
     let wsum = 0;
-    const weights = spans.map((span) => {
-      const w = 1 + span ** 1.78;
+    const weights = spans.map((span, idx) => {
+      const u = units[idx];
+      const shape = 1 / (1 + Math.max(0, u - 3) * 2.2);
+      const w = (1 + span ** 1.78) * shape;
       wsum += w;
       return w;
     });
@@ -1049,15 +1119,17 @@
     const bendMin = mode === "g6" ? 7 : 8;
     const bendMax = mode === "g6" ? 9 : 11;
     const maxLen = mode === "g6" ? 52 : 64;
-    const maxAttempts = mode === "g6" ? 620 : 900;
-    const maxSucc = 22;
+    const maxAttempts = mode === "g6" ? 1100 : 1800;
+    const maxRawSuccess = 72;
+    const detourP = mode === "g6" ? 0.1 : 0.06;
+    const biasGoalP = mode === "g6" ? 0.55 : 0.64;
     const bottoms = bottomCandidates(pathable);
     const tops = topCandidates(pathable);
     if (!bottoms.length || !tops.length) return null;
     const manhattan = (a, g) => Math.abs(a.c - g.c) + Math.abs(a.r - g.r);
     const dirs4 = [DIR.U, DIR.D, DIR.L, DIR.R];
     const successes = [];
-    for (let att = 0; att < maxAttempts && successes.length < maxSucc; att++) {
+    for (let att = 0; att < maxAttempts && successes.length < maxRawSuccess; att++) {
       const start = bottoms[Math.floor(rng() * bottoms.length)];
       const goal = tops[Math.floor(rng() * tops.length)];
       const path = [start];
@@ -1076,7 +1148,7 @@
         for (const [, v] of Array.from(g6VisitHistogram(path).entries())) {
           if (v === 2) twosNow++;
         }
-        const detourBeforeRevisit = twosNow < maxDoubleKeys && cand.length > 1 && rng() < 0.26;
+        const detourBeforeRevisit = twosNow < maxDoubleKeys && cand.length > 1 && rng() < detourP;
         if (detourBeforeRevisit) {
           let worst = -1;
           for (const n of cand) {
@@ -1086,7 +1158,7 @@
           const far = cand.filter((n) => manhattan(n, goal) === worst);
           path.push(far[Math.floor(rng() * far.length)]);
         } else {
-          const biasGoal = rng() < 0.44;
+          const biasGoal = rng() < biasGoalP;
           if (biasGoal && cand.length > 1) {
             let best = Infinity;
             for (const n of cand) {
@@ -1119,6 +1191,19 @@
       const cr = countRightAngles(forStage);
       if (cr < bendMin || cr > bendMax) continue;
       successes.push(forStage);
+    }
+    if (successes.length > 1) {
+      const meta = successes.map((p) => {
+        var _a, _b;
+        return {
+          p,
+          u: (_a = revisitLoopUnitLegCount(p)) != null ? _a : 99,
+          s: (_b = grade6RevisitBendLoopSpanSteps(p)) != null ? _b : 0
+        };
+      });
+      meta.sort((a, b) => a.u !== b.u ? a.u - b.u : b.s - a.s);
+      successes.length = 0;
+      successes.push(...meta.slice(0, 48).map((m) => m.p));
     }
     return g6PickRawPathByLoopSpan(successes, rng);
   }

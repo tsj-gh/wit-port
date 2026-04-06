@@ -1066,21 +1066,93 @@ export function grade6RevisitBendLoopSpanSteps(path: CellCoord[]): number | null
   return Math.abs(idxs[1]! - idxs[0]!);
 }
 
+/** Grade5 型: ちょうど 1 マスが 2 回・他は 1 回のとき、その 2 添字。それ以外は `null`。 */
+function grade5StyleRevisitIndexPair(path: CellCoord[]): [number, number] | null {
+  const keyToIndices = new Map<string, number[]>();
+  for (let i = 0; i < path.length; i++) {
+    const k = keyCell(path[i]!.c, path[i]!.r);
+    const arr = keyToIndices.get(k);
+    if (arr) arr.push(i);
+    else keyToIndices.set(k, [i]);
+  }
+  let doubleKey: string | null = null;
+  for (const [k, arr] of Array.from(keyToIndices.entries())) {
+    if (arr.length === 2) {
+      if (doubleKey !== null) return null;
+      doubleKey = k;
+    } else if (arr.length !== 1) return null;
+  }
+  if (!doubleKey) return null;
+  const arr = keyToIndices.get(doubleKey)!;
+  const i0 = Math.min(arr[0]!, arr[1]!);
+  const i1 = Math.max(arr[0]!, arr[1]!);
+  return [i0, i1];
+}
+
+/**
+ * 再訪折れマス（G6/G7 の `gradeG6…` / `grade6Dual…`、または G5 の単一再訪）の **1 回目〜2 回目**の閉路区間について、
+ * 隣接する折れ点どうしの添字差が 1（1 辺しかない区間）の個数。
+ * G5 のばらつきに寄せるための統計・候補選別に使用。
+ */
+export function revisitLoopUnitLegCount(path: CellCoord[]): number | null {
+  let i0: number;
+  let i1: number;
+  const k =
+    gradeG6RevisitBendOnlyCellKey(path) ?? grade6DualRevisitBendCellKey(path);
+  if (k) {
+    const idxs: number[] = [];
+    for (let i = 0; i < path.length; i++) {
+      if (keyCell(path[i]!.c, path[i]!.r) === k) idxs.push(i);
+    }
+    if (idxs.length !== 2) return null;
+    i0 = Math.min(idxs[0]!, idxs[1]!);
+    i1 = Math.max(idxs[0]!, idxs[1]!);
+  } else {
+    const pair = grade5StyleRevisitIndexPair(path);
+    if (!pair) return null;
+    i0 = pair[0]!;
+    i1 = pair[1]!;
+  }
+  if (i1 <= i0) return null;
+  const boundaries = new Set<number>([i0, i1]);
+  for (let j = i0 + 1; j <= i1 - 1; j++) {
+    if (interiorPassageKind(path, j) === "bend") boundaries.add(j);
+  }
+  const sorted = Array.from(boundaries).sort((x, y) => x - y);
+  let unit = 0;
+  for (let t = 0; t < sorted.length - 1; t++) {
+    if (sorted[t + 1]! - sorted[t]! === 1) unit++;
+  }
+  return unit;
+}
+
 /** G7 正解頂点列: ちょうど 2 マスが各 2 回、再訪十字 1+、再訪折れ 1。 */
 function gradeG7DualRevisitSolutionPath(path: CellCoord[]): boolean {
   return grade6DualRevisitBendCellKey(path) != null;
 }
 
-/** 生の頂点列候補から、再訪折れループ辺数が大きいほど選ばれやすいが短いループも残る重み付き 1 本選び */
+/** 再訪折れ閉路の「1 辺しかない折れ間区間」が少ない候補を優先し、同一形状帯ではループ辺数が長いほど選ばれやすい */
 function g6PickRawPathByLoopSpan(paths: CellCoord[][], rng: () => number): CellCoord[] | null {
   if (!paths.length) return null;
   if (paths.length === 1) return paths[0]!;
   const scored = paths
-    .map((p) => ({ p, span: grade6RevisitBendLoopSpanSteps(p) ?? 0 }))
+    .map((p) => ({
+      p,
+      span: grade6RevisitBendLoopSpanSteps(p) ?? 0,
+      unitLegs: revisitLoopUnitLegCount(p) ?? 999,
+    }))
     .filter((x) => x.span > 0);
   if (!scored.length) return paths[0]!;
+  let pool = scored;
+  for (const cap of [2, 3, 4, 5, 999] as const) {
+    const tier = scored.filter((x) => x.unitLegs <= cap);
+    if (tier.length > 0) {
+      pool = tier;
+      break;
+    }
+  }
   const bySpan = new Map<number, CellCoord[][]>();
-  for (const { p, span } of scored) {
+  for (const { p, span } of pool) {
     const g = bySpan.get(span) ?? [];
     g.push(p);
     bySpan.set(span, g);
@@ -1110,9 +1182,12 @@ function g6PickRawPathByLoopSpan(paths: CellCoord[][], rng: () => number): CellC
     return pickFrom[Math.floor(rng() * pickFrom.length)]!;
   }
   const spans = pickFrom.map((p) => grade6RevisitBendLoopSpanSteps(p) ?? 1);
+  const units = pickFrom.map((p) => revisitLoopUnitLegCount(p) ?? 99);
   let wsum = 0;
-  const weights = spans.map((span) => {
-    const w = 1 + span ** 1.78;
+  const weights = spans.map((span, idx) => {
+    const u = units[idx]!;
+    const shape = 1 / (1 + Math.max(0, u - 3) * 2.2);
+    const w = (1 + span ** 1.78) * shape;
     wsum += w;
     return w;
   });
@@ -1148,7 +1223,7 @@ function g6CanAppend(path: CellCoord[], next: CellCoord, maxDoubleKeys: 1 | 2): 
 
 /**
  * G6（6×6）/ G7（7×7）: 下辺→上辺への貪欲ランダムウォーク（訪問上限付き）で高難度幾何を満たす直交経路を探索。
- * 複数本の成功経路を溜め、再訪折れループ辺数が長いほど選ばれやすい重み付きで 1 本に絞る。
+ * 複数本の成功経路を溜め、再訪折れ閉路の単位辺区間が少ない候補を優先しつつループ辺数が長いほど選ばれやすい重みで 1 本に絞る。
  */
 function tryRandomHighGradeSolutionPath(
   pathable: boolean[][],
@@ -1162,8 +1237,12 @@ function tryRandomHighGradeSolutionPath(
   const bendMin = mode === "g6" ? 7 : 8;
   const bendMax = mode === "g6" ? 9 : 11;
   const maxLen = mode === "g6" ? 52 : 64;
-  const maxAttempts = mode === "g6" ? 620 : 900;
-  const maxSucc = 22;
+  /** 単位辺区間を減らすため detour を抑え、候補本数を増やして形状の良い経路を選びやすくする */
+  const maxAttempts = mode === "g6" ? 1100 : 1800;
+  /** 形状でソートして上位を残すため、一度多めに集める */
+  const maxRawSuccess = 72;
+  const detourP = mode === "g6" ? 0.1 : 0.06;
+  const biasGoalP = mode === "g6" ? 0.55 : 0.64;
   const bottoms = bottomCandidates(pathable);
   const tops = topCandidates(pathable);
   if (!bottoms.length || !tops.length) return null;
@@ -1171,7 +1250,7 @@ function tryRandomHighGradeSolutionPath(
   const dirs4 = [DIR.U, DIR.D, DIR.L, DIR.R];
   const successes: CellCoord[][] = [];
 
-  for (let att = 0; att < maxAttempts && successes.length < maxSucc; att++) {
+  for (let att = 0; att < maxAttempts && successes.length < maxRawSuccess; att++) {
     const start = bottoms[Math.floor(rng() * bottoms.length)]!;
     const goal = tops[Math.floor(rng() * tops.length)]!;
     const path: CellCoord[] = [start];
@@ -1191,7 +1270,7 @@ function tryRandomHighGradeSolutionPath(
         if (v === 2) twosNow++;
       }
       const detourBeforeRevisit =
-        twosNow < maxDoubleKeys && cand.length > 1 && rng() < 0.26;
+        twosNow < maxDoubleKeys && cand.length > 1 && rng() < detourP;
       if (detourBeforeRevisit) {
         let worst = -1;
         for (const n of cand) {
@@ -1201,7 +1280,7 @@ function tryRandomHighGradeSolutionPath(
         const far = cand.filter((n) => manhattan(n, goal) === worst);
         path.push(far[Math.floor(rng() * far.length)]!);
       } else {
-        const biasGoal = rng() < 0.44;
+        const biasGoal = rng() < biasGoalP;
         if (biasGoal && cand.length > 1) {
           let best = Infinity;
           for (const n of cand) {
@@ -1234,6 +1313,16 @@ function tryRandomHighGradeSolutionPath(
     const cr = countRightAngles(forStage);
     if (cr < bendMin || cr > bendMax) continue;
     successes.push(forStage);
+  }
+  if (successes.length > 1) {
+    const meta = successes.map((p) => ({
+      p,
+      u: revisitLoopUnitLegCount(p) ?? 99,
+      s: grade6RevisitBendLoopSpanSteps(p) ?? 0,
+    }));
+    meta.sort((a, b) => (a.u !== b.u ? a.u - b.u : b.s - a.s));
+    successes.length = 0;
+    successes.push(...meta.slice(0, 48).map((m) => m.p));
   }
   return g6PickRawPathByLoopSpan(successes, rng);
 }
