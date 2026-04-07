@@ -783,10 +783,23 @@ export default function ReflecShotGame() {
   const [showSolutionPath, setShowSolutionPath] = useState(false);
   /** devtj+DEBUG のみ UI から変更。本番は常に curved（案2） */
   const [trajectoryStyle, setTrajectoryStyle] = useState<TrajectoryDrawStyle>("curved");
+  /** devtj+DEBUG: 案2（丸み軌跡）の折れ点丸め半径（px） */
+  const [debugTrajectoryCornerRadiusPx, setDebugTrajectoryCornerRadiusPx] = useState(
+    TRAJECTORY_CORNER_RADIUS_PX
+  );
   const activeTrajectoryStyle = useMemo((): TrajectoryDrawStyle => {
     if (isDevTj && isDebugMode) return trajectoryStyle;
     return "curved";
   }, [isDevTj, isDebugMode, trajectoryStyle]);
+  const activeTrajectoryCornerRadiusPx = useMemo(() => {
+    if (isDevTj && isDebugMode) {
+      return Math.max(
+        TRAJECTORY_CORNER_RADIUS_MIN,
+        Math.min(TRAJECTORY_CORNER_RADIUS_MAX, debugTrajectoryCornerRadiusPx)
+      );
+    }
+    return TRAJECTORY_CORNER_RADIUS_PX;
+  }, [debugTrajectoryCornerRadiusPx, isDebugMode, isDevTj]);
   /** デバッグ時のみスライダーで変更。非デバッグ・非 devtj 時は 3.5 固定。 */
   const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(DEFAULT_BALL_SPEED_MULT);
   /** 宝石パーティクル吸引: `BASE_GEM_ATTRACT` に掛ける倍率 */
@@ -2117,7 +2130,7 @@ export default function ReflecShotGame() {
         canvasPathRoundedShotTrail(
           ctx,
           shotTrail,
-          TRAJECTORY_CORNER_RADIUS_PX,
+          activeTrajectoryCornerRadiusPx,
           TRAJECTORY_STRAIGHT_CONTINUE_DOT
         );
       } else {
@@ -2219,6 +2232,7 @@ export default function ReflecShotGame() {
 
     boardLayoutRef.current = { cellPx, ox, oy, rMin, cMin, nCols };
   }, [
+    activeTrajectoryCornerRadiusPx,
     activeTrajectoryStyle,
     collectedGems,
     debugCrossFlashArmPct,
@@ -2823,6 +2837,25 @@ export default function ReflecShotGame() {
                     {t("games.reflecShot.debugTrajectoryStyleVertexDots")}
                   </span>
                 </label>
+                {trajectoryStyle === "curved" && (
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-slate-400">
+                    <span className="shrink-0 text-[10px]">
+                      {t("games.reflecShot.debugTrajectoryCornerRadius")}
+                    </span>
+                    <input
+                      type="range"
+                      min={TRAJECTORY_CORNER_RADIUS_MIN}
+                      max={TRAJECTORY_CORNER_RADIUS_MAX}
+                      step={0.25}
+                      value={debugTrajectoryCornerRadiusPx}
+                      onChange={(e) => setDebugTrajectoryCornerRadiusPx(Number(e.target.value))}
+                      className="flex-1 min-w-0 accent-cyan-400"
+                    />
+                    <span className="tabular-nums w-12 text-right text-[10px] text-cyan-200/90">
+                      {debugTrajectoryCornerRadiusPx.toFixed(2)}px
+                    </span>
+                  </div>
+                )}
               </div>
               <label className="mt-2 flex flex-wrap items-center gap-2 text-slate-400 cursor-pointer">
                 <input

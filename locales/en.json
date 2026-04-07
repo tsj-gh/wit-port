@@ -76,6 +76,7 @@
       "debugTrajectoryStyleLabel": "Shot trajectory look",
       "debugTrajectoryStyleCurved": "Rounded corners (option 2, recommended)",
       "debugTrajectoryStyleVertexDots": "Light vertex dots (option 1)",
+      "debugTrajectoryCornerRadius": "Option 2: curve radius",
       "debugShowSolutionPath": "Solution path (main sequence, straight)",
       "debugGemRulePanelTitle": "Gem rules (expected / Goal requirement)",
       "debugDummyDensity": "Dummy density",
