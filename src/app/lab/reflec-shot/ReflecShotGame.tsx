@@ -132,6 +132,11 @@ const BUMPER_GLYPH_SIZE_RATIO = 0.84;
 const TRAJECTORY_BUMPER_FLASH_MS = 400;
 /** デバッグ正解経路と射出中軌跡の線幅（同一） */
 const SOLUTION_PATH_LINE_WIDTH = 1.5;
+/** 射出軌跡・バンパー反射頂点の光ドット（キャンバス座標系） */
+const TRAJECTORY_VERTEX_DOT_R = 2.5;
+const TRAJECTORY_VERTEX_DOT_R_SOLUTION = 3.35;
+const TRAJECTORY_VERTEX_DOT_BASE_OPACITY = 0.82;
+const TRAJECTORY_VERTEX_DOT_FADE_MS = 240;
 
 const MAX_GEM_PARTICLES = 80;
 const GEM_BURST_N = 9;
@@ -767,6 +772,10 @@ export default function ReflecShotGame() {
   const crossFlashRef = useRef<{ c: number; r: number; t0: number } | null>(null);
   /** 射出中の軌跡（盤面 px）。編集フェーズでは空 */
   const moveShotTrailRef = useRef<{ x: number; y: number }[]>([]);
+  /** 射出中: バンパーで進行方向が変わったマス（StartPad/GoalPad 除外・直進スルー除外）。SVG `<g>` で描画 */
+  const [trajectoryVertexDots, setTrajectoryVertexDots] = useState<
+    { c: number; r: number; born: number; isSolutionBumper: boolean }[]
+  >([]);
   /** Grade5+: 折れ点バンパーへの初回入射方向 */
   const bumperIncomingFirstRef = useRef<Map<string, Dir>>(new Map());
   const twoSidedBumperUsedRef = useRef<Set<string>>(new Set());
@@ -843,6 +852,8 @@ export default function ReflecShotGame() {
   const trailUiLastPushRef = useRef(0);
 
   const [swipeTrailPoints, setSwipeTrailPoints] = useState<{ x: number; y: number }[]>([]);
+  /** 盤ラッパーリサイズ時に SVG 反射ドットの座標を boardLayoutRef と再同期する */
+  const [boardLayoutRevision, setBoardLayoutRevision] = useState(0);
   /** 軌跡は polyline のみフェード。SVG ルートは opacity:1 のままにしてキャンバス側が透けないようにする */
   const [trailStrokeOpacity, setTrailStrokeOpacity] = useState(1);
   /** 判定マス用の短いフラッシュ（時刻は draw の rAF で減衰） */
@@ -1180,6 +1191,7 @@ export default function ReflecShotGame() {
     const st = stage;
     if (!st || phase !== "edit") return;
     moveShotTrailRef.current = [];
+    setTrajectoryVertexDots([]);
     pathSegHistoryRef.current = [];
     crossGemAwardedThisSegRef.current = false;
     revisitCrossCellStateRef.current.clear();
@@ -1388,6 +1400,37 @@ export default function ReflecShotGame() {
 
       const res = applyArrival(st, B, incoming);
 
+      if (res.kind === "continue") {
+        const bkRefl = keyCell(B.c, B.r);
+        const bumpRefl = st.bumpers.get(bkRefl);
+        const hyphenPassRefl =
+          bumpRefl &&
+          bumpRefl.display === "HYPHEN" &&
+          (dirsEqual(incoming, DIR.L) || dirsEqual(incoming, DIR.R));
+        const pipePassRefl =
+          bumpRefl &&
+          bumpRefl.display === "PIPE" &&
+          (dirsEqual(incoming, DIR.U) || dirsEqual(incoming, DIR.D));
+        const passThroughRefl = hyphenPassRefl || pipePassRefl;
+        const turnedAtB = !dirsEqual(incoming, res.outDir);
+        const onReflectPad =
+          (B.c === st.startPad.c && B.r === st.startPad.r) ||
+          (B.c === st.goalPad.c && B.r === st.goalPad.r);
+        if (turnedAtB && !onReflectPad && bumpRefl && !passThroughRefl) {
+          const isSolBump =
+            solutionGemBumperKeys.has(bkRefl) && bumpRefl.isDummy !== true;
+          setTrajectoryVertexDots((prev) => [
+            ...prev,
+            {
+              c: B.c,
+              r: B.r,
+              born: performance.now(),
+              isSolutionBumper: isSolBump,
+            },
+          ]);
+        }
+      }
+
       if (st.grade >= 3 && res.kind === "continue") {
         const next = res.next;
         const vIn = { dc: B.c - sim.fromCell.c, dr: B.r - sim.fromCell.r };
@@ -1570,8 +1613,19 @@ export default function ReflecShotGame() {
   }, [isDevTj, isDebugMode, showSolutionPath, stage]);
 
   useEffect(() => {
-    if (phase === "edit") moveShotTrailRef.current = [];
+    if (phase === "edit") {
+      moveShotTrailRef.current = [];
+      setTrajectoryVertexDots([]);
+    }
   }, [phase]);
+
+  useEffect(() => {
+    const el = boardWrapRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setBoardLayoutRevision((n) => n + 1));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!showWinOverlay) return;
@@ -3093,6 +3147,52 @@ export default function ReflecShotGame() {
                     points={swipeTrailPoints.map((p) => `${p.x},${p.y}`).join(" ")}
                   />
                 )}
+                <g
+                  className="trajectory-vertex-dots"
+                  data-board-layout-rev={boardLayoutRevision}
+                >
+                  {phase !== "edit" &&
+                    trajectoryVertexDots.map((vd) => {
+                      const lay = boardLayoutRef.current;
+                      if (!lay) return null;
+                      const cc = cellCenterPx(
+                        vd.c,
+                        vd.r,
+                        lay.cellPx,
+                        lay.ox,
+                        lay.oy,
+                        lay.rMin,
+                        lay.cMin
+                      );
+                      const dbgSolDots = isDevTj && isDebugMode && showSolutionPath;
+                      const sol = dbgSolDots && vd.isSolutionBumper;
+                      const rr = sol ? TRAJECTORY_VERTEX_DOT_R_SOLUTION : TRAJECTORY_VERTEX_DOT_R;
+                      const fill = sol ? "rgb(207, 250, 254)" : "rgb(255, 255, 255)";
+                      const filt = sol
+                        ? `drop-shadow(0 0 ${rr + 2.5}px rgba(34,211,238,0.78))`
+                        : `drop-shadow(0 0 3px rgba(165,243,252,0.5))`;
+                      return (
+                        <circle
+                          key={`${vd.born}-${vd.c}-${vd.r}`}
+                          cx={cc.x}
+                          cy={cc.y}
+                          r={rr}
+                          fill={fill}
+                          opacity={isDevTj ? 0 : TRAJECTORY_VERTEX_DOT_BASE_OPACITY}
+                          style={{ filter: filt }}
+                        >
+                          {isDevTj ? (
+                            <animate
+                              attributeName="opacity"
+                              to={String(TRAJECTORY_VERTEX_DOT_BASE_OPACITY)}
+                              dur={`${TRAJECTORY_VERTEX_DOT_FADE_MS}ms`}
+                              fill="freeze"
+                            />
+                          ) : null}
+                        </circle>
+                      );
+                    })}
+                </g>
               </svg>
             </div>
           </div>
