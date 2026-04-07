@@ -137,6 +137,96 @@ const TRAJECTORY_VERTEX_DOT_R = 2.5;
 const TRAJECTORY_VERTEX_DOT_R_SOLUTION = 3.35;
 const TRAJECTORY_VERTEX_DOT_BASE_OPACITY = 0.82;
 const TRAJECTORY_VERTEX_DOT_FADE_MS = 240;
+/** 射出軌跡の折れ点を二次ベジエで丸めるときの曲率半径（px） */
+const TRAJECTORY_CORNER_RADIUS_PX = 4;
+const TRAJECTORY_CORNER_RADIUS_MIN = 3;
+const TRAJECTORY_CORNER_RADIUS_MAX = 5;
+/**
+ * 連続セグメントの単位ベクトル内積がこれ未満なら折れとみなす（1 に近いほど直線扱いで長く保つ）
+ */
+const TRAJECTORY_STRAIGHT_CONTINUE_DOT = 0.994;
+
+type TrajectoryDrawStyle = "curved" | "vertexDots";
+
+/** サンプル列から折れ点インデックスのみ抜き出す（直線区間は両端のみ） */
+function shotTrailCornerIndices(pts: readonly { x: number; y: number }[], straightDotMin: number): number[] {
+  const n = pts.length;
+  if (n < 2) return n === 1 ? [0] : [];
+  const out: number[] = [0];
+  for (let i = 2; i < n; i++) {
+    const ax = pts[i - 1]!.x - pts[i - 2]!.x;
+    const ay = pts[i - 1]!.y - pts[i - 2]!.y;
+    const bx = pts[i]!.x - pts[i - 1]!.x;
+    const by = pts[i]!.y - pts[i - 1]!.y;
+    const la = Math.hypot(ax, ay);
+    const lb = Math.hypot(bx, by);
+    if (la < 1e-4 || lb < 1e-4) continue;
+    const dot = (ax * bx + ay * by) / (la * lb);
+    if (dot < straightDotMin) out.push(i - 1);
+  }
+  if (out[out.length - 1] !== n - 1) out.push(n - 1);
+  return out;
+}
+
+/**
+ * 折れ点を制御点とする二次ベジエで繋ぐ（キャンバス＝SVG の Q と同型）。
+ * 直線区間は従来どおり L に相当する直線になる。
+ */
+function canvasPathRoundedShotTrail(
+  ctx: CanvasRenderingContext2D,
+  pts: readonly { x: number; y: number }[],
+  cornerRadius: number,
+  straightDotMin: number
+): void {
+  if (pts.length < 2) return;
+  const idx = shotTrailCornerIndices(pts, straightDotMin);
+  if (idx.length < 2) return;
+  const K = idx.map((j) => pts[j]!);
+  const m = K.length;
+  const R = Math.max(
+    TRAJECTORY_CORNER_RADIUS_MIN,
+    Math.min(TRAJECTORY_CORNER_RADIUS_MAX, cornerRadius)
+  );
+  ctx.moveTo(K[0]!.x, K[0]!.y);
+  if (m === 2) {
+    ctx.lineTo(K[1]!.x, K[1]!.y);
+    return;
+  }
+  for (let k = 1; k <= m - 2; k++) {
+    const p0 = K[k - 1]!;
+    const V = K[k]!;
+    const p1 = K[k + 1]!;
+    const uInX = V.x - p0.x;
+    const uInY = V.y - p0.y;
+    const uOutX = p1.x - V.x;
+    const uOutY = p1.y - V.y;
+    const L1 = Math.hypot(uInX, uInY);
+    const L2 = Math.hypot(uOutX, uOutY);
+    if (L1 < 1e-6 || L2 < 1e-6) {
+      ctx.lineTo(V.x, V.y);
+      continue;
+    }
+    const nInX = uInX / L1;
+    const nInY = uInY / L1;
+    const nOutX = uOutX / L2;
+    const nOutY = uOutY / L2;
+    const dotCl = Math.max(-1, Math.min(1, nInX * nOutX + nInY * nOutY));
+    const angle = Math.acos(dotCl);
+    if (angle < 1e-3) {
+      ctx.lineTo(V.x, V.y);
+      continue;
+    }
+    const tanHalf = Math.tan(angle / 2);
+    const offset = Math.min(R / tanHalf, L1 * 0.48, L2 * 0.48);
+    const T1x = V.x - nInX * offset;
+    const T1y = V.y - nInY * offset;
+    const T2x = V.x + nOutX * offset;
+    const T2y = V.y + nOutY * offset;
+    ctx.lineTo(T1x, T1y);
+    ctx.quadraticCurveTo(V.x, V.y, T2x, T2y);
+  }
+  ctx.lineTo(K[m - 1]!.x, K[m - 1]!.y);
+}
 
 const MAX_GEM_PARTICLES = 80;
 const GEM_BURST_N = 9;
@@ -691,6 +781,12 @@ export default function ReflecShotGame() {
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
   const [showSolutionPath, setShowSolutionPath] = useState(false);
+  /** devtj+DEBUG のみ UI から変更。本番は常に curved（案2） */
+  const [trajectoryStyle, setTrajectoryStyle] = useState<TrajectoryDrawStyle>("curved");
+  const activeTrajectoryStyle = useMemo((): TrajectoryDrawStyle => {
+    if (isDevTj && isDebugMode) return trajectoryStyle;
+    return "curved";
+  }, [isDevTj, isDebugMode, trajectoryStyle]);
   /** デバッグ時のみスライダーで変更。非デバッグ・非 devtj 時は 3.5 固定。 */
   const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(DEFAULT_BALL_SPEED_MULT);
   /** 宝石パーティクル吸引: `BASE_GEM_ATTRACT` に掛ける倍率 */
@@ -2017,9 +2113,18 @@ export default function ReflecShotGame() {
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.beginPath();
-      ctx.moveTo(shotTrail[0]!.x, shotTrail[0]!.y);
-      for (let ti = 1; ti < shotTrail.length; ti++) {
-        ctx.lineTo(shotTrail[ti]!.x, shotTrail[ti]!.y);
+      if (activeTrajectoryStyle === "curved") {
+        canvasPathRoundedShotTrail(
+          ctx,
+          shotTrail,
+          TRAJECTORY_CORNER_RADIUS_PX,
+          TRAJECTORY_STRAIGHT_CONTINUE_DOT
+        );
+      } else {
+        ctx.moveTo(shotTrail[0]!.x, shotTrail[0]!.y);
+        for (let ti = 1; ti < shotTrail.length; ti++) {
+          ctx.lineTo(shotTrail[ti]!.x, shotTrail[ti]!.y);
+        }
       }
       ctx.stroke();
       ctx.restore();
@@ -2114,6 +2219,7 @@ export default function ReflecShotGame() {
 
     boardLayoutRef.current = { cellPx, ox, oy, rMin, cMin, nCols };
   }, [
+    activeTrajectoryStyle,
     collectedGems,
     debugCrossFlashArmPct,
     debugGemAttractMult,
@@ -2691,6 +2797,33 @@ export default function ReflecShotGame() {
           </div>
           {isDebugPanelExpanded && (
             <>
+              <div className="mt-2 flex flex-col gap-1.5 text-slate-400">
+                <span className="text-[10px] leading-tight text-slate-300">
+                  {t("games.reflecShot.debugTrajectoryStyleLabel")}
+                </span>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name="reflec-shot-trajectory-style"
+                    checked={trajectoryStyle === "curved"}
+                    onChange={() => setTrajectoryStyle("curved")}
+                    className="accent-sky-400"
+                  />
+                  <span className="text-[10px] leading-snug">{t("games.reflecShot.debugTrajectoryStyleCurved")}</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name="reflec-shot-trajectory-style"
+                    checked={trajectoryStyle === "vertexDots"}
+                    onChange={() => setTrajectoryStyle("vertexDots")}
+                    className="accent-sky-400"
+                  />
+                  <span className="text-[10px] leading-snug">
+                    {t("games.reflecShot.debugTrajectoryStyleVertexDots")}
+                  </span>
+                </label>
+              </div>
               <label className="mt-2 flex flex-wrap items-center gap-2 text-slate-400 cursor-pointer">
                 <input
                   type="checkbox"
@@ -3151,7 +3284,8 @@ export default function ReflecShotGame() {
                   className="trajectory-vertex-dots"
                   data-board-layout-rev={boardLayoutRevision}
                 >
-                  {phase !== "edit" &&
+                  {activeTrajectoryStyle === "vertexDots" &&
+                    phase !== "edit" &&
                     trajectoryVertexDots.map((vd) => {
                       const lay = boardLayoutRef.current;
                       if (!lay) return null;
