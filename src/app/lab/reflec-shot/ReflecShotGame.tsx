@@ -3484,15 +3484,15 @@ export default function ReflecShotGame() {
 
       {showWinOverlay && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-text)_32%,transparent)]"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(8px)_brightness(0.7)]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="reflec-win-title"
         >
-          <div className="mx-4 max-w-sm rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] p-8 text-center shadow-2xl">
+          <div className="mx-4 max-w-sm rounded-2xl border-2 border-[var(--color-primary)] !bg-[var(--color-surface)] !opacity-100 p-8 text-center shadow-xl">
             <h2
               id="reflec-win-title"
-              className="mb-4 text-2xl font-bold text-[var(--color-primary)]"
+              className="mb-4 text-xl font-bold text-[var(--color-primary)]"
             >
               {t("games.reflecShot.resultWinMessage")}
             </h2>
@@ -3500,7 +3500,7 @@ export default function ReflecShotGame() {
               <button
                 type="button"
                 onClick={() => setShowWinOverlay(false)}
-                className="rounded-lg bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))] px-6 py-3 font-medium text-[var(--color-text)] hover:brightness-95"
+                className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_85%,var(--color-bg))] px-6 py-3 font-medium text-[var(--color-text)] hover:brightness-95 active:scale-95"
               >
                 {t("games.reflecShot.resultBack")}
               </button>
@@ -3508,7 +3508,7 @@ export default function ReflecShotGame() {
                 type="button"
                 onClick={() => goNextProblem()}
                 disabled={boardLoadWait}
-                className="rounded-lg bg-[var(--color-primary)] px-6 py-3 font-medium text-[var(--color-on-primary)] hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg bg-[var(--color-primary)] px-6 py-3 font-medium text-[var(--color-on-primary)] hover:brightness-95 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t("games.reflecShot.nextProblemBtn")}
               </button>
@@ -3519,26 +3519,26 @@ export default function ReflecShotGame() {
 
       {showFailOverlay && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-text)_32%,transparent)]"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(8px)_brightness(0.7)]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="reflec-fail-title"
         >
-          <div className="mx-4 max-w-sm rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] p-8 text-center shadow-2xl">
+          <div className="mx-4 max-w-sm rounded-2xl border-2 border-[var(--color-primary)] !bg-[var(--color-surface)] !opacity-100 p-8 text-center shadow-xl">
             <h2
               id="reflec-fail-title"
-              className="mb-2 text-2xl font-bold text-[var(--color-accent)]"
+              className="mb-2 text-xl font-bold text-[var(--color-primary)]"
             >
               {t("games.reflecShot.resultFailTitle")}
             </h2>
-            <p className="mb-4 text-[var(--color-muted)]">
+            <p className="mb-4 text-[var(--color-text)]">
               {gemGoalFail ? t("games.reflecShot.resultFailGems") : t("games.reflecShot.resultFailMessage")}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               <button
                 type="button"
                 onClick={() => retryAfterLoss()}
-                className="rounded-lg bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))] px-6 py-3 font-medium text-[var(--color-text)] hover:brightness-95"
+                className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_85%,var(--color-bg))] px-6 py-3 font-medium text-[var(--color-text)] hover:brightness-95 active:scale-95"
               >
                 {t("games.reflecShot.resultRetry")}
               </button>
@@ -3546,7 +3546,7 @@ export default function ReflecShotGame() {
                 type="button"
                 onClick={() => goNextProblem()}
                 disabled={boardLoadWait}
-                className="rounded-lg bg-[var(--color-primary)] px-6 py-3 font-medium text-[var(--color-on-primary)] hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg bg-[var(--color-primary)] px-6 py-3 font-medium text-[var(--color-on-primary)] hover:brightness-95 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t("games.reflecShot.nextProblemBtn")}
               </button>

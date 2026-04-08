@@ -780,25 +780,25 @@ export default function SkyscraperGame() {
 
       {showClearOverlay && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,var(--color-text)_32%,transparent)]"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(8px)_brightness(0.7)]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="clear-title"
         >
-          <div className="rounded-2xl p-8 bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] text-center shadow-2xl max-w-sm mx-4">
+          <div className="mx-4 max-w-sm rounded-2xl border-2 border-[var(--color-primary)] !bg-[var(--color-surface)] !opacity-100 p-8 text-center shadow-xl">
             <h2
               id="clear-title"
-              className="text-2xl font-bold text-[var(--color-primary)] mb-2"
+              className="mb-2 text-xl font-bold text-[var(--color-primary)]"
             >
               Perfect!
             </h2>
-            <p className="text-[var(--color-muted)] mb-4">
+            <p className="mb-4 text-[var(--color-text)]">
               {t("games.skyscraper.clearSolved").replace("{time}", formatTime(timeSeconds))}
             </p>
             <div className="flex gap-2 justify-center">
               <button
                 onClick={() => setShowClearOverlay(false)}
-                className="px-6 py-3 rounded-lg bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))] text-[var(--color-text)] font-medium hover:brightness-95"
+                className="px-6 py-3 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_85%,var(--color-bg))] text-[var(--color-text)] font-medium hover:brightness-95 active:scale-95"
               >
                 {t("games.skyscraper.back")}
               </button>
@@ -807,7 +807,7 @@ export default function SkyscraperGame() {
                   setShowClearOverlay(false);
                   loadPuzzle(n, difficulty);
                 }}
-                className="px-6 py-3 rounded-lg bg-[var(--color-primary)] text-[var(--color-on-primary)] font-medium hover:brightness-95"
+                className="px-6 py-3 rounded-lg bg-[var(--color-primary)] text-[var(--color-on-primary)] font-medium hover:brightness-95 active:scale-95"
               >
                 {t("games.skyscraper.continueNext")}
               </button>
