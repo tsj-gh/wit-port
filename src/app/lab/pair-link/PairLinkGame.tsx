@@ -25,6 +25,7 @@ import {
 import { useUserSyncContext } from "@/components/UserSyncProvider";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
 import { recordPuzzleClear } from "@/lib/wispo-user-data";
+import { clearModalBackdropOverlayStyle, useClearModalBackdropDebugValues } from "@/lib/debugClearModalBackdrop";
 import { useI18n } from "@/lib/i18n-context";
 import { pairLinkLoadingLine, translatePairLinkStatus } from "@/lib/i18n-runtime-status";
 import type { Pair } from "@/lib/puzzle-engine/pair-link";
@@ -546,6 +547,7 @@ export default function PairLinkGame() {
 
   const searchParams = useSearchParams();
   const isDevTj = searchParams.get("devtj") === "true";
+  const clearModalBackdropDebug = useClearModalBackdropDebugValues();
   const userSync = useUserSyncContext();
 
   useEffect(() => {
@@ -2366,7 +2368,12 @@ export default function PairLinkGame() {
 
       {showClearOverlay && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(var(--clear-backdrop-blur-px,0.3px))_brightness(0.7)]"
+          className={
+            isDevTj
+              ? "fixed inset-0 z-[9999] flex items-center justify-center"
+              : "fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(0.3px)_brightness(0.7)]"
+          }
+          style={isDevTj ? clearModalBackdropOverlayStyle(clearModalBackdropDebug) : undefined}
           role="dialog"
           aria-modal="true"
           aria-labelledby="clear-title"

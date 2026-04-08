@@ -14,7 +14,6 @@
   --wit-border: color-mix(in srgb, var(--color-text) 14%, transparent);
   --wit-card-bg: color-mix(in srgb, var(--color-surface) 82%, var(--color-bg));
   --wit-accent-glow: color-mix(in srgb, var(--color-primary) 45%, transparent);
-  --clear-backdrop-blur-px: 0.3px;
 }
 
 /* テーマ切替時の色の滑らかな遷移 */
