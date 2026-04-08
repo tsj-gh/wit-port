@@ -14,28 +14,28 @@ function FooterNav() {
     >
       <DevLink
         href="/"
-        className="text-[13px] text-wit-muted no-underline transition-colors hover:text-wit-text"
+        className="text-[13px] text-[var(--color-muted)] no-underline transition-colors hover:text-[var(--color-text)]"
       >
         {t("footer.top")}
       </DevLink>
-      <span className="text-wit-muted/50" aria-hidden="true">|</span>
+      <span className="text-[color-mix(in_srgb,var(--color-muted)_50%,transparent)]" aria-hidden="true">|</span>
       <DevLink
         href="/privacy"
-        className="text-[13px] text-wit-muted no-underline transition-colors hover:text-wit-text"
+        className="text-[13px] text-[var(--color-muted)] no-underline transition-colors hover:text-[var(--color-text)]"
       >
         {t("footer.privacy")}
       </DevLink>
-      <span className="text-wit-muted/50" aria-hidden="true">|</span>
+      <span className="text-[color-mix(in_srgb,var(--color-muted)_50%,transparent)]" aria-hidden="true">|</span>
       <DevLink
         href="/contact"
-        className="text-[13px] text-wit-muted no-underline transition-colors hover:text-wit-text"
+        className="text-[13px] text-[var(--color-muted)] no-underline transition-colors hover:text-[var(--color-text)]"
       >
         {t("footer.contact")}
       </DevLink>
-      <span className="text-wit-muted/50" aria-hidden="true">|</span>
+      <span className="text-[color-mix(in_srgb,var(--color-muted)_50%,transparent)]" aria-hidden="true">|</span>
       <DevLink
         href="/columns/educational-value"
-        className="text-[13px] text-wit-muted no-underline transition-colors hover:text-wit-text"
+        className="text-[13px] text-[var(--color-muted)] no-underline transition-colors hover:text-[var(--color-text)]"
       >
         {t("footer.column")}
       </DevLink>
@@ -52,7 +52,7 @@ export default function Footer() {
       <Suspense fallback={<nav className="flex justify-center gap-4 mb-4" aria-label="フッターナビゲーション" />}>
         <FooterNav />
       </Suspense>
-      <p className="text-center text-sm text-wit-muted">
+      <p className="text-center text-sm text-[var(--color-muted)]">
         &copy; 2026 Wispo (wit-spot.vercel.app). All rights reserved.
       </p>
     </footer>

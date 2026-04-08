@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-wit-bg" />}>
+    <Suspense fallback={<div className="min-h-screen bg-[var(--color-bg)]" />}>
       <PrivacyPageContent />
     </Suspense>
   );

@@ -13,10 +13,10 @@ export function ContactPageContent() {
       <Suspense
         fallback={
           <header className="flex justify-between items-center py-8">
-            <a href="/" className="text-wit-text font-black">
+            <a href="/" className="text-[var(--color-text)] font-black">
               Wispo
             </a>
-            <a href="/" className="text-wit-muted text-sm">
+            <a href="/" className="text-[var(--color-muted)] text-sm">
               ←
             </a>
           </header>
@@ -26,10 +26,10 @@ export function ContactPageContent() {
       </Suspense>
 
       <main className="pb-20">
-        <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-wit-text">{t("contact.title")}</h1>
-        <p className="text-wit-muted text-[15px] leading-relaxed mb-8">{t("contact.intro")}</p>
+        <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-[var(--color-text)]">{t("contact.title")}</h1>
+        <p className="text-[var(--color-muted)] text-[15px] leading-relaxed mb-8">{t("contact.intro")}</p>
 
-        <div className="rounded-2xl overflow-hidden border border-white/10 bg-white/5 backdrop-blur">
+        <div className="rounded-2xl overflow-hidden border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] backdrop-blur">
           <iframe
             src="https://docs.google.com/forms/d/e/1FAIpQLSdT4fq8tjaTrGe0uojoix3OfNzAeJ5Hzq1Aal92OF0QGINTEw/viewform?embedded=true"
             width="100%"
@@ -49,7 +49,7 @@ export function ContactPageContent() {
             fallback={
               <a
                 href="/"
-                className="inline-block px-5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-wit-text no-underline text-sm font-medium"
+                className="inline-block px-5 py-2.5 rounded-xl bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-text)] no-underline text-sm font-medium"
               >
                 {t("common.backToTop")}
               </a>

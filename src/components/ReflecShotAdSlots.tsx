@@ -32,8 +32,8 @@ function getDebugSlotLabel(slotIndex: number): string {
 function AdPlaceholder({ slotIndex, isFlashing }: { slotIndex: number; isFlashing: boolean }) {
   return (
     <div
-      className={`flex w-full items-center justify-center rounded-lg border border-dashed border-white/30 bg-slate-700/40 px-3 py-2 text-center text-wit-muted text-xs font-mono transition-all duration-200 ${
-        isFlashing ? "opacity-100 ring-2 ring-emerald-400/80 scale-[1.01]" : "opacity-70"
+      className={`flex w-full items-center justify-center rounded-lg border border-dashed border-[color-mix(in_srgb,var(--color-text)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]/40 px-3 py-2 text-center text-[var(--color-muted)] text-xs font-mono transition-all duration-200 ${
+        isFlashing ? "opacity-100 ring-2 ring-[color-mix(in_srgb,var(--color-primary)_55%,transparent)] scale-[1.01]" : "opacity-70"
       }`}
       style={{ minHeight: AD_MIN_HEIGHT_PX }}
       aria-label={`広告スペース ${slotIndex}（Reflec-Shot・デバッグ表示）`}

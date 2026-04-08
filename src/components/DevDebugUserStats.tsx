@@ -31,20 +31,20 @@ export function DevDebugUserStats() {
   };
 
   return (
-    <div className="mt-1 pt-1 border-t border-white/10 space-y-1">
-      <div className="font-semibold text-slate-300">学習記録</div>
+    <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] space-y-1">
+      <div className="font-semibold text-[var(--color-muted)]">学習記録</div>
       <div>
-        累計クリア数: <span className="tabular-nums text-slate-200">{totalClears}</span>
-        <span className="text-slate-500 text-[9px] ml-1">
+        累計クリア数: <span className="tabular-nums text-[color-mix(in_srgb,var(--color-text)_88%,var(--color-bg))]">{totalClears}</span>
+        <span className="text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))] text-[9px] ml-1">
           (PL:{data.achievements.pairLink} SS:{data.achievements.skyscraper} PJ:{data.achievements.pressureJudge})
         </span>
       </div>
       <div>
-        活動日数: <span className="tabular-nums text-slate-200">{data.totalActiveDays}</span>
+        活動日数: <span className="tabular-nums text-[color-mix(in_srgb,var(--color-text)_88%,var(--color-bg))]">{data.totalActiveDays}</span>
       </div>
       <button
         onClick={handleReset}
-        className="px-1 py-0.5 rounded text-[9px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+        className="px-1 py-0.5 rounded text-[9px] border border-amber-500/50 bg-[var(--color-accent)]/20 text-amber-400 hover:bg-[var(--color-accent)]/30"
       >
         今日の進捗をリセット
       </button>

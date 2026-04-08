@@ -13,7 +13,7 @@ export function TopBackLink({ children }: { children?: React.ReactNode }) {
   return (
     <DevLink
       href="/"
-      className="inline-block px-5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-wit-text no-underline text-sm font-medium hover:bg-white/15 transition-colors"
+      className="inline-block px-5 py-2.5 rounded-xl bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-text)] no-underline text-sm font-medium hover:bg-[color-mix(in_srgb,var(--color-text)_15%,transparent)] transition-colors"
     >
       {label}
     </DevLink>

@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default function EducationalValueColumnPage() {
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 pb-16 md:py-14">
-      <Suspense fallback={<div className="mb-8 h-9 w-40 rounded-lg bg-white/5" aria-hidden />}>
+      <Suspense fallback={<div className="mb-8 h-9 w-40 rounded-lg bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)]" aria-hidden />}>
         <EducationalColumnWispoHeader />
       </Suspense>
       <EducationalColumnArticle />

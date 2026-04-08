@@ -36,23 +36,23 @@ export function GamePageHeader({
       <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2">
         <DevLink
           href={homeHref}
-          className="flex min-h-8 min-w-0 shrink-0 items-center gap-2 self-center text-xl font-black leading-none tracking-wider text-wit-text no-underline hover:opacity-90 sm:gap-3 sm:text-2xl"
+          className="flex min-h-8 min-w-0 shrink-0 items-center gap-2 self-center text-xl font-black leading-none tracking-wider text-[var(--color-text)] no-underline hover:opacity-90 sm:gap-3 sm:text-2xl"
         >
-          <span className="block h-8 w-8 shrink-0 rounded-lg bg-gradient-to-br from-wit-emerald to-teal-600" />
+          <span className="block h-8 w-8 shrink-0 rounded-2xl bg-gradient-to-br from-[var(--color-primary)] to-[color-mix(in_srgb,var(--color-accent)_70%,var(--color-primary))]" />
           <span className="truncate">Wispo</span>
         </DevLink>
         <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-2 self-center">
           <LanguageToggle />
           {trailing != null ? (
-            <div className="flex shrink-0 items-center gap-2 text-sm leading-none text-wit-muted">{trailing}</div>
+            <div className="flex shrink-0 items-center gap-2 text-sm leading-none text-[var(--color-muted)]">{trailing}</div>
           ) : null}
         </div>
       </div>
 
       {/* 2行目: アプリ名（言語切替より下に回らないよう常にこの順） */}
-      <h1 className="min-w-0 max-w-full break-words text-left text-xl font-black leading-tight tracking-tight text-wit-text sm:text-2xl">
-        <span className="text-wit-text">{titleEn}</span>
-        {locale === "ja" ? <span className="text-wit-muted">（{titleJa}）</span> : null}
+      <h1 className="min-w-0 max-w-full break-words text-left text-xl font-black leading-tight tracking-tight text-[var(--color-text)] sm:text-2xl">
+        <span className="text-[var(--color-text)]">{titleEn}</span>
+        {locale === "ja" ? <span className="text-[var(--color-muted)]">（{titleJa}）</span> : null}
       </h1>
     </header>
   );

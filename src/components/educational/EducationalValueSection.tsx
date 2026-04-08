@@ -30,18 +30,18 @@ export function EducationalValueSection({
       className="mx-auto w-full max-w-[1080px] px-4 py-6 pb-12"
       aria-label="このパズルの知育効果"
     >
-      <details className="group overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur">
-        <summary className="cursor-pointer list-none px-6 py-4 text-sm text-wit-muted transition-colors select-none hover:text-wit-text">
+      <details className="group overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] backdrop-blur">
+        <summary className="cursor-pointer list-none px-6 py-4 text-sm text-[var(--color-muted)] transition-colors select-none hover:text-[var(--color-text)]">
           <span className="font-medium">{summaryLabel}</span>
         </summary>
-        <div className="space-y-4 px-6 pb-6 pt-0 text-sm leading-relaxed text-wit-muted">
-          <div className="space-y-4 [&_h3]:mt-5 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-wit-text [&_h3]:first:mt-0 [&_p]:text-justify">
+        <div className="space-y-4 px-6 pb-6 pt-0 text-sm leading-relaxed text-[var(--color-muted)]">
+          <div className="space-y-4 [&_h3]:mt-5 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-[var(--color-text)] [&_h3]:first:mt-0 [&_p]:text-justify">
             {children}
           </div>
-          <p className="border-t border-white/10 pt-4 text-left">
+          <p className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pt-4 text-left">
             <Link
               href={columnHref}
-              className="text-sky-300 underline-offset-2 transition-colors hover:text-sky-200 hover:underline"
+              className="text-[var(--color-accent)] underline-offset-2 transition-colors hover:text-[var(--color-muted)] hover:underline"
             >
               {t("educational.sectionLink")}
             </Link>

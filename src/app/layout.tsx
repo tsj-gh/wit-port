@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
 import Footer from "@/components/Footer";
+import { SiteThemeProvider } from "@/components/SiteThemeProvider";
 import { I18nProvider } from "@/lib/i18n-context";
 import { UserSyncProvider } from "@/components/UserSyncProvider";
 
@@ -49,11 +50,16 @@ export default function RootLayout({
           </>
         )}
       </head>
-      <body className="min-h-screen flex flex-col overflow-x-hidden bg-gradient-to-br from-wit-bg to-wit-bg-2 text-wit-text font-sans antialiased">
+      <body className="relative flex min-h-screen flex-col overflow-x-hidden bg-[var(--color-bg)] font-sans text-[var(--color-text)] antialiased">
         <UserSyncProvider>
           <I18nProvider>
-            {children}
-            <Footer />
+            <SiteThemeProvider>
+              <div className="texture-overlay fixed inset-0 z-[5]" aria-hidden />
+              <div className="relative z-10 flex min-h-screen flex-1 flex-col">
+                {children}
+                <Footer />
+              </div>
+            </SiteThemeProvider>
           </I18nProvider>
         </UserSyncProvider>
       </body>

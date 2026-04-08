@@ -388,7 +388,7 @@ function TapRippleRing({
     >
       <motion.div
         layout={false}
-        className="absolute inset-0 rounded-full border border-white/12 shadow-[0_0_14px_rgba(255,255,255,0.06)]"
+        className="absolute inset-0 rounded-full border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] shadow-[0_0_14px_rgba(255,255,255,0.06)]"
         initial={{ scale: 1, opacity: 0.22 }}
         animate={{ scale: rippleMaxScale, opacity: 0 }}
         transition={{ duration: TAP_RIPPLE_DURATION_SEC, ease: TAP_RIPPLE_EASE }}
@@ -460,7 +460,7 @@ function PairLinkEndpointTapOverlay({
             className="absolute inset-0 rounded-full flex items-center justify-center shadow-sm"
             style={{ backgroundColor: color }}
           >
-            <span className="relative z-10 font-bold text-white drop-shadow-sm" style={{ fontSize: fontPx }}>
+            <span className="relative z-10 font-bold text-[var(--color-on-primary)] drop-shadow-sm" style={{ fontSize: fontPx }}>
               {tapFx.valStr}
             </span>
           </div>
@@ -1504,8 +1504,8 @@ export default function PairLinkGame() {
 
   if (loading || !numbers.length) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-wit-bg text-wit-text">
-        <p className="text-wit-muted">{loadingOverlayText}</p>
+      <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)] text-[var(--color-text)]">
+        <p className="text-[var(--color-muted)]">{loadingOverlayText}</p>
       </div>
     );
   }
@@ -1514,7 +1514,7 @@ export default function PairLinkGame() {
     <div className="mx-auto max-w-[1080px] w-full px-4 py-4">
       {isDevTj && lastPuzzleDebugInfo && !useLegacyMode && (
         <div
-          className="fixed left-4 bottom-4 z-40 rounded-lg border border-white/10 bg-black/70 px-2 py-1.5 text-[10px] font-mono text-slate-400"
+          className="fixed left-4 bottom-4 z-40 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_82%,var(--color-bg))] px-2 py-1.5 text-[10px] font-mono text-[var(--color-muted)]"
           aria-live="polite"
         >
           Source: {lastPuzzleDebugInfo.source === "insurance" ? "Insurance" : "Generated"} | Stock: {(gradeStockStatus[lastPuzzleDebugInfo.grade] ?? 0)}/{STOCK_PER_GRADE_MAX} | Score: {lastPuzzleDebugInfo.score ?? "—"} | Seed: {lastPuzzleDebugInfo.seed ? lastPuzzleDebugInfo.seed.slice(-12) : "—"}
@@ -1524,30 +1524,28 @@ export default function PairLinkGame() {
         <div className="fixed right-4 top-4 z-50">
           <button
             onClick={() => setIsDebugMode(true)}
-            className="px-2 py-1 rounded border border-white/20 text-xs font-mono"
-            style={{ background: "#334155" }}
+            className="rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_55%,var(--color-bg))] px-2 py-1 text-xs font-mono text-[var(--color-text)]"
           >
             DEBUG OFF
           </button>
         </div>
       )}
       {isDebugMode && (
-        <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono">
+        <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_88%,var(--color-bg))] p-3 text-left text-xs font-mono text-[var(--color-text)] shadow-lg backdrop-blur-md">
           <div className="flex items-center justify-between gap-2">
             {isDebugPanelExpanded && (
-              <span className="font-bold text-emerald-400 shrink-0">{t("games.pairLink.debugPanelTitle")}</span>
+              <span className="shrink-0 font-bold text-[var(--color-primary)]">{t("games.pairLink.debugPanelTitle")}</span>
             )}
-            <div className="flex items-center gap-1 shrink-0 ml-auto">
+            <div className="ml-auto flex shrink-0 items-center gap-1">
               <button
                 onClick={() => setIsDebugMode(false)}
-                className="px-2 py-1 rounded border border-white/20"
-                style={{ background: "#10b981" }}
+                className="rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[var(--color-primary)] px-2 py-1 text-[var(--color-on-primary)]"
               >
                 DEBUG ON
               </button>
               <button
                 onClick={() => setIsDebugPanelExpanded((v) => !v)}
-                className="p-1 rounded border border-white/20 hover:bg-white/10 text-white/80"
+                className="rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] p-1 text-[var(--color-muted)] hover:bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)]"
                 title={isDebugPanelExpanded ? t("common.closePanel") : t("common.openPanel")}
               >
                 {isDebugPanelExpanded ? "▲" : "▼"}
@@ -1556,12 +1554,12 @@ export default function PairLinkGame() {
           </div>
           {isDebugPanelExpanded && (
             <>
-              <label className="mt-2 flex items-center gap-2 cursor-pointer text-slate-400">
+              <label className="mt-2 flex items-center gap-2 cursor-pointer text-[var(--color-muted)]">
                 <input
                   type="checkbox"
                   checked={verboseConsoleLogs}
                   onChange={(e) => setVerboseConsoleLogs(e.target.checked)}
-                  className="rounded border-white/30"
+                  className="rounded border-[color-mix(in_srgb,var(--color-text)_30%,transparent)]"
                 />
                 <span className="text-[10px]">{t("games.pairLink.debugVerboseLog")}</span>
               </label>
@@ -1590,18 +1588,18 @@ export default function PairLinkGame() {
                     )
                   }
                   disabled={isPrefetching}
-                  className="px-2 py-0.5 rounded text-[10px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-2 py-0.5 rounded text-[10px] border border-[color-mix(in_srgb,var(--color-primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_12%,var(--color-bg))] text-[var(--color-primary)] hover:bg-[color-mix(in_srgb,var(--color-primary)_18%,var(--color-bg))] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   手動プリフェッチ実行
                 </button>
                 <button
                   onClick={() => refreshAds()}
-                  className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                  className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-[var(--color-accent)]/20 text-amber-400 hover:bg-[var(--color-accent)]/30"
                 >
                   フラッシュテスト
                 </button>
               </div>
-              <div className="mt-2 space-y-0.5 text-slate-400/90 text-[10px]">
+              <div className="mt-2 space-y-0.5 text-[var(--color-muted)]/90 text-[10px]">
                 <div>
                   プリフェッチ状態:{" "}
                   <span className={isPrefetching ? "text-amber-400" : ""}>
@@ -1634,8 +1632,8 @@ export default function PairLinkGame() {
                   </div>
                 )}
                 {lastProfile && Object.keys(lastProfile).length > 0 && (
-                  <div className="mt-1 pt-1 border-t border-white/10">
-                    <div className="font-semibold text-slate-300 mb-0.5">[累計内訳]（ループ全回分合計）</div>
+                  <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)]">
+                    <div className="font-semibold text-[var(--color-muted)] mb-0.5">[累計内訳]（ループ全回分合計）</div>
                     {Object.entries(lastProfile).map(([step, ms]) => {
                       const cn = ms > 100 ? "text-red-400 font-bold" : ms > 16.7 ? "text-amber-400" : "";
                       return (
@@ -1693,13 +1691,13 @@ export default function PairLinkGame() {
                     {adsRefreshState.refreshCount}
                   </span>
                 </div>
-                <div className="mt-1 pt-1 border-t border-white/10">
-                  <div className="font-semibold text-slate-300 mb-0.5">UIモード</div>
+                <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)]">
+                  <div className="font-semibold text-[var(--color-muted)] mb-0.5">UIモード</div>
                   <div className="flex flex-wrap gap-1 mt-0.5">
                     <button
                       onClick={() => setUseLegacyMode(false)}
                       className={`px-2 py-0.5 rounded text-[10px] border ${
-                        !useLegacyMode ? "border-emerald-500 bg-emerald-500/30 text-emerald-400" : "border-white/20 bg-black/40 text-slate-400 hover:bg-white/10"
+                        !useLegacyMode ? "border-emerald-500 bg-emerald-500/30 text-emerald-400" : "border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] text-[var(--color-muted)] hover:bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)]"
                       }`}
                     >
                       [グレード 1-11]
@@ -1707,15 +1705,15 @@ export default function PairLinkGame() {
                     <button
                       onClick={() => setUseLegacyMode(true)}
                       className={`px-2 py-0.5 rounded text-[10px] border ${
-                        useLegacyMode ? "border-emerald-500 bg-emerald-500/30 text-emerald-400" : "border-white/20 bg-black/40 text-slate-400 hover:bg-white/10"
+                        useLegacyMode ? "border-emerald-500 bg-emerald-500/30 text-emerald-400" : "border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] text-[var(--color-muted)] hover:bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)]"
                       }`}
                     >
                       [Size/Pairs レガシー]
                     </button>
                   </div>
-                  <div className="mt-1.5 pt-1 border-t border-white/10 space-y-1">
-                    <div className="font-semibold text-slate-300 text-[10px]">端点タップ演出</div>
-                    <label className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
+                  <div className="mt-1.5 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] space-y-1">
+                    <div className="font-semibold text-[var(--color-muted)] text-[10px]">端点タップ演出</div>
+                    <label className="flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--color-muted)]">
                       <span className="shrink-0">TAP_SCALE_FACTOR</span>
                       <input
                         type="range"
@@ -1730,33 +1728,33 @@ export default function PairLinkGame() {
                         }}
                         className="w-[min(140px,100%)] accent-emerald-500"
                       />
-                      <span className="tabular-nums text-slate-300 w-9 shrink-0">
+                      <span className="tabular-nums text-[var(--color-muted)] w-9 shrink-0">
                         {tapScaleFactor.toFixed(2)}
                       </span>
                       <button
                         type="button"
                         onClick={() => setTapScaleFactor(DEFAULT_TAP_SCALE_FACTOR)}
-                        className="px-1.5 py-0.5 rounded border border-white/20 text-slate-500 hover:bg-white/10"
+                        className="px-1.5 py-0.5 rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))] hover:bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)]"
                       >
                         既定
                       </button>
                     </label>
-                    <div className="text-[9px] text-slate-500 leading-snug">
+                    <div className="text-[9px] text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))] leading-snug">
                       波紋最大スケール（自動）:{" "}
-                      <span className="tabular-nums text-slate-400">{tapRippleMaxScale.toFixed(2)}</span>
-                      <span className="text-slate-600">
+                      <span className="tabular-nums text-[var(--color-muted)]">{tapRippleMaxScale.toFixed(2)}</span>
+                      <span className="text-[color-mix(in_srgb,var(--color-muted)_70%,var(--color-bg))]">
                         {" "}
                         · G{gridSize} / {canvasSize}px
                       </span>
                     </div>
                   </div>
                   {!useLegacyMode && (
-                    <div className="mt-0.5 text-[10px] text-slate-500 space-y-0.5">
+                    <div className="mt-0.5 text-[10px] text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))] space-y-0.5">
                       <div>
                         グレードストック: {Object.entries(gradeStockStatus).map(([g, n]) => `G${g}:${n}/${STOCK_PER_GRADE_MAX}`).join(" ")}
                       </div>
                       <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                        <span className="text-slate-400 shrink-0">
+                        <span className="text-[var(--color-muted)] shrink-0">
                           ストック空→保険まで Worker 累計(ms)
                         </span>
                         <input
@@ -1770,21 +1768,21 @@ export default function PairLinkGame() {
                             if (!Number.isFinite(n)) return;
                             setDebugWorkerInsuranceBudgetMs(Math.max(0, Math.min(120_000, Math.round(n))));
                           }}
-                          className="w-20 px-1 py-0.5 rounded bg-black/60 border border-white/20 text-slate-200 tabular-nums"
+                          className="w-20 px-1 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[color-mix(in_srgb,var(--color-text)_88%,var(--color-bg))] tabular-nums"
                           title={`プリフェッチ無しで Worker 試行がこの時間を超えたら保険アセットへ切替（既定 ${DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE}ms）`}
                         />
-                        <span className="text-slate-600">既定 {DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE}</span>
+                        <span className="text-[color-mix(in_srgb,var(--color-muted)_70%,var(--color-bg))]">既定 {DEFAULT_WORKER_PHASE_MAX_MS_BEFORE_INSURANCE}</span>
                       </div>
                       {lastPuzzleDebugInfo && (
-                        <div className="text-slate-400">
+                        <div className="text-[var(--color-muted)]">
                           Source: {lastPuzzleDebugInfo.source === "insurance" ? "Insurance" : "Generated"} | Score: {lastPuzzleDebugInfo.score ?? "—"} | Seed: {lastPuzzleDebugInfo.seed ?? "—"}
                         </div>
                       )}
                     </div>
                   )}
                 </div>
-                <div className="mt-1 pt-1 border-t border-white/10">
-                  <div className="font-semibold text-slate-300 mb-0.5">生成モード</div>
+                <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)]">
+                  <div className="font-semibold text-[var(--color-muted)] mb-0.5">生成モード</div>
                   <div className="flex flex-wrap gap-1 mt-0.5">
                     {(["default", "edgeSwap"] as const).map((m) => (
                       <button
@@ -1793,7 +1791,7 @@ export default function PairLinkGame() {
                         className={`px-2 py-0.5 rounded text-[10px] border ${
                           debugGenerationMode === m
                             ? "border-emerald-500 bg-emerald-500/30 text-emerald-400"
-                            : "border-white/20 bg-black/40 text-slate-400 hover:bg-white/10"
+                            : "border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] text-[var(--color-muted)] hover:bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)]"
                         }`}
                       >
                         {m === "default" ? "[Default]" : "[Edge-Swap]"}
@@ -1802,13 +1800,13 @@ export default function PairLinkGame() {
                   </div>
                   <div className="mt-1 space-y-1 text-[10px]">
                     <div className="flex items-center gap-1">
-                      <span className="text-slate-400 shrink-0 w-28">生成盤面のScore閾値（Default 10）</span>
+                      <span className="text-[var(--color-muted)] shrink-0 w-28">生成盤面のScore閾値（Default 10）</span>
                       <input
                         type="number"
                         min={-1}
                         value={scoreThresholdDraft}
                         onChange={(e) => setScoreThresholdDraft(Number(e.target.value))}
-                        className="w-16 px-1 py-0.5 rounded bg-black/60 border border-white/20 text-slate-200"
+                        className="w-16 px-1 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[color-mix(in_srgb,var(--color-text)_88%,var(--color-bg))]"
                       />
                       <button
                         type="button"
@@ -1818,20 +1816,20 @@ export default function PairLinkGame() {
                         反映
                       </button>
                     </div>
-                    <div className="flex gap-3 text-slate-400">
+                    <div className="flex gap-3 text-[var(--color-muted)]">
                       <span>生成リトライ回数: {lastAttempts != null ? lastAttempts : "—"}</span>
                       <span>生成所要時間: {lastTotalMs != null ? `${lastTotalMs} ms` : "—"}</span>
                     </div>
                   </div>
                   {debugGenerationMode === "edgeSwap" && (
                     <>
-                      <div className="mt-1 pt-1 border-t border-white/10">
+                      <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)]">
                         <button
                           type="button"
                           onClick={() => setEdgeSwapConstantsPanelOpen((o) => !o)}
-                          className="flex items-center gap-1 w-full text-left font-semibold text-slate-300 text-[10px] py-0.5 hover:text-white/90"
+                          className="flex items-center gap-1 w-full text-left font-semibold text-[var(--color-muted)] text-[10px] py-0.5 hover:text-[var(--color-on-primary)]/90"
                         >
-                          <span className="tabular-nums w-3 text-slate-500">
+                          <span className="tabular-nums w-3 text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))]">
                             {edgeSwapConstantsPanelOpen ? "▼" : "▶"}
                           </span>
                           Edge Swap定数
@@ -1839,7 +1837,7 @@ export default function PairLinkGame() {
                         {edgeSwapConstantsPanelOpen && (
                           <div className="mt-1 space-y-1 pl-1 text-[10px]">
                             <div className="flex items-center gap-1 flex-wrap">
-                              <span className="text-slate-400 shrink-0 w-[10.5rem]">目標件数（囲い込み）</span>
+                              <span className="text-[var(--color-muted)] shrink-0 w-[10.5rem]">目標件数（囲い込み）</span>
                               <input
                                 type="range"
                                 min={0}
@@ -1849,13 +1847,13 @@ export default function PairLinkGame() {
                                 onChange={(e) => setDebugTargetEnclosureCount(Number(e.target.value))}
                                 className="flex-1 max-w-24"
                               />
-                              <span className="tabular-nums w-6 text-slate-300">
+                              <span className="tabular-nums w-6 text-[var(--color-muted)]">
                                 {debugTargetEnclosureCount}
                               </span>
                             </div>
                             {EDGE_SWAP_SCORE_FIELDS.map((f) => (
                               <div key={f.key} className="flex items-center gap-1 flex-wrap">
-                                <span className="text-slate-400 shrink-0 w-[10.5rem]">{f.label}</span>
+                                <span className="text-[var(--color-muted)] shrink-0 w-[10.5rem]">{f.label}</span>
                                 <input
                                   type="number"
                                   min={f.min}
@@ -1868,7 +1866,7 @@ export default function PairLinkGame() {
                                       [f.key]: Number(e.target.value),
                                     }))
                                   }
-                                  className="w-[4.5rem] px-1 py-0.5 rounded bg-black/60 border border-white/20 text-slate-200"
+                                  className="w-[4.5rem] px-1 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[color-mix(in_srgb,var(--color-text)_88%,var(--color-bg))]"
                                 />
                               </div>
                             ))}
@@ -1881,7 +1879,7 @@ export default function PairLinkGame() {
                             >
                               変更を反映
                             </button>
-                            <p className="text-[9px] text-slate-500 leading-snug">
+                            <p className="text-[9px] text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))] leading-snug">
                               隣接率の第3しきい値 0.45 および段階ペナルティ額（200 / 1000 / 5000+）は
                               worker 固定です。
                             </p>
@@ -1894,12 +1892,12 @@ export default function PairLinkGame() {
                 {isDevTj && (
                   <>
                     <DevDebugUserStats />
-                    <div className="mt-1 pt-1 border-t border-white/10 space-y-1">
-                      <div className="font-semibold text-slate-300">進捗同期</div>
+                    <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] space-y-1">
+                      <div className="font-semibold text-[var(--color-muted)]">進捗同期</div>
                       <div className="flex items-center gap-1">
-                        <span className="text-slate-400 shrink-0">anon_id:</span>
+                        <span className="text-[var(--color-muted)] shrink-0">anon_id:</span>
                         <code
-                          className="text-[9px] truncate max-w-[120px] bg-black/40 px-1 rounded"
+                          className="text-[9px] truncate max-w-[120px] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] px-1 rounded"
                           title={userSync?.anonId ?? ""}
                         >
                           {userSync?.anonId ?? "—"}
@@ -1907,18 +1905,18 @@ export default function PairLinkGame() {
                         <button
                           type="button"
                           onClick={() => userSync?.syncNow()}
-                          className="px-1 py-0.5 rounded text-[9px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30"
+                          className="px-1 py-0.5 rounded text-[9px] border border-[color-mix(in_srgb,var(--color-primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_12%,var(--color-bg))] text-[var(--color-primary)] hover:bg-[color-mix(in_srgb,var(--color-primary)_18%,var(--color-bg))]"
                         >
                           同期
                         </button>
                       </div>
                     </div>
-                    <div className="mt-1 pt-1 border-t border-white/10 space-y-1">
-                      <div className="font-semibold text-slate-300">シード（再現用）</div>
+                    <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] space-y-1">
+                      <div className="font-semibold text-[var(--color-muted)]">シード（再現用）</div>
                       <div className="flex items-center gap-1">
-                        <span className="text-slate-400 shrink-0">Current Hash:</span>
+                        <span className="text-[var(--color-muted)] shrink-0">Current Hash:</span>
                         <code
-                          className="text-[9px] truncate max-w-[140px] bg-black/40 px-1 rounded"
+                          className="text-[9px] truncate max-w-[140px] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] px-1 rounded"
                           title={currentSeed ?? ""}
                         >
                           {currentSeed ?? "—"}
@@ -1931,21 +1929,21 @@ export default function PairLinkGame() {
                             }
                           }}
                           disabled={!currentSeed}
-                          className="px-1 py-0.5 rounded text-[9px] border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-1 py-0.5 rounded text-[9px] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text)_20%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           コピー
                         </button>
                       </div>
                     </div>
-                    <div className="mt-1 pt-1 border-t border-white/10">
+                    <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)]">
                       <div className="flex items-center gap-1 flex-wrap">
-                        <span className="text-slate-400 shrink-0">Input Hash:</span>
+                        <span className="text-[var(--color-muted)] shrink-0">Input Hash:</span>
                         <input
                           type="text"
                           value={hashInput}
                           onChange={(e) => setHashInput(e.target.value)}
                           placeholder="ハッシュを入力"
-                          className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+                          className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[color-mix(in_srgb,var(--color-text)_88%,var(--color-bg))]"
                         />
                         <button
                           type="button"
@@ -1966,24 +1964,24 @@ export default function PairLinkGame() {
                         </button>
                       </div>
                     </div>
-                    <div className="mt-1 pt-1 border-t border-white/10">
+                    <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)]">
                       <button
                         type="button"
                         onClick={() => setLegacyDebugPanelOpen((o) => !o)}
-                        className="flex items-center gap-1 w-full text-left font-semibold text-slate-300 text-[10px] py-0.5 hover:text-white/90"
+                        className="flex items-center gap-1 w-full text-left font-semibold text-[var(--color-muted)] text-[10px] py-0.5 hover:text-[var(--color-on-primary)]/90"
                       >
-                        <span className="tabular-nums w-3 text-slate-500">
+                        <span className="tabular-nums w-3 text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))]">
                           {legacyDebugPanelOpen ? "▼" : "▶"}
                         </span>
                         過去の情報（Default 生成・ABC 等）
                       </button>
                       {legacyDebugPanelOpen && (
                         <>
-                          <div className="mt-1 pt-1 border-t border-white/10">
-                            <div className="font-semibold text-slate-300">評価関数パラメータ</div>
+                          <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)]">
+                            <div className="font-semibold text-[var(--color-muted)]">評価関数パラメータ</div>
                             <div className="space-y-1 mt-0.5 text-[10px]">
                               <div className="flex items-center gap-1">
-                                <span className="text-slate-400 shrink-0 w-32">Empty Isolated:</span>
+                                <span className="text-[var(--color-muted)] shrink-0 w-32">Empty Isolated:</span>
                                 <input
                                   type="range"
                                   min={0}
@@ -1996,7 +1994,7 @@ export default function PairLinkGame() {
                                 <span className="tabular-nums w-6">{configEmptyIsolatedPenalty}</span>
                               </div>
                               <div className="flex items-center gap-1">
-                                <span className="text-slate-400 shrink-0 w-32">Detour Weight:</span>
+                                <span className="text-[var(--color-muted)] shrink-0 w-32">Detour Weight:</span>
                                 <input
                                   type="range"
                                   min={0}
@@ -2009,7 +2007,7 @@ export default function PairLinkGame() {
                                 <span className="tabular-nums w-8">{configDetourWeight.toFixed(1)}</span>
                               </div>
                               <div className="flex items-center gap-1">
-                                <span className="text-slate-400 shrink-0 w-32">Base Threshold:</span>
+                                <span className="text-[var(--color-muted)] shrink-0 w-32">Base Threshold:</span>
                                 <input
                                   type="range"
                                   min={0}
@@ -2025,10 +2023,10 @@ export default function PairLinkGame() {
                               </div>
                             </div>
                           </div>
-                          <div className="mt-1 pt-1 border-t border-white/10">
-                            <div className="font-semibold text-slate-300">一意解限界調査</div>
+                          <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)]">
+                            <div className="font-semibold text-[var(--color-muted)]">一意解限界調査</div>
                             <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                              <label className="text-slate-400 text-[10px] shrink-0">Grid:</label>
+                              <label className="text-[var(--color-muted)] text-[10px] shrink-0">Grid:</label>
                               <input
                                 type="number"
                                 min={4}
@@ -2040,9 +2038,9 @@ export default function PairLinkGame() {
                                   const maxP = v >= 7 ? 10 : v;
                                   setDebugNumPairs((p) => Math.min(p, maxP));
                                 }}
-                                className="w-12 px-1 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+                                className="w-12 px-1 py-0.5 rounded text-[10px] bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[color-mix(in_srgb,var(--color-text)_88%,var(--color-bg))]"
                               />
-                              <label className="text-slate-400 text-[10px] shrink-0">Pairs:</label>
+                              <label className="text-[var(--color-muted)] text-[10px] shrink-0">Pairs:</label>
                               <input
                                 type="number"
                                 min={2}
@@ -2059,19 +2057,19 @@ export default function PairLinkGame() {
                                     )
                                   )
                                 }
-                                className="w-12 px-1 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+                                className="w-12 px-1 py-0.5 rounded text-[10px] bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[color-mix(in_srgb,var(--color-text)_88%,var(--color-bg))]"
                               />
                               <button
                                 type="button"
                                 onClick={runTest10}
                                 disabled={test10Running}
-                                className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-[var(--color-accent)]/20 text-amber-400 hover:bg-[var(--color-accent)]/30 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {test10Running ? "実行中..." : "Test 10 Runs"}
                               </button>
                             </div>
                             {test10Result && (
-                              <div className="mt-0.5 text-[10px] text-slate-400">
+                              <div className="mt-0.5 text-[10px] text-[var(--color-muted)]">
                                 <span>成功: {test10Result.success}/10</span>
                                 <span className="ml-2">平均: {test10Result.avgMs}ms</span>
                                 {test10Result.lastAbc && (
@@ -2084,9 +2082,9 @@ export default function PairLinkGame() {
                               </div>
                             )}
                           </div>
-                          <div className="mt-1 pt-1 border-t border-white/10">
-                            <div className="font-semibold text-slate-300">ABC スコア</div>
-                            <div className="space-y-0.5 text-slate-400/90">
+                          <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)]">
+                            <div className="font-semibold text-[var(--color-muted)]">ABC スコア</div>
+                            <div className="space-y-0.5 text-[var(--color-muted)]/90">
                               <div>
                                 A. 迂回率:{" "}
                                 <span className="tabular-nums text-amber-400">
@@ -2110,12 +2108,12 @@ export default function PairLinkGame() {
                               type="button"
                               onClick={runBatch100}
                               disabled={batch100Running}
-                              className="mt-1 px-2 py-0.5 rounded text-[10px] border border-violet-500/50 bg-violet-500/20 text-violet-400 hover:bg-violet-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="mt-1 px-2 py-0.5 rounded text-[10px] border border-violet-500/50 bg-[var(--color-primary)]/20 text-violet-400 hover:bg-[var(--color-primary)]/30 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {batch100Running ? "計測中..." : "100回生成 & 計測"}
                             </button>
                             {batch100Result && (
-                              <pre className="mt-1 p-1 rounded bg-black/40 text-[9px] text-slate-300 whitespace-pre-wrap max-h-24 overflow-y-auto">
+                              <pre className="mt-1 p-1 rounded bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] text-[9px] text-[var(--color-muted)] whitespace-pre-wrap max-h-24 overflow-y-auto">
                                 {batch100Result}
                               </pre>
                             )}
@@ -2132,8 +2130,8 @@ export default function PairLinkGame() {
                     <button
                       key={label}
                       onClick={() => setForcedWidth(value)}
-                      className={`px-2 py-0.5 rounded text-[10px] border border-white/20 transition-colors ${
-                        forcedWidth === value ? "bg-emerald-600/80 border-emerald-400" : "bg-black/60 hover:bg-white/10"
+                      className={`px-2 py-0.5 rounded text-[10px] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] transition-colors ${
+                        forcedWidth === value ? "bg-emerald-600/80 border-emerald-400" : "bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] hover:bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)]"
                       }`}
                     >
                       {label}
@@ -2159,7 +2157,7 @@ export default function PairLinkGame() {
           trailing={
             <>
               <span className="tabular-nums">{formatTime(timeSeconds)}</span>
-              {solved && <span className="text-wit-emerald">{t("games.pairLink.clear")}</span>}
+              {solved && <span className="text-[var(--color-primary)]">{t("games.pairLink.clear")}</span>}
             </>
           }
         />
@@ -2171,21 +2169,21 @@ export default function PairLinkGame() {
         <PairLinkAdSlot slotIndex={1} isDebugMode={isDebugMode} />
       </div>
 
-      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
+      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
         <div className="flex w-full flex-col items-center">
-          <div className="mb-2 w-full text-sm font-semibold text-wit-text">
+          <div className="mb-2 w-full text-sm font-semibold text-[var(--color-text)]">
             <span>{statusDisplay}</span>
           </div>
           <div
             className="w-full touch-none select-none"
             style={{ minHeight: canvasSize, WebkitTapHighlightColor: "transparent" }}
           >
-            <div className="relative w-full max-w-[500px] mx-auto border-2 border-slate-600 rounded-xl shadow-lg overflow-hidden bg-slate-900">
+            <div className="relative w-full max-w-[500px] mx-auto border-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] rounded-xl shadow-lg overflow-hidden bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))]">
               <canvas
                 ref={attachCanvasRef}
                 width={canvasSize}
                 height={canvasSize}
-                className="w-full h-auto cursor-crosshair block align-top bg-slate-900"
+                className="w-full h-auto cursor-crosshair block align-top bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))]"
                 style={{ touchAction: "none" }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
@@ -2213,7 +2211,7 @@ export default function PairLinkGame() {
           {useLegacyMode ? (
             <>
               <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
-                <label className="block text-xs text-wit-muted mb-1">Grid Size</label>
+                <label className="block text-xs text-[var(--color-muted)] mb-1">Grid Size</label>
                 <div
                   className="flex w-full min-w-0 overflow-x-auto gap-2 py-1 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
                   style={{ WebkitOverflowScrolling: "touch" }}
@@ -2239,8 +2237,8 @@ export default function PairLinkGame() {
                         }}
                         className={`shrink-0 snap-center whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${
                           isActive
-                            ? "bg-sky-600 text-white border border-sky-500"
-                            : "bg-slate-800 text-wit-text border border-slate-600 hover:bg-slate-700"
+                            ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] border border-[var(--color-primary)]"
+                            : "bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] text-[var(--color-text)] border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]"
                         }`}
                       >
                         {n}×{n}
@@ -2250,7 +2248,7 @@ export default function PairLinkGame() {
                 </div>
               </div>
               <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
-                <label className="block text-xs text-wit-muted mb-1">Number of Pairs</label>
+                <label className="block text-xs text-[var(--color-muted)] mb-1">Number of Pairs</label>
                 <div
                   className="flex w-full min-w-0 overflow-x-auto gap-2 py-1 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
                   style={{ WebkitOverflowScrolling: "touch" }}
@@ -2266,8 +2264,8 @@ export default function PairLinkGame() {
                         onClick={() => setSettingsNumPairs(n)}
                         className={`shrink-0 snap-center whitespace-nowrap px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${
                           isActive
-                            ? "bg-sky-600 text-white border border-sky-500"
-                            : "bg-slate-800 text-wit-text border border-slate-600 hover:bg-slate-700"
+                            ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] border border-[var(--color-primary)]"
+                            : "bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] text-[var(--color-text)] border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]"
                         }`}
                       >
                         {n}
@@ -2283,7 +2281,7 @@ export default function PairLinkGame() {
                     initGame(settingsGridSize, settingsNumPairs);
                   }}
                   disabled={loading}
-                  className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg bg-[var(--color-primary)] text-[var(--color-on-primary)] text-sm font-medium hover:brightness-95 disabled:opacity-50"
                 >
                   {t("games.pairLink.newPuzzleLegacy")}
                 </button>
@@ -2295,7 +2293,7 @@ export default function PairLinkGame() {
                         clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)
                       )
                     }
-                    className="px-4 py-2 rounded-lg bg-slate-600 text-slate-200 text-sm font-medium hover:bg-slate-500"
+                    className="px-4 py-2 rounded-lg bg-[color-mix(in_srgb,var(--color-text)_65%,var(--color-bg))] text-[var(--color-on-primary)] text-sm font-medium hover:brightness-95"
                     title={`${settingsGridSize}×${clampPairCount(settingsGridSize, settingsNumPairs, debugGenerationMode)} のストックを削除（プリフェッチ中もキャンセル）`}
                   >
                     （debug）ストックを削除
@@ -2306,7 +2304,7 @@ export default function PairLinkGame() {
           ) : (
             <>
               <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
-                <label className="block text-xs text-wit-muted mb-1">{t("common.chooseGrade")}</label>
+                <label className="block text-xs text-[var(--color-muted)] mb-1">{t("common.chooseGrade")}</label>
                 <div
                   className="flex w-full min-w-0 overflow-x-auto gap-2 py-1 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
                   style={{ WebkitOverflowScrolling: "touch" }}
@@ -2324,8 +2322,8 @@ export default function PairLinkGame() {
                         }}
                         className={`shrink-0 snap-center whitespace-nowrap px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${
                           isActive
-                            ? "bg-sky-600 text-white border border-sky-500"
-                            : "bg-slate-800 text-wit-text border border-slate-600 hover:bg-slate-700"
+                            ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] border border-[var(--color-primary)]"
+                            : "bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] text-[var(--color-text)] border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]"
                         }`}
                         title={g.theme}
                       >
@@ -2342,7 +2340,7 @@ export default function PairLinkGame() {
                     initGameByGrade(currentGrade);
                   }}
                   disabled={loading}
-                  className="px-4 py-2 rounded-lg bg-wit-emerald text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg bg-[var(--color-primary)] text-[var(--color-on-primary)] text-sm font-medium hover:brightness-95 disabled:opacity-50"
                 >
                   {t("games.pairLink.nextPuzzle")}
                 </button>
@@ -2358,35 +2356,35 @@ export default function PairLinkGame() {
           <PairLinkAdSlot slotIndex={2} isDebugMode={isDebugMode} />
         </div>
         {!useLegacyMode && GRADE_MAP.get(currentGrade) && (
-          <p className="mx-auto mt-3 w-full px-1 text-center text-xs text-wit-muted">
+          <p className="mx-auto mt-3 w-full px-1 text-center text-xs text-[var(--color-muted)]">
             {GRADE_MAP.get(currentGrade)!.theme}
           </p>
         )}
-        <p className="mt-3 text-xs text-wit-muted">{t("games.pairLink.ruleHint")}</p>
+        <p className="mt-3 text-xs text-[var(--color-muted)]">{t("games.pairLink.ruleHint")}</p>
       </section>
         </div>
 
       {showClearOverlay && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,var(--color-text)_32%,transparent)]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="clear-title"
         >
-          <div className="rounded-2xl p-8 bg-slate-800 border border-slate-600 text-center shadow-2xl max-w-sm mx-4">
+          <div className="rounded-2xl p-8 bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] text-center shadow-2xl max-w-sm mx-4">
             <h2
               id="clear-title"
-              className="text-2xl font-bold text-wit-emerald mb-2"
+              className="text-2xl font-bold text-[var(--color-primary)] mb-2"
             >
               Perfect!
             </h2>
-            <p className="text-wit-muted mb-4">
+            <p className="text-[var(--color-muted)] mb-4">
               {t("games.pairLink.clearSolved").replace("{time}", formatTime(timeSeconds))}
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               <button
                 onClick={() => setShowClearOverlay(false)}
-                className="px-6 py-3 rounded-lg bg-slate-700 text-wit-text font-medium hover:bg-slate-600"
+                className="px-6 py-3 rounded-lg bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))] text-[var(--color-text)] font-medium hover:brightness-95"
               >
                 {t("games.pairLink.back")}
               </button>
@@ -2400,7 +2398,7 @@ export default function PairLinkGame() {
                     initGameByGrade(currentGrade);
                   }
                 }}
-                className="px-6 py-3 rounded-lg bg-wit-emerald text-white font-medium hover:bg-emerald-600"
+                className="px-6 py-3 rounded-lg bg-[var(--color-primary)] text-[var(--color-on-primary)] font-medium hover:brightness-95"
               >
                 {t("games.pairLink.continueNext")}
               </button>

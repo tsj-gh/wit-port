@@ -358,8 +358,8 @@ export default function SkyscraperGame() {
 
   if (loading || !clues) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-wit-bg text-wit-text">
-        <p className="text-wit-muted">{t("games.skyscraper.loadPuzzle")}</p>
+      <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)] text-[var(--color-text)]">
+        <p className="text-[var(--color-muted)]">{t("games.skyscraper.loadPuzzle")}</p>
       </div>
     );
   }
@@ -371,30 +371,30 @@ export default function SkyscraperGame() {
           <button
             type="button"
             onClick={() => setIsDebugMode(true)}
-            className="rounded border border-white/20 px-2 py-1 font-mono text-xs"
-            style={{ background: "#334155" }}
+            className="rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_55%,var(--color-bg))] px-2 py-1 font-mono text-xs text-[var(--color-text)]"
           >
             DEBUG OFF
           </button>
         </div>
       )}
       {isDevTj && isDebugMode && (
-        <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-left text-xs font-mono">
+        <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_88%,var(--color-bg))] p-3 text-left text-xs font-mono text-[var(--color-text)] shadow-lg backdrop-blur-md">
           <div className="mb-2 flex items-center justify-between gap-2">
-            {isDebugPanelExpanded && <span className="font-bold text-emerald-400">{t("games.skyscraper.debugPanel")}</span>}
+            {isDebugPanelExpanded && (
+              <span className="font-bold text-[var(--color-primary)]">{t("games.skyscraper.debugPanel")}</span>
+            )}
             <div className="ml-auto flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => setIsDebugMode(false)}
-                className="rounded border border-white/20 px-2 py-1"
-                style={{ background: "#10b981" }}
+                className="rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[var(--color-primary)] px-2 py-1 text-[var(--color-on-primary)]"
               >
                 DEBUG ON
               </button>
               <button
                 type="button"
                 onClick={() => setIsDebugPanelExpanded((v) => !v)}
-                className="rounded border border-white/20 p-1 text-white/80"
+                className="rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] p-1 text-[var(--color-muted)]"
                 aria-expanded={isDebugPanelExpanded}
               >
                 {isDebugPanelExpanded ? "▲" : "▼"}
@@ -402,58 +402,64 @@ export default function SkyscraperGame() {
             </div>
           </div>
           {isDebugPanelExpanded && (
-          <div className="space-y-2 text-[10px] text-slate-400/90">
+          <div className="space-y-2 text-[10px] text-[var(--color-muted)]/90">
             <DevDebugUserStats />
             <div className="flex flex-wrap gap-1">
               <button
                 onClick={() => triggerDebugSolve()}
                 disabled={solved || !clues}
-                className="px-2 py-0.5 rounded text-[9px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-2 py-0.5 rounded text-[9px] border border-[color-mix(in_srgb,var(--color-primary)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_12%,var(--color-bg))] text-[var(--color-primary)] hover:bg-[color-mix(in_srgb,var(--color-primary)_18%,var(--color-bg))] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t("games.skyscraper.debugForceClear")}
               </button>
             </div>
             <div className="flex items-center gap-1">
               <span className="shrink-0">anon_id:</span>
-              <code className="text-[9px] truncate max-w-[120px] bg-black/40 px-1 rounded" title={userSync?.anonId ?? ""}>
+              <code
+                className="text-[9px] truncate max-w-[120px] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] px-1 rounded text-[var(--color-muted)]"
+                title={userSync?.anonId ?? ""}
+              >
                 {userSync?.anonId ?? "—"}
               </code>
               <button
                 onClick={() => userSync?.syncNow()}
-                className="px-1 py-0.5 rounded text-[9px] border border-sky-500/50 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30"
+                className="px-1 py-0.5 rounded text-[9px] border border-[color-mix(in_srgb,var(--color-primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_12%,var(--color-bg))] text-[var(--color-primary)] hover:bg-[color-mix(in_srgb,var(--color-primary)_18%,var(--color-bg))]"
               >
                 {t("games.skyscraper.sync")}
               </button>
             </div>
             <div className="flex items-center gap-1">
               <span className="shrink-0">Current Hash:</span>
-              <code className="text-[9px] truncate max-w-[140px] bg-black/40 px-1 rounded" title={currentSeed ?? ""}>
+              <code
+                className="text-[9px] truncate max-w-[140px] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] px-1 rounded text-[var(--color-muted)]"
+                title={currentSeed ?? ""}
+              >
                 {currentSeed ?? "—"}
               </code>
               <button
                 onClick={() => currentSeed && navigator.clipboard?.writeText(currentSeed)}
                 disabled={!currentSeed}
-                className="px-1 py-0.5 rounded text-[9px] border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50"
+                className="px-1 py-0.5 rounded text-[9px] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text)_20%,transparent)] disabled:opacity-50"
               >
                 {t("games.skyscraper.copy")}
               </button>
             </div>
             <div>
-              <span className="shrink-0 text-slate-500">Random Sequence ID:</span>{" "}
+              <span className="shrink-0 text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))]">Random Sequence ID:</span>{" "}
               <span className="tabular-nums">{randomSequenceId ?? "—"}</span>
             </div>
             <div>
-              <span className="shrink-0 text-slate-500">Core Grid Hash:</span>{" "}
+              <span className="shrink-0 text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))]">Core Grid Hash:</span>{" "}
               <code className="text-[9px] truncate max-w-[120px] block">{coreGridHash ?? "—"}</code>
             </div>
-            <div className="flex items-center gap-1 flex-wrap pt-1 border-t border-white/10">
+            <div className="flex items-center gap-1 flex-wrap pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)]">
               <span className="shrink-0">Input Hash:</span>
               <input
                 type="text"
                 value={hashInput}
                 onChange={(e) => setHashInput(e.target.value)}
                 placeholder={t("games.skyscraper.hashPlaceholder")}
-                className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+                className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-[color-mix(in_srgb,var(--color-surface)_35%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-text)]"
               />
               <button
                 onClick={() => {
@@ -461,7 +467,7 @@ export default function SkyscraperGame() {
                   if (s) loadPuzzle(n, difficulty, s);
                 }}
                 disabled={!hashInput.trim() || loading}
-                className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50"
+                className="px-2 py-0.5 rounded text-[10px] border border-[color-mix(in_srgb,var(--color-primary)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_12%,var(--color-bg))] text-[var(--color-primary)] hover:bg-[color-mix(in_srgb,var(--color-primary)_18%,var(--color-bg))] disabled:opacity-50"
               >
                 {t("games.skyscraper.genFromHash")}
               </button>
@@ -477,7 +483,7 @@ export default function SkyscraperGame() {
         trailing={
           <>
             <span className="tabular-nums">{formatTime(timeSeconds)}</span>
-            {solved && <span className="text-wit-emerald">{t("games.skyscraper.clearBanner")}</span>}
+            {solved && <span className="text-[var(--color-primary)]">{t("games.skyscraper.clearBanner")}</span>}
           </>
         }
       />
@@ -486,7 +492,7 @@ export default function SkyscraperGame() {
         <SkyscraperAdSlot slotIndex={1} isDebugMode={isDebugMode} />
       </div>
 
-      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
+      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
         <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
           <div className="flex flex-col gap-2 items-center">
             <div className="grid gap-1 justify-items-center" style={{ gridTemplateColumns: `repeat(${n + 2}, auto)` }}>
@@ -494,7 +500,7 @@ export default function SkyscraperGame() {
               {clues.top.map((v, i) => (
                 <div
                   key={`t-${i}`}
-                  className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-wit-muted font-semibold text-sm"
+                  className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-[var(--color-muted)] font-semibold text-sm"
                 >
                   {v ?? "—"}
                 </div>
@@ -507,14 +513,14 @@ export default function SkyscraperGame() {
                 {clues.left.map((v, i) => (
                   <div
                     key={`l-${i}`}
-                    className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-wit-muted font-semibold text-sm"
+                    className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-[var(--color-muted)] font-semibold text-sm"
                   >
                     {v ?? "—"}
                   </div>
                 ))}
               </div>
               <div
-                className={`border-2 border-slate-600 rounded-xl overflow-hidden transition-opacity duration-200 ${isRewinding ? "opacity-50" : "opacity-100"}`}
+                className={`border-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] rounded-xl overflow-hidden transition-opacity duration-200 ${isRewinding ? "opacity-50" : "opacity-100"}`}
                 style={{ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)` }}
               >
                 {Array.from({ length: n * n }, (_, i) => {
@@ -529,10 +535,10 @@ export default function SkyscraperGame() {
                       key={`${r}-${c}`}
                       role="button"
                       tabIndex={0}
-                      className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center border border-slate-600 cursor-pointer font-bold text-base sm:text-lg select-none touch-none
-                        ${solved ? "cursor-default bg-slate-700/50" : "hover:bg-slate-700/50"}
-                        ${val ? "text-wit-text" : "text-slate-500"}
-                        ${isMaybe ? "text-slate-400" : ""}
+                      className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] cursor-pointer font-bold text-base sm:text-lg select-none touch-none
+                        ${solved ? "cursor-default bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]/50" : "hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]/50"}
+                        ${val ? "text-[var(--color-text)]" : "text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))]"}
+                        ${isMaybe ? "text-[var(--color-muted)]" : ""}
                         ${isPin ? "relative after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-0 after:h-0 after:border-l-[5px] after:border-r-[5px] after:border-l-transparent after:border-r-transparent after:border-t-[8px] after:border-t-amber-600" : ""}`}
                       style={
                         val
@@ -600,7 +606,7 @@ export default function SkyscraperGame() {
                 {clues.right.map((v, i) => (
                   <div
                     key={`r-${i}`}
-                    className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-wit-muted font-semibold text-sm"
+                    className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-[var(--color-muted)] font-semibold text-sm"
                   >
                     {v ?? "—"}
                   </div>
@@ -613,7 +619,7 @@ export default function SkyscraperGame() {
               {clues.bottom.map((v, i) => (
                 <div
                   key={`b-${i}`}
-                  className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-wit-muted font-semibold text-sm"
+                  className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-[var(--color-muted)] font-semibold text-sm"
                 >
                   {v ?? "—"}
                 </div>
@@ -623,26 +629,26 @@ export default function SkyscraperGame() {
           </div>
 
           <div className="flex flex-col gap-2 items-center maybe-panel">
-            <span className="text-sm text-wit-muted font-medium">{t("games.skyscraper.maybeLabel")}</span>
+            <span className="text-sm text-[var(--color-muted)] font-medium">{t("games.skyscraper.maybeLabel")}</span>
             <div className="flex flex-col gap-2">
               <button
                 onClick={handleMaybeEnter}
                 disabled={solved || maybeMode}
-                className="px-4 py-2 rounded-lg bg-amber-600/80 text-white text-sm font-medium hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 rounded-lg bg-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-primary))] text-[var(--color-on-primary)] text-sm font-medium hover:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t("games.skyscraper.maybeEnter")}
               </button>
               <button
                 onClick={handleMaybeConfirm}
                 disabled={!maybeMode}
-                className="px-4 py-2 rounded-lg bg-slate-700 border border-slate-600 text-wit-text text-sm hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 rounded-lg bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] text-[var(--color-text)] text-sm hover:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t("games.skyscraper.maybeConfirm")}
               </button>
               <button
                 onClick={handleMaybeRewind}
                 disabled={!maybeMode}
-                className="px-4 py-2 rounded-lg bg-slate-700 border border-slate-600 text-wit-text text-sm hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 rounded-lg bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] text-[var(--color-text)] text-sm hover:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t("games.skyscraper.maybeRewind")}
               </button>
@@ -650,13 +656,13 @@ export default function SkyscraperGame() {
           </div>
         </div>
 
-        <div className="mt-3 min-h-[1.5em] text-center text-sm font-medium text-wit-muted">{statusDisplay}</div>
+        <div className="mt-3 min-h-[1.5em] text-center text-sm font-medium text-[var(--color-muted)]">{statusDisplay}</div>
       </section>
 
-      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-3 backdrop-blur sm:px-5 sm:pb-5 sm:pt-3">
+      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-3 backdrop-blur sm:px-5 sm:pb-5 sm:pt-3">
         <div className="flex w-full min-w-0 flex-col gap-4">
           <div className="w-full min-w-0">
-            <label className="mb-1 block text-xs text-wit-muted">{t("games.skyscraper.sizeLabel")}</label>
+            <label className="mb-1 block text-xs text-[var(--color-muted)]">{t("games.skyscraper.sizeLabel")}</label>
             <div
               className="flex w-full min-w-0 gap-2 overflow-x-auto py-1 [scrollbar-width:none] [-ms-overflow-style:none] snap-x snap-mandatory [&::-webkit-scrollbar]:[display:none]"
               style={{ WebkitOverflowScrolling: "touch" }}
@@ -672,8 +678,8 @@ export default function SkyscraperGame() {
                     disabled={loading}
                     className={`min-h-[44px] shrink-0 snap-center touch-manipulation whitespace-nowrap rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
                       isActive
-                        ? "border-sky-500 bg-sky-600 text-white"
-                        : "border-slate-600 bg-slate-800 text-wit-text hover:bg-slate-700"
+                        ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
+                        : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] text-[var(--color-text)] hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]"
                     } disabled:opacity-50`}
                   >
                     {size}×{size}
@@ -683,7 +689,7 @@ export default function SkyscraperGame() {
             </div>
           </div>
           <div className="w-full min-w-0">
-            <label className="mb-1 block text-xs text-wit-muted">{t("games.skyscraper.difficulty")}</label>
+            <label className="mb-1 block text-xs text-[var(--color-muted)]">{t("games.skyscraper.difficulty")}</label>
             <div
               className="flex w-full min-w-0 gap-2 overflow-x-auto py-1 [scrollbar-width:none] [-ms-overflow-style:none] snap-x snap-mandatory [&::-webkit-scrollbar]:[display:none]"
               style={{ WebkitOverflowScrolling: "touch" }}
@@ -706,8 +712,8 @@ export default function SkyscraperGame() {
                     disabled={loading}
                     className={`min-h-[44px] shrink-0 snap-center touch-manipulation whitespace-nowrap rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
                       isActive
-                        ? "border-sky-500 bg-sky-600 text-white"
-                        : "border-slate-600 bg-slate-800 text-wit-text hover:bg-slate-700"
+                        ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
+                        : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] text-[var(--color-text)] hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]"
                     } disabled:opacity-50`}
                   >
                     {label}
@@ -720,26 +726,26 @@ export default function SkyscraperGame() {
             <button
               onClick={handleHint}
               disabled={solved}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-wit-text hover:bg-slate-600 disabled:opacity-50"
+              className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))] px-3 py-2 text-sm text-[var(--color-text)] hover:brightness-95 disabled:opacity-50"
             >
               {t("games.skyscraper.hint")}
             </button>
             <button
               onClick={handleCheck}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-wit-text hover:bg-slate-600"
+              className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))] px-3 py-2 text-sm text-[var(--color-text)] hover:brightness-95"
             >
               {t("games.skyscraper.check")}
             </button>
             <button
               onClick={handleClear}
               disabled={solved}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-wit-text hover:bg-slate-600 disabled:opacity-50"
+              className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))] px-3 py-2 text-sm text-[var(--color-text)] hover:brightness-95 disabled:opacity-50"
             >
               {t("games.skyscraper.reset")}
             </button>
             <button
               onClick={handleSolve}
-              className="rounded-lg bg-wit-emerald px-3 py-2 text-sm text-white hover:bg-emerald-600"
+              className="rounded-lg bg-[var(--color-primary)] px-3 py-2 text-sm text-[var(--color-on-primary)] hover:brightness-95"
             >
               {t("games.skyscraper.autoSolve")}
             </button>
@@ -748,7 +754,7 @@ export default function SkyscraperGame() {
             <button
               onClick={() => loadPuzzle(n, difficulty)}
               disabled={loading}
-              className="rounded-lg bg-wit-emerald px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+              className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-on-primary)] hover:brightness-95 disabled:opacity-50"
             >
               {t("games.skyscraper.newPuzzle")}
             </button>
@@ -760,10 +766,10 @@ export default function SkyscraperGame() {
         <SkyscraperAdSlot slotIndex={2} isDebugMode={isDebugMode} />
       </div>
 
-      <section className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-5">
-        <h2 className="mb-3 text-lg font-bold text-wit-text">{t("games.skyscraper.rulesTitle")}</h2>
-        <p className="mb-3 text-xs leading-relaxed text-wit-muted">{t("games.skyscraper.rulesIntro")}</p>
-        <ol className="list-inside list-decimal space-y-2 text-sm leading-relaxed text-wit-muted">
+      <section className="w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-4 backdrop-blur sm:p-5">
+        <h2 className="mb-3 text-lg font-bold text-[var(--color-text)]">{t("games.skyscraper.rulesTitle")}</h2>
+        <p className="mb-3 text-xs leading-relaxed text-[var(--color-muted)]">{t("games.skyscraper.rulesIntro")}</p>
+        <ol className="list-inside list-decimal space-y-2 text-sm leading-relaxed text-[var(--color-muted)]">
           <li>{t("games.skyscraper.rulesLi1")}</li>
           <li>{t("games.skyscraper.rulesLi2")}</li>
           <li>{t("games.skyscraper.rulesLi3")}</li>
@@ -774,25 +780,25 @@ export default function SkyscraperGame() {
 
       {showClearOverlay && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,var(--color-text)_32%,transparent)]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="clear-title"
         >
-          <div className="rounded-2xl p-8 bg-slate-800 border border-slate-600 text-center shadow-2xl max-w-sm mx-4">
+          <div className="rounded-2xl p-8 bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] text-center shadow-2xl max-w-sm mx-4">
             <h2
               id="clear-title"
-              className="text-2xl font-bold text-wit-emerald mb-2"
+              className="text-2xl font-bold text-[var(--color-primary)] mb-2"
             >
               Perfect!
             </h2>
-            <p className="text-wit-muted mb-4">
+            <p className="text-[var(--color-muted)] mb-4">
               {t("games.skyscraper.clearSolved").replace("{time}", formatTime(timeSeconds))}
             </p>
             <div className="flex gap-2 justify-center">
               <button
                 onClick={() => setShowClearOverlay(false)}
-                className="px-6 py-3 rounded-lg bg-slate-700 text-wit-text font-medium hover:bg-slate-600"
+                className="px-6 py-3 rounded-lg bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))] text-[var(--color-text)] font-medium hover:brightness-95"
               >
                 {t("games.skyscraper.back")}
               </button>
@@ -801,7 +807,7 @@ export default function SkyscraperGame() {
                   setShowClearOverlay(false);
                   loadPuzzle(n, difficulty);
                 }}
-                className="px-6 py-3 rounded-lg bg-wit-emerald text-white font-medium hover:bg-emerald-600"
+                className="px-6 py-3 rounded-lg bg-[var(--color-primary)] text-[var(--color-on-primary)] font-medium hover:brightness-95"
               >
                 {t("games.skyscraper.continueNext")}
               </button>

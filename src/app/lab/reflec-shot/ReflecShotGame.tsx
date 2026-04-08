@@ -91,6 +91,8 @@ function alignDummyBumpersOnSolutionPathForAutoSolve(st: GridStage): void {
 }
 import { ReflecShotAdSlot } from "@/components/ReflecShotAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
+import { useSiteTheme } from "@/components/SiteThemeProvider";
+import { SITE_THEMES, SITE_THEME_IDS, type SiteThemeId } from "@/lib/siteThemes";
 import { refreshAds } from "@/lib/ads";
 import {
   GAME_AD_GAP_AFTER_SLOT_1_PX,
@@ -767,6 +769,7 @@ export default function ReflecShotGame() {
   const { t } = useI18n();
   const searchParams = useSearchParams();
   const isDevTj = searchParams.get("devtj") === "true";
+  const { themeId, setThemeId } = useSiteTheme();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [grade, setGrade] = useState(1);
@@ -2778,32 +2781,30 @@ export default function ReflecShotGame() {
           <button
             type="button"
             onClick={() => setIsDebugMode(true)}
-            className="px-2 py-1 rounded border border-white/20 text-xs font-mono"
-            style={{ background: "#334155" }}
+            className="rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_55%,var(--color-bg))] px-2 py-1 text-xs font-mono text-[var(--color-text)]"
           >
             DEBUG OFF
           </button>
         </div>
       )}
       {isDevTj && isDebugMode && (
-        <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-black/80 p-3 text-xs font-mono text-left">
+        <div className="fixed right-4 top-4 z-50 max-h-[90vh] overflow-y-auto rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_88%,var(--color-bg))] p-3 text-xs font-mono text-left text-[var(--color-text)] shadow-lg backdrop-blur-md">
           <div className="flex flex-wrap items-center justify-between gap-2">
             {isDebugPanelExpanded && (
-              <span className="font-bold text-emerald-400">{t("games.reflecShot.debugPanelTitle")}</span>
+              <span className="font-bold text-[var(--color-primary)]">{t("games.reflecShot.debugPanelTitle")}</span>
             )}
             <div className="flex flex-wrap items-center gap-1 ml-auto">
               <button
                 type="button"
                 onClick={() => setIsDebugMode(false)}
-                className="px-2 py-1 rounded border border-white/20"
-                style={{ background: "#10b981" }}
+                className="rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[var(--color-primary)] px-2 py-1 text-[var(--color-on-primary)]"
               >
                 DEBUG ON
               </button>
               <button
                 type="button"
                 onClick={() => setIsDebugPanelExpanded((v) => !v)}
-                className="p-1 rounded border border-white/20 text-white/80"
+                className="p-1 rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-muted)]"
               >
                 {isDebugPanelExpanded ? "▲" : "▼"}
               </button>
@@ -2811,8 +2812,8 @@ export default function ReflecShotGame() {
           </div>
           {isDebugPanelExpanded && (
             <>
-              <div className="mt-2 flex flex-col gap-1.5 text-slate-400">
-                <span className="text-[10px] leading-tight text-slate-300">
+              <div className="mt-2 flex flex-col gap-1.5 text-[var(--color-muted)]">
+                <span className="text-[10px] leading-tight text-[var(--color-muted)]">
                   {t("games.reflecShot.debugTrajectoryStyleLabel")}
                 </span>
                 <label className="flex cursor-pointer items-center gap-2">
@@ -2838,7 +2839,7 @@ export default function ReflecShotGame() {
                   </span>
                 </label>
                 {trajectoryStyle === "curved" && (
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-slate-400">
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[var(--color-muted)]">
                     <span className="shrink-0 text-[10px]">
                       {t("games.reflecShot.debugTrajectoryCornerRadius")}
                     </span>
@@ -2857,18 +2858,36 @@ export default function ReflecShotGame() {
                   </div>
                 )}
               </div>
-              <label className="mt-2 flex flex-wrap items-center gap-2 text-slate-400 cursor-pointer">
+              <div className="mt-2 flex flex-col gap-1 text-[var(--color-muted)]">
+                <label className="text-[10px] leading-tight text-[var(--color-muted)]" htmlFor="wispo-site-theme">
+                  {t("games.reflecShot.debugSiteTheme")}
+                </label>
+                <select
+                  id="wispo-site-theme"
+                  value={themeId}
+                  onChange={(e) => setThemeId(e.target.value as SiteThemeId)}
+                  className="w-full rounded-lg border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] px-2 py-1.5 text-[10px] text-[var(--color-text)]"
+                >
+                  {SITE_THEME_IDS.map((id) => (
+                    <option key={id} value={id}>
+                      {SITE_THEMES[id].name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <label className="mt-2 flex flex-wrap items-center gap-2 text-[var(--color-muted)] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={showSolutionPath}
                   onChange={(e) => setShowSolutionPath(e.target.checked)}
-                  className="accent-rose-400"
+                  style={{ accentColor: "var(--color-primary)" }}
+                  className="accent-stone-600"
                 />
                 {t("games.reflecShot.debugShowSolutionPath")}
               </label>
               {showSolutionPath && stage && (
-                <div className="mt-1 rounded border border-rose-500/25 bg-rose-950/35 px-2 py-1.5 text-[10px] leading-snug text-rose-50/90 font-mono space-y-0.5">
-                  <div className="font-semibold text-rose-200/90">
+                <div className="mt-1 rounded-2xl border border-[color-mix(in_srgb,var(--color-primary)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_08%,var(--color-bg))] px-2 py-1.5 text-[10px] leading-snug text-[var(--color-text)] font-mono space-y-0.5">
+                  <div className="font-semibold text-[var(--color-primary)]">
                     {t("games.reflecShot.debugGemRulePanelTitle")}
                   </div>
                   <div>
@@ -2892,7 +2911,7 @@ export default function ReflecShotGame() {
                   </div>
                 </div>
               )}
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[var(--color-muted)]">
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugDummyDensity")}</span>
                 <input
                   type="range"
@@ -2907,12 +2926,12 @@ export default function ReflecShotGame() {
                   {debugDummyDensityPct}%
                 </span>
               </div>
-              <p className="mt-1 text-[10px] leading-snug text-slate-500">
+              <p className="mt-1 text-[10px] leading-snug text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))]">
                 {grade <= 2
                   ? t("games.reflecShot.debugInitialWrongRateGrade12")
                   : t("games.reflecShot.debugInitialWrongRate").replace("{pct}", String(initialWrongRatePct))}
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[var(--color-muted)]">
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugBallSpeed")}</span>
                 <input
                   type="range"
@@ -2923,9 +2942,9 @@ export default function ReflecShotGame() {
                   onChange={(e) => setDebugBallSpeedMult(Number(e.target.value))}
                   className="flex-1 min-w-0 accent-sky-400"
                 />
-                <span className="tabular-nums w-10 text-right text-[10px] text-sky-200/90">{debugBallSpeedMult}×</span>
+                <span className="tabular-nums w-10 text-right text-[10px] text-[var(--color-muted)]/90">{debugBallSpeedMult}×</span>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[var(--color-muted)]">
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugGemAttract")}</span>
                 <input
                   type="range"
@@ -2940,7 +2959,7 @@ export default function ReflecShotGame() {
                   {debugGemAttractMult}×
                 </span>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[var(--color-muted)]">
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugCrossFlashArm")}</span>
                 <input
                   type="range"
@@ -2955,7 +2974,7 @@ export default function ReflecShotGame() {
                   {debugCrossFlashArmPct}%
                 </span>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[var(--color-muted)]">
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugWallFxMs")}</span>
                 <input
                   type="range"
@@ -2970,7 +2989,7 @@ export default function ReflecShotGame() {
                   {debugWallFxMs}ms
                 </span>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-slate-400">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[var(--color-muted)]">
                 <span className="shrink-0 text-[10px]">{t("games.reflecShot.debugGoalFxMs")}</span>
                 <input
                   type="range"
@@ -2985,8 +3004,8 @@ export default function ReflecShotGame() {
                   {debugGoalFxMs}ms
                 </span>
               </div>
-              <div className="mt-2 flex flex-col gap-1 text-slate-400">
-                <span className="text-[10px] leading-tight text-slate-300">
+              <div className="mt-2 flex flex-col gap-1 text-[var(--color-muted)]">
+                <span className="text-[10px] leading-tight text-[var(--color-muted)]">
                   devtj 軌跡判定・弧長上限（対角線×倍率）
                 </span>
                 <div className="flex items-center gap-2">
@@ -3004,24 +3023,24 @@ export default function ReflecShotGame() {
                   </span>
                 </div>
                 {tjTrajectoryDebug && (
-                  <div className="mt-1 rounded border border-white/10 bg-slate-900/80 p-2 text-[10px] leading-snug text-slate-300">
-                    <div className="font-semibold text-cyan-300/90">最終判定マス: {tjTrajectoryDebug.cellKey}</div>
+                  <div className="mt-1 rounded border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))]/80 p-2 text-[10px] leading-snug text-[var(--color-muted)]">
+                    <div className="font-semibold text-[var(--color-primary)]">最終判定マス: {tjTrajectoryDebug.cellKey}</div>
                     {tjTrajectoryDebug.rejected && (
-                      <div className="text-amber-300/90">却下: {tjTrajectoryDebug.rejected}</div>
+                      <div className="text-[var(--color-accent)]">却下: {tjTrajectoryDebug.rejected}</div>
                     )}
                     {tjTrajectoryDebug.picked && (
-                      <div className="text-emerald-300/90">採用: {tjTrajectoryDebug.picked}</div>
+                      <div className="text-[var(--color-primary)]">採用: {tjTrajectoryDebug.picked}</div>
                     )}
                     {tjTrajectoryDebug.arcLen != null && tjTrajectoryDebug.maxArcLimit != null && (
-                      <div className="text-slate-400">
+                      <div className="text-[var(--color-muted)]">
                         弧長 {tjTrajectoryDebug.arcLen.toFixed(1)} / 上限 {tjTrajectoryDebug.maxArcLimit.toFixed(1)} px
                       </div>
                     )}
-                    <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-slate-400">
+                    <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[var(--color-muted)]">
                       {(["PIPE", "SLASH", "HYPHEN", "BACKSLASH"] as const).map((kind) => (
                         <div key={kind} className="flex justify-between gap-1">
                           <span>{kind}</span>
-                          <span className="tabular-nums text-slate-500">
+                          <span className="tabular-nums text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))]">
                             μ=
                             {tjTrajectoryDebug.meanDists[kind] != null
                               ? tjTrajectoryDebug.meanDists[kind]!.toFixed(3)
@@ -3038,7 +3057,7 @@ export default function ReflecShotGame() {
                 )}
               </div>
               {grade === 4 && (
-                <div className="mt-2 flex flex-col gap-0.5 text-slate-400">
+                <div className="mt-2 flex flex-col gap-0.5 text-[var(--color-muted)]">
                   <span className="text-[10px] leading-tight">
                     {t("games.reflecShot.debugGrade2Mid").replace(
                       "{n}",
@@ -3062,16 +3081,16 @@ export default function ReflecShotGame() {
                 </div>
               )}
               {grade === 5 && (
-                <div className="mt-2 flex flex-col gap-1 text-slate-400">
-                  <span className="text-[10px] leading-tight text-slate-300">{t("games.reflecShot.debugGenModeLv4")}</span>
+                <div className="mt-2 flex flex-col gap-1 text-[var(--color-muted)]">
+                  <span className="text-[10px] leading-tight text-[var(--color-muted)]">{t("games.reflecShot.debugGenModeLv4")}</span>
                   <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
                       onClick={() => setDebugLv4GenMode("default")}
                       className={`rounded border px-2 py-0.5 text-[10px] ${
                         debugLv4GenMode === "default"
-                          ? "border-violet-400 bg-violet-500/25 text-violet-100"
-                          : "border-white/20 text-slate-400"
+                          ? "border-violet-400 bg-[var(--color-primary)]/25 text-violet-100"
+                          : "border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-muted)]"
                       }`}
                     >
                       Default
@@ -3081,8 +3100,8 @@ export default function ReflecShotGame() {
                       onClick={() => setDebugLv4GenMode("rFirst")}
                       className={`rounded border px-2 py-0.5 text-[10px] ${
                         debugLv4GenMode === "rFirst"
-                          ? "border-violet-400 bg-violet-500/25 text-violet-100"
-                          : "border-white/20 text-slate-400"
+                          ? "border-violet-400 bg-[var(--color-primary)]/25 text-violet-100"
+                          : "border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-muted)]"
                       }`}
                     >
                       R-First
@@ -3092,8 +3111,8 @@ export default function ReflecShotGame() {
                       onClick={() => setDebugLv4GenMode("rSecond")}
                       className={`rounded border px-2 py-0.5 text-[10px] ${
                         debugLv4GenMode === "rSecond"
-                          ? "border-violet-400 bg-violet-500/25 text-violet-100"
-                          : "border-white/20 text-slate-400"
+                          ? "border-violet-400 bg-[var(--color-primary)]/25 text-violet-100"
+                          : "border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-muted)]"
                       }`}
                     >
                       R-Second
@@ -3101,7 +3120,7 @@ export default function ReflecShotGame() {
                   </div>
                 </div>
               )}
-              <div className="mt-2 border-t border-white/10 pt-2 space-y-0.5 text-slate-400/90 text-[10px]">
+              <div className="mt-2 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pt-2 space-y-0.5 text-[var(--color-muted)]/90 text-[10px]">
                 <div>
                   Build:{" "}
                   {typeof window !== "undefined" && window.location.hostname === "localhost"
@@ -3118,10 +3137,14 @@ export default function ReflecShotGame() {
                       : "—"}
                 </div>
                 {lastMetrics && (
-                  <div className="text-[9px] text-slate-400 leading-snug space-y-0.5">
+                  <div className="text-[9px] text-[var(--color-muted)] leading-snug space-y-0.5">
                     <div>
                       {t("games.reflecShot.debugGenPath")}{" "}
-                      <span className={lastMetrics.usedPrimary ? "text-emerald-300" : "text-amber-300"}>
+                      <span
+                        className={
+                          lastMetrics.usedPrimary ? "text-[var(--color-primary)]" : "text-[var(--color-accent)]"
+                        }
+                      >
                         {lastMetrics.usedPrimary
                           ? t("games.reflecShot.debugPrimary")
                           : `${t("games.reflecShot.debugFallback")}${lastMetrics.fallbackT}`}
@@ -3129,19 +3152,19 @@ export default function ReflecShotGame() {
                     </div>
                     <div className="break-all">
                       seed req…eff:{" "}
-                      <code className="text-slate-300">
+                      <code className="text-[var(--color-muted)]">
                         0x{(lastMetrics.requestSeed >>> 0).toString(16)}
                       </code>
                       {lastMetrics.requestSeed >>> 0 !== (lastMetrics.effectiveSeed >>> 0) ? (
                         <>
                           {" → "}
-                          <code className="text-amber-200">0x{(lastMetrics.effectiveSeed >>> 0).toString(16)}</code>
+                          <code className="text-[var(--color-accent)]">0x{(lastMetrics.effectiveSeed >>> 0).toString(16)}</code>
                         </>
                       ) : null}
                     </div>
                   </div>
                 )}
-                <div className="text-sky-200/80">
+                <div className="text-[var(--color-muted)]/80">
                   Stock:{" "}
                   {REFLECT_SHOT_STOCK_GRADES.map((g) => (
                     <span key={g} className="mr-1.5">
@@ -3149,7 +3172,7 @@ export default function ReflecShotGame() {
                     </span>
                   ))}
                 </div>
-                <div className="text-slate-300">
+                <div className="text-[var(--color-muted)]">
                   Source:{" "}
                   {boardDisplaySource === "stock"
                     ? "Stock"
@@ -3163,7 +3186,7 @@ export default function ReflecShotGame() {
                     <span className="text-yellow-300"> start extended</span>
                   )}
                 </div>
-                <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
+                <label className="flex items-center gap-2 text-[var(--color-muted)] cursor-pointer">
                   <input
                     type="checkbox"
                     checked={stockPrefetchPaused}
@@ -3175,25 +3198,25 @@ export default function ReflecShotGame() {
                 <button
                   type="button"
                   onClick={() => refreshAds()}
-                  className="mt-1 px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                  className="mt-1 px-2 py-0.5 rounded text-[10px] border border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_15%,var(--color-bg))] text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_22%,var(--color-bg))]"
                 >
                   {t("games.reflecShot.debugFlashTest")}
                 </button>
               </div>
-              <div className="mt-2 border-t border-white/10 pt-2 space-y-1.5">
-                <div className="font-semibold text-slate-300 text-[10px]">{t("games.reflecShot.debugSeedLabel")}</div>
+              <div className="mt-2 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pt-2 space-y-1.5">
+                <div className="font-semibold text-[var(--color-muted)] text-[10px]">{t("games.reflecShot.debugSeedLabel")}</div>
                 <div className="flex items-start gap-1 flex-wrap">
-                  <span className="text-slate-400 shrink-0 text-[10px]">{t("games.reflecShot.debugBoardPrev")}</span>
-                  <code className="text-[9px] break-all flex-1 min-w-0 bg-black/40 px-1 rounded text-amber-200/90 max-h-20 overflow-y-auto">
+                  <span className="text-[var(--color-muted)] shrink-0 text-[10px]">{t("games.reflecShot.debugBoardPrev")}</span>
+                  <code className="text-[9px] break-all flex-1 min-w-0 bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] px-1 rounded text-[var(--color-accent)] max-h-20 overflow-y-auto">
                     {debugPreviousBoard
                       ? `rs2.${debugPreviousBoard.grade}.${(debugPreviousBoard.seed >>> 0).toString(16)}`
                       : "-"}
                   </code>
                 </div>
                 <div className="flex items-start gap-1 flex-wrap">
-                  <span className="text-slate-400 shrink-0 text-[10px]">{t("games.reflecShot.debugBoardCurr")}</span>
+                  <span className="text-[var(--color-muted)] shrink-0 text-[10px]">{t("games.reflecShot.debugBoardCurr")}</span>
                   <code
-                    className="text-[9px] break-all flex-1 min-w-0 bg-black/40 px-1 rounded text-emerald-200/90 max-h-20 overflow-y-auto"
+                    className="text-[9px] break-all flex-1 min-w-0 bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] px-1 rounded text-[var(--color-primary)] max-h-20 overflow-y-auto"
                     title={currentStageHash || "—"}
                   >
                     {currentStageHash || "—"}
@@ -3206,19 +3229,19 @@ export default function ReflecShotGame() {
                       }
                     }}
                     disabled={!currentStageHash}
-                    className="px-1.5 py-0.5 rounded text-[9px] border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-40 shrink-0"
+                    className="px-1.5 py-0.5 rounded text-[9px] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text)_20%,transparent)] disabled:opacity-40 shrink-0"
                   >
                     {t("games.reflecShot.debugCopy")}
                   </button>
                 </div>
                 <div className="flex items-center gap-1 flex-wrap">
-                  <span className="text-slate-400 shrink-0 text-[10px]">{t("games.reflecShot.debugInputLabel")}</span>
+                  <span className="text-[var(--color-muted)] shrink-0 text-[10px]">{t("games.reflecShot.debugInputLabel")}</span>
                   <input
                     type="text"
                     value={hashInput}
                     onChange={(e) => setHashInput(e.target.value)}
                     placeholder="rs2.{grade}.{hex}"
-                    className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-black/60 border border-white/20 text-slate-200"
+                    className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px] bg-[color-mix(in_srgb,var(--color-surface)_35%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-text)]"
                   />
                   <button
                     type="button"
@@ -3227,15 +3250,15 @@ export default function ReflecShotGame() {
                       if (s) applyStageFromHash(s);
                     }}
                     disabled={!hashInput.trim() || isGenerating || boardLoadWait}
-                    className="px-2 py-0.5 rounded text-[10px] border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-40"
+                    className="px-2 py-0.5 rounded text-[10px] border border-[color-mix(in_srgb,var(--color-primary)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_12%,var(--color-bg))] text-[var(--color-primary)] hover:bg-[color-mix(in_srgb,var(--color-primary)_18%,var(--color-bg))] disabled:opacity-40"
                   >
                     {t("games.reflecShot.debugGenFromHash")}
                   </button>
                 </div>
-                <p className="text-[9px] text-slate-500 leading-snug">
-                  <code className="text-slate-400">rs2.</code>
+                <p className="text-[9px] text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))] leading-snug">
+                  <code className="text-[var(--color-muted)]">rs2.</code>
                   {t("games.reflecShot.debugHashHelpMid")}
-                  <code className="text-slate-400">rs1.</code>
+                  <code className="text-[var(--color-muted)]">rs1.</code>
                   {t("games.reflecShot.debugHashHelpTail")}
                 </p>
               </div>
@@ -3250,12 +3273,12 @@ export default function ReflecShotGame() {
         <ReflecShotAdSlot slotIndex={1} isDebugMode={isDebugMode} />
       </div>
 
-      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
+      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
         <div className="flex w-full flex-col items-center">
           {/* 上に僅かな余白、タイマー〜盤面は gap+mb で約1行分に詰める */}
           <div className="flex w-full flex-col gap-y-1 pb-0 pt-1.5 mb-1">
             {/* 固定行高：進行中ラベル（左）＋準備タイマー（右）。text-sm / leading-5 */}
-            <div className="grid w-full min-h-5 grid-cols-[1fr_auto] items-center gap-x-2 text-sm font-semibold leading-5 text-wit-text">
+            <div className="grid w-full min-h-5 grid-cols-[1fr_auto] items-center gap-x-2 text-sm font-semibold leading-5 text-[var(--color-text)]">
               <span className="min-w-0 truncate">
                 {phase === "move" || phase === "wallFx" || phase === "goalFx"
                   ? t("games.reflecShot.phaseMove")
@@ -3271,13 +3294,13 @@ export default function ReflecShotGame() {
             {/* ステータス1行ぶんの高さを常に確保 */}
             <div className="flex min-h-5 w-full items-center text-sm leading-5">
               {boardLoadWait && !statusMsg ? (
-                <span className="text-sky-300">{t("games.reflecShot.st.preparing")}</span>
+                <span className="text-[var(--color-accent)]">{t("games.reflecShot.st.preparing")}</span>
               ) : statusMsg &&
                 phase !== "won" &&
                 phase !== "lost" &&
                 phase !== "wallFx" &&
                 phase !== "goalFx" ? (
-                <span className="text-wit-muted">{statusMsgDisplay}</span>
+                <span className="text-[var(--color-muted)]">{statusMsgDisplay}</span>
               ) : null}
             </div>
           </div>
@@ -3287,11 +3310,11 @@ export default function ReflecShotGame() {
           >
             <div
               ref={boardWrapRef}
-              className="relative mx-auto aspect-square w-full max-h-[min(72vh,520px)] overflow-hidden rounded-2xl border border-white/10 bg-slate-950"
+              className="relative mx-auto aspect-square w-full max-h-[min(72vh,520px)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))]"
             >
               <canvas
                 ref={canvasRef}
-                className="absolute inset-0 h-full w-full touch-none select-none cursor-default bg-slate-950"
+                className="absolute inset-0 h-full w-full touch-none select-none cursor-default bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))]"
                 style={{ touchAction: "none" }}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
@@ -3364,32 +3387,32 @@ export default function ReflecShotGame() {
             </div>
           </div>
           <div
-            className="mt-2 flex w-full min-h-[6.5rem] flex-col items-stretch justify-center gap-2 rounded-xl border border-white/10 bg-slate-900/35 px-3 py-3 text-center"
+            className="mt-2 flex w-full min-h-[6.5rem] flex-col items-stretch justify-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))]/35 px-3 py-3 text-center"
             role="note"
           >
             {(() => {
               const rg = stage?.grade ?? grade;
               return (
                 <>
-                  <p className="mx-auto max-w-md text-sm font-medium leading-relaxed text-wit-muted md:whitespace-nowrap md:text-[13px]">
+                  <p className="mx-auto max-w-md text-sm font-medium leading-relaxed text-[var(--color-muted)] md:whitespace-nowrap md:text-[13px]">
                     {t("games.reflecShot.ruleIntro")}
                   </p>
                   {rg >= 3 && rg <= 4 && (
-                    <p className="mx-auto max-w-md text-sm leading-relaxed text-wit-muted">
+                    <p className="mx-auto max-w-md text-sm leading-relaxed text-[var(--color-muted)]">
                       {t("games.reflecShot.ruleCrossBonus")}
                     </p>
                   )}
                   {rg >= 5 && rg !== 6 && (
-                    <p className="mx-auto max-w-md text-sm leading-relaxed text-wit-muted">
+                    <p className="mx-auto max-w-md text-sm leading-relaxed text-[var(--color-muted)]">
                       {t("games.reflecShot.ruleCrossBonus")}
                     </p>
                   )}
                   {rg >= 5 && (
-                    <p className="mx-auto max-w-md text-sm leading-relaxed text-wit-muted">
+                    <p className="mx-auto max-w-md text-sm leading-relaxed text-[var(--color-muted)]">
                       {t("games.reflecShot.ruleTwoSidedBonus")}
                     </p>
                   )}
-                  <p className="mx-auto max-w-md border-t border-white/10 pt-2 text-xs leading-relaxed text-wit-muted/90">
+                  <p className="mx-auto max-w-md border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pt-2 text-xs leading-relaxed text-[var(--color-muted)]/90">
                     <span className="block whitespace-pre-line md:hidden">{t("games.reflecShot.ruleControls")}</span>
                     <span className="hidden md:block md:whitespace-nowrap md:text-center md:text-[11px]">
                       {t("games.reflecShot.ruleControlsPc")}
@@ -3402,7 +3425,7 @@ export default function ReflecShotGame() {
         </div>
         <div className="mb-2 mt-4 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
           <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
-            <label className="block text-xs text-wit-muted mb-1">{t("common.chooseGrade")}</label>
+            <label className="block text-xs text-[var(--color-muted)] mb-1">{t("common.chooseGrade")}</label>
             <div
               className="flex w-full min-w-0 overflow-x-auto gap-2 py-1 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:[display:none]"
               style={{ WebkitOverflowScrolling: "touch" }}
@@ -3424,8 +3447,8 @@ export default function ReflecShotGame() {
                     }}
                     className={`shrink-0 snap-center whitespace-nowrap px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-manipulation ${
                       isActive
-                        ? "bg-sky-600 text-white border border-sky-500"
-                        : "bg-slate-800 text-wit-text border border-slate-600 hover:bg-slate-700"
+                        ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] border border-[var(--color-primary)]"
+                        : "bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] text-[var(--color-text)] border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]"
                     } disabled:opacity-50 disabled:pointer-events-none`}
                     title={bendOrBumperHint(g)}
                   >
@@ -3442,14 +3465,14 @@ export default function ReflecShotGame() {
             <button
               type="button"
               disabled={isGenerating || boardLoadWait}
-              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
+              className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_15%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2 text-[var(--color-text)] text-sm hover:bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)] disabled:opacity-40 disabled:pointer-events-none"
               onClick={regen}
             >
               {t("games.reflecShot.regenStage")}
             </button>
             <button
               type="button"
-              className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-emerald-300 text-sm hover:bg-emerald-500/25"
+              className="rounded-lg border border-[color-mix(in_srgb,var(--color-primary)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_12%,var(--color-bg))] px-3 py-2 text-[var(--color-primary)] text-sm hover:bg-[color-mix(in_srgb,var(--color-primary)_18%,var(--color-bg))]"
               onClick={autoSolve}
             >
               {t("games.reflecShot.autoSolve")}
@@ -3462,7 +3485,7 @@ export default function ReflecShotGame() {
             <button
               type="button"
               disabled={isGenerating || boardLoadWait}
-              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-wit-text text-sm hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
+              className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_15%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2 text-[var(--color-text)] text-sm hover:bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)] disabled:opacity-40 disabled:pointer-events-none"
               onClick={regen}
             >
               {t("games.reflecShot.regenStage")}
@@ -3480,15 +3503,15 @@ export default function ReflecShotGame() {
 
       {showWinOverlay && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-text)_32%,transparent)]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="reflec-win-title"
         >
-          <div className="mx-4 max-w-sm rounded-2xl border border-slate-600 bg-slate-800 p-8 text-center shadow-2xl">
+          <div className="mx-4 max-w-sm rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] p-8 text-center shadow-2xl">
             <h2
               id="reflec-win-title"
-              className="mb-4 text-2xl font-bold text-wit-emerald"
+              className="mb-4 text-2xl font-bold text-[var(--color-primary)]"
             >
               {t("games.reflecShot.resultWinMessage")}
             </h2>
@@ -3496,7 +3519,7 @@ export default function ReflecShotGame() {
               <button
                 type="button"
                 onClick={() => setShowWinOverlay(false)}
-                className="rounded-lg bg-slate-700 px-6 py-3 font-medium text-wit-text hover:bg-slate-600"
+                className="rounded-lg bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))] px-6 py-3 font-medium text-[var(--color-text)] hover:brightness-95"
               >
                 {t("games.reflecShot.resultBack")}
               </button>
@@ -3504,7 +3527,7 @@ export default function ReflecShotGame() {
                 type="button"
                 onClick={() => goNextProblem()}
                 disabled={boardLoadWait}
-                className="rounded-lg bg-wit-emerald px-6 py-3 font-medium text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg bg-[var(--color-primary)] px-6 py-3 font-medium text-[var(--color-on-primary)] hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t("games.reflecShot.nextProblemBtn")}
               </button>
@@ -3515,26 +3538,26 @@ export default function ReflecShotGame() {
 
       {showFailOverlay && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-text)_32%,transparent)]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="reflec-fail-title"
         >
-          <div className="mx-4 max-w-sm rounded-2xl border border-slate-600 bg-slate-800 p-8 text-center shadow-2xl">
+          <div className="mx-4 max-w-sm rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] p-8 text-center shadow-2xl">
             <h2
               id="reflec-fail-title"
-              className="mb-2 text-2xl font-bold text-amber-400"
+              className="mb-2 text-2xl font-bold text-[var(--color-accent)]"
             >
               {t("games.reflecShot.resultFailTitle")}
             </h2>
-            <p className="mb-4 text-wit-muted">
+            <p className="mb-4 text-[var(--color-muted)]">
               {gemGoalFail ? t("games.reflecShot.resultFailGems") : t("games.reflecShot.resultFailMessage")}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               <button
                 type="button"
                 onClick={() => retryAfterLoss()}
-                className="rounded-lg bg-slate-700 px-6 py-3 font-medium text-wit-text hover:bg-slate-600"
+                className="rounded-lg bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))] px-6 py-3 font-medium text-[var(--color-text)] hover:brightness-95"
               >
                 {t("games.reflecShot.resultRetry")}
               </button>
@@ -3542,7 +3565,7 @@ export default function ReflecShotGame() {
                 type="button"
                 onClick={() => goNextProblem()}
                 disabled={boardLoadWait}
-                className="rounded-lg bg-wit-emerald px-6 py-3 font-medium text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg bg-[var(--color-primary)] px-6 py-3 font-medium text-[var(--color-on-primary)] hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t("games.reflecShot.nextProblemBtn")}
               </button>

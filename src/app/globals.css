@@ -2,8 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 初期表示（SSR）: Paper & Craft。クライアントの SiteThemeProvider が上書き */
 :root {
-  --wit-card-bg: rgba(30, 41, 59, 0.7);
-  --wit-border: rgba(255, 255, 255, 0.1);
-  --wit-accent-glow: rgba(59, 130, 246, 0.5);
+  --color-bg: #f9f7f2;
+  --color-surface: #e0d7c6;
+  --color-primary: #d97757;
+  --color-text: #333333;
+  --color-accent: #a68d74;
+  --color-muted: color-mix(in srgb, var(--color-text) 56%, var(--color-bg));
+  --color-on-primary: #ffffff;
+  --wit-border: color-mix(in srgb, var(--color-text) 14%, transparent);
+  --wit-card-bg: color-mix(in srgb, var(--color-surface) 82%, var(--color-bg));
+  --wit-accent-glow: color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+
+/* 背景に微細な紙のようなノイズ（約 2%） */
+.texture-overlay {
+  background-image: url("https://www.transparenttextures.com/patterns/pinstriped-suit.png");
+  opacity: 0.02;
+  pointer-events: none;
 }

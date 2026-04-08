@@ -16,7 +16,7 @@ export function LanguageToggle({ size = "compact" }: LanguageToggleProps) {
 
   return (
     <div
-      className={`flex ${h} shrink-0 items-stretch rounded-lg border border-white/15 bg-white/5 p-0 text-[10px] font-bold tracking-wide sm:text-[11px]`}
+      className={`flex ${h} shrink-0 items-stretch rounded-lg border border-[color-mix(in_srgb,var(--color-text)_15%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-0 text-[10px] font-bold tracking-wide sm:text-[11px]`}
       role="group"
       aria-label={t("common.languageAria")}
     >
@@ -25,8 +25,8 @@ export function LanguageToggle({ size = "compact" }: LanguageToggleProps) {
         onClick={() => setLocale("ja")}
         className={`flex min-h-0 min-w-[2rem] flex-1 items-center justify-center rounded-md px-2 transition-colors touch-manipulation sm:min-w-[2.25rem] ${
           locale === "ja"
-            ? "bg-sky-600 text-white shadow-sm"
-            : "text-wit-muted hover:bg-white/10 hover:text-wit-text"
+            ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-sm"
+            : "text-[var(--color-muted)] hover:bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)] hover:text-[var(--color-text)]"
         }`}
       >
         JP
@@ -36,8 +36,8 @@ export function LanguageToggle({ size = "compact" }: LanguageToggleProps) {
         onClick={() => setLocale("en")}
         className={`flex min-h-0 min-w-[2rem] flex-1 items-center justify-center rounded-md px-2 transition-colors touch-manipulation sm:min-w-[2.25rem] ${
           locale === "en"
-            ? "bg-sky-600 text-white shadow-sm"
-            : "text-wit-muted hover:bg-white/10 hover:text-wit-text"
+            ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-sm"
+            : "text-[var(--color-muted)] hover:bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)] hover:text-[var(--color-text)]"
         }`}
       >
         EN

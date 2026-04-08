@@ -23,7 +23,7 @@ export default function ReflecShotLabPage() {
   return (
     <>
       <main className="mx-auto flex w-full max-w-3xl flex-1 px-4 py-4 md:py-6">
-        <Suspense fallback={<div className="py-8 text-sm text-wit-muted">読み込み中…</div>}>
+        <Suspense fallback={<div className="py-8 text-sm text-[var(--color-muted)]">読み込み中…</div>}>
           <ReflecShotGame />
         </Suspense>
       </main>

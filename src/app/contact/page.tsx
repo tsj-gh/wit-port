@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function ContactPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-wit-bg" />}>
+    <Suspense fallback={<div className="min-h-screen bg-[var(--color-bg)]" />}>
       <ContactPageContent />
     </Suspense>
   );

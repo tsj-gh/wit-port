@@ -46,7 +46,7 @@ export default function SkyscraperPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(skyscraperJsonLd) }}
       />
-      <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-wit-bg text-wit-muted">読み込み中…</div>}>
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)] text-[var(--color-muted)]">読み込み中…</div>}>
         <SkyscraperGame />
       </Suspense>
       <SkyscraperEducationalI18n />
