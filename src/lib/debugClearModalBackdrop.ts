@@ -57,18 +57,25 @@ function emit() {
   listeners.forEach((l) => l());
 }
 
+/** `Number(null)` が 0 になるため、未保存・空文字は null とみなして既定値にフォールバックする */
+function parseStoredNumber(key: string): number | null {
+  const raw = localStorage.getItem(key);
+  if (raw == null || raw === "") return null;
+  const v = Number(raw);
+  return Number.isFinite(v) ? v : null;
+}
+
 function readPersisted(): ClearModalBackdropDebugState {
   if (typeof window === "undefined") return { ...CLEAR_MODAL_DEBUG_DEFAULTS };
   try {
-    const b = Number(localStorage.getItem(STORAGE_BLUR));
-    const br = Number(localStorage.getItem(STORAGE_BRIGHTNESS));
-    const o = Number(localStorage.getItem(STORAGE_OPACITY));
+    const b = parseStoredNumber(STORAGE_BLUR);
+    const br = parseStoredNumber(STORAGE_BRIGHTNESS);
+    const o = parseStoredNumber(STORAGE_OPACITY);
     return {
-      debugBlur: Number.isFinite(b) ? normalizeBlur(b) : CLEAR_MODAL_DEBUG_DEFAULTS.debugBlur,
-      debugBrightness: Number.isFinite(br)
-        ? normalizeBrightness(br)
-        : CLEAR_MODAL_DEBUG_DEFAULTS.debugBrightness,
-      debugOpacity: Number.isFinite(o) ? normalizeOpacity(o) : CLEAR_MODAL_DEBUG_DEFAULTS.debugOpacity,
+      debugBlur: b !== null ? normalizeBlur(b) : CLEAR_MODAL_DEBUG_DEFAULTS.debugBlur,
+      debugBrightness:
+        br !== null ? normalizeBrightness(br) : CLEAR_MODAL_DEBUG_DEFAULTS.debugBrightness,
+      debugOpacity: o !== null ? normalizeOpacity(o) : CLEAR_MODAL_DEBUG_DEFAULTS.debugOpacity,
     };
   } catch {
     return { ...CLEAR_MODAL_DEBUG_DEFAULTS };
