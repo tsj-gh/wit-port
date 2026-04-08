@@ -3491,7 +3491,7 @@ export default function ReflecShotGame() {
           className={
             isDevTj
               ? "fixed inset-0 z-[9999] flex items-center justify-center"
-              : "fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(0.3px)_brightness(0.7)]"
+              : "fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_25%,transparent)] [backdrop-filter:blur(1px)_brightness(1.3)]"
           }
           style={isDevTj ? clearModalBackdropOverlayStyle(clearModalBackdropDebug) : undefined}
           role="dialog"
@@ -3531,7 +3531,7 @@ export default function ReflecShotGame() {
           className={
             isDevTj
               ? "fixed inset-0 z-[9999] flex items-center justify-center"
-              : "fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(0.3px)_brightness(0.7)]"
+              : "fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_25%,transparent)] [backdrop-filter:blur(1px)_brightness(1.3)]"
           }
           style={isDevTj ? clearModalBackdropOverlayStyle(clearModalBackdropDebug) : undefined}
           role="dialog"

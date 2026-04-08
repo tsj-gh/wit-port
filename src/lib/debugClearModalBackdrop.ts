@@ -3,11 +3,11 @@
 import type { CSSProperties } from "react";
 import { useSyncExternalStore } from "react";
 
-/** 本番クリアオーバーレイに相当する初期値（blur は整数 px レンジ上は 0 に丸め） */
+/** 本番クリアオーバーレイと一致する初期値（テーマの --color-bg に連動するシート濃さ） */
 export const CLEAR_MODAL_DEBUG_DEFAULTS = {
-  debugBlur: 0,
-  debugBrightness: 0.7,
-  debugOpacity: 0.8,
+  debugBlur: 1,
+  debugBrightness: 1.3,
+  debugOpacity: 0.25,
 } as const;
 
 export type ClearModalBackdropDebugState = {
@@ -16,9 +16,9 @@ export type ClearModalBackdropDebugState = {
   debugOpacity: number;
 };
 
-const STORAGE_BLUR = "wispo-debug-clear-modal-blur";
-const STORAGE_BRIGHTNESS = "wispo-debug-clear-modal-brightness";
-const STORAGE_OPACITY = "wispo-debug-clear-modal-opacity";
+const STORAGE_BLUR = "wispo-debug-clear-modal-blur-v2";
+const STORAGE_BRIGHTNESS = "wispo-debug-clear-modal-brightness-v2";
+const STORAGE_OPACITY = "wispo-debug-clear-modal-opacity-v2";
 
 export const CLEAR_MODAL_BLUR_RANGE = { min: 0, max: 20, step: 1 } as const;
 export const CLEAR_MODAL_BRIGHTNESS_RANGE = { min: 0.1, max: 1.5, step: 0.1 } as const;
