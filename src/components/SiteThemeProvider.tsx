@@ -43,7 +43,7 @@ function applyThemeCssVars(theme: (typeof SITE_THEMES)[SiteThemeId]) {
 }
 
 export function SiteThemeProvider({ children }: { children: ReactNode }) {
-  const [themeId, setThemeIdState] = useState<SiteThemeId>("paperCraft");
+  const [themeId, setThemeIdState] = useState<SiteThemeId>("botanicalSport");
 
   useEffect(() => {
     try {

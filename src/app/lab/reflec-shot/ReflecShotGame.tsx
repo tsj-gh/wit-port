@@ -138,9 +138,10 @@ const TRAJECTORY_VERTEX_DOT_R_SOLUTION = 3.35;
 const TRAJECTORY_VERTEX_DOT_BASE_OPACITY = 0.82;
 const TRAJECTORY_VERTEX_DOT_FADE_MS = 240;
 /** 射出軌跡の折れ点を二次ベジエで丸めるときの曲率半径（px） */
-const TRAJECTORY_CORNER_RADIUS_PX = 4;
+const TRAJECTORY_CORNER_RADIUS_PX = 5;
 const TRAJECTORY_CORNER_RADIUS_MIN = 3;
-const TRAJECTORY_CORNER_RADIUS_MAX = 5;
+/** デバッグスライダー上限・曲線描画のクランプ上限 */
+const TRAJECTORY_CORNER_RADIUS_MAX = 7.5;
 /**
  * 連続セグメントの単位ベクトル内積がこれ未満なら折れとみなす（1 に近いほど直線扱いで長く保つ）
  */
@@ -800,7 +801,7 @@ export default function ReflecShotGame() {
     }
     return TRAJECTORY_CORNER_RADIUS_PX;
   }, [debugTrajectoryCornerRadiusPx, isDebugMode, isDevTj]);
-  /** デバッグ時のみスライダーで変更。非デバッグ・非 devtj 時は 3.5 固定。 */
+  /** デバッグ時のみスライダーで変更。非デバッグ・非 devtj 時は TRAJECTORY_CORNER_RADIUS_PX 固定。 */
   const [debugBallSpeedMult, setDebugBallSpeedMult] = useState(DEFAULT_BALL_SPEED_MULT);
   /** 宝石パーティクル吸引: `BASE_GEM_ATTRACT` に掛ける倍率 */
   const [debugGemAttractMult, setDebugGemAttractMult] = useState(DEFAULT_GEM_ATTRACT_MULT);

@@ -2,13 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 初期表示（SSR）: Paper & Craft。クライアントの SiteThemeProvider が上書き */
+/* 初期表示（SSR）: Botanical Sport（デフォルト）。クライアントの SiteThemeProvider が上書き */
 :root {
-  --color-bg: #f9f7f2;
-  --color-surface: #e0d7c6;
-  --color-primary: #d97757;
-  --color-text: #333333;
-  --color-accent: #a68d74;
+  --color-bg: #edf2ee;
+  --color-surface: #ffffff;
+  --color-primary: #2d5a27;
+  --color-text: #1a2a3a;
+  --color-accent: #e3b04b;
   --color-muted: color-mix(in srgb, var(--color-text) 56%, var(--color-bg));
   --color-on-primary: #ffffff;
   --wit-border: color-mix(in srgb, var(--color-text) 14%, transparent);
