@@ -90,6 +90,7 @@ function alignDummyBumpersOnSolutionPathForAutoSolve(st: GridStage): void {
   }
 }
 import { ReflecShotAdSlot } from "@/components/ReflecShotAdSlots";
+import { DebugClearBackdropBlurControl } from "@/components/DebugClearBackdropBlurControl";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { refreshAds } from "@/lib/ads";
 import {
@@ -2856,6 +2857,7 @@ export default function ReflecShotGame() {
                   </div>
                 )}
               </div>
+              <DebugClearBackdropBlurControl />
               <label className="mt-2 flex flex-wrap items-center gap-2 text-[var(--color-muted)] cursor-pointer">
                 <input
                   type="checkbox"
@@ -3484,7 +3486,7 @@ export default function ReflecShotGame() {
 
       {showWinOverlay && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(8px)_brightness(0.7)]"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(var(--clear-backdrop-blur-px,2px))_brightness(0.7)]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="reflec-win-title"
@@ -3519,7 +3521,7 @@ export default function ReflecShotGame() {
 
       {showFailOverlay && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(8px)_brightness(0.7)]"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(var(--clear-backdrop-blur-px,2px))_brightness(0.7)]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="reflec-fail-title"

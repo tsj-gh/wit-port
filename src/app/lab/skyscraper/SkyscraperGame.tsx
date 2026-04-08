@@ -780,7 +780,7 @@ export default function SkyscraperGame() {
 
       {showClearOverlay && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(8px)_brightness(0.7)]"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] [backdrop-filter:blur(var(--clear-backdrop-blur-px,2px))_brightness(0.7)]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="clear-title"

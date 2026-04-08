@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getOrInitWispoUserData, resetAllUserData } from "@/lib/wispo-user-data";
 import { useUserSyncContext } from "@/components/UserSyncProvider";
+import { DebugClearBackdropBlurControl } from "@/components/DebugClearBackdropBlurControl";
 
 const USER_DATA_UPDATED_EVENT = "wispo:userDataUpdated";
 
@@ -48,6 +49,7 @@ export function DevDebugUserStats() {
       >
         今日の進捗をリセット
       </button>
+      <DebugClearBackdropBlurControl />
     </div>
   );
 }
