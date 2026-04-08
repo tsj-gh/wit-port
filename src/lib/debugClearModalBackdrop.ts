@@ -20,6 +20,9 @@ const STORAGE_BLUR = "wispo-debug-clear-modal-blur-v2";
 const STORAGE_BRIGHTNESS = "wispo-debug-clear-modal-brightness-v2";
 const STORAGE_OPACITY = "wispo-debug-clear-modal-opacity-v2";
 
+/** 誤保存された v2 を捨て、既定 1/1.3/0.25 からやり直す（各ブラウザで1回） */
+const STORAGE_V2_KEYS_CLEARED_FLAG = "wispo-debug-clear-modal-v2-keys-cleared";
+
 export const CLEAR_MODAL_BLUR_RANGE = { min: 0, max: 20, step: 1 } as const;
 export const CLEAR_MODAL_BRIGHTNESS_RANGE = { min: 0.1, max: 1.5, step: 0.1 } as const;
 export const CLEAR_MODAL_OPACITY_RANGE = { min: 0, max: 1, step: 0.05 } as const;
@@ -93,8 +96,22 @@ function persist(next: ClearModalBackdropDebugState) {
   }
 }
 
+function dropV2BackdropKeysOnce() {
+  if (typeof window === "undefined") return;
+  try {
+    if (localStorage.getItem(STORAGE_V2_KEYS_CLEARED_FLAG)) return;
+    localStorage.removeItem(STORAGE_BLUR);
+    localStorage.removeItem(STORAGE_BRIGHTNESS);
+    localStorage.removeItem(STORAGE_OPACITY);
+    localStorage.setItem(STORAGE_V2_KEYS_CLEARED_FLAG, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
 function ensureHydrated() {
   if (typeof window === "undefined" || hydrated) return;
+  dropV2BackdropKeysOnce();
   hydrated = true;
   state = readPersisted();
 }
