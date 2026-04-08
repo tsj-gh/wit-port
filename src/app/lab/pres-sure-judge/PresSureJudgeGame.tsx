@@ -138,8 +138,14 @@ function createWeightItem(value: number, id?: string): WeightItem {
       bg: "bg-[color-mix(in_srgb,var(--color-text)_62%,var(--color-bg))]",
       border: "border-[color-mix(in_srgb,var(--color-muted)_40%,transparent)]",
     },
-    md: { bg: "bg-blue-600", border: "border-blue-400" },
-    lg: { bg: "bg-indigo-600", border: "border-indigo-400" },
+    md: {
+      bg: "bg-[color-mix(in_srgb,var(--color-primary)_82%,var(--color-bg))]",
+      border: "border-[color-mix(in_srgb,var(--color-primary)_48%,transparent)]",
+    },
+    lg: {
+      bg: "bg-[color-mix(in_srgb,var(--color-accent)_72%,var(--color-bg))]",
+      border: "border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)]",
+    },
   };
   const p = palettes[sizes] || palettes.md;
   return {
@@ -156,8 +162,9 @@ function createNPCWeightItem(value: number): WeightItem {
     id: `npc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     value,
     visual: {
-      bgClass: "bg-gradient-to-br from-amber-600 to-orange-700",
-      borderClass: "border-amber-400",
+      bgClass:
+        "bg-gradient-to-br from-[var(--color-primary)] to-[color-mix(in_srgb,var(--color-accent)_50%,var(--color-primary))]",
+      borderClass: "border-[color-mix(in_srgb,var(--color-primary)_42%,transparent)]",
       size,
     },
     position: { x: 0, y: 0 },
@@ -181,14 +188,20 @@ function PlacedWeightBlock({ w }: { w: PlacedWeight }) {
       : getBlockSize(size);
   const bgClass =
     w.side === "left"
-      ? "bg-gradient-to-br from-amber-600 to-orange-700"
+      ? "bg-gradient-to-br from-[var(--color-primary)] to-[color-mix(in_srgb,var(--color-accent)_50%,var(--color-primary))]"
       : size === "sm"
         ? "bg-[color-mix(in_srgb,var(--color-text)_62%,var(--color-bg))]"
         : size === "md"
-          ? "bg-blue-600"
-          : "bg-indigo-600";
+          ? "bg-[color-mix(in_srgb,var(--color-primary)_82%,var(--color-bg))]"
+          : "bg-[color-mix(in_srgb,var(--color-accent)_72%,var(--color-bg))]";
   const borderClass =
-    w.side === "left" ? "border-amber-400" : size === "sm" ? "border-slate-400" : size === "md" ? "border-blue-400" : "border-indigo-400";
+    w.side === "left"
+      ? "border-[color-mix(in_srgb,var(--color-primary)_42%,transparent)]"
+      : size === "sm"
+        ? "border-[color-mix(in_srgb,var(--color-muted)_45%,transparent)]"
+        : size === "md"
+          ? "border-[color-mix(in_srgb,var(--color-primary)_48%,transparent)]"
+          : "border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)]";
   return (
     <motion.div
       layout
@@ -256,7 +269,7 @@ function NPCDropBlock({ item }: { item: WeightItem }) {
           damping: 15,
         },
       }}
-      className={`flex items-center justify-center rounded-xl border-2 font-bold text-amber-100 text-lg shrink-0 ${blockSize} ${item.visual.bgClass} ${item.visual.borderClass}`}
+      className={`flex items-center justify-center rounded-xl border-2 font-bold text-[var(--color-on-primary)] text-lg shrink-0 ${blockSize} ${item.visual.bgClass} ${item.visual.borderClass}`}
       style={{
         boxShadow:
           "0 6px 16px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.3)",
@@ -1365,31 +1378,31 @@ export default function PresSureJudgeGame() {
           </div>
           <div className="mt-2 space-y-1.5">
             <label className="flex items-center justify-between gap-2">
-              <span className="text-amber-300/90">scaleWrapperTopOffset:</span>
+              <span className="text-[var(--color-muted)]">scaleWrapperTopOffset:</span>
               <input
                 type="number"
                 value={layoutParamsDraft.scaleWrapperTopOffset}
                 onChange={(e) =>
                   setLayoutParamsDraft((p) => ({ ...p, scaleWrapperTopOffset: Number(e.target.value) || 0 }))
                 }
-                className="w-14 px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-amber-300"
+                className="w-14 px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-muted)]"
               />
               <span className="text-[var(--color-muted)]">({DEBUG_LAYOUT_DEFAULTS.scaleWrapperTopOffset})</span>
             </label>
             <label className="flex items-center justify-between gap-2">
-              <span className="text-amber-300/90">scaleWrapperMaxOffset:</span>
+              <span className="text-[var(--color-muted)]">scaleWrapperMaxOffset:</span>
               <input
                 type="number"
                 value={layoutParamsDraft.scaleWrapperMaxOffset}
                 onChange={(e) =>
                   setLayoutParamsDraft((p) => ({ ...p, scaleWrapperMaxOffset: Number(e.target.value) || 0 }))
                 }
-                className="w-14 px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-amber-300"
+                className="w-14 px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-muted)]"
               />
               <span className="text-[var(--color-muted)]">({DEBUG_LAYOUT_DEFAULTS.scaleWrapperMaxOffset})</span>
             </label>
             <label className="flex items-center justify-between gap-2">
-              <span className="text-amber-300/90">{t("games.presSure.debugArmRatio")}</span>
+              <span className="text-[var(--color-muted)]">{t("games.presSure.debugArmRatio")}</span>
               <input
                 type="number"
                 min="0.1"
@@ -1402,14 +1415,14 @@ export default function PresSureJudgeGame() {
                     armLengthRatio: Math.max(0.1, Math.min(1, Number(e.target.value) || 1)),
                   }))
                 }
-                className="w-14 px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-amber-300"
+                className="w-14 px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-muted)]"
               />
               <span className="text-[var(--color-muted)]">({DEBUG_LAYOUT_DEFAULTS.armLengthRatio})</span>
             </label>
           </div>
           <button
             onClick={() => setLayoutParams(layoutParamsDraft)}
-            className="mt-2 w-full rounded border border-amber-500/50 bg-[var(--color-accent)]/20 py-1.5 text-amber-400 hover:bg-[var(--color-accent)]/30"
+            className="mt-2 w-full rounded border border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] bg-[var(--color-accent)]/20 py-1.5 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30"
           >
             {t("games.presSure.debugApplyValues")}
           </button>
@@ -1429,7 +1442,7 @@ export default function PresSureJudgeGame() {
                 checked={showConnectionPoints}
                 onChange={(e) => setShowConnectionPoints(e.target.checked)}
               />
-              <span className="text-amber-400">{t("games.presSure.debugShowArmJoint")}</span>
+              <span className="text-[var(--color-accent)]">{t("games.presSure.debugShowArmJoint")}</span>
             </label>
             <label className="mt-1 flex items-center gap-2">
               <input
@@ -1437,7 +1450,7 @@ export default function PresSureJudgeGame() {
                 checked={showArmLines}
                 onChange={(e) => setShowArmLines(e.target.checked)}
               />
-              <span className="text-amber-400">{t("games.presSure.debugShowArmLine")}</span>
+              <span className="text-[var(--color-accent)]">{t("games.presSure.debugShowArmLine")}</span>
             </label>
             <label className="mt-1 flex items-center gap-2">
               <input
@@ -1445,7 +1458,7 @@ export default function PresSureJudgeGame() {
                 checked={showBezierTrajectory}
                 onChange={(e) => setShowBezierTrajectory(e.target.checked)}
               />
-              <span className="text-amber-400">{t("games.presSure.debugShowBezier")}</span>
+              <span className="text-[var(--color-accent)]">{t("games.presSure.debugShowBezier")}</span>
             </label>
             <label className="mt-1 flex items-center gap-2">
               <input
@@ -1453,10 +1466,10 @@ export default function PresSureJudgeGame() {
                 checked={showBoundingBox}
                 onChange={(e) => setShowBoundingBox(e.target.checked)}
               />
-              <span className="text-amber-400">{t("games.presSure.debugShowBounds")}</span>
+              <span className="text-[var(--color-accent)]">{t("games.presSure.debugShowBounds")}</span>
             </label>
             <label className="mt-1 flex items-center gap-2">
-              <span className="text-amber-400">{t("games.presSure.debugInitialSpeedMul")}</span>
+              <span className="text-[var(--color-accent)]">{t("games.presSure.debugInitialSpeedMul")}</span>
               <input
                 type="number"
                 step="0.1"
@@ -1464,7 +1477,7 @@ export default function PresSureJudgeGame() {
                 max="5"
                 value={velocityMultiplier}
                 onChange={(e) => setVelocityMultiplier(Math.max(0.1, Math.min(5, Number(e.target.value) || 1)))}
-                className="w-14 px-2 py-1 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-amber-300"
+                className="w-14 px-2 py-1 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-muted)]"
               />
             </label>
             <label className="mt-1 flex items-center gap-2">
@@ -1473,26 +1486,26 @@ export default function PresSureJudgeGame() {
                 checked={debugDoubleInventory}
                 onChange={(e) => setDebugDoubleInventory(e.target.checked)}
               />
-              <span className="text-amber-400">{t("games.presSure.debugDoubleNextInv")}</span>
+              <span className="text-[var(--color-accent)]">{t("games.presSure.debugDoubleNextInv")}</span>
             </label>
             <div className="mt-2 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pt-2">
               <span className="text-emerald-400">{t("games.presSure.debugNpcRoundItem")}</span>
               <label className="mt-1 flex items-center justify-between gap-2">
-                <span className="text-amber-300/90">{t("games.presSure.debugSpawnDelay")}</span>
+                <span className="text-[var(--color-muted)]">{t("games.presSure.debugSpawnDelay")}</span>
                 <input
                   type="number"
                   value={npcItemAppearDelayMs}
                   onChange={(e) => setNpcItemAppearDelayMs(Math.max(0, Number(e.target.value) || NPC_ITEM_APPEAR_DELAY_MS))}
-                  className="w-14 px-2 py-1 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-amber-300"
+                  className="w-14 px-2 py-1 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-muted)]"
                 />
               </label>
               <label className="mt-1 flex items-center justify-between gap-2">
-                <span className="text-amber-300/90">{t("games.presSure.debugLaunchDelay")}</span>
+                <span className="text-[var(--color-muted)]">{t("games.presSure.debugLaunchDelay")}</span>
                 <input
                   type="number"
                   value={npcItemFlyDelayMs}
                   onChange={(e) => setNpcItemFlyDelayMs(Math.max(0, Number(e.target.value) || NPC_ITEM_FLY_DELAY_MS))}
-                  className="w-14 px-2 py-1 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-amber-300"
+                  className="w-14 px-2 py-1 rounded bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] text-[var(--color-muted)]"
                 />
               </label>
             </div>
@@ -1541,7 +1554,7 @@ export default function PresSureJudgeGame() {
                 {t("games.presSure.debugRefreshCount")}{" "}
                 <span
                   className={`tabular-nums transition-colors duration-200 ${
-                    countFlashing ? "text-amber-400 font-bold" : ""
+                    countFlashing ? "text-[var(--color-accent)] font-bold" : ""
                   }`}
                 >
                   {adsRefreshState.refreshCount}
@@ -1550,7 +1563,7 @@ export default function PresSureJudgeGame() {
               <div className="mt-2">
                 <button
                   onClick={() => refreshAds()}
-                  className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-[var(--color-accent)]/20 text-amber-400 hover:bg-[var(--color-accent)]/30"
+                  className="px-2 py-0.5 rounded text-[10px] border border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30"
                 >
                   {t("games.presSure.debugFlashTest")}
                 </button>
@@ -1596,7 +1609,7 @@ export default function PresSureJudgeGame() {
           )}
           {boxLabels.arm && (
             <div
-              className="absolute text-[9px] font-mono bg-blue-950/90 text-blue-300 px-1 rounded"
+              className="absolute text-[9px] font-mono bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))] text-[var(--color-muted)] px-1 rounded"
               style={{ left: boxLabels.arm.x, top: boxLabels.arm.y - 14 }}
             >
               Arm {boxLabels.arm.w.toFixed(0)}×{boxLabels.arm.h.toFixed(0)}
@@ -1712,7 +1725,7 @@ export default function PresSureJudgeGame() {
               <span className="block">
                 {t("games.presSure.debugVelApplied")} vx={debugOverlay.vx.toFixed(0)} vy={debugOverlay.vy.toFixed(0)}
               </span>
-              <span className="block text-amber-400">
+              <span className="block text-[var(--color-accent)]">
                 {t("games.presSure.debugLaunch")}{" "}
                 {debugOverlay.launchSource === "double-click"
                   ? t("games.presSure.launchDoubleClick")
@@ -1728,12 +1741,12 @@ export default function PresSureJudgeGame() {
               title="P0"
             />
             <div
-              className="absolute w-3 h-3 rounded-full bg-[var(--color-accent)] border-2 border-amber-300"
+              className="absolute w-3 h-3 rounded-full bg-[var(--color-accent)] border-2 border-[color-mix(in_srgb,var(--color-accent)_38%,transparent)]"
               style={{ left: debugOverlay.p1.x - 6, top: debugOverlay.p1.y - 6 }}
               title="P1"
             />
             <div
-              className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-blue-300"
+              className="absolute w-3 h-3 rounded-full bg-[var(--color-primary)] border-2 border-[color-mix(in_srgb,var(--color-primary)_38%,transparent)]"
               style={{ left: debugOverlay.p2.x - 6, top: debugOverlay.p2.y - 6 }}
               title="P2"
             />
@@ -1792,7 +1805,7 @@ export default function PresSureJudgeGame() {
                   {phase === "user" ? (
                     <span
                       className={`font-mono font-bold tabular-nums text-2xl md:text-3xl ${
-                        timer <= 3 ? "text-red-400 animate-pulse" : "text-amber-400/90"
+                        timer <= 3 ? "text-red-400 animate-pulse" : "text-[var(--color-accent)]/90"
                       }`}
                     >
                       {timer}s
@@ -1830,7 +1843,7 @@ export default function PresSureJudgeGame() {
                       bottom: `calc(100% - ${panBottomBase}px)`,
                       height: layoutParams.armHeight,
                       transformOrigin: "center bottom",
-                      ...(isDebugMode && showBoundingBox && { outline: "1px dashed blue", outlineOffset: -1 }),
+                      ...(isDebugMode && showBoundingBox && { outline: "1px dashed var(--color-primary)", outlineOffset: -1 }),
                     }}
                     animate={{
                       rotate: rotation,
@@ -1843,7 +1856,7 @@ export default function PresSureJudgeGame() {
                     }}
                   >
                     <div
-                      className="absolute bottom-0 h-2 rounded-full bg-gradient-to-r from-transparent via-slate-500 to-transparent"
+                      className="absolute bottom-0 h-2 rounded-full bg-gradient-to-r from-transparent via-[color-mix(in_srgb,var(--color-muted)_55%,transparent)] to-transparent"
                       style={{ left: leftEndX, width: rightEndX - leftEndX }}
                     />
                     <div
@@ -1866,10 +1879,10 @@ export default function PresSureJudgeGame() {
                       transform: "rotate(0deg)",
                     }}
                   >
-                    <span className="text-[10px] text-amber-400/90 font-medium mb-1">NPC</span>
+                    <span className="text-[10px] text-[var(--color-accent)]/90 font-medium mb-1">NPC</span>
                     <div
                       ref={leftPanRef}
-                      className="relative w-32 rounded-b-xl border-2 border-amber-500/50 bg-[var(--color-accent)]/10 px-2 py-2 overflow-visible"
+                      className="relative w-32 rounded-b-xl border-2 border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] bg-[var(--color-accent)]/10 px-2 py-2 overflow-visible"
                       style={{
                         minHeight: PAN_MAX_VISIBLE_HEIGHT,
                         height:
@@ -1898,10 +1911,10 @@ export default function PresSureJudgeGame() {
                       transform: "rotate(0deg)",
                     }}
                   >
-                    <span className="text-[10px] text-blue-400/90 font-medium mb-1">You</span>
+                    <span className="text-[10px] text-[var(--color-primary)]/90 font-medium mb-1">You</span>
                     <motion.div
                       ref={rightPanRef}
-                      className="relative w-32 rounded-b-xl border-2 px-2 py-2 border-blue-500/50 bg-blue-500/10 transition-colors overflow-visible"
+                      className="relative w-32 rounded-b-xl border-2 px-2 py-2 border-[color-mix(in_srgb,var(--color-primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_12%,transparent)] transition-colors overflow-visible"
                       style={{
                         ...(isDebugMode && showBoundingBox && { outline: "1px solid green", outlineOffset: -1 }),
                         minHeight: PAN_MAX_VISIBLE_HEIGHT,
@@ -1913,7 +1926,10 @@ export default function PresSureJudgeGame() {
                               )
                             : PAN_MAX_VISIBLE_HEIGHT,
                       }}
-                      whileHover={{ borderColor: "rgba(96,165,250,0.9)", backgroundColor: "rgba(59,130,246,0.2)" }}
+                      whileHover={{
+                        borderColor: "color-mix(in srgb, var(--color-primary) 55%, transparent)",
+                        backgroundColor: "color-mix(in srgb, var(--color-primary) 22%, transparent)",
+                      }}
                     >
                       {rightDisplay.map((w) => (
                         <PlacedWeightBlock key={w.id} w={w} />
@@ -1945,7 +1961,7 @@ export default function PresSureJudgeGame() {
                   {isDebugMode && showConnectionPoints && (
                     <>
                       <div
-                        className="absolute w-3 h-3 rounded-full border-2 border-amber-300 bg-[var(--color-accent)] pointer-events-none z-30"
+                        className="absolute w-3 h-3 rounded-full border-2 border-[color-mix(in_srgb,var(--color-accent)_38%,transparent)] bg-[var(--color-accent)] pointer-events-none z-30"
                         style={{
                           left: leftEndX,
                           top: panBottomBase + leftEndY,
@@ -1954,7 +1970,7 @@ export default function PresSureJudgeGame() {
                         title={t("games.presSure.titleNpcAnchor")}
                       />
                       <div
-                        className="absolute w-3 h-3 rounded-full border-2 border-blue-300 bg-blue-500 pointer-events-none z-30"
+                        className="absolute w-3 h-3 rounded-full border-2 border-[color-mix(in_srgb,var(--color-primary)_38%,transparent)] bg-[var(--color-primary)] pointer-events-none z-30"
                         style={{
                           left: rightEndX,
                           top: panBottomBase + rightEndY,
@@ -2039,7 +2055,7 @@ export default function PresSureJudgeGame() {
                     >
                       <div
                         ref={inventoryContainerRef}
-                        className={`h-full w-full p-3 rounded-xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 flex gap-3 items-center overflow-x-auto overflow-y-hidden scroll-smooth ${forcedWidth === 375 ? "flex-wrap" : "flex-wrap md:flex-nowrap"}`}
+                        className={`h-full w-full p-3 rounded-xl border-2 border-dashed border-[color-mix(in_srgb,var(--color-primary)_32%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_8%,transparent)] flex gap-3 items-center overflow-x-auto overflow-y-hidden scroll-smooth ${forcedWidth === 375 ? "flex-wrap" : "flex-wrap md:flex-nowrap"}`}
                         style={{ touchAction: "none", scrollBehavior: "smooth" }}
                         onPointerDownCapture={handleInventoryPointerDown}
                         onPointerMove={handleInventoryPointerMove}
@@ -2097,7 +2113,8 @@ export default function PresSureJudgeGame() {
                       <div
                         className="absolute right-0 top-0 bottom-0 w-12 pointer-events-none shrink-0"
                         style={{
-                          background: "linear-gradient(to right, transparent, rgba(10, 14, 24, 0.9))",
+                          background:
+                            "linear-gradient(to right, transparent, color-mix(in srgb, var(--color-text) 88%, var(--color-bg)))",
                         }}
                         aria-hidden
                       />
@@ -2107,7 +2124,7 @@ export default function PresSureJudgeGame() {
                   <button
                     onClick={handleJudge}
                     disabled={phase === "transition"}
-                    className={`w-full py-3 rounded-xl font-bold transition-colors border-2 border-amber-400/50 ${
+                    className={`w-full py-3 rounded-xl font-bold transition-colors border-2 border-[color-mix(in_srgb,var(--color-accent)_42%,transparent)] ${
                       phase === "transition"
                         ? "cursor-not-allowed bg-[var(--color-accent)]/50 text-[var(--color-muted)]"
                         : "bg-[var(--color-accent)] text-[var(--color-text)] hover:brightness-95"
@@ -2159,9 +2176,9 @@ export default function PresSureJudgeGame() {
                       className="flex items-center gap-4 px-4 py-3 rounded-lg bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] text-sm shrink-0"
                     >
                       <span className="text-[var(--color-muted)] w-10 shrink-0">R{e.round}</span>
-                      <span className="text-amber-400 shrink-0">NPC +{e.left}</span>
-                      <span className="text-blue-400 shrink-0">You +{e.right}</span>
-                      <span className={`shrink-0 font-mono ${e.diff >= 0 ? "text-amber-400" : "text-blue-400"}`}>Δ{e.diff}</span>
+                      <span className="text-[var(--color-accent)] shrink-0">NPC +{e.left}</span>
+                      <span className="text-[var(--color-primary)] shrink-0">You +{e.right}</span>
+                      <span className={`shrink-0 font-mono ${e.diff >= 0 ? "text-[var(--color-accent)]" : "text-[var(--color-primary)]"}`}>Δ{e.diff}</span>
                     </motion.div>
                   ))}
                 </div>

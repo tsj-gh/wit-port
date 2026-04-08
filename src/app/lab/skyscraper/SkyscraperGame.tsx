@@ -539,11 +539,11 @@ export default function SkyscraperGame() {
                         ${solved ? "cursor-default bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]/50" : "hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]/50"}
                         ${val ? "text-[var(--color-text)]" : "text-[color-mix(in_srgb,var(--color-muted)_85%,var(--color-bg))]"}
                         ${isMaybe ? "text-[var(--color-muted)]" : ""}
-                        ${isPin ? "relative after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-0 after:h-0 after:border-l-[5px] after:border-r-[5px] after:border-l-transparent after:border-r-transparent after:border-t-[8px] after:border-t-amber-600" : ""}`}
+                        ${isPin ? "relative after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-0 after:h-0 after:border-l-[5px] after:border-r-[5px] after:border-l-transparent after:border-r-transparent after:border-t-[8px] after:border-t-[var(--color-primary)]" : ""}`}
                       style={
                         val
                           ? {
-                              background: `linear-gradient(to top, rgba(16, 185, 129, 0.4) ${(val / n) * 100}%, transparent ${(val / n) * 100}%)`,
+                              background: `linear-gradient(to top, color-mix(in srgb, var(--color-primary) 40%, transparent) ${(val / n) * 100}%, transparent ${(val / n) * 100}%)`,
                             }
                           : {}
                       }

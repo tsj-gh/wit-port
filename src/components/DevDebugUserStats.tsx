@@ -44,7 +44,7 @@ export function DevDebugUserStats() {
       </div>
       <button
         onClick={handleReset}
-        className="px-1 py-0.5 rounded text-[9px] border border-amber-500/50 bg-[var(--color-accent)]/20 text-amber-400 hover:bg-[var(--color-accent)]/30"
+        className="px-1 py-0.5 rounded text-[9px] border border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30"
       >
         今日の進捗をリセット
       </button>

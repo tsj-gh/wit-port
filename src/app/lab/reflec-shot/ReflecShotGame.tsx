@@ -91,8 +91,6 @@ function alignDummyBumpersOnSolutionPathForAutoSolve(st: GridStage): void {
 }
 import { ReflecShotAdSlot } from "@/components/ReflecShotAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
-import { useSiteTheme } from "@/components/SiteThemeProvider";
-import { SITE_THEMES, SITE_THEME_IDS, type SiteThemeId } from "@/lib/siteThemes";
 import { refreshAds } from "@/lib/ads";
 import {
   GAME_AD_GAP_AFTER_SLOT_1_PX,
@@ -769,7 +767,6 @@ export default function ReflecShotGame() {
   const { t } = useI18n();
   const searchParams = useSearchParams();
   const isDevTj = searchParams.get("devtj") === "true";
-  const { themeId, setThemeId } = useSiteTheme();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [grade, setGrade] = useState(1);
@@ -2822,7 +2819,7 @@ export default function ReflecShotGame() {
                     name="reflec-shot-trajectory-style"
                     checked={trajectoryStyle === "curved"}
                     onChange={() => setTrajectoryStyle("curved")}
-                    className="accent-sky-400"
+                    className="accent-[var(--color-primary)]"
                   />
                   <span className="text-[10px] leading-snug">{t("games.reflecShot.debugTrajectoryStyleCurved")}</span>
                 </label>
@@ -2832,7 +2829,7 @@ export default function ReflecShotGame() {
                     name="reflec-shot-trajectory-style"
                     checked={trajectoryStyle === "vertexDots"}
                     onChange={() => setTrajectoryStyle("vertexDots")}
-                    className="accent-sky-400"
+                    className="accent-[var(--color-primary)]"
                   />
                   <span className="text-[10px] leading-snug">
                     {t("games.reflecShot.debugTrajectoryStyleVertexDots")}
@@ -2850,30 +2847,13 @@ export default function ReflecShotGame() {
                       step={0.25}
                       value={debugTrajectoryCornerRadiusPx}
                       onChange={(e) => setDebugTrajectoryCornerRadiusPx(Number(e.target.value))}
-                      className="flex-1 min-w-0 accent-cyan-400"
+                      className="flex-1 min-w-0 accent-[var(--color-accent)]"
                     />
-                    <span className="tabular-nums w-12 text-right text-[10px] text-cyan-200/90">
+                    <span className="tabular-nums w-12 text-right text-[10px] text-[color-mix(in_srgb,var(--color-accent)_72%,var(--color-bg))]">
                       {debugTrajectoryCornerRadiusPx.toFixed(2)}px
                     </span>
                   </div>
                 )}
-              </div>
-              <div className="mt-2 flex flex-col gap-1 text-[var(--color-muted)]">
-                <label className="text-[10px] leading-tight text-[var(--color-muted)]" htmlFor="wispo-site-theme">
-                  {t("games.reflecShot.debugSiteTheme")}
-                </label>
-                <select
-                  id="wispo-site-theme"
-                  value={themeId}
-                  onChange={(e) => setThemeId(e.target.value as SiteThemeId)}
-                  className="w-full rounded-lg border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_45%,var(--color-bg))] px-2 py-1.5 text-[10px] text-[var(--color-text)]"
-                >
-                  {SITE_THEME_IDS.map((id) => (
-                    <option key={id} value={id}>
-                      {SITE_THEMES[id].name}
-                    </option>
-                  ))}
-                </select>
               </div>
               <label className="mt-2 flex flex-wrap items-center gap-2 text-[var(--color-muted)] cursor-pointer">
                 <input
@@ -2881,7 +2861,7 @@ export default function ReflecShotGame() {
                   checked={showSolutionPath}
                   onChange={(e) => setShowSolutionPath(e.target.checked)}
                   style={{ accentColor: "var(--color-primary)" }}
-                  className="accent-stone-600"
+                  className="accent-[var(--color-primary)]"
                 />
                 {t("games.reflecShot.debugShowSolutionPath")}
               </label>
@@ -2940,7 +2920,7 @@ export default function ReflecShotGame() {
                   step={0.25}
                   value={debugBallSpeedMult}
                   onChange={(e) => setDebugBallSpeedMult(Number(e.target.value))}
-                  className="flex-1 min-w-0 accent-sky-400"
+                  className="flex-1 min-w-0 accent-[var(--color-primary)]"
                 />
                 <span className="tabular-nums w-10 text-right text-[10px] text-[var(--color-muted)]/90">{debugBallSpeedMult}×</span>
               </div>
@@ -2953,9 +2933,9 @@ export default function ReflecShotGame() {
                   step={0.25}
                   value={debugGemAttractMult}
                   onChange={(e) => setDebugGemAttractMult(Number(e.target.value))}
-                  className="flex-1 min-w-0 accent-amber-400"
+                  className="flex-1 min-w-0 accent-[var(--color-accent)]"
                 />
-                <span className="tabular-nums w-10 text-right text-[10px] text-amber-200/90">
+                <span className="tabular-nums w-10 text-right text-[10px] text-[color-mix(in_srgb,var(--color-accent)_70%,var(--color-bg))]">
                   {debugGemAttractMult}×
                 </span>
               </div>
@@ -3016,9 +2996,9 @@ export default function ReflecShotGame() {
                     step={0.05}
                     value={debugTjMaxArcFactor}
                     onChange={(e) => setDebugTjMaxArcFactor(Number(e.target.value))}
-                    className="flex-1 min-w-0 accent-cyan-400"
+                    className="flex-1 min-w-0 accent-[var(--color-accent)]"
                   />
-                  <span className="tabular-nums w-12 text-right text-[10px] text-cyan-200/90">
+                  <span className="tabular-nums w-12 text-right text-[10px] text-[color-mix(in_srgb,var(--color-accent)_72%,var(--color-bg))]">
                     ×{debugTjMaxArcFactor.toFixed(2)}
                   </span>
                 </div>
@@ -3072,9 +3052,9 @@ export default function ReflecShotGame() {
                       step={1}
                       value={debugGrade2Bend6MidSlider}
                       onChange={(e) => setDebugGrade2Bend6MidSlider(Number(e.target.value))}
-                      className="flex-1 min-w-0 accent-amber-400"
+                      className="flex-1 min-w-0 accent-[var(--color-accent)]"
                     />
-                    <span className="tabular-nums w-8 text-right text-[10px] text-amber-200/90">
+                    <span className="tabular-nums w-8 text-right text-[10px] text-[color-mix(in_srgb,var(--color-accent)_70%,var(--color-bg))]">
                       {debugGrade2Bend6MidSlider}
                     </span>
                   </div>
@@ -3191,7 +3171,7 @@ export default function ReflecShotGame() {
                     type="checkbox"
                     checked={stockPrefetchPaused}
                     onChange={(e) => setStockPrefetchPaused(e.target.checked)}
-                    className="accent-amber-400"
+                    className="accent-[var(--color-accent)]"
                   />
                   {t("games.reflecShot.debugStockPause")}
                 </label>

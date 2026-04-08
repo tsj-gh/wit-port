@@ -9,7 +9,8 @@
     "backToTop": "トップへ戻る",
     "backToTopArrow": "← トップへ戻る",
     "loading": "読み込み中…",
-    "languageAria": "表示言語"
+    "languageAria": "表示言語",
+    "debugSiteTheme": "サイトテーマ（デバッグ）"
   },
   "footer": {
     "top": "ウィスポ（トップ）",

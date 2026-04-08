@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { SITE_THEMES, type SiteThemeId } from "@/lib/siteThemes";
+import { pickOnPrimaryForHex, SITE_THEMES, type SiteThemeId } from "@/lib/themes";
 
 const STORAGE_KEY = "wispo-site-theme-id";
 
@@ -30,7 +30,7 @@ function applyThemeCssVars(theme: (typeof SITE_THEMES)[SiteThemeId]) {
   root.style.setProperty("--color-text", text);
   root.style.setProperty("--color-accent", accent);
   root.style.setProperty("--color-muted", `color-mix(in srgb, ${text} 56%, ${bg})`);
-  root.style.setProperty("--color-on-primary", "#ffffff");
+  root.style.setProperty("--color-on-primary", pickOnPrimaryForHex(primary));
   root.style.setProperty("--wit-border", `color-mix(in srgb, ${text} 14%, transparent)`);
   root.style.setProperty(
     "--wit-card-bg",

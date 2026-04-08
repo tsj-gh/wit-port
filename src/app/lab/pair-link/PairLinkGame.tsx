@@ -1594,7 +1594,7 @@ export default function PairLinkGame() {
                 </button>
                 <button
                   onClick={() => refreshAds()}
-                  className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-[var(--color-accent)]/20 text-amber-400 hover:bg-[var(--color-accent)]/30"
+                  className="px-2 py-0.5 rounded text-[10px] border border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30"
                 >
                   フラッシュテスト
                 </button>
@@ -1602,13 +1602,13 @@ export default function PairLinkGame() {
               <div className="mt-2 space-y-0.5 text-[var(--color-muted)]/90 text-[10px]">
                 <div>
                   プリフェッチ状態:{" "}
-                  <span className={isPrefetching ? "text-amber-400" : ""}>
+                  <span className={isPrefetching ? "text-[var(--color-accent)]" : ""}>
                     {isPrefetching ? "生成中...（Running）" : "待機中（Idle）"}
                   </span>
                 </div>
                 <div>
                   ストック状況:{" "}
-                  <span className="tabular-nums text-amber-400">
+                  <span className="tabular-nums text-[var(--color-accent)]">
                     {Object.entries(stockStatus)
                       .sort(([a], [b]) => a.localeCompare(b))
                       .map(([k, v]) => `${k}: ${v}個`)
@@ -1635,7 +1635,7 @@ export default function PairLinkGame() {
                   <div className="mt-1 pt-1 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)]">
                     <div className="font-semibold text-[var(--color-muted)] mb-0.5">[累計内訳]（ループ全回分合計）</div>
                     {Object.entries(lastProfile).map(([step, ms]) => {
-                      const cn = ms > 100 ? "text-red-400 font-bold" : ms > 16.7 ? "text-amber-400" : "";
+                      const cn = ms > 100 ? "text-red-400 font-bold" : ms > 16.7 ? "text-[var(--color-accent)]" : "";
                       return (
                         <div key={step} className="flex justify-between gap-2">
                           <span>{step}:</span>
@@ -1685,7 +1685,7 @@ export default function PairLinkGame() {
                   リフレッシュ回数:{" "}
                   <span
                     className={`tabular-nums transition-colors duration-200 ${
-                      countFlashing ? "text-amber-400 font-bold" : ""
+                      countFlashing ? "text-[var(--color-accent)] font-bold" : ""
                     }`}
                   >
                     {adsRefreshState.refreshCount}
@@ -2063,7 +2063,7 @@ export default function PairLinkGame() {
                                 type="button"
                                 onClick={runTest10}
                                 disabled={test10Running}
-                                className="px-2 py-0.5 rounded text-[10px] border border-amber-500/50 bg-[var(--color-accent)]/20 text-amber-400 hover:bg-[var(--color-accent)]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-2 py-0.5 rounded text-[10px] border border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {test10Running ? "実行中..." : "Test 10 Runs"}
                               </button>
@@ -2073,7 +2073,7 @@ export default function PairLinkGame() {
                                 <span>成功: {test10Result.success}/10</span>
                                 <span className="ml-2">平均: {test10Result.avgMs}ms</span>
                                 {test10Result.lastAbc && (
-                                  <div className="mt-0.5 text-amber-400/90">
+                                  <div className="mt-0.5 text-[color-mix(in_srgb,var(--color-accent)_85%,var(--color-bg))]">
                                     ABC: A={test10Result.lastAbc.detourScore.toFixed(2)} B=
                                     {test10Result.lastAbc.enclosureScore} C=
                                     {test10Result.lastAbc.junctionComplexity.toFixed(2)}
@@ -2087,19 +2087,19 @@ export default function PairLinkGame() {
                             <div className="space-y-0.5 text-[var(--color-muted)]/90">
                               <div>
                                 A. 迂回率:{" "}
-                                <span className="tabular-nums text-amber-400">
+                                <span className="tabular-nums text-[var(--color-accent)]">
                                   {abcScore ? abcScore.detourScore.toFixed(3) : "—"}
                                 </span>
                               </div>
                               <div>
                                 B. エンクロージャ:{" "}
-                                <span className="tabular-nums text-amber-400">
+                                <span className="tabular-nums text-[var(--color-accent)]">
                                   {abcScore != null ? abcScore.enclosureScore : "—"}
                                 </span>
                               </div>
                               <div>
                                 C. 分岐複雑性:{" "}
-                                <span className="tabular-nums text-amber-400">
+                                <span className="tabular-nums text-[var(--color-accent)]">
                                   {abcScore ? abcScore.junctionComplexity.toFixed(3) : "—"}
                                 </span>
                               </div>

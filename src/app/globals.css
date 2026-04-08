@@ -16,6 +16,26 @@
   --wit-accent-glow: color-mix(in srgb, var(--color-primary) 45%, transparent);
 }
 
+/* テーマ切替時の色の滑らかな遷移 */
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body,
+body * {
+  transition-property: background-color, color, border-color, fill, stroke, box-shadow, outline-color, text-decoration-color;
+  transition-duration: 0.3s;
+  transition-timing-function: ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body,
+  body * {
+    transition-duration: 0s !important;
+  }
+}
+
 /* 背景に微細な紙のようなノイズ（約 2%） */
 .texture-overlay {
   background-image: url("https://www.transparenttextures.com/patterns/pinstriped-suit.png");

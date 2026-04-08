@@ -9,7 +9,8 @@
     "backToTop": "Back to home",
     "backToTopArrow": "← Back to home",
     "loading": "Loading…",
-    "languageAria": "Display language"
+    "languageAria": "Display language",
+    "debugSiteTheme": "Site theme (debug)"
   },
   "footer": {
     "top": "Wispo (Home)",

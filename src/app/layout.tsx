@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
 import Footer from "@/components/Footer";
+import { DebugThemeSelector } from "@/components/DebugThemeSelector";
 import { SiteThemeProvider } from "@/components/SiteThemeProvider";
 import { I18nProvider } from "@/lib/i18n-context";
 import { UserSyncProvider } from "@/components/UserSyncProvider";
@@ -54,6 +55,7 @@ export default function RootLayout({
         <UserSyncProvider>
           <I18nProvider>
             <SiteThemeProvider>
+              <DebugThemeSelector />
               <div className="texture-overlay fixed inset-0 z-[5]" aria-hidden />
               <div className="relative z-10 flex min-h-screen flex-1 flex-col">
                 {children}
