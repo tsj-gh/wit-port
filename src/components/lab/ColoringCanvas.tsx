@@ -208,8 +208,8 @@ export function ColoringCanvas() {
     const pctx = paint.getContext("2d");
     if (!mctx || !pctx) return;
 
-    mctx.fillStyle = "#000000";
-    mctx.fillRect(0, 0, w, h);
+    // 外側は透明、内側のみ不透明のマスクを作る
+    mctx.clearRect(0, 0, w, h);
     mctx.save();
     mctx.translate(ox, oy);
     mctx.scale(pxPerVb, pxPerVb);
