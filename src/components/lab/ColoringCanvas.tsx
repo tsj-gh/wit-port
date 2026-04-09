@@ -264,34 +264,34 @@ export function ColoringCanvas() {
 
   const paintAt = (clientX: number, clientY: number) => {
     const canvas = displayRef.current;
+    const mask = maskRef.current;
     const paint = paintRef.current;
-    if (!canvas || !paint || !pathRef.current) return;
+    if (!canvas || !paint || !mask) return;
 
     const rect = canvas.getBoundingClientRect();
     const px = ((clientX - rect.left) / rect.width) * canvas.width;
     const py = ((clientY - rect.top) / rect.height) * canvas.height;
 
-    const path = pathRef.current;
-    const sx = (px - ox) / pxPerVb;
-    const sy = (py - oy) / pxPerVb;
-
     const pctx = paint.getContext("2d");
-    if (!pctx) return;
+    const mctx = mask.getContext("2d", { willReadFrequently: true });
+    if (!pctx || !mctx) return;
+
+    // マスク内判定（1px サンプル）。無効化時は常に通す。
+    if (!DEBUG_DISABLE_MASK) {
+      const mx = Math.max(0, Math.min(mask.width - 1, Math.floor(px)));
+      const my = Math.max(0, Math.min(mask.height - 1, Math.floor(py)));
+      const a = mctx.getImageData(mx, my, 1, 1).data[3]!;
+      if (a < 10) return;
+    }
 
     pctx.save();
     pctx.setTransform(1, 0, 0, 1, 0, 0);
-    pctx.translate(ox, oy);
-    pctx.scale(pxPerVb, pxPerVb);
-    if (!DEBUG_DISABLE_MASK) {
-      if (!pctx.isPointInPath(path, sx, sy)) {
-        pctx.restore();
-        return;
-      }
-      pctx.clip(path);
-    }
+    pctx.translate(0, 0);
+
+    const brushRadiusPx = BRUSH_RADIUS_VB * pxPerVb;
 
     // 1) まず source-over で確実に着色（即時反映を保証）
-    const gBase = pctx.createRadialGradient(sx, sy, 0, sx, sy, BRUSH_RADIUS_VB);
+    const gBase = pctx.createRadialGradient(px, py, 0, px, py, brushRadiusPx);
     gBase.addColorStop(0, selected.color);
     gBase.addColorStop(0.5, selected.color);
     gBase.addColorStop(1, "rgba(255,255,255,0)");
@@ -299,19 +299,26 @@ export function ColoringCanvas() {
     pctx.globalAlpha = PAINT_ALPHA;
     pctx.fillStyle = gBase;
     pctx.beginPath();
-    pctx.arc(sx, sy, BRUSH_RADIUS_VB, 0, Math.PI * 2);
+    pctx.arc(px, py, brushRadiusPx, 0, Math.PI * 2);
     pctx.fill();
 
     // 2) 既存色との混ざりを soft-light で軽く追加
-    const gMix = pctx.createRadialGradient(sx, sy, 0, sx, sy, BRUSH_RADIUS_VB * 0.85);
+    const gMix = pctx.createRadialGradient(px, py, 0, px, py, brushRadiusPx * 0.85);
     gMix.addColorStop(0, selected.color);
     gMix.addColorStop(1, "rgba(255,255,255,0)");
     pctx.globalCompositeOperation = "soft-light";
     pctx.globalAlpha = 0.28;
     pctx.fillStyle = gMix;
     pctx.beginPath();
-    pctx.arc(sx, sy, BRUSH_RADIUS_VB * 0.85, 0, Math.PI * 2);
+    pctx.arc(px, py, brushRadiusPx * 0.85, 0, Math.PI * 2);
     pctx.fill();
+
+    // 3) マスク有効時のみ、最終結果を常に枠内に制限
+    if (!DEBUG_DISABLE_MASK) {
+      pctx.globalCompositeOperation = "destination-in";
+      pctx.globalAlpha = 1;
+      pctx.drawImage(mask, 0, 0);
+    }
     pctx.restore();
 
     spawnParticles(px, py, selected.color);
