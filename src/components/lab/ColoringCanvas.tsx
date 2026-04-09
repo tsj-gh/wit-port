@@ -41,9 +41,18 @@ const FILL_THRESHOLD = 0.98;
 /** viewBox 単位でのブラシ半径（100 がキャラの幅の目安） */
 const BRUSH_RADIUS_VB = 16;
 const SCAN_STRIDE = 2;
-const PAINT_ALPHA = 0.55;
 /** マスク干渉切り分け用（true で枠外でも描ける） */
 const DEBUG_DISABLE_MASK = false;
+const SPLATTER_BASE_ALPHA = 0.88;
+
+/** 原点(0,0)中心・おおむね半径1のベタ塗りインクシミ */
+const SPLATTER_PATHS = [
+  "M0 -1 C0.35 -0.95 0.78 -0.7 0.86 -0.3 C1.02 0.04 0.86 0.36 0.6 0.56 C0.46 0.84 0.12 1.03 -0.18 0.95 C-0.52 1.04 -0.86 0.78 -0.96 0.42 C-1.08 0.1 -0.98 -0.24 -0.78 -0.52 C-0.56 -0.84 -0.28 -1.04 0 -1 Z",
+  "M0 -1 L0.22 -0.7 L0.54 -0.82 L0.62 -0.46 L0.98 -0.28 L0.72 0.02 L0.92 0.34 L0.56 0.48 L0.5 0.9 L0.12 0.72 L-0.08 1 L-0.34 0.72 L-0.68 0.88 L-0.72 0.5 L-1 0.2 L-0.72 -0.06 L-0.86 -0.38 L-0.46 -0.42 L-0.34 -0.82 L0 -1 Z",
+  "M0 -0.94 C0.18 -0.86 0.3 -0.74 0.42 -0.66 C0.64 -0.74 0.92 -0.6 0.96 -0.32 C1.12 -0.06 1.04 0.24 0.82 0.4 C0.84 0.74 0.54 0.96 0.24 0.88 C0.02 1.06 -0.3 1.04 -0.48 0.8 C-0.82 0.88 -1.04 0.6 -0.98 0.28 C-1.14 0.02 -1 -0.32 -0.72 -0.48 C-0.66 -0.8 -0.34 -1 -0.02 -0.92 Z",
+  "M0 -1 C0.22 -0.84 0.38 -0.88 0.58 -0.74 C0.78 -0.6 0.96 -0.36 0.94 -0.12 C1.06 0.14 0.96 0.38 0.8 0.54 C0.7 0.84 0.42 1 0.12 0.94 C-0.16 1.06 -0.42 0.98 -0.58 0.78 C-0.86 0.72 -1.04 0.44 -0.96 0.16 C-1.02 -0.1 -0.92 -0.4 -0.68 -0.54 C-0.58 -0.82 -0.3 -1.02 0 -1 Z",
+  "M0 -0.98 C0.28 -1 0.58 -0.86 0.72 -0.6 C0.98 -0.5 1.06 -0.2 0.92 0.06 C1 0.34 0.86 0.62 0.6 0.72 C0.44 0.96 0.16 1.08 -0.1 0.92 C-0.42 1.02 -0.74 0.84 -0.82 0.52 C-1.02 0.34 -1.06 0.04 -0.84 -0.16 C-0.9 -0.44 -0.72 -0.74 -0.42 -0.78 C-0.26 -0.96 -0.12 -1 0 -0.98 Z",
+] as const;
 
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string };
 
@@ -290,35 +299,31 @@ export function ColoringCanvas() {
 
     const brushRadiusPx = BRUSH_RADIUS_VB * pxPerVb;
 
-    // 1) まず source-over で確実に着色（即時反映を保証）
-    const gBase = pctx.createRadialGradient(px, py, 0, px, py, brushRadiusPx);
-    gBase.addColorStop(0, selected.color);
-    gBase.addColorStop(0.5, selected.color);
-    gBase.addColorStop(1, "rgba(255,255,255,0)");
-    pctx.globalCompositeOperation = "source-over";
-    pctx.globalAlpha = PAINT_ALPHA;
-    pctx.fillStyle = gBase;
-    pctx.beginPath();
-    pctx.arc(px, py, brushRadiusPx, 0, Math.PI * 2);
-    pctx.fill();
+    // ベタ塗りインクシミ: ランダム形状 + ランダム回転 + わずかな拡大縮小
+    const pathIndex = Math.floor(Math.random() * SPLATTER_PATHS.length);
+    const splatPath = new Path2D(SPLATTER_PATHS[pathIndex]!);
+    const angle = Math.random() * Math.PI * 2;
+    const scaleJitter = 0.8 + Math.random() * 0.4;
+    const radius = brushRadiusPx * scaleJitter;
 
-    // 2) 既存色との混ざりを soft-light で軽く追加
-    const gMix = pctx.createRadialGradient(px, py, 0, px, py, brushRadiusPx * 0.85);
-    gMix.addColorStop(0, selected.color);
-    gMix.addColorStop(1, "rgba(255,255,255,0)");
-    pctx.globalCompositeOperation = "soft-light";
-    pctx.globalAlpha = 0.28;
-    pctx.fillStyle = gMix;
-    pctx.beginPath();
-    pctx.arc(px, py, brushRadiusPx * 0.85, 0, Math.PI * 2);
-    pctx.fill();
+    pctx.globalCompositeOperation = "multiply";
+    pctx.globalAlpha = SPLATTER_BASE_ALPHA;
+    pctx.fillStyle = selected.color;
+    pctx.translate(px, py);
+    pctx.rotate(angle);
+    pctx.scale(radius, radius);
+    pctx.fill(splatPath);
 
-    // 3) マスク有効時のみ、最終結果を常に枠内に制限
+    // マスク有効時のみ、最終結果を常に枠内に制限
     if (!DEBUG_DISABLE_MASK) {
+      pctx.setTransform(1, 0, 0, 1, 0, 0);
       pctx.globalCompositeOperation = "destination-in";
       pctx.globalAlpha = 1;
       pctx.drawImage(mask, 0, 0);
     }
+    // 描画後はデフォルトに戻す
+    pctx.globalCompositeOperation = "source-over";
+    pctx.globalAlpha = 1;
     pctx.restore();
 
     spawnParticles(px, py, selected.color);
