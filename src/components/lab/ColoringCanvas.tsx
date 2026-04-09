@@ -42,6 +42,8 @@ const FILL_THRESHOLD = 0.98;
 const BRUSH_RADIUS_VB = 16;
 const SCAN_STRIDE = 2;
 const PAINT_ALPHA = 0.55;
+/** マスク干渉切り分け用（true で枠外でも描ける） */
+const DEBUG_DISABLE_MASK = false;
 
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string };
 
@@ -280,21 +282,35 @@ export function ColoringCanvas() {
     pctx.setTransform(1, 0, 0, 1, 0, 0);
     pctx.translate(ox, oy);
     pctx.scale(pxPerVb, pxPerVb);
-    if (!pctx.isPointInPath(path, sx, sy)) {
-      pctx.restore();
-      return;
+    if (!DEBUG_DISABLE_MASK) {
+      if (!pctx.isPointInPath(path, sx, sy)) {
+        pctx.restore();
+        return;
+      }
+      pctx.clip(path);
     }
-    pctx.clip(path);
-    pctx.globalCompositeOperation = "soft-light";
-    pctx.globalAlpha = PAINT_ALPHA;
 
-    const g = pctx.createRadialGradient(sx, sy, 0, sx, sy, BRUSH_RADIUS_VB);
-    g.addColorStop(0, selected.color);
-    g.addColorStop(0.5, selected.color);
-    g.addColorStop(1, "rgba(255,255,255,0)");
-    pctx.fillStyle = g;
+    // 1) まず source-over で確実に着色（即時反映を保証）
+    const gBase = pctx.createRadialGradient(sx, sy, 0, sx, sy, BRUSH_RADIUS_VB);
+    gBase.addColorStop(0, selected.color);
+    gBase.addColorStop(0.5, selected.color);
+    gBase.addColorStop(1, "rgba(255,255,255,0)");
+    pctx.globalCompositeOperation = "source-over";
+    pctx.globalAlpha = PAINT_ALPHA;
+    pctx.fillStyle = gBase;
     pctx.beginPath();
     pctx.arc(sx, sy, BRUSH_RADIUS_VB, 0, Math.PI * 2);
+    pctx.fill();
+
+    // 2) 既存色との混ざりを soft-light で軽く追加
+    const gMix = pctx.createRadialGradient(sx, sy, 0, sx, sy, BRUSH_RADIUS_VB * 0.85);
+    gMix.addColorStop(0, selected.color);
+    gMix.addColorStop(1, "rgba(255,255,255,0)");
+    pctx.globalCompositeOperation = "soft-light";
+    pctx.globalAlpha = 0.28;
+    pctx.fillStyle = gMix;
+    pctx.beginPath();
+    pctx.arc(sx, sy, BRUSH_RADIUS_VB * 0.85, 0, Math.PI * 2);
     pctx.fill();
     pctx.restore();
 
@@ -374,7 +390,7 @@ export function ColoringCanvas() {
               ref={displayRef}
               width={size}
               height={size}
-              className="h-full w-full touch-none rounded-3xl border-4 border-stone-200 bg-stone-100 shadow-inner"
+              className="relative z-10 h-full w-full touch-none rounded-3xl border-4 border-stone-200 bg-stone-100 shadow-inner"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
             />
