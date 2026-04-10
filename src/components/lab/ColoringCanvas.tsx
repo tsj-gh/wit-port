@@ -132,6 +132,8 @@ function parseHexRgb(hex: string): { r: number; g: number; b: number } | null {
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
+const FULL_PALETTE_RGB = FULL_PALETTE_12.map((s) => parseHexRgb(s.color)!);
+
 function colorDistanceSq(
   a: { r: number; g: number; b: number },
   b: { r: number; g: number; b: number },
@@ -140,6 +142,29 @@ function colorDistanceSq(
   const dg = a.g - b.g;
   const db = a.b - b.b;
   return dr * dr + dg * dg + db * db;
+}
+
+function nearestHueIndexFromRgb(r: number, g: number, b: number): number {
+  let bestIdx = 0;
+  let best = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < FULL_PALETTE_RGB.length; i++) {
+    const p = FULL_PALETTE_RGB[i]!;
+    const d = colorDistanceSq({ r, g, b }, p);
+    if (d < best) {
+      best = d;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+/** 12色環上で from を to 方向へ1ステップ移動（最短、同距離は時計回り） */
+function stepHueToward(fromIdx: number, toIdx: number): number {
+  if (fromIdx === toIdx) return fromIdx;
+  const cw = (toIdx - fromIdx + 12) % 12;
+  const ccw = (fromIdx - toIdx + 12) % 12;
+  if (cw <= ccw) return (fromIdx + 1) % 12;
+  return (fromIdx + 11) % 12;
 }
 
 function useShapeLayout(canvasSize: number) {
@@ -399,19 +424,9 @@ export function ColoringCanvas() {
       if (a < 10) return;
     }
 
-    const sx = Math.max(0, Math.min(paint.width - 1, Math.floor(px)));
-    const sy = Math.max(0, Math.min(paint.height - 1, Math.floor(py)));
-    const sample = pctx.getImageData(sx, sy, 1, 1).data;
-    const pr = sample[0]!;
-    const pg = sample[1]!;
-    const pb = sample[2]!;
-    const pa = sample[3]!;
     const selRgb = parseHexRgb(selected.color);
-    const isEmpty = pa < 28;
-    const sameColor =
-      !isEmpty &&
-      selRgb != null &&
-      colorDistanceSq({ r: pr, g: pg, b: pb }, selRgb) < 48 * 48;
+    if (!selRgb) return;
+    const targetHueIdx = nearestHueIndexFromRgb(selRgb.r, selRgb.g, selRgb.b);
 
     const pathIndex = Math.floor(Math.random() * SPLATTER_PATHS.length);
     const splatPath = new Path2D(SPLATTER_PATHS[pathIndex]!);
@@ -419,25 +434,53 @@ export function ColoringCanvas() {
     const scaleJitter = 0.8 + Math.random() * 0.4;
     const radiusPx = splatterRadiusVb * pxPerVb * scaleJitter;
 
-    pctx.save();
-    pctx.setTransform(1, 0, 0, 1, 0, 0);
-    pctx.translate(px, py);
-    pctx.rotate(angle);
-    pctx.scale(radiusPx, radiusPx);
-    pctx.fillStyle = selected.color;
-    pctx.globalAlpha = 1;
+    // スプラット領域を一時マスク化（重なり領域だけ色相ステップ）
+    const pad = Math.ceil(radiusPx * 1.3);
+    const x0 = Math.max(0, Math.floor(px - pad));
+    const y0 = Math.max(0, Math.floor(py - pad));
+    const x1 = Math.min(paint.width, Math.ceil(px + pad));
+    const y1 = Math.min(paint.height, Math.ceil(py + pad));
+    const bw = x1 - x0;
+    const bh = y1 - y0;
+    if (bw <= 0 || bh <= 0) return;
 
-    if (isEmpty || sameColor) {
-      pctx.globalCompositeOperation = "source-over";
-      pctx.fill(splatPath);
-    } else {
-      pctx.globalCompositeOperation = "hue";
-      pctx.fill(splatPath);
-      pctx.globalCompositeOperation = "source-over";
-      pctx.fill(splatPath);
+    const tmpCanvas = document.createElement("canvas");
+    tmpCanvas.width = bw;
+    tmpCanvas.height = bh;
+    const tctx = tmpCanvas.getContext("2d");
+    if (!tctx) return;
+    tctx.setTransform(1, 0, 0, 1, 0, 0);
+    tctx.translate(px - x0, py - y0);
+    tctx.rotate(angle);
+    tctx.scale(radiusPx, radiusPx);
+    tctx.fillStyle = "#ffffff";
+    tctx.fill(splatPath);
+    const splatData = tctx.getImageData(0, 0, bw, bh).data;
+
+    const paintImage = pctx.getImageData(x0, y0, bw, bh);
+    const data = paintImage.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const sa = splatData[i + 3]!;
+      if (sa < 24) continue;
+      const a = data[i + 3]!;
+      if (a < 28) {
+        // 未塗りは選択色でベタ塗り
+        data[i] = selRgb.r;
+        data[i + 1] = selRgb.g;
+        data[i + 2] = selRgb.b;
+        data[i + 3] = 255;
+      } else {
+        // 既塗りは「前色→選択色方向」に1ステップ色相移動
+        const curIdx = nearestHueIndexFromRgb(data[i]!, data[i + 1]!, data[i + 2]!);
+        const nextIdx = stepHueToward(curIdx, targetHueIdx);
+        const next = FULL_PALETTE_RGB[nextIdx]!;
+        data[i] = next.r;
+        data[i + 1] = next.g;
+        data[i + 2] = next.b;
+        data[i + 3] = 255;
+      }
     }
-
-    pctx.restore();
+    pctx.putImageData(paintImage, x0, y0);
 
     if (!DEBUG_DISABLE_MASK) {
       pctx.save();
