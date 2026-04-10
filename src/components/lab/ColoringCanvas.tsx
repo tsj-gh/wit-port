@@ -158,13 +158,36 @@ function nearestHueIndexFromRgb(r: number, g: number, b: number): number {
   return bestIdx;
 }
 
-/** 12色環上で from を to 方向へ1ステップ移動（最短、同距離は時計回り） */
-function stepHueToward(fromIdx: number, toIdx: number): number {
+/** 12色環上の最短弧の長さ（隣＝1、対極＝6） */
+function circularHueDistance(fromIdx: number, toIdx: number): number {
+  const d = Math.abs(fromIdx - toIdx);
+  return Math.min(d, 12 - d);
+}
+
+/** 12色環上で from を to 方向へちょうど1ステップ（最短弧、同距離は時計回り） */
+function hueStepOnceToward(fromIdx: number, toIdx: number): number {
   if (fromIdx === toIdx) return fromIdx;
   const cw = (toIdx - fromIdx + 12) % 12;
   const ccw = (fromIdx - toIdx + 12) % 12;
   if (cw <= ccw) return (fromIdx + 1) % 12;
   return (fromIdx + 11) % 12;
+}
+
+/**
+ * 距離1: いきなり選択色へ
+ * 距離2,3: 1ステップ
+ * 距離4,5,6: 2ステップ（毎回 to 方向へ hueStepOnceToward）
+ */
+function hueStepAdaptive(fromIdx: number, toIdx: number): number {
+  if (fromIdx === toIdx) return fromIdx;
+  const dist = circularHueDistance(fromIdx, toIdx);
+  if (dist === 1) return toIdx;
+  const repeats = dist >= 4 ? 2 : 1;
+  let cur = fromIdx;
+  for (let s = 0; s < repeats; s++) {
+    cur = hueStepOnceToward(cur, toIdx);
+  }
+  return cur;
 }
 
 function useShapeLayout(canvasSize: number) {
@@ -472,7 +495,7 @@ export function ColoringCanvas() {
       } else {
         // 既塗りは「前色→選択色方向」に1ステップ色相移動
         const curIdx = nearestHueIndexFromRgb(data[i]!, data[i + 1]!, data[i + 2]!);
-        const nextIdx = stepHueToward(curIdx, targetHueIdx);
+        const nextIdx = hueStepAdaptive(curIdx, targetHueIdx);
         const next = FULL_PALETTE_RGB[nextIdx]!;
         data[i] = next.r;
         data[i + 1] = next.g;
