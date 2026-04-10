@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { ColoringCanvas } from "@/components/lab/ColoringCanvas";
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
@@ -13,7 +14,9 @@ export const metadata: Metadata = {
 export default function TapColoringLabPage() {
   return (
     <main className="min-h-dvh bg-stone-50 text-stone-800">
-      <ColoringCanvas />
+      <Suspense fallback={<div className="p-8 text-center text-sm text-stone-500">読み込み中…</div>}>
+        <ColoringCanvas />
+      </Suspense>
     </main>
   );
 }
