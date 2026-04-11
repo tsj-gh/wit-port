@@ -255,11 +255,35 @@ export function ColoringCanvas() {
   const rafRef = useRef<number>(0);
   const pathRef = useRef<Path2D | null>(null);
   const clearTriggeredRef = useRef(false);
+  /** キャンバスでポインタが押下中（この間にクリア→次ステージへ進んだら、離すまで塗りを止める） */
+  const pointerDownOnCanvasRef = useRef(false);
+  /** クリア後の新ステージで、直前のドラッグが続いているとき true。対応する pointerup まで塗り禁止 */
+  const blockPaintUntilPointerUpRef = useRef(false);
+  const activeCanvasPointerIdRef = useRef<number | null>(null);
   const splatterImagesRef = useRef<HTMLImageElement[]>([]);
   const [splatterImagesReady, setSplatterImagesReady] = useState(false);
   const { pxPerVb, ox, oy } = useShapeLayout(size);
 
   const shape = TAP_COLORING_SHAPES[stageIndex % TAP_COLORING_SHAPES.length]!;
+
+  const releaseCanvasPointer = useCallback((pointerId: number) => {
+    if (pointerId !== activeCanvasPointerIdRef.current) return;
+    activeCanvasPointerIdRef.current = null;
+    pointerDownOnCanvasRef.current = false;
+    blockPaintUntilPointerUpRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    const onWindowPointerEnd = (e: PointerEvent) => {
+      releaseCanvasPointer(e.pointerId);
+    };
+    window.addEventListener("pointerup", onWindowPointerEnd);
+    window.addEventListener("pointercancel", onWindowPointerEnd);
+    return () => {
+      window.removeEventListener("pointerup", onWindowPointerEnd);
+      window.removeEventListener("pointercancel", onWindowPointerEnd);
+    };
+  }, [releaseCanvasPointer]);
 
   useEffect(() => {
     setSelected((prev) => {
@@ -456,6 +480,8 @@ export function ColoringCanvas() {
   };
 
   const paintAt = (clientX: number, clientY: number) => {
+    if (cleared) return;
+    if (blockPaintUntilPointerUpRef.current) return;
     const canvas = displayRef.current;
     const mask = maskRef.current;
     const paint = paintRef.current;
@@ -573,20 +599,36 @@ export function ColoringCanvas() {
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (cleared) {
+      e.preventDefault();
+      pointerDownOnCanvasRef.current = true;
+      activeCanvasPointerIdRef.current = e.pointerId;
+      return;
+    }
+    if (blockPaintUntilPointerUpRef.current) return;
     e.preventDefault();
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+    pointerDownOnCanvasRef.current = true;
+    activeCanvasPointerIdRef.current = e.pointerId;
     paintAt(e.clientX, e.clientY);
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (cleared) return;
+    if (blockPaintUntilPointerUpRef.current) return;
     if (e.buttons !== 1 && e.pointerType !== "touch") return;
     paintAt(e.clientX, e.clientY);
+  };
+
+  const onPointerUpCanvas = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    releaseCanvasPointer(e.pointerId);
   };
 
   useEffect(() => {
     if (!cleared) return;
     const t = window.setTimeout(() => {
       clearTriggeredRef.current = false;
+      blockPaintUntilPointerUpRef.current = pointerDownOnCanvasRef.current;
       setActivePalette(pickTriadPalette());
       setStageIndex((i) => i + 1);
       setCleared(false);
@@ -715,6 +757,8 @@ export function ColoringCanvas() {
               className="relative z-10 h-full w-full touch-none rounded-3xl border-4 border-stone-200 bg-stone-100 shadow-inner"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
+              onPointerUp={onPointerUpCanvas}
+              onPointerCancel={onPointerUpCanvas}
             />
           </motion.div>
         </AnimatePresence>
