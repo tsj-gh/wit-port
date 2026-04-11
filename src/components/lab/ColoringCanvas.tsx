@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { MutableRefObject } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 
@@ -232,7 +233,7 @@ export function ColoringCanvas() {
   const isDevTj = searchParams.get("devtj") === "true";
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const displayRef = useRef<HTMLCanvasElement>(null);
+  const displayRef = useRef<HTMLCanvasElement | null>(null) as MutableRefObject<HTMLCanvasElement | null>;
   const maskRef = useRef<HTMLCanvasElement>(null);
   const paintRef = useRef<HTMLCanvasElement>(null);
 
@@ -420,6 +421,21 @@ export function ColoringCanvas() {
     redrawDisplay();
   }, [layoutPath, ox, oy, pxPerVb, redrawDisplay, size]);
 
+  const initStageCanvasesRef = useRef(initStageCanvases) as MutableRefObject<typeof initStageCanvases>;
+  useLayoutEffect(() => {
+    initStageCanvasesRef.current = initStageCanvases;
+  }, [initStageCanvases]);
+
+  /** AnimatePresence の新しい表示 canvas マウント後に初期化（古い canvas へ描いて捨てられるのを防ぐ） */
+  const setDisplayCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
+    displayRef.current = node;
+    if (node) {
+      queueMicrotask(() => {
+        initStageCanvasesRef.current();
+      });
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const imgs: HTMLImageElement[] = [];
@@ -456,9 +472,11 @@ export function ColoringCanvas() {
     return () => ro.disconnect();
   }, []);
 
+  /** リサイズのみ（表示 canvas は同一ノードのまま）— ステージ切替は setDisplayCanvasRef 側で初期化 */
   useEffect(() => {
-    initStageCanvases();
-  }, [initStageCanvases, stageIndex, shape.id]);
+    if (!displayRef.current) return;
+    initStageCanvasesRef.current();
+  }, [size]);
 
   const spawnParticles = (cx: number, cy: number, color: string) => {
     const n = 14;
@@ -751,7 +769,7 @@ export function ColoringCanvas() {
             transition={{ type: "spring", stiffness: 400, damping: 24 }}
           >
             <canvas
-              ref={displayRef}
+              ref={setDisplayCanvasRef}
               width={size}
               height={size}
               className="relative z-10 h-full w-full touch-none rounded-3xl border-4 border-stone-200 bg-stone-100 shadow-inner"
