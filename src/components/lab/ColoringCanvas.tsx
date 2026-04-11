@@ -87,29 +87,18 @@ const FULL_PALETTE_12: readonly TapColoringSwatch[] = HUE_RING.map((h, i) => ({
   color: hslToHex(h, 100, 50),
 }));
 
-function shuffleIndices12(): number[] {
-  const a = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j]!, a[i]!];
-  }
-  return a;
-}
-
-function pickRandomPalette(slotCount: number): TapColoringSwatch[] {
-  const n = Math.max(2, Math.min(5, Math.round(slotCount)));
-  const order = shuffleIndices12();
-  const out: TapColoringSwatch[] = [];
-  for (let k = 0; k < n; k++) out.push(FULL_PALETTE_12[order[k]!]!);
-  return out;
-}
-
-function randomPaletteSlotCountNonDebug(): number {
-  return 3 + Math.floor(Math.random() * 3);
+/** 12色環で基準を1つランダムに選び、+3/+4 と -3/-4 をそれぞれランダムに1つずつ取った3色 */
+function pickTriadPalette(): TapColoringSwatch[] {
+  const baseIdx = Math.floor(Math.random() * 12);
+  const posStep = Math.random() < 0.5 ? 3 : 4;
+  const negStep = Math.random() < 0.5 ? 3 : 4;
+  const iPos = (baseIdx + posStep) % 12;
+  const iNeg = (baseIdx - negStep + 12) % 12;
+  return [FULL_PALETTE_12[baseIdx]!, FULL_PALETTE_12[iPos]!, FULL_PALETTE_12[iNeg]!];
 }
 
 const DEFAULT_FILL_THRESHOLD = 0.9;
-const DEFAULT_SPLATTER_RADIUS_VB = 5.5;
+const DEFAULT_SPLATTER_RADIUS_VB = 12.5;
 const SCAN_STRIDE = 2;
 /** マスク干渉切り分け用（true で枠外でも描ける） */
 const DEBUG_DISABLE_MASK = false;
@@ -249,9 +238,7 @@ export function ColoringCanvas() {
 
   const [size, setSize] = useState(360);
   const [stageIndex, setStageIndex] = useState(0);
-  const [activePalette, setActivePalette] = useState<TapColoringSwatch[]>(() =>
-    pickRandomPalette(randomPaletteSlotCountNonDebug()),
-  );
+  const [activePalette, setActivePalette] = useState<TapColoringSwatch[]>(() => pickTriadPalette());
   const [selected, setSelected] = useState<TapColoringSwatch>(() => activePalette[0]!);
   const [fillRatio, setFillRatio] = useState(0);
   const [cleared, setCleared] = useState(false);
@@ -260,7 +247,6 @@ export function ColoringCanvas() {
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
   const [debugSplatterRadiusVb, setDebugSplatterRadiusVb] = useState(DEFAULT_SPLATTER_RADIUS_VB);
   const [debugFillThreshold, setDebugFillThreshold] = useState(DEFAULT_FILL_THRESHOLD);
-  const [debugPaletteSlots, setDebugPaletteSlots] = useState(4);
 
   const splatterRadiusVb = isDevTj && isDebugMode ? debugSplatterRadiusVb : DEFAULT_SPLATTER_RADIUS_VB;
   const fillThreshold = isDevTj && isDebugMode ? debugFillThreshold : DEFAULT_FILL_THRESHOLD;
@@ -601,14 +587,12 @@ export function ColoringCanvas() {
     if (!cleared) return;
     const t = window.setTimeout(() => {
       clearTriggeredRef.current = false;
-      const slots =
-        isDevTj && isDebugMode ? debugPaletteSlots : randomPaletteSlotCountNonDebug();
-      setActivePalette(pickRandomPalette(slots));
+      setActivePalette(pickTriadPalette());
       setStageIndex((i) => i + 1);
       setCleared(false);
     }, 900);
     return () => clearTimeout(t);
-  }, [cleared, debugPaletteSlots, isDebugMode, isDevTj]);
+  }, [cleared]);
 
   useEffect(() => {
     return () => cancelAnimationFrame(rafRef.current);
@@ -678,19 +662,6 @@ export function ColoringCanvas() {
                   className="w-full accent-amber-600"
                 />
                 <div className="tabular-nums text-stone-500">{Math.round(debugFillThreshold * 100)}%</div>
-              </div>
-              <div>
-                <div className="mb-1 font-semibold text-stone-700">パレット色数（2〜5）</div>
-                <input
-                  type="range"
-                  min={2}
-                  max={5}
-                  step={1}
-                  value={debugPaletteSlots}
-                  onChange={(e) => setDebugPaletteSlots(Number(e.target.value))}
-                  className="w-full accent-amber-600"
-                />
-                <div className="tabular-nums text-stone-500">{debugPaletteSlots} 色</div>
               </div>
             </div>
           )}
