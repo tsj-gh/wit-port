@@ -114,7 +114,7 @@ const SCAN_STRIDE = 2;
 /** マスク干渉切り分け用（true で枠外でも描ける） */
 const DEBUG_DISABLE_MASK = false;
 
-const SPLATTER_IMAGE_COUNT = 10;
+const SPLATTER_IMAGE_COUNT = 9;
 const SPLATTER_PUBLIC_PREFIX = "/assets/tap-coloring";
 
 /**
