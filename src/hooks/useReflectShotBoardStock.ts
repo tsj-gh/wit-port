@@ -42,9 +42,18 @@ export function useReflectShotBoardStock(
   const stockRef = useRef<StockRef>(emptyStock());
   const inFlightByGradeRef = useRef<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 });
   const enabledRef = useRef(enabled);
+  /** アンマウント後は補充・setState を止める（Worker 終了で generate が連鎖拒否→scheduleReplenish 嵐になるのを防ぐ） */
+  const aliveRef = useRef(true);
   useLayoutEffect(() => {
     enabledRef.current = enabled;
   }, [enabled]);
+  useLayoutEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      enabledRef.current = false;
+    };
+  }, []);
   const [, bumpUi] = useReducer((x: number) => x + 1, 0);
 
   const getStockCounts = useCallback((): Record<number, number> => {
@@ -61,7 +70,7 @@ export function useReflectShotBoardStock(
   }, []);
 
   const scheduleReplenish = useCallback(() => {
-    if (!enabledRef.current) return;
+    if (!enabledRef.current || !aliveRef.current) return;
 
     for (const g of REFLECT_SHOT_STOCK_GRADES) {
       const q = stockRef.current[g]!;
@@ -77,12 +86,14 @@ export function useReflectShotBoardStock(
         })
           .then(({ stage }) => {
             inFlightByGradeRef.current[g] = Math.max(0, (inFlightByGradeRef.current[g] ?? 0) - 1);
+            if (!aliveRef.current) return;
             stockRef.current[g]!.push(stage);
             bumpUi();
             scheduleReplenish();
           })
           .catch(() => {
             inFlightByGradeRef.current[g] = Math.max(0, (inFlightByGradeRef.current[g] ?? 0) - 1);
+            if (!aliveRef.current) return;
             bumpUi();
             scheduleReplenish();
           });
