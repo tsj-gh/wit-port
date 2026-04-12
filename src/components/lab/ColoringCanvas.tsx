@@ -107,28 +107,72 @@ const DEBUG_DISABLE_MASK = false;
 const SPLATTER_IMAGE_COUNT = 9;
 const SPLATTER_PUBLIC_PREFIX = "/assets/tap-coloring";
 
+/** 表示は CSS で論理サイズのまま、ビットマップを拡大して縮小表示のジャギーを抑える */
+const TAP_COLOR_INTERNAL_SCALE = 2;
+
+/** スプラッター元画像の長辺上限（メモリと縮小描画品質のバランス） */
+const SPLATTER_SOURCE_MAX_SIDE_PX = 320;
+
+/** 画面上のパーティクル半径の基準（論理 px 相当） */
+const PARTICLE_RADIUS_LOGICAL_PX = 5;
+
+/** インク輪郭のわずかな柔らかさ（ビットマップ座標。2 倍解像度時は画面上で約半分に見える） */
+const INK_SPLAT_SHADOW_BLUR_BITMAP_PX = 3;
+
+function applyCanvasInkQuality(ctx: CanvasRenderingContext2D) {
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+}
+
+const canvasInkStyle = { imageRendering: "auto" } as const;
+
+/**
+ * インク用スプラッター PNG を、小さな drawImage に耐える解像度へ一度だけ整える
+ */
+function createInkOptimizedSplatterSource(img: HTMLImageElement): HTMLCanvasElement | HTMLImageElement {
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  if (w < 1 || h < 1) return img;
+  const maxSide = Math.max(w, h);
+  if (maxSide <= SPLATTER_SOURCE_MAX_SIDE_PX) return img;
+  const scale = SPLATTER_SOURCE_MAX_SIDE_PX / maxSide;
+  const nw = Math.max(1, Math.round(w * scale));
+  const nh = Math.max(1, Math.round(h * scale));
+  const c = document.createElement("canvas");
+  c.width = nw;
+  c.height = nh;
+  const ctx = c.getContext("2d");
+  if (!ctx) return img;
+  applyCanvasInkQuality(ctx);
+  ctx.drawImage(img, 0, 0, nw, nh);
+  return c;
+}
+
 /**
  * PNG を黒シルエット化したうえで source-in 着色（アルファ形状は維持）
  */
 function tintSplatterToCanvas(
-  img: HTMLImageElement,
+  source: CanvasImageSource,
   tintRgb: { r: number; g: number; b: number },
   outW: number,
   outH: number,
   out: HTMLCanvasElement,
 ): void {
-  out.width = outW;
-  out.height = outH;
+  const rw = Math.max(1, Math.round(outW));
+  const rh = Math.max(1, Math.round(outH));
+  out.width = rw;
+  out.height = rh;
   const ctx = out.getContext("2d");
   if (!ctx) return;
-  ctx.clearRect(0, 0, outW, outH);
-  ctx.drawImage(img, 0, 0, outW, outH);
+  applyCanvasInkQuality(ctx);
+  ctx.clearRect(0, 0, rw, rh);
+  ctx.drawImage(source, 0, 0, rw, rh);
   ctx.globalCompositeOperation = "source-atop";
   ctx.fillStyle = "#000000";
-  ctx.fillRect(0, 0, outW, outH);
+  ctx.fillRect(0, 0, rw, rh);
   ctx.globalCompositeOperation = "source-in";
   ctx.fillStyle = `rgb(${tintRgb.r},${tintRgb.g},${tintRgb.b})`;
-  ctx.fillRect(0, 0, outW, outH);
+  ctx.fillRect(0, 0, rw, rh);
   ctx.globalCompositeOperation = "source-over";
 }
 
@@ -151,6 +195,11 @@ function colorDistanceSq(
   const dg = a.g - b.g;
   const db = a.b - b.b;
   return dr * dr + dg * dg + db * db;
+}
+
+function splatterSourceSize(src: HTMLImageElement | HTMLCanvasElement): { w: number; h: number } {
+  if (src instanceof HTMLCanvasElement) return { w: src.width, h: src.height };
+  return { w: src.naturalWidth, h: src.naturalHeight };
 }
 
 function nearestHueIndexFromRgb(r: number, g: number, b: number): number {
@@ -261,9 +310,10 @@ export function ColoringCanvas() {
   /** クリア後の新ステージで、直前のドラッグが続いているとき true。対応する pointerup まで塗り禁止 */
   const blockPaintUntilPointerUpRef = useRef(false);
   const activeCanvasPointerIdRef = useRef<number | null>(null);
-  const splatterImagesRef = useRef<HTMLImageElement[]>([]);
+  const splatterImagesRef = useRef<(HTMLImageElement | HTMLCanvasElement)[]>([]);
   const [splatterImagesReady, setSplatterImagesReady] = useState(false);
-  const { pxPerVb, ox, oy } = useShapeLayout(size);
+  const bitmapSize = Math.round(size * TAP_COLOR_INTERNAL_SCALE);
+  const { pxPerVb, ox, oy } = useShapeLayout(bitmapSize);
 
   const shape = TAP_COLORING_SHAPES[stageIndex % TAP_COLORING_SHAPES.length]!;
 
@@ -304,6 +354,7 @@ export function ColoringCanvas() {
 
     const ctx = display.getContext("2d");
     if (!ctx) return;
+    applyCanvasInkQuality(ctx);
 
     const path = pathRef.current;
     const w = display.width;
@@ -338,13 +389,14 @@ export function ColoringCanvas() {
     ctx.restore();
 
     const parts = particlesRef.current;
+    const pr = PARTICLE_RADIUS_LOGICAL_PX * TAP_COLOR_INTERNAL_SCALE;
     if (parts.length > 0) {
       for (const p of parts) {
         ctx.save();
         ctx.globalAlpha = p.life;
         ctx.fillStyle = p.color;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 5 * p.life, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, pr * p.life, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
@@ -392,8 +444,8 @@ export function ColoringCanvas() {
     const path = pathRef.current;
     if (!path) return;
 
-    const w = size;
-    const h = size;
+    const w = bitmapSize;
+    const h = bitmapSize;
     display.width = w;
     display.height = h;
     mask.width = w;
@@ -404,6 +456,8 @@ export function ColoringCanvas() {
     const mctx = mask.getContext("2d");
     const pctx = paint.getContext("2d");
     if (!mctx || !pctx) return;
+    applyCanvasInkQuality(mctx);
+    applyCanvasInkQuality(pctx);
 
     mctx.clearRect(0, 0, w, h);
     mctx.save();
@@ -419,7 +473,7 @@ export function ColoringCanvas() {
     clearTriggeredRef.current = false;
     setFillRatio(0);
     redrawDisplay();
-  }, [layoutPath, ox, oy, pxPerVb, redrawDisplay, size]);
+  }, [bitmapSize, layoutPath, ox, oy, pxPerVb, redrawDisplay]);
 
   const initStageCanvasesRef = useRef(initStageCanvases) as MutableRefObject<typeof initStageCanvases>;
   useLayoutEffect(() => {
@@ -442,7 +496,10 @@ export function ColoringCanvas() {
     let pending = SPLATTER_IMAGE_COUNT;
     const onDone = () => {
       pending -= 1;
-      if (pending <= 0 && !cancelled) setSplatterImagesReady(true);
+      if (pending <= 0 && !cancelled) {
+        splatterImagesRef.current = imgs.map((im) => createInkOptimizedSplatterSource(im));
+        setSplatterImagesReady(true);
+      }
     };
     for (let i = 1; i <= SPLATTER_IMAGE_COUNT; i++) {
       const im = new Image();
@@ -452,7 +509,6 @@ export function ColoringCanvas() {
       im.src = `${SPLATTER_PUBLIC_PREFIX}/splatter_${String(i).padStart(2, "0")}.png`;
       imgs.push(im);
     }
-    splatterImagesRef.current = imgs;
     return () => {
       cancelled = true;
     };
@@ -512,6 +568,7 @@ export function ColoringCanvas() {
     const pctx = paint.getContext("2d");
     const mctx = mask.getContext("2d", { willReadFrequently: true });
     if (!pctx || !mctx) return;
+    applyCanvasInkQuality(pctx);
 
     if (!DEBUG_DISABLE_MASK) {
       const mx = Math.max(0, Math.min(mask.width - 1, Math.floor(px)));
@@ -527,11 +584,14 @@ export function ColoringCanvas() {
 
     const imgs = splatterImagesRef.current;
     const img = imgs[Math.floor(Math.random() * SPLATTER_IMAGE_COUNT)];
-    if (!img || !img.complete || img.naturalWidth < 1) return;
+    if (!img) return;
+    if (img instanceof HTMLImageElement && !img.complete) return;
+    const { w: srcW, h: srcH } = splatterSourceSize(img);
+    if (srcW < 1 || srcH < 1) return;
 
     const scaleJitter = 0.8 + Math.random() * 0.4;
     const baseDiameter = 2 * splatterRadiusVb * pxPerVb * scaleJitter;
-    const ar = img.naturalWidth / img.naturalHeight;
+    const ar = srcW / srcH;
     let drawW: number;
     let drawH: number;
     if (ar >= 1) {
@@ -563,11 +623,24 @@ export function ColoringCanvas() {
     tmpCanvas.height = bh;
     const tctx = tmpCanvas.getContext("2d");
     if (!tctx) return;
+    applyCanvasInkQuality(tctx);
     tctx.setTransform(1, 0, 0, 1, 0, 0);
     tctx.clearRect(0, 0, bw, bh);
-    tctx.translate(px - x0, py - y0);
+    const dx = Math.round(px - x0);
+    const dy = Math.round(py - y0);
+    const ddx = Math.round(-drawW / 2);
+    const ddy = Math.round(-drawH / 2);
+    const dw = Math.round(drawW);
+    const dh = Math.round(drawH);
+    tctx.translate(dx, dy);
     tctx.rotate(angle);
-    tctx.drawImage(tintCanvas, -drawW / 2, -drawH / 2);
+    tctx.shadowColor = `rgb(${selRgb.r},${selRgb.g},${selRgb.b})`;
+    tctx.shadowBlur = INK_SPLAT_SHADOW_BLUR_BITMAP_PX;
+    tctx.shadowOffsetX = 0;
+    tctx.shadowOffsetY = 0;
+    tctx.drawImage(tintCanvas, ddx, ddy, dw, dh);
+    tctx.shadowBlur = 0;
+    tctx.shadowColor = "transparent";
     const splatData = tctx.getImageData(0, 0, bw, bh).data;
 
     const paintImage = pctx.getImageData(x0, y0, bw, bh);
@@ -770,8 +843,9 @@ export function ColoringCanvas() {
           >
             <canvas
               ref={setDisplayCanvasRef}
-              width={size}
-              height={size}
+              width={bitmapSize}
+              height={bitmapSize}
+              style={canvasInkStyle}
               className="relative z-10 h-full w-full touch-none rounded-3xl border-4 border-stone-200 bg-stone-100 shadow-inner"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
@@ -781,8 +855,22 @@ export function ColoringCanvas() {
           </motion.div>
         </AnimatePresence>
 
-        <canvas ref={maskRef} width={size} height={size} className="hidden" aria-hidden />
-        <canvas ref={paintRef} width={size} height={size} className="hidden" aria-hidden />
+        <canvas
+          ref={maskRef}
+          width={bitmapSize}
+          height={bitmapSize}
+          style={canvasInkStyle}
+          className="hidden"
+          aria-hidden
+        />
+        <canvas
+          ref={paintRef}
+          width={bitmapSize}
+          height={bitmapSize}
+          style={canvasInkStyle}
+          className="hidden"
+          aria-hidden
+        />
       </div>
 
       <AnimatePresence>
