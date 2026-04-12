@@ -1661,7 +1661,7 @@ export default function PresSureJudgeGame() {
         style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
       >
         <div className="w-full" style={{ minHeight: 100 }}>
-          <PresSureJudgeAdSlot slotIndex={1} isDebugMode={isDebugMode} />
+          <PresSureJudgeAdSlot slotIndex={1} />
         </div>
       </div>
       </div>
@@ -2135,7 +2135,7 @@ export default function PresSureJudgeGame() {
                 </div>
                 {/* 広告枠B: 操作UIの直下 */}
                 <div className="relative z-0 w-full shrink-0" style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}>
-                  <PresSureJudgeAdSlot slotIndex={2} isDebugMode={isDebugMode} />
+                  <PresSureJudgeAdSlot slotIndex={2} />
                 </div>
                 </>
               )}

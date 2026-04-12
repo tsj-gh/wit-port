@@ -491,7 +491,7 @@ export default function SkyscraperGame() {
       />
 
       <div className="relative z-0 w-full" style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}>
-        <SkyscraperAdSlot slotIndex={1} isDebugMode={isDebugMode} />
+        <SkyscraperAdSlot slotIndex={1} />
       </div>
 
       <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
@@ -765,7 +765,7 @@ export default function SkyscraperGame() {
       </section>
 
       <div className="relative z-0 w-full" style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}>
-        <SkyscraperAdSlot slotIndex={2} isDebugMode={isDebugMode} />
+        <SkyscraperAdSlot slotIndex={2} />
       </div>
 
       <section className="w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-4 backdrop-blur sm:p-5">

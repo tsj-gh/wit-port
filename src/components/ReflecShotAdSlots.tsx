@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { GameAdSlotFrame } from "@/components/ads/GameAdSlotFrame";
 import { AD_REFRESH_EVENT } from "@/lib/ads";
 
 /** 既定は本番発行者。ステージング用に `NEXT_PUBLIC_ADSENSE_CLIENT_ID` で上書き可 */
@@ -22,10 +23,9 @@ const AD_SIZES: [number, number][] = [
 
 type ReflecShotAdSlotProps = {
   slotIndex: 1 | 2;
-  isDebugMode: boolean;
 };
 
-function getDebugSlotLabel(slotIndex: number): string {
+function getReserveSlotLabel(slotIndex: number): string {
   return `広告スペース #${slotIndex}（Reflec-Shot）`;
 }
 
@@ -36,9 +36,9 @@ function AdPlaceholder({ slotIndex, isFlashing }: { slotIndex: number; isFlashin
         isFlashing ? "opacity-100 ring-2 ring-[color-mix(in_srgb,var(--color-primary)_55%,transparent)] scale-[1.01]" : "opacity-70"
       }`}
       style={{ minHeight: AD_MIN_HEIGHT_PX }}
-      aria-label={`広告スペース ${slotIndex}（Reflec-Shot・デバッグ表示）`}
+      aria-label={`広告スペース ${slotIndex}（Reflec-Shot）`}
     >
-      {getDebugSlotLabel(slotIndex)}
+      {getReserveSlotLabel(slotIndex)}
     </div>
   );
 }
@@ -47,18 +47,16 @@ function AdPlaceholder({ slotIndex, isFlashing }: { slotIndex: number; isFlashin
  * Reflec-Shot ラボ用広告ユニット（GPT）
  * slotIndex=2 のマウント時に両スロットを defineSlot／display（Pair-link / Pres-Sure Judge と同型）
  */
-export function ReflecShotAdSlot({ slotIndex, isDebugMode }: ReflecShotAdSlotProps) {
+export function ReflecShotAdSlot({ slotIndex }: ReflecShotAdSlotProps) {
   const initializedRef = useRef(false);
   const [isFlashing, setIsFlashing] = useState(false);
 
-  const slotId = slotIndex === 1 ? SLOT_1 : SLOT_2;
   const divId = `ad-reflecshot-${slotIndex}`;
-  const showPlaceholder = isDebugMode || (!slotId && process.env.NODE_ENV !== "production");
+  const showPlaceholder = !SLOT_1 || !SLOT_2;
 
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!isDebugMode) return;
     const onRefresh = () => {
       setIsFlashing(true);
       if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
@@ -72,10 +70,10 @@ export function ReflecShotAdSlot({ slotIndex, isDebugMode }: ReflecShotAdSlotPro
       window.removeEventListener(AD_REFRESH_EVENT, onRefresh);
       if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     };
-  }, [isDebugMode]);
+  }, []);
 
   useEffect(() => {
-    if (isDebugMode || !SLOT_1 || !SLOT_2) return;
+    if (!SLOT_1 || !SLOT_2) return;
     if (slotIndex !== 2) return;
 
     const googletag = window.googletag;
@@ -101,38 +99,34 @@ export function ReflecShotAdSlot({ slotIndex, isDebugMode }: ReflecShotAdSlotPro
         // AdBlock 等: ゲームの進行を妨げない
       }
     });
-  }, [isDebugMode, slotIndex]);
+  }, [slotIndex]);
 
   if (showPlaceholder) {
     return (
-      <div className="mx-auto w-full max-w-full">
+      <GameAdSlotFrame>
         <AdPlaceholder slotIndex={slotIndex} isFlashing={isFlashing} />
-      </div>
-    );
-  }
-
-  if (!slotId) {
-    return (
-      <div className="mx-auto w-full max-w-full" style={{ minHeight: AD_MIN_HEIGHT_PX }} aria-hidden="true" />
+      </GameAdSlotFrame>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-full" aria-label={`広告スペース ${slotIndex}（Reflec-Shot）`}>
-      <div
-        id={divId}
-        style={{ minHeight: AD_MIN_HEIGHT_PX }}
-        className="mx-auto flex min-h-[100px] w-full max-w-full items-center justify-center"
-      />
-    </div>
+    <GameAdSlotFrame>
+      <div className="mx-auto w-full max-w-full" aria-label={`広告スペース ${slotIndex}（Reflec-Shot）`}>
+        <div
+          id={divId}
+          style={{ minHeight: AD_MIN_HEIGHT_PX }}
+          className="mx-auto flex min-h-[100px] w-full max-w-full items-center justify-center"
+        />
+      </div>
+    </GameAdSlotFrame>
   );
 }
 
-export function ReflecShotAdSlots({ isDebugMode }: { isDebugMode: boolean }) {
+export function ReflecShotAdSlots() {
   return (
     <>
-      <ReflecShotAdSlot slotIndex={1} isDebugMode={isDebugMode} />
-      <ReflecShotAdSlot slotIndex={2} isDebugMode={isDebugMode} />
+      <ReflecShotAdSlot slotIndex={1} />
+      <ReflecShotAdSlot slotIndex={2} />
     </>
   );
 }
