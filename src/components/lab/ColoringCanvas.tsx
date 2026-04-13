@@ -82,8 +82,10 @@ const DEBUG_DISABLE_MASK = false;
 
 const SPLATTER_IMAGE_COUNT = 9;
 const SPLATTER_PUBLIC_PREFIX = "/assets/tap-coloring";
-const ANIMAL_PICTURE_PUBLIC_PREFIX = "/assets/tap-coloring/Pictures";
+const PICTURE_PUBLIC_PREFIX = "/assets/tap-coloring/Pictures";
 const ANIMAL_PICTURE_COUNT = 12;
+const PRODUCE_PICTURE_COUNT = 10;
+const VEHICLE_PICTURE_COUNT = 12;
 
 /** 表示は CSS で論理サイズのまま、ビットマップを拡大して縮小表示のジャギーを抑える */
 const TAP_COLOR_INTERNAL_SCALE = 2;
@@ -97,24 +99,51 @@ const PARTICLE_RADIUS_LOGICAL_PX = 5;
 /** インク輪郭のわずかな柔らかさ（ビットマップ座標。2 倍解像度時は画面上で約半分に見える） */
 const INK_SPLAT_SHADOW_BLUR_BITMAP_PX = 3;
 
-type AnimalPictureAsset = {
+type PictureCategory = "animal" | "produce" | "vehicle";
+
+type ColoringPictureAsset = {
   id: string;
   label: string;
+  category: PictureCategory;
   src: string;
 };
 
-const ANIMAL_PICTURE_ASSETS: readonly AnimalPictureAsset[] = Array.from(
-  { length: ANIMAL_PICTURE_COUNT },
-  (_, i) => {
+function buildPictureAssets(
+  category: PictureCategory,
+  prefix: "Animal" | "Produce" | "Vehicle",
+  count: number,
+  labelPrefix: string,
+): ColoringPictureAsset[] {
+  return Array.from({ length: count }, (_, i) => {
     const n = i + 1;
     const code = String(n).padStart(2, "0");
     return {
-      id: `animal-${code}`,
-      label: `どうぶつ ${code}`,
-      src: `${ANIMAL_PICTURE_PUBLIC_PREFIX}/Picture_Animal_${code}.png`,
+      id: `${category}-${code}`,
+      label: `${labelPrefix} ${code}`,
+      category,
+      src: `${PICTURE_PUBLIC_PREFIX}/Picture_${prefix}_${code}.png`,
     };
-  },
-);
+  });
+}
+
+const COLORING_PICTURE_ASSETS: readonly ColoringPictureAsset[] = [
+  ...buildPictureAssets("animal", "Animal", ANIMAL_PICTURE_COUNT, "どうぶつ"),
+  ...buildPictureAssets("produce", "Produce", PRODUCE_PICTURE_COUNT, "やさい・くだもの"),
+  ...buildPictureAssets("vehicle", "Vehicle", VEHICLE_PICTURE_COUNT, "のりもの"),
+];
+
+function pickRandomPictureIndex(previousIndex: number | null): number {
+  if (COLORING_PICTURE_ASSETS.length <= 1) return 0;
+  if (previousIndex == null) return Math.floor(Math.random() * COLORING_PICTURE_ASSETS.length);
+
+  const prevCategory = COLORING_PICTURE_ASSETS[previousIndex]?.category;
+  const candidates: number[] = [];
+  for (let i = 0; i < COLORING_PICTURE_ASSETS.length; i++) {
+    if (COLORING_PICTURE_ASSETS[i]!.category !== prevCategory) candidates.push(i);
+  }
+  if (candidates.length === 0) return Math.floor(Math.random() * COLORING_PICTURE_ASSETS.length);
+  return candidates[Math.floor(Math.random() * candidates.length)]!;
+}
 
 function applyCanvasInkQuality(ctx: CanvasRenderingContext2D) {
   ctx.imageSmoothingEnabled = true;
@@ -290,7 +319,7 @@ export function ColoringCanvas() {
 
   const [size, setSize] = useState(360);
   const [stageIndex, setStageIndex] = useState(0);
-  const [pictureIndex, setPictureIndex] = useState(() => Math.floor(Math.random() * ANIMAL_PICTURE_ASSETS.length));
+  const [pictureIndex, setPictureIndex] = useState(() => pickRandomPictureIndex(null));
   const [activePalette, setActivePalette] = useState<TapColoringSwatch[]>(() => pickTriadPalette());
   const [selected, setSelected] = useState<TapColoringSwatch>(() => activePalette[0]!);
   const [fillRatio, setFillRatio] = useState(0);
@@ -315,12 +344,12 @@ export function ColoringCanvas() {
   const blockPaintUntilPointerUpRef = useRef(false);
   const activeCanvasPointerIdRef = useRef<number | null>(null);
   const splatterImagesRef = useRef<(HTMLImageElement | HTMLCanvasElement)[]>([]);
-  const animalPictureImagesRef = useRef<HTMLImageElement[]>([]);
+  const coloringPictureImagesRef = useRef<HTMLImageElement[]>([]);
   const [splatterImagesReady, setSplatterImagesReady] = useState(false);
-  const [animalPicturesReady, setAnimalPicturesReady] = useState(false);
+  const [coloringPicturesReady, setColoringPicturesReady] = useState(false);
   const bitmapSize = Math.round(size * TAP_COLOR_INTERNAL_SCALE);
   const paintScalePx = (bitmapSize * 0.82) / 100;
-  const currentPictureAsset = ANIMAL_PICTURE_ASSETS[pictureIndex]!;
+  const currentPictureAsset = COLORING_PICTURE_ASSETS[pictureIndex]!;
 
   const releaseCanvasPointer = useCallback((pointerId: number) => {
     if (pointerId !== activeCanvasPointerIdRef.current) return;
@@ -429,7 +458,7 @@ export function ColoringCanvas() {
     const mask = maskRef.current;
     const paint = paintRef.current;
     if (!display || !mask || !paint) return;
-    const picture = animalPictureImagesRef.current[pictureIndex];
+    const picture = coloringPictureImagesRef.current[pictureIndex];
     if (!picture || !picture.complete || picture.naturalWidth < 1 || picture.naturalHeight < 1) return;
 
     const w = bitmapSize;
@@ -519,7 +548,7 @@ export function ColoringCanvas() {
     clearTriggeredRef.current = false;
     setFillRatio(0);
     redrawDisplay();
-  }, [animalPicturesReady, bitmapSize, pictureIndex, redrawDisplay]);
+  }, [coloringPicturesReady, bitmapSize, pictureIndex, redrawDisplay]);
 
   const initStageCanvasesRef = useRef(initStageCanvases) as MutableRefObject<typeof initStageCanvases>;
   useLayoutEffect(() => {
@@ -563,15 +592,15 @@ export function ColoringCanvas() {
   useEffect(() => {
     let cancelled = false;
     const imgs: HTMLImageElement[] = [];
-    let pending = ANIMAL_PICTURE_ASSETS.length;
+    let pending = COLORING_PICTURE_ASSETS.length;
     const onDone = () => {
       pending -= 1;
       if (pending <= 0 && !cancelled) {
-        animalPictureImagesRef.current = imgs;
-        setAnimalPicturesReady(true);
+        coloringPictureImagesRef.current = imgs;
+        setColoringPicturesReady(true);
       }
     };
-    for (const asset of ANIMAL_PICTURE_ASSETS) {
+    for (const asset of COLORING_PICTURE_ASSETS) {
       const im = new Image();
       im.decoding = "async";
       im.onload = onDone;
@@ -601,9 +630,9 @@ export function ColoringCanvas() {
   /** リサイズ・問題画像変更時（表示 canvas は同一ノードのまま） */
   useEffect(() => {
     if (!displayRef.current) return;
-    if (!animalPicturesReady) return;
+    if (!coloringPicturesReady) return;
     initStageCanvasesRef.current();
-  }, [animalPicturesReady, pictureIndex, size]);
+  }, [coloringPicturesReady, pictureIndex, size]);
 
   const spawnParticles = (cx: number, cy: number, color: string) => {
     const n = 14;
@@ -792,7 +821,7 @@ export function ColoringCanvas() {
       clearTriggeredRef.current = false;
       blockPaintUntilPointerUpRef.current = pointerDownOnCanvasRef.current;
       setActivePalette(pickTriadPalette());
-      setPictureIndex(Math.floor(Math.random() * ANIMAL_PICTURE_ASSETS.length));
+      setPictureIndex((prev) => pickRandomPictureIndex(prev));
       setStageIndex((i) => i + 1);
       setCleared(false);
     }, 900);
@@ -876,7 +905,7 @@ export function ColoringCanvas() {
       <header className="text-center">
         <h1 className="text-xl font-bold text-stone-700">タップでぬりえ</h1>
         <p className="text-sm text-stone-500">たっぷして いろを のばそう</p>
-        {(!splatterImagesReady || !animalPicturesReady) && (
+        {(!splatterImagesReady || !coloringPicturesReady) && (
           <p className="mt-1 text-[10px] text-amber-700">画像を読み込み中…</p>
         )}
         {!isDevTj && (
