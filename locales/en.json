@@ -281,6 +281,17 @@
       "p_mont": "Montessori emphasizes causality grounded in concrete materials; here, tilt of the scale returns as embodied cause-and-effect before abstract lecture. The screen acts as a prepared environment: misplacements and timeouts appear immediately, offering environmental feedback that supports self-correction without scolding. The NPC stands in for another agent’s move—a thin but clear social frame for “how do I respond after someone else acts?” When adults scaffold, naming which pan looks heavier or what the child fears on the next move supports self-observation more than narrating outcomes for them.",
       "h3_step": "Progression (rounds & difficulty)",
       "p_step": "As rounds advance, NPC pressure and inventory tension shift play from single-weight comparisons toward imagining balance several moves ahead. The Judge action demands a meta-decision to stop tweaking and commit, helping separate impulse from reasoning. Difficulty rises in steps to preserve a prepared gradient of load so learning can be drawn from both success and failure. Alongside logic-puzzle titles, the design offers integrated practice with number, time, and bodily action."
+    },
+    "tapColoring": {
+      "summary": "Educational benefits of this game",
+      "h3_dev": "Design rationale",
+      "p_dev": "Tap coloring integrates two threads for toddlers: grasping cause-and-effect and emotionally responding to color in a digital medium. Where analog coloring stresses motor inhibition (“stay inside the lines”), this prototype maximizes immediate visual reward—touched areas fill right away. That tight feedback loop can serve as an early interface for digital-native children to build a sense of self-efficacy.",
+      "h3_neuro": "Neuroscience lens",
+      "p_neuro": "Looking at the screen while tapping a region recruits visuomotor coordination between vision and hand. The thick, “juicy” ink feedback gives a sense of space being filled, which can engage visual cortex and dopamine-related reward circuits. Choosing one color among several also offers a light exercise in simple decision-making supported by the prefrontal cortex.",
+      "h3_mont": "Montessori alignment",
+      "p_mont": "The design leans on correction from the environment (auto-education). Bold black outlines act as clear boundaries so children can see at once where their action took effect. Rather than adults dictating “color here,” the flow respects spontaneous intent—“I’ll make this spot red next”—followed by self-evaluation of the outcome.",
+      "h3_step": "Progression (grades G0+)",
+      "p_step": "At the lowest grades, play centers on simple silhouettes and single-color fills to stack small successes. As difficulty rises, motifs become more segmented (e.g., from an animal’s face toward the whole body), and layouts invite separating adjacent regions by color, bridging toward ideas of color composition. This mirrors Montessori sensory education: concrete manipulation first, then gradual movement toward more abstract aesthetic judgment."
     }
   },
   "privacy": {

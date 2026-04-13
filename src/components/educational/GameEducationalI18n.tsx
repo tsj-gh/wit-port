@@ -70,3 +70,20 @@ export function PresSureEducationalI18n() {
     </EducationalValueSection>
   );
 }
+
+export function TapColoringEducationalI18n() {
+  const { t } = useI18n();
+  const p = "educational.tapColoring";
+  return (
+    <EducationalValueSection summaryLabel={t(`${p}.summary`)}>
+      <h3>{t(`${p}.h3_dev`)}</h3>
+      <p>{t(`${p}.p_dev`)}</p>
+      <h3>{t(`${p}.h3_neuro`)}</h3>
+      <p>{t(`${p}.p_neuro`)}</p>
+      <h3>{t(`${p}.h3_mont`)}</h3>
+      <p>{t(`${p}.p_mont`)}</p>
+      <h3>{t(`${p}.h3_step`)}</h3>
+      <p>{t(`${p}.p_step`)}</p>
+    </EducationalValueSection>
+  );
+}
