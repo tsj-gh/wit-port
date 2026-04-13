@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { TapColoringEducationalI18n } from "@/components/educational/GameEducationalI18n";
-import { ColoringCanvas } from "@/components/lab/ColoringCanvas";
+import { TapColoringLabShell } from "@/components/lab/TapColoringLabShell";
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
 
@@ -15,9 +15,9 @@ export const metadata: Metadata = {
 export default function TapColoringLabPage() {
   return (
     <>
-      <main className="min-h-dvh bg-stone-50 text-stone-800">
-        <Suspense fallback={<div className="p-8 text-center text-sm text-stone-500">読み込み中…</div>}>
-          <ColoringCanvas />
+      <main className="mx-auto flex w-full max-w-3xl flex-1 px-4 py-4 md:py-6">
+        <Suspense fallback={<div className="py-8 text-sm text-[var(--color-muted)]">読み込み中…</div>}>
+          <TapColoringLabShell />
         </Suspense>
       </main>
       <TapColoringEducationalI18n />

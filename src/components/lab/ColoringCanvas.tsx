@@ -322,7 +322,6 @@ export function ColoringCanvas() {
   const [pictureIndex, setPictureIndex] = useState(() => pickRandomPictureIndex(null));
   const [activePalette, setActivePalette] = useState<TapColoringSwatch[]>(() => pickTriadPalette());
   const [selected, setSelected] = useState<TapColoringSwatch>(() => activePalette[0]!);
-  const [fillRatio, setFillRatio] = useState(0);
   const [cleared, setCleared] = useState(false);
 
   const [isDebugMode, setIsDebugMode] = useState(false);
@@ -546,7 +545,6 @@ export function ColoringCanvas() {
     pctx.clearRect(0, 0, w, h);
 
     clearTriggeredRef.current = false;
-    setFillRatio(0);
     redrawDisplay();
   }, [coloringPicturesReady, bitmapSize, pictureIndex, redrawDisplay]);
 
@@ -781,7 +779,6 @@ export function ColoringCanvas() {
     spawnParticles(px, py, selected.color);
 
     const ratio = measureFill();
-    setFillRatio(ratio);
     if (ratio >= fillThreshold && !clearTriggeredRef.current) {
       clearTriggeredRef.current = true;
       setCleared(true);
@@ -832,10 +829,8 @@ export function ColoringCanvas() {
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
-  const pctTarget = Math.round(fillThreshold * 100);
-
   return (
-    <div ref={containerRef} className="relative mx-auto flex w-full max-w-lg flex-col gap-4 px-3 pb-8 pt-4">
+    <div ref={containerRef} className="relative mx-auto flex w-full max-w-lg flex-col gap-4 px-0 pb-2 pt-0">
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-4 z-50">
           <button
@@ -902,16 +897,9 @@ export function ColoringCanvas() {
         </div>
       )}
 
-      <header className="text-center">
-        <h1 className="text-xl font-bold text-stone-700">タップでぬりえ</h1>
-        <p className="text-sm text-stone-500">たっぷして いろを のばそう</p>
-        {(!splatterImagesReady || !coloringPicturesReady) && (
-          <p className="mt-1 text-[10px] text-amber-700">画像を読み込み中…</p>
-        )}
-        {!isDevTj && (
-          <p className="mt-1 text-[10px] text-stone-400">デバッグは URL に ?devtj=true を付けてください</p>
-        )}
-      </header>
+      {(!splatterImagesReady || !coloringPicturesReady) && (
+        <p className="text-center text-[10px] text-[var(--color-muted)]">画像を読み込み中…</p>
+      )}
 
       <div className="flex flex-wrap items-center justify-center gap-3">
         {activePalette.map((p) => {
@@ -947,7 +935,7 @@ export function ColoringCanvas() {
               width={bitmapSize}
               height={bitmapSize}
               style={canvasInkStyle}
-              className="relative z-10 h-full w-full touch-none rounded-3xl border-4 border-stone-200 bg-stone-100 shadow-inner"
+              className="relative z-10 h-full w-full touch-none rounded-2xl border-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))] shadow-inner"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUpCanvas}
@@ -989,14 +977,6 @@ export function ColoringCanvas() {
         )}
       </AnimatePresence>
 
-      <div className="flex items-center justify-between text-sm text-stone-500">
-        <span>
-          いま: <strong className="text-stone-700">{currentPictureAsset.label}</strong>
-        </span>
-        <span className="tabular-nums">
-          ぬれたよ: {Math.min(100, Math.round(fillRatio * 100))}% / {pctTarget}%
-        </span>
-      </div>
     </div>
   );
 }
