@@ -1,33 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
-
-/** viewBox 0 0 100 100 の単純な塗り用シルエット（外部アセットなし） */
-export const TAP_COLORING_SHAPES = [
-  {
-    id: "apple",
-    label: "りんご",
-    d: "M50 22 C32 22 18 40 18 62 C18 84 34 100 50 100 C66 100 82 84 82 62 C82 40 68 22 50 22 Z M50 20 L46 8 L54 8 Z",
-  },
-  {
-    id: "star",
-    label: "ほし",
-    d: "M50 6 L61 36 L94 36 L68 56 L79 88 L50 70 L21 88 L32 56 L6 36 L39 36 Z",
-  },
-  {
-    id: "cat",
-    label: "ねこ",
-    d: "M50 28 L36 10 L28 32 C16 40 10 54 10 70 C10 90 28 98 50 96 C72 98 90 90 90 70 C90 54 84 40 72 32 L64 10 Z",
-  },
-  {
-    id: "car",
-    label: "くるま",
-    d: "M12 72 L12 58 L22 50 L78 50 L88 58 L88 72 Z M24 74 m-7 0 a7 7 0 1 0 14 0 a7 7 0 1 0 -14 0 M76 74 m-7 0 a7 7 0 1 0 14 0 a7 7 0 1 0 -14 0",
-  },
-] as const;
 
 /** HSB 色相環に沿った 12 色（S/B はビビッド寄り: HSL 100% / 50%） */
 const HUE_RING = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330] as const;
@@ -106,6 +82,8 @@ const DEBUG_DISABLE_MASK = false;
 
 const SPLATTER_IMAGE_COUNT = 9;
 const SPLATTER_PUBLIC_PREFIX = "/assets/tap-coloring";
+const ANIMAL_PICTURE_PUBLIC_PREFIX = "/assets/tap-coloring/Pictures";
+const ANIMAL_PICTURE_COUNT = 12;
 
 /** 表示は CSS で論理サイズのまま、ビットマップを拡大して縮小表示のジャギーを抑える */
 const TAP_COLOR_INTERNAL_SCALE = 2;
@@ -118,6 +96,25 @@ const PARTICLE_RADIUS_LOGICAL_PX = 5;
 
 /** インク輪郭のわずかな柔らかさ（ビットマップ座標。2 倍解像度時は画面上で約半分に見える） */
 const INK_SPLAT_SHADOW_BLUR_BITMAP_PX = 3;
+
+type AnimalPictureAsset = {
+  id: string;
+  label: string;
+  src: string;
+};
+
+const ANIMAL_PICTURE_ASSETS: readonly AnimalPictureAsset[] = Array.from(
+  { length: ANIMAL_PICTURE_COUNT },
+  (_, i) => {
+    const n = i + 1;
+    const code = String(n).padStart(2, "0");
+    return {
+      id: `animal-${code}`,
+      label: `どうぶつ ${code}`,
+      src: `${ANIMAL_PICTURE_PUBLIC_PREFIX}/Picture_Animal_${code}.png`,
+    };
+  },
+);
 
 function applyCanvasInkQuality(ctx: CanvasRenderingContext2D) {
   ctx.imageSmoothingEnabled = true;
@@ -202,6 +199,20 @@ function splatterSourceSize(src: HTMLImageElement | HTMLCanvasElement): { w: num
   return { w: src.naturalWidth, h: src.naturalHeight };
 }
 
+function createPictureFrame(
+  canvasSize: number,
+  srcW: number,
+  srcH: number,
+): { drawW: number; drawH: number; drawX: number; drawY: number } {
+  const maxBox = canvasSize * 0.76;
+  const scale = Math.min(maxBox / srcW, maxBox / srcH);
+  const drawW = Math.max(1, Math.round(srcW * scale));
+  const drawH = Math.max(1, Math.round(srcH * scale));
+  const drawX = Math.round((canvasSize - drawW) / 2);
+  const drawY = Math.round((canvasSize - drawH) / 2);
+  return { drawW, drawH, drawX, drawY };
+}
+
 function nearestHueIndexFromRgb(r: number, g: number, b: number): number {
   let bestIdx = 0;
   let best = Number.POSITIVE_INFINITY;
@@ -248,15 +259,6 @@ function hueStepAdaptive(fromIdx: number, toIdx: number): number {
   return cur;
 }
 
-function useShapeLayout(canvasSize: number) {
-  return useMemo(() => {
-    const pxPerVb = (canvasSize * 0.82) / 100;
-    const ox = (canvasSize - 100 * pxPerVb) / 2;
-    const oy = (canvasSize - 100 * pxPerVb) / 2;
-    return { pxPerVb, ox, oy };
-  }, [canvasSize]);
-}
-
 /** マスク（白＝内側）とペイント層から、内側ピクセルに対する塗り率を算出（stride で間引きスキャン） */
 function computeFillRatio(maskData: ImageData, paintData: ImageData, stride: number): number {
   let inside = 0;
@@ -288,6 +290,7 @@ export function ColoringCanvas() {
 
   const [size, setSize] = useState(360);
   const [stageIndex, setStageIndex] = useState(0);
+  const [pictureIndex, setPictureIndex] = useState(() => Math.floor(Math.random() * ANIMAL_PICTURE_ASSETS.length));
   const [activePalette, setActivePalette] = useState<TapColoringSwatch[]>(() => pickTriadPalette());
   const [selected, setSelected] = useState<TapColoringSwatch>(() => activePalette[0]!);
   const [fillRatio, setFillRatio] = useState(0);
@@ -303,7 +306,8 @@ export function ColoringCanvas() {
 
   const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number>(0);
-  const pathRef = useRef<Path2D | null>(null);
+  const pictureBaseRef = useRef<HTMLCanvasElement | null>(null);
+  const pictureLineOverlayRef = useRef<HTMLCanvasElement | null>(null);
   const clearTriggeredRef = useRef(false);
   /** キャンバスでポインタが押下中（この間にクリア→次ステージへ進んだら、離すまで塗りを止める） */
   const pointerDownOnCanvasRef = useRef(false);
@@ -311,11 +315,12 @@ export function ColoringCanvas() {
   const blockPaintUntilPointerUpRef = useRef(false);
   const activeCanvasPointerIdRef = useRef<number | null>(null);
   const splatterImagesRef = useRef<(HTMLImageElement | HTMLCanvasElement)[]>([]);
+  const animalPictureImagesRef = useRef<HTMLImageElement[]>([]);
   const [splatterImagesReady, setSplatterImagesReady] = useState(false);
+  const [animalPicturesReady, setAnimalPicturesReady] = useState(false);
   const bitmapSize = Math.round(size * TAP_COLOR_INTERNAL_SCALE);
-  const { pxPerVb, ox, oy } = useShapeLayout(bitmapSize);
-
-  const shape = TAP_COLORING_SHAPES[stageIndex % TAP_COLORING_SHAPES.length]!;
+  const paintScalePx = (bitmapSize * 0.82) / 100;
+  const currentPictureAsset = ANIMAL_PICTURE_ASSETS[pictureIndex]!;
 
   const releaseCanvasPointer = useCallback((pointerId: number) => {
     if (pointerId !== activeCanvasPointerIdRef.current) return;
@@ -343,20 +348,15 @@ export function ColoringCanvas() {
     });
   }, [activePalette]);
 
-  const layoutPath = useCallback(() => {
-    pathRef.current = new Path2D(shape.d);
-  }, [shape.d]);
-
   const redrawDisplay = useCallback(() => {
     const display = displayRef.current;
     const paint = paintRef.current;
-    if (!display || !paint || !pathRef.current) return;
+    if (!display || !paint) return;
 
     const ctx = display.getContext("2d");
     if (!ctx) return;
     applyCanvasInkQuality(ctx);
 
-    const path = pathRef.current;
     const w = display.width;
     const h = display.height;
 
@@ -366,12 +366,8 @@ export function ColoringCanvas() {
     ctx.fillStyle = "#fafaf9";
     ctx.fillRect(0, 0, w, h);
 
-    ctx.save();
-    ctx.translate(ox, oy);
-    ctx.scale(pxPerVb, pxPerVb);
-    ctx.fillStyle = "#e7e5e4";
-    ctx.fill(path);
-    ctx.restore();
+    const pictureBase = pictureBaseRef.current;
+    if (pictureBase) ctx.drawImage(pictureBase, 0, 0);
 
     ctx.save();
     ctx.globalCompositeOperation = "source-over";
@@ -379,14 +375,8 @@ export function ColoringCanvas() {
     ctx.drawImage(paint, 0, 0);
     ctx.restore();
 
-    ctx.save();
-    ctx.translate(ox, oy);
-    ctx.scale(pxPerVb, pxPerVb);
-    ctx.strokeStyle = "#57534e";
-    ctx.lineWidth = 2.5 / pxPerVb;
-    ctx.lineJoin = "round";
-    ctx.stroke(path);
-    ctx.restore();
+    const lineOverlay = pictureLineOverlayRef.current;
+    if (lineOverlay) ctx.drawImage(lineOverlay, 0, 0);
 
     const parts = particlesRef.current;
     const pr = PARTICLE_RADIUS_LOGICAL_PX * TAP_COLOR_INTERNAL_SCALE;
@@ -401,7 +391,7 @@ export function ColoringCanvas() {
         ctx.restore();
       }
     }
-  }, [ox, oy, pxPerVb]);
+  }, []);
 
   const runParticles = useCallback(() => {
     const step = () => {
@@ -439,10 +429,8 @@ export function ColoringCanvas() {
     const mask = maskRef.current;
     const paint = paintRef.current;
     if (!display || !mask || !paint) return;
-
-    layoutPath();
-    const path = pathRef.current;
-    if (!path) return;
+    const picture = animalPictureImagesRef.current[pictureIndex];
+    if (!picture || !picture.complete || picture.naturalWidth < 1 || picture.naturalHeight < 1) return;
 
     const w = bitmapSize;
     const h = bitmapSize;
@@ -458,14 +446,72 @@ export function ColoringCanvas() {
     if (!mctx || !pctx) return;
     applyCanvasInkQuality(mctx);
     applyCanvasInkQuality(pctx);
+    const { drawW, drawH, drawX, drawY } = createPictureFrame(
+      bitmapSize,
+      picture.naturalWidth,
+      picture.naturalHeight,
+    );
 
     mctx.clearRect(0, 0, w, h);
-    mctx.save();
-    mctx.translate(ox, oy);
-    mctx.scale(pxPerVb, pxPerVb);
-    mctx.fillStyle = "#ffffff";
-    mctx.fill(path);
-    mctx.restore();
+    mctx.drawImage(picture, drawX, drawY, drawW, drawH);
+    const maskImg = mctx.getImageData(0, 0, w, h);
+    for (let i = 0; i < maskImg.data.length; i += 4) {
+      const a = maskImg.data[i + 3]!;
+      if (a < 12) {
+        maskImg.data[i] = 0;
+        maskImg.data[i + 1] = 0;
+        maskImg.data[i + 2] = 0;
+        maskImg.data[i + 3] = 0;
+        continue;
+      }
+      const bright = maskImg.data[i]! + maskImg.data[i + 1]! + maskImg.data[i + 2]!;
+      if (bright >= 690) {
+        maskImg.data[i] = 255;
+        maskImg.data[i + 1] = 255;
+        maskImg.data[i + 2] = 255;
+        maskImg.data[i + 3] = 255;
+      } else {
+        maskImg.data[i] = 0;
+        maskImg.data[i + 1] = 0;
+        maskImg.data[i + 2] = 0;
+        maskImg.data[i + 3] = 0;
+      }
+    }
+    mctx.putImageData(maskImg, 0, 0);
+
+    const baseCanvas = document.createElement("canvas");
+    baseCanvas.width = w;
+    baseCanvas.height = h;
+    const bctx = baseCanvas.getContext("2d");
+    if (!bctx) return;
+    applyCanvasInkQuality(bctx);
+    bctx.clearRect(0, 0, w, h);
+    bctx.drawImage(picture, drawX, drawY, drawW, drawH);
+    pictureBaseRef.current = baseCanvas;
+
+    const lineOverlayCanvas = document.createElement("canvas");
+    lineOverlayCanvas.width = w;
+    lineOverlayCanvas.height = h;
+    const lctx = lineOverlayCanvas.getContext("2d");
+    if (!lctx) return;
+    applyCanvasInkQuality(lctx);
+    lctx.clearRect(0, 0, w, h);
+    lctx.drawImage(picture, drawX, drawY, drawW, drawH);
+    const lineImage = lctx.getImageData(0, 0, w, h);
+    for (let i = 0; i < lineImage.data.length; i += 4) {
+      const a = lineImage.data[i + 3]!;
+      const bright = lineImage.data[i]! + lineImage.data[i + 1]! + lineImage.data[i + 2]!;
+      if (a < 12 || bright > 330) {
+        lineImage.data[i + 3] = 0;
+      } else {
+        lineImage.data[i] = 0;
+        lineImage.data[i + 1] = 0;
+        lineImage.data[i + 2] = 0;
+        lineImage.data[i + 3] = 255;
+      }
+    }
+    lctx.putImageData(lineImage, 0, 0);
+    pictureLineOverlayRef.current = lineOverlayCanvas;
 
     pctx.setTransform(1, 0, 0, 1, 0, 0);
     pctx.clearRect(0, 0, w, h);
@@ -473,7 +519,7 @@ export function ColoringCanvas() {
     clearTriggeredRef.current = false;
     setFillRatio(0);
     redrawDisplay();
-  }, [bitmapSize, layoutPath, ox, oy, pxPerVb, redrawDisplay]);
+  }, [animalPicturesReady, bitmapSize, pictureIndex, redrawDisplay]);
 
   const initStageCanvasesRef = useRef(initStageCanvases) as MutableRefObject<typeof initStageCanvases>;
   useLayoutEffect(() => {
@@ -515,6 +561,30 @@ export function ColoringCanvas() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    const imgs: HTMLImageElement[] = [];
+    let pending = ANIMAL_PICTURE_ASSETS.length;
+    const onDone = () => {
+      pending -= 1;
+      if (pending <= 0 && !cancelled) {
+        animalPictureImagesRef.current = imgs;
+        setAnimalPicturesReady(true);
+      }
+    };
+    for (const asset of ANIMAL_PICTURE_ASSETS) {
+      const im = new Image();
+      im.decoding = "async";
+      im.onload = onDone;
+      im.onerror = onDone;
+      im.src = asset.src;
+      imgs.push(im);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
@@ -528,11 +598,12 @@ export function ColoringCanvas() {
     return () => ro.disconnect();
   }, []);
 
-  /** リサイズのみ（表示 canvas は同一ノードのまま）— ステージ切替は setDisplayCanvasRef 側で初期化 */
+  /** リサイズ・問題画像変更時（表示 canvas は同一ノードのまま） */
   useEffect(() => {
     if (!displayRef.current) return;
+    if (!animalPicturesReady) return;
     initStageCanvasesRef.current();
-  }, [size]);
+  }, [animalPicturesReady, pictureIndex, size]);
 
   const spawnParticles = (cx: number, cy: number, color: string) => {
     const n = 14;
@@ -590,7 +661,7 @@ export function ColoringCanvas() {
     if (srcW < 1 || srcH < 1) return;
 
     const scaleJitter = 0.8 + Math.random() * 0.4;
-    const baseDiameter = 2 * splatterRadiusVb * pxPerVb * scaleJitter;
+    const baseDiameter = 2 * splatterRadiusVb * paintScalePx * scaleJitter;
     const ar = srcW / srcH;
     let drawW: number;
     let drawH: number;
@@ -721,6 +792,7 @@ export function ColoringCanvas() {
       clearTriggeredRef.current = false;
       blockPaintUntilPointerUpRef.current = pointerDownOnCanvasRef.current;
       setActivePalette(pickTriadPalette());
+      setPictureIndex(Math.floor(Math.random() * ANIMAL_PICTURE_ASSETS.length));
       setStageIndex((i) => i + 1);
       setCleared(false);
     }, 900);
@@ -804,8 +876,8 @@ export function ColoringCanvas() {
       <header className="text-center">
         <h1 className="text-xl font-bold text-stone-700">タップでぬりえ</h1>
         <p className="text-sm text-stone-500">たっぷして いろを のばそう</p>
-        {!splatterImagesReady && (
-          <p className="mt-1 text-[10px] text-amber-700">シミ画像を読み込み中…</p>
+        {(!splatterImagesReady || !animalPicturesReady) && (
+          <p className="mt-1 text-[10px] text-amber-700">画像を読み込み中…</p>
         )}
         {!isDevTj && (
           <p className="mt-1 text-[10px] text-stone-400">デバッグは URL に ?devtj=true を付けてください</p>
@@ -834,7 +906,7 @@ export function ColoringCanvas() {
       <div className="relative mx-auto aspect-square w-full max-w-[420px]">
         <AnimatePresence mode="wait">
           <motion.div
-            key={`${stageIndex}-${shape.id}`}
+            key={`${stageIndex}-${currentPictureAsset.id}`}
             className="absolute inset-0 flex items-center justify-center"
             initial={{ scale: 0.78, opacity: 0, rotate: -5 }}
             animate={{ scale: 1, opacity: 1, rotate: 0 }}
@@ -890,7 +962,7 @@ export function ColoringCanvas() {
 
       <div className="flex items-center justify-between text-sm text-stone-500">
         <span>
-          いま: <strong className="text-stone-700">{shape.label}</strong>
+          いま: <strong className="text-stone-700">{currentPictureAsset.label}</strong>
         </span>
         <span className="tabular-nums">
           ぬれたよ: {Math.min(100, Math.round(fillRatio * 100))}% / {pctTarget}%
