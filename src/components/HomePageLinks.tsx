@@ -8,7 +8,7 @@ const cardWrapClassName =
   "group relative flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--wit-border)] bg-[var(--wit-card-bg)] backdrop-blur-[10px] transition-all duration-200 ease-[cubic-bezier(0.25,0.8,0.25,1)] hover:-translate-y-1 hover:border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] hover:shadow-[0_12px_28px_color-mix(in_srgb,var(--color-text)_12%,transparent),0_0_16px_color-mix(in_srgb,var(--color-primary)_22%,transparent)] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:content-[''] after:bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--color-primary)_18%,transparent),transparent_55%)] after:opacity-0 after:transition-opacity after:duration-200 group-hover:after:opacity-100";
 
 const gameLinkClassName =
-  "relative z-[1] flex min-h-0 flex-1 flex-col p-3 text-[var(--color-text)] no-underline md:p-3.5";
+  "relative z-[1] flex min-h-0 flex-1 flex-col p-3 pr-9 text-[var(--color-text)] no-underline md:p-3.5 md:pr-10";
 
 function HomeGameCard({ cardId }: { cardId: HomeGameCardId }) {
   const { t } = useI18n();
