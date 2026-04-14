@@ -98,6 +98,10 @@ const PARTICLE_RADIUS_LOGICAL_PX = 5;
 
 /** インク輪郭のわずかな柔らかさ（ビットマップ座標。2 倍解像度時は画面上で約半分に見える） */
 const INK_SPLAT_SHADOW_BLUR_BITMAP_PX = 3;
+const SUCCESS_UI_FADE_MS = 300;
+const TRANSITION_BG_MS = 1000;
+const SETUP_ENTER_MS = 620;
+const RESUME_UI_MS = 300;
 
 type PictureCategory = "animal" | "produce" | "vehicle";
 
@@ -203,6 +207,7 @@ function tintSplatterToCanvas(
 }
 
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string };
+type ColoringPhase = "play" | "success" | "transition" | "setup" | "resume";
 
 function parseHexRgb(hex: string): { r: number; g: number; b: number } | null {
   const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
@@ -226,6 +231,67 @@ function colorDistanceSq(
 function splatterSourceSize(src: HTMLImageElement | HTMLCanvasElement): { w: number; h: number } {
   if (src instanceof HTMLCanvasElement) return { w: src.width, h: src.height };
   return { w: src.naturalWidth, h: src.naturalHeight };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function randomPastel(): string {
+  const h = Math.floor(Math.random() * 360);
+  const s = 68;
+  const l = 88;
+  return `hsl(${h} ${s}% ${l}%)`;
+}
+
+function playSuccessPong(): void {
+  if (typeof window === "undefined") return;
+  const Ctx = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) return;
+  const ctx = new Ctx();
+  const t0 = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(420, t0);
+  osc.frequency.exponentialRampToValueAtTime(660, t0 + 0.07);
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(0.2, t0 + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + 0.2);
+}
+
+function playSlideWhoosh(): void {
+  if (typeof window === "undefined") return;
+  const Ctx = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) return;
+  const ctx = new Ctx();
+  const t0 = ctx.currentTime;
+  const bufferSize = ctx.sampleRate * 0.22;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    const t = i / bufferSize;
+    const env = (1 - t) * (1 - t);
+    data[i] = (Math.random() * 2 - 1) * env * 0.2;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = "highpass";
+  filter.frequency.value = 520;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(0.18, t0 + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+  src.start(t0);
+  src.stop(t0 + 0.21);
 }
 
 function createPictureFrame(
@@ -322,7 +388,8 @@ export function ColoringCanvas() {
   const [pictureIndex, setPictureIndex] = useState(() => pickRandomPictureIndex(null));
   const [activePalette, setActivePalette] = useState<TapColoringSwatch[]>(() => pickTriadPalette());
   const [selected, setSelected] = useState<TapColoringSwatch>(() => activePalette[0]!);
-  const [cleared, setCleared] = useState(false);
+  const [phase, setPhase] = useState<ColoringPhase>("play");
+  const [sceneBgColor, setSceneBgColor] = useState("#fafaf9");
 
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
@@ -346,6 +413,7 @@ export function ColoringCanvas() {
   const coloringPictureImagesRef = useRef<HTMLImageElement[]>([]);
   const [splatterImagesReady, setSplatterImagesReady] = useState(false);
   const [coloringPicturesReady, setColoringPicturesReady] = useState(false);
+  const sequenceRunningRef = useRef(false);
   const bitmapSize = Math.round(size * TAP_COLOR_INTERNAL_SCALE);
   const paintScalePx = (bitmapSize * 0.82) / 100;
   const currentPictureAsset = COLORING_PICTURE_ASSETS[pictureIndex]!;
@@ -544,7 +612,6 @@ export function ColoringCanvas() {
     pctx.setTransform(1, 0, 0, 1, 0, 0);
     pctx.clearRect(0, 0, w, h);
 
-    clearTriggeredRef.current = false;
     redrawDisplay();
   }, [coloringPicturesReady, bitmapSize, pictureIndex, redrawDisplay]);
 
@@ -651,8 +718,57 @@ export function ColoringCanvas() {
     runParticles();
   };
 
+  const spawnCelebrationParticles = useCallback((cx: number, cy: number) => {
+    const colors = ["#fff3b0", "#bde0fe", "#caffbf", "#ffd6a5", "#ffc6ff"];
+    const n = 42;
+    const parts: Particle[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = (Math.PI * 2 * i) / n + Math.random() * 0.4;
+      const sp = 2.4 + Math.random() * 5.8;
+      parts.push({
+        x: cx,
+        y: cy,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 2.2,
+        life: 0.86 + Math.random() * 0.14,
+        color: colors[i % colors.length]!,
+      });
+    }
+    particlesRef.current = [...particlesRef.current, ...parts];
+    runParticles();
+  }, [runParticles]);
+
+  const runClearSequence = useCallback(async (px: number, py: number) => {
+    if (sequenceRunningRef.current) return;
+    sequenceRunningRef.current = true;
+    clearTriggeredRef.current = true;
+    setPhase("success");
+    playSuccessPong();
+    spawnCelebrationParticles(px, py);
+    blockPaintUntilPointerUpRef.current = true;
+
+    await sleep(SUCCESS_UI_FADE_MS);
+    setPhase("transition");
+    setSceneBgColor(randomPastel());
+    playSlideWhoosh();
+
+    await sleep(120);
+    setActivePalette(pickTriadPalette());
+    setPictureIndex((prev) => pickRandomPictureIndex(prev));
+    setStageIndex((i) => i + 1);
+    setPhase("setup");
+
+    await sleep(SETUP_ENTER_MS);
+    setPhase("resume");
+    await sleep(RESUME_UI_MS);
+    setPhase("play");
+    if (!pointerDownOnCanvasRef.current) blockPaintUntilPointerUpRef.current = false;
+    clearTriggeredRef.current = false;
+    sequenceRunningRef.current = false;
+  }, [spawnCelebrationParticles]);
+
   const paintAt = (clientX: number, clientY: number) => {
-    if (cleared) return;
+    if (phase !== "play") return;
     if (blockPaintUntilPointerUpRef.current) return;
     const canvas = displayRef.current;
     const mask = maskRef.current;
@@ -780,14 +896,13 @@ export function ColoringCanvas() {
 
     const ratio = measureFill();
     if (ratio >= fillThreshold && !clearTriggeredRef.current) {
-      clearTriggeredRef.current = true;
-      setCleared(true);
+      void runClearSequence(px, py);
     }
     redrawDisplay();
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (cleared) {
+    if (phase !== "play") {
       e.preventDefault();
       pointerDownOnCanvasRef.current = true;
       activeCanvasPointerIdRef.current = e.pointerId;
@@ -802,7 +917,7 @@ export function ColoringCanvas() {
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (cleared) return;
+    if (phase !== "play") return;
     if (blockPaintUntilPointerUpRef.current) return;
     if (e.buttons !== 1 && e.pointerType !== "touch") return;
     paintAt(e.clientX, e.clientY);
@@ -813,24 +928,16 @@ export function ColoringCanvas() {
   };
 
   useEffect(() => {
-    if (!cleared) return;
-    const t = window.setTimeout(() => {
-      clearTriggeredRef.current = false;
-      blockPaintUntilPointerUpRef.current = pointerDownOnCanvasRef.current;
-      setActivePalette(pickTriadPalette());
-      setPictureIndex((prev) => pickRandomPictureIndex(prev));
-      setStageIndex((i) => i + 1);
-      setCleared(false);
-    }, 900);
-    return () => clearTimeout(t);
-  }, [cleared]);
-
-  useEffect(() => {
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
   return (
-    <div ref={containerRef} className="relative mx-auto flex w-full max-w-lg flex-col gap-4 px-0 pb-2 pt-0">
+    <motion.div
+      ref={containerRef}
+      className="relative mx-auto flex w-full max-w-lg flex-col gap-4 rounded-2xl px-0 pb-2 pt-0"
+      animate={{ backgroundColor: sceneBgColor }}
+      transition={{ duration: TRANSITION_BG_MS / 1000, ease: "linear" }}
+    >
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-4 z-50">
           <button
@@ -901,7 +1008,16 @@ export function ColoringCanvas() {
         <p className="text-center text-[10px] text-[var(--color-muted)]">画像を読み込み中…</p>
       )}
 
-      <div className="flex flex-wrap items-center justify-center gap-3">
+      <motion.div
+        className={`flex flex-wrap items-center justify-center gap-3 ${
+          phase === "play" || phase === "resume" ? "pointer-events-auto" : "pointer-events-none"
+        }`}
+        animate={{
+          opacity: phase === "play" || phase === "resume" ? 1 : 0,
+          y: phase === "play" || phase === "resume" ? 0 : -14,
+        }}
+        transition={{ duration: SUCCESS_UI_FADE_MS / 1000, ease: "easeOut" }}
+      >
         {activePalette.map((p) => {
           const active = p.color === selected.color;
           return (
@@ -918,17 +1034,27 @@ export function ColoringCanvas() {
             />
           );
         })}
-      </div>
+      </motion.div>
 
       <div className="relative mx-auto aspect-square w-full max-w-[420px]">
         <AnimatePresence mode="wait">
           <motion.div
             key={`${stageIndex}-${currentPictureAsset.id}`}
             className="absolute inset-0 flex items-center justify-center"
-            initial={{ scale: 0.78, opacity: 0, rotate: -5 }}
-            animate={{ scale: 1, opacity: 1, rotate: 0 }}
-            exit={{ scale: 1.1, opacity: 0, rotate: 6 }}
-            transition={{ type: "spring", stiffness: 400, damping: 24 }}
+            initial={{ x: "-120%", scale: 0.98, opacity: 0.96, rotate: -3 }}
+            animate={
+              phase === "success"
+                ? { x: 0, opacity: 1, rotate: 0, scale: [1, 1.07, 0.94, 1.03, 1] }
+                : phase === "transition"
+                  ? { x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }
+                  : { x: 0, opacity: 1, rotate: 0, scale: 1 }
+            }
+            exit={{ x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }}
+            transition={{
+              duration:
+                phase === "success" ? 0.34 : phase === "transition" ? 0.56 : phase === "setup" ? 0.56 : 0.3,
+              ease: phase === "setup" ? "easeOut" : phase === "transition" ? "easeIn" : "easeOut",
+            }}
           >
             <canvas
               ref={setDisplayCanvasRef}
@@ -962,21 +1088,6 @@ export function ColoringCanvas() {
         />
       </div>
 
-      <AnimatePresence>
-        {cleared && (
-          <motion.div
-            initial={{ opacity: 0, y: 12, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.1 }}
-            className="pointer-events-none fixed inset-x-0 top-1/3 z-10 flex justify-center"
-          >
-            <div className="rounded-2xl bg-amber-300 px-8 py-4 text-2xl font-bold text-amber-900 shadow-lg">
-              クリア！
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-    </div>
+    </motion.div>
   );
 }
