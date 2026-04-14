@@ -65,6 +65,7 @@ export function PopPopBubblesLabShell() {
   const [bubbleCount, setBubbleCount] = useState(4);
   const [bubbleSpeedScale, setBubbleSpeedScale] = useState(1);
   const [animalFallGravity, setAnimalFallGravity] = useState(180);
+  const [bubbleRestitution, setBubbleRestitution] = useState(0.86);
 
   useEffect(() => {
     if (!isDevTj) setIsDebugMode(false);
@@ -103,7 +104,7 @@ export function PopPopBubblesLabShell() {
           onBubbleCollision: () => setCollisionCount((n) => n + 1),
         });
         sceneRef.current = scene;
-        scene.setDebugConfig({ bubbleCount, bubbleSpeedScale, animalFallGravity });
+        scene.setDebugConfig({ bubbleCount, bubbleSpeedScale, animalFallGravity, bubbleRestitution });
 
         const resize = () => {
           const rect = stage.getBoundingClientRect();
@@ -135,8 +136,8 @@ export function PopPopBubblesLabShell() {
   }, []);
 
   useEffect(() => {
-    sceneRef.current?.setDebugConfig({ bubbleSpeedScale, animalFallGravity });
-  }, [bubbleSpeedScale, animalFallGravity]);
+    sceneRef.current?.setDebugConfig({ bubbleSpeedScale, animalFallGravity, bubbleRestitution });
+  }, [bubbleSpeedScale, animalFallGravity, bubbleRestitution]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -220,6 +221,19 @@ export function PopPopBubblesLabShell() {
                   className="w-full accent-[var(--color-primary)]"
                 />
                 <div className="tabular-nums">{animalFallGravity.toFixed(0)}</div>
+              </label>
+              <label className="block">
+                <div className="mb-1 font-semibold text-[var(--color-text)]">バブル弾性（ぷにん反発）</div>
+                <input
+                  type="range"
+                  min={0.55}
+                  max={0.98}
+                  step={0.01}
+                  value={bubbleRestitution}
+                  onChange={(e) => setBubbleRestitution(Number(e.target.value))}
+                  className="w-full accent-[var(--color-primary)]"
+                />
+                <div className="tabular-nums">{bubbleRestitution.toFixed(2)}</div>
               </label>
             </div>
           )}

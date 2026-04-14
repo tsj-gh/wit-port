@@ -11,6 +11,9 @@ type Bubble = {
   damping: number;
   mass: number;
   animalIndex: number;
+  squashX: number;
+  squashY: number;
+  squashTimer: number;
 };
 
 type BurstParticle = {
@@ -49,6 +52,7 @@ export type PopPopBubblesDebugConfig = {
   bubbleCount: number;
   bubbleSpeedScale: number;
   animalFallGravity: number;
+  bubbleRestitution: number;
 };
 
 function rand(min: number, max: number): number {
@@ -109,6 +113,7 @@ export class PopPopBubblesScene {
     bubbleCount: DEFAULT_BUBBLE_COUNT,
     bubbleSpeedScale: 1,
     animalFallGravity: 180,
+    bubbleRestitution: 0.86,
   };
 
   constructor(options: SceneOptions) {
@@ -169,6 +174,7 @@ export class PopPopBubblesScene {
       bubbleCount: Math.max(MIN_BUBBLE_COUNT, Math.min(MAX_BUBBLE_COUNT, Math.round(next.bubbleCount ?? this.config.bubbleCount))),
       bubbleSpeedScale: Math.max(0.3, Math.min(3, next.bubbleSpeedScale ?? this.config.bubbleSpeedScale)),
       animalFallGravity: Math.max(40, Math.min(520, next.animalFallGravity ?? this.config.animalFallGravity)),
+      bubbleRestitution: Math.max(0.55, Math.min(0.98, next.bubbleRestitution ?? this.config.bubbleRestitution)),
     };
 
     const nextScale = this.config.bubbleSpeedScale;
@@ -211,7 +217,7 @@ export class PopPopBubblesScene {
     }
     for (let i = 0; i < count; i++) {
       const side = Math.floor(Math.random() * 4);
-      const radius = rand(42, 52);
+      const radius = rand(42, 52) * 1.5;
       let x = 0;
       let y = 0;
       if (side === 0) {
@@ -238,11 +244,14 @@ export class PopPopBubblesScene {
         vy: Math.sin(angle) * speed,
         cruiseSpeed: speed,
         radius,
-        restitution: 0.86,
+        restitution: this.config.bubbleRestitution,
         friction: 0.01,
         damping: 0.05,
         mass: 1,
         animalIndex: ids[i % ids.length] ?? 0,
+        squashX: 1,
+        squashY: 1,
+        squashTimer: 0,
       });
     }
     this.bubbles = bubbles;
@@ -294,8 +303,24 @@ export class PopPopBubblesScene {
     this.updateBubbles(dt);
     this.resolveBubbleCollisions();
     for (const b of this.bubbles) this.enforceCruiseSpeed(b);
+    this.updateBubbleSquash(dt);
     this.updateParticles(dt);
     this.updateFallingAnimals(dt);
+  }
+
+  private updateBubbleSquash(dt: number): void {
+    for (const b of this.bubbles) {
+      if (b.squashTimer > 0) {
+        b.squashTimer = Math.max(0, b.squashTimer - dt);
+        const t = 1 - b.squashTimer / 0.16;
+        const ease = Math.sin(t * Math.PI);
+        b.squashX = 1 + ease * 0.18;
+        b.squashY = 1 - ease * 0.14;
+      } else {
+        b.squashX += (1 - b.squashX) * 0.24;
+        b.squashY += (1 - b.squashY) * 0.24;
+      }
+    }
   }
 
   private enforceCruiseSpeed(b: Bubble): void {
@@ -321,20 +346,32 @@ export class PopPopBubblesScene {
         b.x = b.radius;
         b.vx = Math.abs(b.vx) * b.restitution;
         b.vy *= 1 - b.friction;
+        b.squashTimer = 0.16;
+        b.squashX = 1.22;
+        b.squashY = 0.84;
       } else if (b.x + b.radius > this.width) {
         b.x = this.width - b.radius;
         b.vx = -Math.abs(b.vx) * b.restitution;
         b.vy *= 1 - b.friction;
+        b.squashTimer = 0.16;
+        b.squashX = 1.22;
+        b.squashY = 0.84;
       }
 
       if (b.y - b.radius < 0) {
         b.y = b.radius;
         b.vy = Math.abs(b.vy) * b.restitution;
         b.vx *= 1 - b.friction;
+        b.squashTimer = 0.16;
+        b.squashX = 0.84;
+        b.squashY = 1.2;
       } else if (b.y + b.radius > this.height) {
         b.y = this.height - b.radius;
         b.vy = -Math.abs(b.vy) * b.restitution;
         b.vx *= 1 - b.friction;
+        b.squashTimer = 0.16;
+        b.squashX = 0.84;
+        b.squashY = 1.2;
       }
     }
   }
@@ -383,6 +420,13 @@ export class PopPopBubblesScene {
         a.vy += tangentY * tangentVel * friction * 0.5;
         b.vx -= tangentX * tangentVel * friction * 0.5;
         b.vy -= tangentY * tangentVel * friction * 0.5;
+
+        a.squashTimer = 0.16;
+        b.squashTimer = 0.16;
+        a.squashX = 1.2;
+        a.squashY = 0.86;
+        b.squashX = 1.2;
+        b.squashY = 0.86;
 
         collisionsThisFrame += 1;
       }
@@ -475,10 +519,12 @@ export class PopPopBubblesScene {
     const ctx = this.ctx;
     for (const b of this.bubbles) {
       const d = b.radius * 2;
+      const drawW = d * b.squashX;
+      const drawH = d * b.squashY;
 
       ctx.save();
       ctx.globalAlpha = 0.98;
-      ctx.drawImage(this.bubbleTexture, b.x - b.radius, b.y - b.radius, d, d);
+      ctx.drawImage(this.bubbleTexture, b.x - drawW / 2, b.y - drawH / 2, drawW, drawH);
       ctx.restore();
 
       const img = this.animalImages[b.animalIndex % this.animalImages.length];
@@ -486,10 +532,10 @@ export class PopPopBubblesScene {
       const inner = b.radius * 1.25;
       ctx.save();
       ctx.beginPath();
-      ctx.arc(b.x, b.y, b.radius * 0.78, 0, Math.PI * 2);
+      ctx.ellipse(b.x, b.y, b.radius * 0.78 * b.squashX, b.radius * 0.78 * b.squashY, 0, 0, Math.PI * 2);
       ctx.clip();
       ctx.globalAlpha = 0.94;
-      ctx.drawImage(img, b.x - inner / 2, b.y - inner / 2, inner, inner);
+      ctx.drawImage(img, b.x - (inner * b.squashX) / 2, b.y - (inner * b.squashY) / 2, inner * b.squashX, inner * b.squashY);
       ctx.restore();
     }
   }
