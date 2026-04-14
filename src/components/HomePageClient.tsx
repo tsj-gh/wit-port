@@ -22,11 +22,11 @@ export function HomePageClient() {
         <LanguageToggle />
       </header>
 
-      <section className="pb-16 pt-4 text-center animate-fade-in-up-delay sm:pt-2">
-        <h1 className="mb-6 text-[clamp(32px,5vw,56px)] font-extrabold leading-tight bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)] bg-clip-text text-transparent">
+      <section className="pb-8 pt-2 text-center animate-fade-in-up-delay sm:pb-10 sm:pt-1">
+        <h1 className="mb-4 text-[clamp(30px,5vw,52px)] font-extrabold leading-tight bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)] bg-clip-text text-transparent sm:mb-5">
           {t("home.heroTitle")}
         </h1>
-        <p className="mx-auto max-w-[600px] text-[clamp(16px,2vw,20px)] leading-relaxed text-[var(--color-muted)]">
+        <p className="mx-auto max-w-[600px] text-[clamp(15px,2vw,19px)] leading-snug text-[var(--color-muted)] sm:leading-relaxed">
           {t("home.heroLine1")}
           <br />
           {t("home.heroLine2")}
@@ -35,13 +35,12 @@ export function HomePageClient() {
 
       <HomePageLinks />
 
-      <section className="animate-fade-in-up-delay-more border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pb-8 pt-12">
-        <h2 className="mb-4 text-xl font-bold text-[var(--color-text)]">{t("home.sectionColumnTitle")}</h2>
-        <p className="mb-4 leading-relaxed text-[var(--color-muted)]">{t("home.sectionColumnBody")}</p>
-        <p className="mb-6">
+      <section className="animate-fade-in-up-delay-more border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pb-8 pt-6 md:pt-8">
+        <h2 className="mb-1.5 text-lg font-bold text-[var(--color-text)]">{t("home.sectionColumnTitle")}</h2>
+        <p className="mb-5 text-sm leading-snug text-[var(--color-muted)]">
           <Link
             href="/columns/educational-value"
-            className="inline-flex items-center font-medium text-[var(--color-accent)] underline-offset-2 hover:text-[var(--color-muted)] hover:underline"
+            className="font-medium text-[var(--color-accent)] underline-offset-2 hover:text-[var(--color-muted)] hover:underline"
           >
             {t("home.sectionColumnLink")}
           </Link>
