@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import {
@@ -50,6 +51,8 @@ function playFallbackPop(audioCtxRef: { current: AudioContext | null }): void {
 }
 
 export function PopPopBubblesLabShell() {
+  const searchParams = useSearchParams();
+  const isDevTj = searchParams.get("devtj") === "true";
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<PopPopBubblesScene | null>(null);
@@ -62,6 +65,10 @@ export function PopPopBubblesLabShell() {
   const [bubbleCount, setBubbleCount] = useState(4);
   const [bubbleSpeedScale, setBubbleSpeedScale] = useState(1);
   const [animalFallGravity, setAnimalFallGravity] = useState(180);
+
+  useEffect(() => {
+    if (!isDevTj) setIsDebugMode(false);
+  }, [isDevTj]);
 
   useEffect(() => {
     let disposed = false;
@@ -140,7 +147,7 @@ export function PopPopBubblesLabShell() {
 
   return (
     <div className={GAME_COLUMN_CLASS}>
-      {!isDebugMode && (
+      {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-4 z-50">
           <button
             type="button"
@@ -151,7 +158,7 @@ export function PopPopBubblesLabShell() {
           </button>
         </div>
       )}
-      {isDebugMode && (
+      {isDevTj && isDebugMode && (
         <div className="fixed right-4 top-4 z-50 max-h-[90vh] w-[min(92vw,300px)] overflow-y-auto rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_90%,var(--color-bg))] p-3 text-left text-xs text-[var(--color-text)] shadow-lg backdrop-blur">
           <div className="mb-2 flex items-center justify-between gap-2">
             {isDebugPanelExpanded && <span className="font-bold text-[var(--color-primary)]">はじけて！バブル DEBUG</span>}

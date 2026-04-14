@@ -4,6 +4,7 @@ type Bubble = {
   y: number;
   vx: number;
   vy: number;
+  cruiseSpeed: number;
   radius: number;
   restitution: number;
   friction: number;
@@ -174,8 +175,10 @@ export class PopPopBubblesScene {
     if (Math.abs(prevScale - nextScale) > 0.001 && prevScale > 0) {
       const ratio = nextScale / prevScale;
       for (const b of this.bubbles) {
+        b.cruiseSpeed *= ratio;
         b.vx *= ratio;
         b.vy *= ratio;
+        this.enforceCruiseSpeed(b);
       }
     }
   }
@@ -233,6 +236,7 @@ export class PopPopBubblesScene {
         y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
+        cruiseSpeed: speed,
         radius,
         restitution: 0.86,
         friction: 0.01,
@@ -289,16 +293,27 @@ export class PopPopBubblesScene {
   private update(dt: number): void {
     this.updateBubbles(dt);
     this.resolveBubbleCollisions();
+    for (const b of this.bubbles) this.enforceCruiseSpeed(b);
     this.updateParticles(dt);
     this.updateFallingAnimals(dt);
   }
 
+  private enforceCruiseSpeed(b: Bubble): void {
+    const target = Math.max(8, b.cruiseSpeed);
+    const speed = Math.hypot(b.vx, b.vy);
+    if (speed < 0.01) {
+      const a = Math.random() * Math.PI * 2;
+      b.vx = Math.cos(a) * target;
+      b.vy = Math.sin(a) * target;
+      return;
+    }
+    const k = target / speed;
+    b.vx *= k;
+    b.vy *= k;
+  }
+
   private updateBubbles(dt: number): void {
     for (const b of this.bubbles) {
-      const dampingFactor = Math.max(0, 1 - b.damping * dt * 60);
-      b.vx *= dampingFactor;
-      b.vy *= dampingFactor;
-
       b.x += b.vx * dt;
       b.y += b.vy * dt;
 
