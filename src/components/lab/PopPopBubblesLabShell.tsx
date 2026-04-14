@@ -57,6 +57,11 @@ export function PopPopBubblesLabShell() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [collisionCount, setCollisionCount] = useState(0);
+  const [isDebugMode, setIsDebugMode] = useState(false);
+  const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
+  const [bubbleCount, setBubbleCount] = useState(4);
+  const [bubbleSpeedScale, setBubbleSpeedScale] = useState(1);
+  const [animalFallGravity, setAnimalFallGravity] = useState(180);
 
   useEffect(() => {
     let disposed = false;
@@ -91,6 +96,7 @@ export function PopPopBubblesLabShell() {
           onBubbleCollision: () => setCollisionCount((n) => n + 1),
         });
         sceneRef.current = scene;
+        scene.setDebugConfig({ bubbleCount, bubbleSpeedScale, animalFallGravity });
 
         const resize = () => {
           const rect = stage.getBoundingClientRect();
@@ -121,8 +127,97 @@ export function PopPopBubblesLabShell() {
     };
   }, []);
 
+  useEffect(() => {
+    sceneRef.current?.setDebugConfig({ bubbleSpeedScale, animalFallGravity });
+  }, [bubbleSpeedScale, animalFallGravity]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    scene.setDebugConfig({ bubbleCount });
+    scene.respawnWaveNow();
+  }, [bubbleCount]);
+
   return (
     <div className={GAME_COLUMN_CLASS}>
+      {!isDebugMode && (
+        <div className="fixed right-4 top-4 z-50">
+          <button
+            type="button"
+            onClick={() => setIsDebugMode(true)}
+            className="rounded border border-[color-mix(in_srgb,var(--color-text)_22%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_84%,var(--color-bg))] px-2 py-1 font-mono text-xs text-[var(--color-text)] shadow-sm"
+          >
+            DEBUG OFF
+          </button>
+        </div>
+      )}
+      {isDebugMode && (
+        <div className="fixed right-4 top-4 z-50 max-h-[90vh] w-[min(92vw,300px)] overflow-y-auto rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_90%,var(--color-bg))] p-3 text-left text-xs text-[var(--color-text)] shadow-lg backdrop-blur">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            {isDebugPanelExpanded && <span className="font-bold text-[var(--color-primary)]">はじけて！バブル DEBUG</span>}
+            <div className="ml-auto flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setIsDebugMode(false)}
+                className="rounded border border-[color-mix(in_srgb,var(--color-text)_22%,transparent)] bg-[var(--color-primary)] px-2 py-1 text-[10px] font-semibold text-[var(--color-on-primary)]"
+              >
+                DEBUG ON
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDebugPanelExpanded((v) => !v)}
+                className="rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] p-1 text-[var(--color-muted)]"
+                aria-expanded={isDebugPanelExpanded}
+              >
+                {isDebugPanelExpanded ? "▲" : "▼"}
+              </button>
+            </div>
+          </div>
+          {isDebugPanelExpanded && (
+            <div className="space-y-3 text-[10px] text-[var(--color-muted)]">
+              <label className="block">
+                <div className="mb-1 font-semibold text-[var(--color-text)]">バブル数</div>
+                <input
+                  type="range"
+                  min={1}
+                  max={8}
+                  step={1}
+                  value={bubbleCount}
+                  onChange={(e) => setBubbleCount(Number(e.target.value))}
+                  className="w-full accent-[var(--color-primary)]"
+                />
+                <div className="tabular-nums">{bubbleCount}</div>
+              </label>
+              <label className="block">
+                <div className="mb-1 font-semibold text-[var(--color-text)]">バブル速度倍率</div>
+                <input
+                  type="range"
+                  min={0.3}
+                  max={3}
+                  step={0.1}
+                  value={bubbleSpeedScale}
+                  onChange={(e) => setBubbleSpeedScale(Number(e.target.value))}
+                  className="w-full accent-[var(--color-primary)]"
+                />
+                <div className="tabular-nums">{bubbleSpeedScale.toFixed(1)}x</div>
+              </label>
+              <label className="block">
+                <div className="mb-1 font-semibold text-[var(--color-text)]">内容物の落下速度（重力）</div>
+                <input
+                  type="range"
+                  min={40}
+                  max={520}
+                  step={10}
+                  value={animalFallGravity}
+                  onChange={(e) => setAnimalFallGravity(Number(e.target.value))}
+                  className="w-full accent-[var(--color-primary)]"
+                />
+                <div className="tabular-nums">{animalFallGravity.toFixed(0)}</div>
+              </label>
+            </div>
+          )}
+        </div>
+      )}
       <GamePageHeader titleEn="Pop-Pop Bubbles" titleJa="はじけて！バブル" />
       <div className="hidden" aria-hidden>
         <PairLinkAdSlot slotIndex={1} />

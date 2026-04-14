@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { PopPopBubblesLabShell } from "@/components/lab/PopPopBubblesLabShell";
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
@@ -13,7 +14,9 @@ export const metadata: Metadata = {
 export default function PopPopBubblesPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 px-4 py-4 md:py-6">
-      <PopPopBubblesLabShell />
+      <Suspense fallback={<div className="py-8 text-sm text-[var(--color-muted)]">読み込み中…</div>}>
+        <PopPopBubblesLabShell />
+      </Suspense>
     </main>
   );
 }

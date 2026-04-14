@@ -41,6 +41,14 @@ type SceneOptions = {
 
 const WAVE_DELAY_MS = 1000;
 const DEFAULT_BUBBLE_COUNT = 4;
+const MIN_BUBBLE_COUNT = 1;
+const MAX_BUBBLE_COUNT = 8;
+
+export type PopPopBubblesDebugConfig = {
+  bubbleCount: number;
+  bubbleSpeedScale: number;
+  animalFallGravity: number;
+};
 
 function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
@@ -96,6 +104,11 @@ export class PopPopBubblesScene {
   private waveTimer: ReturnType<typeof setTimeout> | null = null;
   private collisionAccumulator = 0;
   private idSeq = 0;
+  private config: PopPopBubblesDebugConfig = {
+    bubbleCount: DEFAULT_BUBBLE_COUNT,
+    bubbleSpeedScale: 1,
+    animalFallGravity: 180,
+  };
 
   constructor(options: SceneOptions) {
     this.canvas = options.canvas;
@@ -149,6 +162,29 @@ export class PopPopBubblesScene {
     }
   }
 
+  public setDebugConfig(next: Partial<PopPopBubblesDebugConfig>): void {
+    const prevScale = this.config.bubbleSpeedScale;
+    this.config = {
+      bubbleCount: Math.max(MIN_BUBBLE_COUNT, Math.min(MAX_BUBBLE_COUNT, Math.round(next.bubbleCount ?? this.config.bubbleCount))),
+      bubbleSpeedScale: Math.max(0.3, Math.min(3, next.bubbleSpeedScale ?? this.config.bubbleSpeedScale)),
+      animalFallGravity: Math.max(40, Math.min(520, next.animalFallGravity ?? this.config.animalFallGravity)),
+    };
+
+    const nextScale = this.config.bubbleSpeedScale;
+    if (Math.abs(prevScale - nextScale) > 0.001 && prevScale > 0) {
+      const ratio = nextScale / prevScale;
+      for (const b of this.bubbles) {
+        b.vx *= ratio;
+        b.vy *= ratio;
+      }
+    }
+  }
+
+  public respawnWaveNow(): void {
+    this.bubbles = [];
+    this.spawnWave();
+  }
+
   private readonly tick = (ts: number): void => {
     if (!this.running) return;
     const dt = Math.min(0.033, Math.max(0.001, (ts - this.lastTs) / 1000));
@@ -163,7 +199,7 @@ export class PopPopBubblesScene {
       clearTimeout(this.waveTimer);
       this.waveTimer = null;
     }
-    const count = DEFAULT_BUBBLE_COUNT;
+    const count = this.config.bubbleCount;
     const bubbles: Bubble[] = [];
     const ids = [0, 1, 2, 3];
     for (let i = ids.length - 1; i > 0; i--) {
@@ -190,7 +226,7 @@ export class PopPopBubblesScene {
       }
       const baseAngle = Math.atan2(this.height * 0.5 - y, this.width * 0.5 - x);
       const angle = baseAngle + rand(-0.75, 0.75);
-      const speed = rand(22, 38);
+      const speed = rand(22, 38) * this.config.bubbleSpeedScale;
       bubbles.push({
         id: `b-${this.idSeq++}`,
         x,
@@ -365,7 +401,7 @@ export class PopPopBubblesScene {
         const pulseProgress = 1 - Math.max(0, a.pulseTime) / 0.2;
         a.scale = 1 + Math.sin(pulseProgress * Math.PI) * 0.22;
       } else {
-        a.vy += 180 * dt;
+        a.vy += this.config.animalFallGravity * dt;
         a.y += a.vy * dt;
         a.x += a.vx * dt;
         a.scale = Math.max(0.82, a.scale * 0.992);
