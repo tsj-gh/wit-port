@@ -4,7 +4,13 @@
  */
 export type HomePlaySectionId = "intuition" | "logical" | "strategic";
 
-export type HomeGameCardId = "tap-coloring" | "pair-link" | "pres-sure-judge" | "skyscraper" | "reflec-shot";
+export type HomeGameCardId =
+  | "tap-coloring"
+  | "pop-pop-bubbles"
+  | "pair-link"
+  | "pres-sure-judge"
+  | "skyscraper"
+  | "reflec-shot";
 
 export type HomeGameCardDef = {
   id: HomeGameCardId;
@@ -21,6 +27,13 @@ export const HOME_GAME_CARDS: Record<HomeGameCardId, HomeGameCardDef> = {
     titleKey: "home.cardTapColoringTitle",
     tooltipKey: "home.cardTapColoringTip",
     emoji: "🖍️",
+  },
+  "pop-pop-bubbles": {
+    id: "pop-pop-bubbles",
+    href: "/lab/pop-pop-bubbles",
+    titleKey: "home.cardPopPopBubblesTitle",
+    tooltipKey: "home.cardPopPopBubblesTip",
+    emoji: "🫧",
   },
   "pair-link": {
     id: "pair-link",
@@ -62,7 +75,7 @@ export const HOME_GAME_SECTIONS: readonly HomeGameSectionDef[] = [
   {
     id: "intuition",
     titleKey: "home.sectionIntuitionTitle",
-    cardIds: ["tap-coloring"],
+    cardIds: ["tap-coloring", "pop-pop-bubbles"],
   },
   {
     id: "logical",
