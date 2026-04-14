@@ -21,6 +21,7 @@ const HUE_LABELS = [
   "H300 マゼンタ",
   "H330",
 ] as const;
+const NON_RED_HUE_INDICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const;
 
 export type TapColoringSwatch = { label: string; color: string };
 
@@ -66,12 +67,30 @@ const FULL_PALETTE_12: readonly TapColoringSwatch[] = HUE_RING.map((h, i) => ({
 
 /** 12色環で基準を1つランダムに選び、+3/+4 と -3/-4 をそれぞれランダムに1つずつ取った3色 */
 function pickTriadPalette(): TapColoringSwatch[] {
-  const baseIdx = Math.floor(Math.random() * 12);
+  const baseIdx = NON_RED_HUE_INDICES[Math.floor(Math.random() * NON_RED_HUE_INDICES.length)]!;
   const posStep = Math.random() < 0.5 ? 3 : 4;
   const negStep = Math.random() < 0.5 ? 3 : 4;
-  const iPos = (baseIdx + posStep) % 12;
-  const iNeg = (baseIdx - negStep + 12) % 12;
-  return [FULL_PALETTE_12[baseIdx]!, FULL_PALETTE_12[iPos]!, FULL_PALETTE_12[iNeg]!];
+  let iPos = (baseIdx + posStep) % 12;
+  let iNeg = (baseIdx - negStep + 12) % 12;
+
+  // 純赤（H0）はパレット候補から除外する
+  if (iPos === 0) iPos = 1;
+  if (iNeg === 0) iNeg = 11;
+
+  const indices = [baseIdx, iPos, iNeg];
+  const used = new Set<number>();
+  const resolved: number[] = [];
+  for (const idx of indices) {
+    if (idx !== 0 && !used.has(idx)) {
+      used.add(idx);
+      resolved.push(idx);
+      continue;
+    }
+    const alt = NON_RED_HUE_INDICES.find((h) => !used.has(h)) ?? 1;
+    used.add(alt);
+    resolved.push(alt);
+  }
+  return resolved.map((idx) => FULL_PALETTE_12[idx]!);
 }
 
 const DEFAULT_FILL_THRESHOLD = 0.9;
@@ -100,6 +119,7 @@ const PARTICLE_RADIUS_LOGICAL_PX = 5;
 const INK_SPLAT_SHADOW_BLUR_BITMAP_PX = 3;
 const SUCCESS_UI_FADE_MS = 300;
 const TRANSITION_BG_MS = 1000;
+const TRANSITION_SLIDE_MS = 560;
 const SETUP_ENTER_MS = 620;
 const RESUME_UI_MS = 300;
 
@@ -752,7 +772,8 @@ export function ColoringCanvas() {
     setSceneBgColor(randomPastel());
     playSlideWhoosh();
 
-    await sleep(120);
+    // 退場アニメーション完了後にのみ次絵へ切り替える
+    await sleep(TRANSITION_SLIDE_MS);
     setActivePalette(pickTriadPalette());
     setPictureIndex((prev) => pickRandomPictureIndex(prev));
     setStageIndex((i) => i + 1);
@@ -1052,7 +1073,7 @@ export function ColoringCanvas() {
             exit={{ x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }}
             transition={{
               duration:
-                phase === "success" ? 0.34 : phase === "transition" ? 0.56 : phase === "setup" ? 0.56 : 0.3,
+                phase === "success" ? 0.34 : phase === "transition" ? TRANSITION_SLIDE_MS / 1000 : phase === "setup" ? 0.56 : 0.3,
               ease: phase === "setup" ? "easeOut" : phase === "transition" ? "easeIn" : "easeOut",
             }}
           >
