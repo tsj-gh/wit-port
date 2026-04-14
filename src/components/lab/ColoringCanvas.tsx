@@ -712,12 +712,12 @@ export function ColoringCanvas() {
     return () => ro.disconnect();
   }, []);
 
-  /** リサイズ・問題画像変更時（表示 canvas は同一ノードのまま） */
+  /** リサイズ時のみ再初期化（画像切替は新canvasマウント時に setDisplayCanvasRef 側で行う） */
   useEffect(() => {
     if (!displayRef.current) return;
     if (!coloringPicturesReady) return;
     initStageCanvasesRef.current();
-  }, [coloringPicturesReady, pictureIndex, size]);
+  }, [coloringPicturesReady, size]);
 
   const spawnParticles = (cx: number, cy: number, color: string) => {
     const n = 14;
