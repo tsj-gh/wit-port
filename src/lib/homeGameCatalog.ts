@@ -12,8 +12,6 @@ export type HomeGameCardDef = {
   titleKey: string;
   descKey: string;
   emoji: string;
-  /** CTA 文言（`home.playDepart` または `home.playChallenge`） */
-  playLabelKey: "home.playDepart" | "home.playChallenge";
 };
 
 export const HOME_GAME_CARDS: Record<HomeGameCardId, HomeGameCardDef> = {
@@ -23,7 +21,6 @@ export const HOME_GAME_CARDS: Record<HomeGameCardId, HomeGameCardDef> = {
     titleKey: "home.cardTapColoringTitle",
     descKey: "home.cardTapColoringDesc",
     emoji: "🖍️",
-    playLabelKey: "home.playDepart",
   },
   "pair-link": {
     id: "pair-link",
@@ -31,7 +28,6 @@ export const HOME_GAME_CARDS: Record<HomeGameCardId, HomeGameCardDef> = {
     titleKey: "home.cardPairLinkTitle",
     descKey: "home.cardPairLinkDesc",
     emoji: "✨",
-    playLabelKey: "home.playDepart",
   },
   "pres-sure-judge": {
     id: "pres-sure-judge",
@@ -39,7 +35,6 @@ export const HOME_GAME_CARDS: Record<HomeGameCardId, HomeGameCardDef> = {
     titleKey: "home.cardPresTitle",
     descKey: "home.cardPresDesc",
     emoji: "⚖️",
-    playLabelKey: "home.playChallenge",
   },
   skyscraper: {
     id: "skyscraper",
@@ -47,7 +42,6 @@ export const HOME_GAME_CARDS: Record<HomeGameCardId, HomeGameCardDef> = {
     titleKey: "home.cardSkyTitle",
     descKey: "home.cardSkyDesc",
     emoji: "🏢",
-    playLabelKey: "home.playDepart",
   },
   "reflec-shot": {
     id: "reflec-shot",
@@ -55,7 +49,6 @@ export const HOME_GAME_CARDS: Record<HomeGameCardId, HomeGameCardDef> = {
     titleKey: "home.cardReflecTitle",
     descKey: "home.cardReflecDesc",
     emoji: "🪞",
-    playLabelKey: "home.playDepart",
   },
 };
 
