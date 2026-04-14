@@ -66,6 +66,7 @@ export function PopPopBubblesLabShell() {
   const [bubbleSpeedScale, setBubbleSpeedScale] = useState(1);
   const [animalFallGravity, setAnimalFallGravity] = useState(180);
   const [bubbleRestitution, setBubbleRestitution] = useState(0.86);
+  const [burstParticleSizeScale, setBurstParticleSizeScale] = useState(1.5);
 
   useEffect(() => {
     if (!isDevTj) setIsDebugMode(false);
@@ -136,8 +137,13 @@ export function PopPopBubblesLabShell() {
   }, []);
 
   useEffect(() => {
-    sceneRef.current?.setDebugConfig({ bubbleSpeedScale, animalFallGravity, bubbleRestitution });
-  }, [bubbleSpeedScale, animalFallGravity, bubbleRestitution]);
+    sceneRef.current?.setDebugConfig({
+      bubbleSpeedScale,
+      animalFallGravity,
+      bubbleRestitution,
+      burstParticleSizeScale,
+    });
+  }, [bubbleSpeedScale, animalFallGravity, bubbleRestitution, burstParticleSizeScale]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -234,6 +240,19 @@ export function PopPopBubblesLabShell() {
                   className="w-full accent-[var(--color-primary)]"
                 />
                 <div className="tabular-nums">{bubbleRestitution.toFixed(2)}</div>
+              </label>
+              <label className="block">
+                <div className="mb-1 font-semibold text-[var(--color-text)]">はじけパーティクル大きさ</div>
+                <input
+                  type="range"
+                  min={0.25}
+                  max={4}
+                  step={0.05}
+                  value={burstParticleSizeScale}
+                  onChange={(e) => setBurstParticleSizeScale(Number(e.target.value))}
+                  className="w-full accent-[var(--color-primary)]"
+                />
+                <div className="tabular-nums">{burstParticleSizeScale.toFixed(2)}x</div>
               </label>
             </div>
           )}

@@ -53,6 +53,8 @@ export type PopPopBubblesDebugConfig = {
   bubbleSpeedScale: number;
   animalFallGravity: number;
   bubbleRestitution: number;
+  /** はじけパーティクルの半径スケール（既定 1.5 ≒ 従来比 1.5 倍） */
+  burstParticleSizeScale: number;
 };
 
 function rand(min: number, max: number): number {
@@ -114,6 +116,7 @@ export class PopPopBubblesScene {
     bubbleSpeedScale: 1,
     animalFallGravity: 180,
     bubbleRestitution: 0.86,
+    burstParticleSizeScale: 1.5,
   };
 
   constructor(options: SceneOptions) {
@@ -175,6 +178,7 @@ export class PopPopBubblesScene {
       bubbleSpeedScale: Math.max(0.3, Math.min(3, next.bubbleSpeedScale ?? this.config.bubbleSpeedScale)),
       animalFallGravity: Math.max(40, Math.min(520, next.animalFallGravity ?? this.config.animalFallGravity)),
       bubbleRestitution: Math.max(0.55, Math.min(0.98, next.bubbleRestitution ?? this.config.bubbleRestitution)),
+      burstParticleSizeScale: Math.max(0.25, Math.min(4, next.burstParticleSizeScale ?? this.config.burstParticleSizeScale)),
     };
 
     const nextScale = this.config.bubbleSpeedScale;
@@ -294,7 +298,7 @@ export class PopPopBubblesScene {
         vx: Math.cos(a) * speed,
         vy: Math.sin(a) * speed - rand(10, 40),
         life: rand(0.45, 0.85),
-        size: rand(radius * 0.05, radius * 0.14),
+        size: rand(radius * 0.05, radius * 0.14) * this.config.burstParticleSizeScale,
       });
     }
   }

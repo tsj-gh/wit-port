@@ -118,6 +118,10 @@ const PARTICLE_RADIUS_LOGICAL_PX = 5;
 /** インク輪郭のわずかな柔らかさ（ビットマップ座標。2 倍解像度時は画面上で約半分に見える） */
 const INK_SPLAT_SHADOW_BLUR_BITMAP_PX = 3;
 const SUCCESS_UI_FADE_MS = 300;
+/** 塗り達成時の拡縮（Squash & Stretch）の再生時間（秒） */
+const SUCCESS_SQUASH_DURATION_S = 0.54;
+/** 拡縮アニメ終了後、退場（transition）へ入るまでのウェイト */
+const SUCCESS_HOLD_AFTER_SQUASH_MS = 500;
 const TRANSITION_BG_MS = 1000;
 const TRANSITION_SLIDE_MS = 560;
 const SETUP_ENTER_MS = 620;
@@ -767,7 +771,9 @@ export function ColoringCanvas() {
     spawnCelebrationParticles(px, py);
     blockPaintUntilPointerUpRef.current = true;
 
-    await sleep(SUCCESS_UI_FADE_MS);
+    await sleep(
+      Math.max(SUCCESS_UI_FADE_MS, Math.round(SUCCESS_SQUASH_DURATION_S * 1000)) + SUCCESS_HOLD_AFTER_SQUASH_MS,
+    );
     setPhase("transition");
     setSceneBgColor(randomPastel());
     playSlideWhoosh();
@@ -1073,7 +1079,13 @@ export function ColoringCanvas() {
             exit={{ x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }}
             transition={{
               duration:
-                phase === "success" ? 0.34 : phase === "transition" ? TRANSITION_SLIDE_MS / 1000 : phase === "setup" ? 0.56 : 0.3,
+                phase === "success"
+                  ? SUCCESS_SQUASH_DURATION_S
+                  : phase === "transition"
+                    ? TRANSITION_SLIDE_MS / 1000
+                    : phase === "setup"
+                      ? 0.56
+                      : 0.3,
               ease: phase === "setup" ? "easeOut" : phase === "transition" ? "easeIn" : "easeOut",
             }}
           >
