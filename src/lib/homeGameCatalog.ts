@@ -10,6 +10,7 @@ export type HomeGameCardDef = {
   id: HomeGameCardId;
   href: string;
   titleKey: string;
+  tooltipKey: string;
   emoji: string;
 };
 
@@ -18,30 +19,35 @@ export const HOME_GAME_CARDS: Record<HomeGameCardId, HomeGameCardDef> = {
     id: "tap-coloring",
     href: "/lab/tap-coloring",
     titleKey: "home.cardTapColoringTitle",
+    tooltipKey: "home.cardTapColoringTip",
     emoji: "🖍️",
   },
   "pair-link": {
     id: "pair-link",
     href: "/lab/pair-link",
     titleKey: "home.cardPairLinkTitle",
+    tooltipKey: "home.cardPairLinkTip",
     emoji: "✨",
   },
   "pres-sure-judge": {
     id: "pres-sure-judge",
     href: "/lab/pres-sure-judge",
     titleKey: "home.cardPresTitle",
+    tooltipKey: "home.cardPresTip",
     emoji: "⚖️",
   },
   skyscraper: {
     id: "skyscraper",
     href: "/lab/skyscraper",
     titleKey: "home.cardSkyTitle",
+    tooltipKey: "home.cardSkyTip",
     emoji: "🏢",
   },
   "reflec-shot": {
     id: "reflec-shot",
     href: "/lab/reflec-shot",
     titleKey: "home.cardReflecTitle",
+    tooltipKey: "home.cardReflecTip",
     emoji: "🪞",
   },
 };
