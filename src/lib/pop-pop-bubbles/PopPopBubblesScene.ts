@@ -14,7 +14,6 @@ type Bubble = {
   squashX: number;
   squashY: number;
   squashTimer: number;
-  tintColor: string;
 };
 
 type BurstParticle = {
@@ -86,27 +85,7 @@ function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
 
-function clampByte(v: number): number {
-  return Math.max(0, Math.min(255, Math.round(v)));
-}
-
-function parseHexColor(color: string): { r: number; g: number; b: number } | null {
-  const m = color.trim().match(/^#([0-9a-f]{6})$/i);
-  if (!m) return null;
-  const hex = m[1]!;
-  return {
-    r: Number.parseInt(hex.slice(0, 2), 16),
-    g: Number.parseInt(hex.slice(2, 4), 16),
-    b: Number.parseInt(hex.slice(4, 6), 16),
-  };
-}
-
-function brightenHex(color: string, amount: number): string {
-  const rgb = parseHexColor(color);
-  if (!rgb) return color;
-  const mix = (v: number) => v + (255 - v) * amount;
-  return `rgb(${clampByte(mix(rgb.r))}, ${clampByte(mix(rgb.g))}, ${clampByte(mix(rgb.b))})`;
-}
+const BURST_EFFECT_COLOR = "#FFFFFF";
 
 function createBubbleTexture(size = 256): HTMLCanvasElement {
   const c = document.createElement("canvas");
@@ -280,7 +259,6 @@ export class PopPopBubblesScene {
     const bubbles: Bubble[] = [];
     const imgCount = Math.max(1, this.animalImages.length);
     const ids = Array.from({ length: imgCount }, (_, i) => i);
-    const bubbleTints = ["#8fd9ff", "#9ce7ff", "#7ec8ff", "#a7dbff"];
     for (let i = ids.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [ids[i], ids[j]] = [ids[j]!, ids[i]!];
@@ -328,7 +306,6 @@ export class PopPopBubblesScene {
         squashX: 1,
         squashY: 1,
         squashTimer: 0,
-        tintColor: bubbleTints[Math.floor(Math.random() * bubbleTints.length)]!,
       });
     }
     this.bubbles = bubbles;
@@ -339,7 +316,7 @@ export class PopPopBubblesScene {
     if (idx < 0) return;
     const b = this.bubbles[idx]!;
     this.bubbles.splice(idx, 1);
-    this.spawnBurstParticles(b.x, b.y, b.radius, b.tintColor);
+    this.spawnBurstParticles(b.x, b.y, b.radius);
     this.fallingAnimals.push({
       x: b.x,
       y: b.y,
@@ -360,9 +337,9 @@ export class PopPopBubblesScene {
     }
   }
 
-  private spawnBurstParticles(x: number, y: number, radius: number, bubbleTint: string): void {
+  private spawnBurstParticles(x: number, y: number, radius: number): void {
     const count = Math.floor(rand(30, 51));
-    const baseColor = brightenHex(bubbleTint, 0.38);
+    const baseColor = BURST_EFFECT_COLOR;
     for (let i = 0; i < count; i++) {
       const a = rand(0, Math.PI * 2);
       const speed = rand(radius * 1.4, radius * 3.25);
@@ -387,7 +364,7 @@ export class PopPopBubblesScene {
       alpha: 0.96,
       expandPerSec: Math.max(90, radius * 3.2),
       fadePerSec: 5.2, // 0.2 秒前後で消える
-      color: brightenHex(bubbleTint, 0.75),
+      color: BURST_EFFECT_COLOR,
     });
   }
 
@@ -575,8 +552,8 @@ export class PopPopBubblesScene {
     ctx.clearRect(0, 0, this.width, this.height);
 
     const bg = ctx.createLinearGradient(0, 0, 0, this.height);
-    bg.addColorStop(0, "rgba(186, 242, 255, 0.42)");
-    bg.addColorStop(1, "rgba(205, 224, 255, 0.18)");
+    bg.addColorStop(0, "rgba(214, 236, 255, 0.72)");
+    bg.addColorStop(1, "rgba(224, 240, 255, 0.58)");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, this.width, this.height);
 
@@ -588,33 +565,39 @@ export class PopPopBubblesScene {
 
   private renderParticles(): void {
     const ctx = this.ctx;
+    const prevComposite = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = "screen";
     for (const p of this.particles) {
       ctx.save();
       ctx.globalAlpha = Math.max(0, p.alpha);
       ctx.fillStyle = p.color;
-      ctx.shadowColor = "rgba(220, 246, 255, 0.9)";
-      ctx.shadowBlur = 9;
+      ctx.shadowColor = "rgba(255, 255, 255, 0.98)";
+      ctx.shadowBlur = 14;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
+    ctx.globalCompositeOperation = prevComposite;
   }
 
   private renderBurstRings(): void {
     const ctx = this.ctx;
+    const prevComposite = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = "screen";
     for (const r of this.burstRings) {
       ctx.save();
       ctx.globalAlpha = Math.max(0, r.alpha);
       ctx.strokeStyle = r.color;
       ctx.lineWidth = r.lineWidth * this.config.burstRingLineWidthScale;
       ctx.shadowColor = r.color;
-      ctx.shadowBlur = this.config.burstRingShadowBlurPx;
+      ctx.shadowBlur = Math.max(8, this.config.burstRingShadowBlurPx);
       ctx.beginPath();
       ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
+    ctx.globalCompositeOperation = prevComposite;
   }
 
   private renderFallingAnimals(): void {
