@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { SkyscraperEducationalI18n } from "@/components/educational/GameEducationalI18n";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
+import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import SkyscraperGame from "./SkyscraperGame";
 import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
 import { buildGameSoftwareApplicationJsonLd } from "@/lib/gameSoftwareApplicationJsonLd";
@@ -24,6 +25,7 @@ export const metadata: Metadata = {
 export default function SkyscraperPage() {
   return (
     <>
+      <SmartGuardLock />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(skyscraperJsonLd) }} />
       <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)] text-[var(--color-muted)]">読み込み中…</div>}>
         <SkyscraperGame />

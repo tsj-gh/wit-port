@@ -42,3 +42,11 @@ body * {
   opacity: 0.02;
   pointer-events: none;
 }
+
+/* Smart Guard: ロック中のみテキスト選択を抑止 */
+body.smart-guard-lock,
+body.smart-guard-lock * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}

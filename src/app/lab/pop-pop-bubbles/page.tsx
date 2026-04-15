@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { PopPopBubblesEducationalSection } from "@/components/educational/PopPopBubblesEducationalSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { PopPopBubblesLabShell } from "@/components/lab/PopPopBubblesLabShell";
+import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
 import { buildGameSoftwareApplicationJsonLd } from "@/lib/gameSoftwareApplicationJsonLd";
 
@@ -19,6 +20,7 @@ export const metadata: Metadata = {
 export default function PopPopBubblesPage() {
   return (
     <>
+      <SmartGuardLock />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(popPopBubblesJsonLd) }}

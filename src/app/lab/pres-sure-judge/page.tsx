@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PresSureEducationalI18n } from "@/components/educational/GameEducationalI18n";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
+import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import PresSureJudgeGame from "./PresSureJudgeGame";
 import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
 import { buildGameSoftwareApplicationJsonLd } from "@/lib/gameSoftwareApplicationJsonLd";
@@ -24,6 +25,7 @@ export const metadata: Metadata = {
 export default function PresSureJudgePage() {
   return (
     <>
+      <SmartGuardLock />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(presSureJsonLd) }} />
       <Suspense fallback={null}>
         <PresSureJudgeGame />
