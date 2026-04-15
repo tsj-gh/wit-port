@@ -2,15 +2,18 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PresSureEducationalI18n } from "@/components/educational/GameEducationalI18n";
 import PresSureJudgeGame from "./PresSureJudgeGame";
-
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
+import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
 
 export const metadata: Metadata = {
-  title: "Pres-Sure Judge（プレッシャージャッジ）",
-  description:
-    "NPCの重りvs自分の重り。10秒以内に均衡を保て。判定ミスは累積するサバイバル・バランシングゲーム。",
-  keywords: ["知育", "パズル", "無料", "バランス", "サバイバル", "タイムアタック"],
-  alternates: { canonical: `${BASE_URL}/lab/pres-sure-judge` },
+  title: gameLabPageSeo.presSureJudge.title,
+  description: gameLabPageSeo.presSureJudge.description,
+  keywords: ["知育", "パズル", "無料", "バランス", "判断力", "数量感覚", "タイムアタック", "幼児"],
+  applicationName: "Wispo",
+  alternates: gameLabAlternates("/lab/pres-sure-judge"),
+  other: {
+    "application:category": "EducationalGame",
+    "application:operating-system": "Web Browser",
+  },
 };
 
 export default function PresSureJudgePage() {

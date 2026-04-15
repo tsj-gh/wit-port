@@ -1,16 +1,15 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PopPopBubblesLabShell } from "@/components/lab/PopPopBubblesLabShell";
-
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
+import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
 
 export const metadata: Metadata = {
-  title: "はじけて！バブル（Pop-Pop Bubbles）",
-  description: "ふわふわ漂うバブルをタップして弾ける、Kids向けの直感ミニゲーム。",
+  title: gameLabPageSeo.popPopBubbles.title,
+  description: gameLabPageSeo.popPopBubbles.description,
+  keywords: ["知育", "手眼協調", "集中", "幼児", "バブル", "タップゲーム", "Wispo"],
   robots: { index: false, follow: false },
-  alternates: { canonical: `${BASE_URL}/lab/pop-pop-bubbles` },
+  alternates: gameLabAlternates("/lab/pop-pop-bubbles"),
 };
-
 export default function PopPopBubblesPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 px-4 py-4 md:py-6">

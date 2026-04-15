@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { TapColoringEducationalI18n } from "@/components/educational/GameEducationalI18n";
 import { TapColoringLabShell } from "@/components/lab/TapColoringLabShell";
-
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
+import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
 
 export const metadata: Metadata = {
-  title: "タップぬりえ（実験）",
-  description: "タップで色が広がる幼児向けぬりえプロトタイプ（実験ページ）",
+  title: gameLabPageSeo.tapColoring.title,
+  description: gameLabPageSeo.tapColoring.description,
+  keywords: ["知育", "ぬりえ", "因果", "色彩", "幼児", "モンテッソーリ", "Wispo"],
   robots: { index: false, follow: false },
-  alternates: { canonical: `${BASE_URL}/lab/tap-coloring` },
+  alternates: gameLabAlternates("/lab/tap-coloring"),
 };
 
 export default function TapColoringLabPage() {

@@ -16,6 +16,8 @@ function HomeGameCard({ cardId }: { cardId: HomeGameCardId }) {
   const def = HOME_GAME_CARDS[cardId];
   const [isTooltipPinned, setIsTooltipPinned] = useState(false);
   const tooltipRootRef = useRef<HTMLDivElement>(null);
+  const eduTextId = `wispo-home-game-edu-${cardId}`;
+  const eduPanelId = `wispo-home-game-edu-panel-${cardId}`;
 
   useEffect(() => {
     if (!isTooltipPinned) return;
@@ -63,6 +65,7 @@ function HomeGameCard({ cardId }: { cardId: HomeGameCardId }) {
           aria-label={t("home.educationColumnAria")}
           title={t("home.educationColumnAria")}
           aria-expanded={isTooltipPinned}
+          aria-controls={eduPanelId}
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -72,9 +75,14 @@ function HomeGameCard({ cardId }: { cardId: HomeGameCardId }) {
           ?
         </button>
         <div
+          id={eduPanelId}
+          role="region"
+          aria-labelledby={eduTextId}
           className={`absolute right-0 top-8 w-56 rounded-xl border border-[color-mix(in_srgb,#ffffff_16%,transparent)] bg-[#333333] px-3 py-2 text-xs leading-snug text-white shadow-[0_12px_24px_rgba(0,0,0,0.35)] transition-all duration-150 ease-out ${tooltipPanelClassName}`}
         >
-          <p>{t(def.tooltipKey)}</p>
+          <p id={eduTextId} className="m-0 whitespace-pre-line">
+            {t(def.tooltipKey)}
+          </p>
           <DevLink
             href="/columns/educational-value"
             className="mt-1 inline-block text-[11px] font-semibold text-[color-mix(in_srgb,#ffffff_88%,#9be7ff_12%)] underline-offset-2 hover:underline"

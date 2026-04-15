@@ -6,9 +6,13 @@ import { DebugThemeSelector } from "@/components/DebugThemeSelector";
 import { SiteThemeProvider } from "@/components/SiteThemeProvider";
 import { I18nProvider } from "@/lib/i18n-context";
 import { UserSyncProvider } from "@/components/UserSyncProvider";
+import { buildWispoSoftwareApplicationJsonLd } from "@/lib/wispoSoftwareApplicationJsonLd";
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
+const wispoSoftwareApplicationJsonLd = buildWispoSoftwareApplicationJsonLd(SITE_URL);
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app"),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Wispo（ウィスポ）| 知育スポーツの拠点",
     template: "%s | Wispo",
@@ -35,6 +39,10 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(wispoSoftwareApplicationJsonLd) }}
+        />
         {process.env.NODE_ENV === "production" && (
           <>
             <Script

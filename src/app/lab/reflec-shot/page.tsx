@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ReflecLabEducationalI18n } from "@/components/educational/GameEducationalI18n";
 import ReflecShotGame from "./ReflecShotGame";
-
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
+import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
 
 export const metadata: Metadata = {
-  title: "Reflec-Shot（リフレクショット・知育ラボ）",
-  description: "反射とスワイプ射出を試す知育ラボ用プロトタイプ（検索インデックス対象外）。",
-  alternates: { canonical: `${BASE_URL}/lab/reflec-shot` },
+  title: gameLabPageSeo.reflecShot.title,
+  description: gameLabPageSeo.reflecShot.description,
+  keywords: ["知育", "空間推理", "反射", "幾何", "パズル", "Wispo"],
+  applicationName: "Wispo",
+  alternates: gameLabAlternates("/lab/reflec-shot"),
   robots: {
     index: false,
     follow: false,
