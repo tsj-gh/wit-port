@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PresSureJudgeAdSlot } from "@/components/PresSureJudgeAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
+import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import {
   GAME_AD_GAP_AFTER_SLOT_1_PX,
   GAME_AD_GAP_BEFORE_SLOT_2_PX,
@@ -2133,6 +2134,11 @@ export default function PresSureJudgeGame() {
                     {t("games.presSure.judge")}
                   </button>
                 </div>
+                <GameQuickInfoNote
+                  goal="数量感覚・抑制制御・タイムプレッシャー下の意思決定力の向上"
+                  target="小学校低学年〜中学生"
+                  operation="ドラッグ&ドロップ＋Judgeボタンで確定"
+                />
                 {/* 広告枠B: 操作UIの直下 */}
                 <div className="relative z-0 w-full shrink-0" style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}>
                   <PresSureJudgeAdSlot slotIndex={2} />

@@ -35,6 +35,9 @@ export function EducationalValueSection({
           <span className="font-medium">{summaryLabel}</span>
         </summary>
         <div className="space-y-4 px-6 pb-6 pt-0 text-sm leading-relaxed text-[var(--color-muted)]">
+          <p className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)] px-3 py-2 text-xs leading-relaxed">
+            上部のクイック・インフォが「結論」なら、ここでは背景理論を扱います。モンテッソーリ教育、ワーキングメモリ、非認知能力の観点から、各ゲームの設計意図を具体的に整理しています。
+          </p>
           <div className="space-y-4 [&_h3]:mt-5 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-[var(--color-text)] [&_h3]:first:mt-0 [&_p]:text-justify">
             {children}
           </div>

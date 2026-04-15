@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import confetti from "canvas-confetti";
 import { GamePageHeader } from "@/components/GamePageHeader";
+import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import { SkyscraperAdSlot } from "@/components/SkyscraperAdSlots";
 import { refreshAds } from "@/lib/ads";
 import {
@@ -660,6 +661,12 @@ export default function SkyscraperGame() {
 
         <div className="mt-3 min-h-[1.5em] text-center text-sm font-medium text-[var(--color-muted)]">{statusDisplay}</div>
       </section>
+
+      <GameQuickInfoNote
+        goal="空間把握・演繹推論・仮説検証の反復訓練"
+        target="小学校中学年〜大人"
+        operation="タップで数字入力、推理しながら検証"
+      />
 
       <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-3 backdrop-blur sm:px-5 sm:pb-5 sm:pt-3">
         <div className="flex w-full min-w-0 flex-col gap-4">

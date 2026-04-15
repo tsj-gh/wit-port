@@ -1,8 +1,13 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ReflecLabEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import ReflecShotGame from "./ReflecShotGame";
 import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
+import { buildGameSoftwareApplicationJsonLd } from "@/lib/gameSoftwareApplicationJsonLd";
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wit-spot.vercel.app";
+const reflecShotJsonLd = buildGameSoftwareApplicationJsonLd("reflec-shot", SITE_URL);
 
 export const metadata: Metadata = {
   title: gameLabPageSeo.reflecShot.title,
@@ -23,12 +28,14 @@ export const metadata: Metadata = {
 export default function ReflecShotLabPage() {
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(reflecShotJsonLd) }} />
       <main className="mx-auto flex w-full max-w-3xl flex-1 px-4 py-4 md:py-6">
         <Suspense fallback={<div className="py-8 text-sm text-[var(--color-muted)]">読み込み中…</div>}>
           <ReflecShotGame />
         </Suspense>
       </main>
       <ReflecLabEducationalI18n />
+      <OtherPuzzlesSection currentId="reflec-shot" />
     </>
   );
 }

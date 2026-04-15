@@ -93,6 +93,7 @@ import { ReflecShotAdSlot } from "@/components/ReflecShotAdSlots";
 import { DebugClearModalBackdropControls } from "@/components/DebugClearModalBackdropControls";
 import { clearModalBackdropOverlayStyle, useClearModalBackdropDebugValues } from "@/lib/debugClearModalBackdrop";
 import { GamePageHeader } from "@/components/GamePageHeader";
+import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import { refreshAds } from "@/lib/ads";
 import {
   GAME_AD_GAP_AFTER_SLOT_1_PX,
@@ -3371,6 +3372,11 @@ export default function ReflecShotGame() {
               </svg>
             </div>
           </div>
+          <GameQuickInfoNote
+            goal="空間推理・反射規則の理解・系列的な戦略更新の訓練"
+            target="小学校中学年〜大人"
+            operation="タップでセル選択、長押し＋スワイプでバンパー向きを設定"
+          />
           <div
             className="mt-2 flex w-full min-h-[6.5rem] flex-col items-stretch justify-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))]/35 px-3 py-3 text-center"
             role="note"

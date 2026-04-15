@@ -17,6 +17,7 @@ import { computeABCScore, computeStats, type ABCScore } from "@/lib/pair-link-ab
 import { refreshAds, getAdsRefreshState, AD_REFRESH_EVENT, AD_REFRESH_STATE_CHANGED } from "@/lib/ads";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
+import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import {
   GAME_AD_GAP_AFTER_SLOT_1_PX,
   GAME_AD_GAP_BEFORE_SLOT_2_PX,
@@ -2209,6 +2210,11 @@ export default function PairLinkGame() {
             </div>
           </div>
         </div>
+        <GameQuickInfoNote
+          goal="論理的推論・先読み計画・ワーキングメモリの強化"
+          target="小学生〜大人（推奨: 小学校中学年以上）"
+          operation="タップまたはドラッグで経路を接続"
+        />
         <div className="mx-auto mt-4 mb-2 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
           {useLegacyMode ? (
             <>
