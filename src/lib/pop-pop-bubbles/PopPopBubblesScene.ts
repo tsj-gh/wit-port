@@ -55,6 +55,10 @@ export type PopPopBubblesDebugConfig = {
   bubbleRestitution: number;
   /** はじけパーティクルの半径スケール（既定 1.5 ≒ 従来比 1.5 倍） */
   burstParticleSizeScale: number;
+  /** モバイル時のバブル縮小補正（0=盤面比率そのまま, 1=縮小なし） */
+  mobileBubbleScaleCompensation: number;
+  /** はじけ後に落ちる内容物の描画スケール */
+  fallingAnimalSizeScale: number;
 };
 
 function rand(min: number, max: number): number {
@@ -114,9 +118,11 @@ export class PopPopBubblesScene {
   private config: PopPopBubblesDebugConfig = {
     bubbleCount: DEFAULT_BUBBLE_COUNT,
     bubbleSpeedScale: 1,
-    animalFallGravity: 180,
+    animalFallGravity: 500,
     bubbleRestitution: 0.86,
     burstParticleSizeScale: 1.5,
+    mobileBubbleScaleCompensation: 0.55,
+    fallingAnimalSizeScale: 1.5,
   };
 
   constructor(options: SceneOptions) {
@@ -176,9 +182,14 @@ export class PopPopBubblesScene {
     this.config = {
       bubbleCount: Math.max(MIN_BUBBLE_COUNT, Math.min(MAX_BUBBLE_COUNT, Math.round(next.bubbleCount ?? this.config.bubbleCount))),
       bubbleSpeedScale: Math.max(0.3, Math.min(3, next.bubbleSpeedScale ?? this.config.bubbleSpeedScale)),
-      animalFallGravity: Math.max(40, Math.min(520, next.animalFallGravity ?? this.config.animalFallGravity)),
+      animalFallGravity: Math.max(120, Math.min(900, next.animalFallGravity ?? this.config.animalFallGravity)),
       bubbleRestitution: Math.max(0.55, Math.min(0.98, next.bubbleRestitution ?? this.config.bubbleRestitution)),
       burstParticleSizeScale: Math.max(0.25, Math.min(4, next.burstParticleSizeScale ?? this.config.burstParticleSizeScale)),
+      mobileBubbleScaleCompensation: Math.max(
+        0,
+        Math.min(1, next.mobileBubbleScaleCompensation ?? this.config.mobileBubbleScaleCompensation)
+      ),
+      fallingAnimalSizeScale: Math.max(0.5, Math.min(3.5, next.fallingAnimalSizeScale ?? this.config.fallingAnimalSizeScale)),
     };
 
     const nextScale = this.config.bubbleSpeedScale;
@@ -221,7 +232,13 @@ export class PopPopBubblesScene {
     }
     for (let i = 0; i < count; i++) {
       const side = Math.floor(Math.random() * 4);
-      const radius = rand(42, 52) * 1.5;
+      const baseRadius = rand(42, 52) * 1.5;
+      const boardScale = Math.min(this.width, this.height) / 460;
+      const scale =
+        boardScale >= 1
+          ? 1
+          : boardScale + (1 - boardScale) * this.config.mobileBubbleScaleCompensation;
+      const radius = baseRadius * scale;
       let x = 0;
       let y = 0;
       if (side === 0) {
@@ -270,7 +287,7 @@ export class PopPopBubblesScene {
     this.fallingAnimals.push({
       x: b.x,
       y: b.y,
-      vx: rand(-20, 20),
+      vx: 0,
       vy: rand(10, 45),
       scale: 1,
       pulseTime: 0.2,
@@ -466,7 +483,6 @@ export class PopPopBubblesScene {
       } else {
         a.vy += this.config.animalFallGravity * dt;
         a.y += a.vy * dt;
-        a.x += a.vx * dt;
         a.scale = Math.max(0.82, a.scale * 0.992);
       }
     }
@@ -508,7 +524,7 @@ export class PopPopBubblesScene {
     for (const a of this.fallingAnimals) {
       const img = this.animalImages[a.animalIndex % this.animalImages.length];
       if (!img) continue;
-      const base = 44;
+      const base = 44 * this.config.fallingAnimalSizeScale;
       const w = base * a.scale;
       const h = base * a.scale;
       const alpha = Math.min(1, Math.max(0, a.life / 2.2));

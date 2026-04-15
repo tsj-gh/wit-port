@@ -65,9 +65,11 @@ export function PopPopBubblesLabShell() {
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
   const [bubbleCount, setBubbleCount] = useState(4);
   const [bubbleSpeedScale, setBubbleSpeedScale] = useState(1);
-  const [animalFallGravity, setAnimalFallGravity] = useState(180);
+  const [animalFallGravity, setAnimalFallGravity] = useState(500);
   const [bubbleRestitution, setBubbleRestitution] = useState(0.86);
   const [burstParticleSizeScale, setBurstParticleSizeScale] = useState(1.5);
+  const [mobileBubbleScaleCompensation, setMobileBubbleScaleCompensation] = useState(0.55);
+  const [fallingAnimalSizeScale, setFallingAnimalSizeScale] = useState(1.5);
 
   useEffect(() => {
     if (!isDevTj) setIsDebugMode(false);
@@ -112,6 +114,8 @@ export function PopPopBubblesLabShell() {
           animalFallGravity,
           bubbleRestitution,
           burstParticleSizeScale,
+          mobileBubbleScaleCompensation,
+          fallingAnimalSizeScale,
         });
 
         const resize = () => {
@@ -149,8 +153,17 @@ export function PopPopBubblesLabShell() {
       animalFallGravity,
       bubbleRestitution,
       burstParticleSizeScale,
+      mobileBubbleScaleCompensation,
+      fallingAnimalSizeScale,
     });
-  }, [bubbleSpeedScale, animalFallGravity, bubbleRestitution, burstParticleSizeScale]);
+  }, [
+    bubbleSpeedScale,
+    animalFallGravity,
+    bubbleRestitution,
+    burstParticleSizeScale,
+    mobileBubbleScaleCompensation,
+    fallingAnimalSizeScale,
+  ]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -194,6 +207,9 @@ export function PopPopBubblesLabShell() {
               </button>
             </div>
           </div>
+          <div className="mb-2 rounded border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] px-2 py-1 text-[10px] text-[var(--color-muted)]">
+            衝突検知: <span className="tabular-nums">{collisionCount}</span>
+          </div>
           {isDebugPanelExpanded && (
             <div className="space-y-3 text-[10px] text-[var(--color-muted)]">
               <label className="block">
@@ -226,14 +242,27 @@ export function PopPopBubblesLabShell() {
                 <div className="mb-1 font-semibold text-[var(--color-text)]">内容物の落下速度（重力）</div>
                 <input
                   type="range"
-                  min={40}
-                  max={520}
+                  min={120}
+                  max={900}
                   step={10}
                   value={animalFallGravity}
                   onChange={(e) => setAnimalFallGravity(Number(e.target.value))}
                   className="w-full accent-[var(--color-primary)]"
                 />
                 <div className="tabular-nums">{animalFallGravity.toFixed(0)}</div>
+              </label>
+              <label className="block">
+                <div className="mb-1 font-semibold text-[var(--color-text)]">モバイル時バブル縮小補正</div>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={mobileBubbleScaleCompensation}
+                  onChange={(e) => setMobileBubbleScaleCompensation(Number(e.target.value))}
+                  className="w-full accent-[var(--color-primary)]"
+                />
+                <div className="tabular-nums">{mobileBubbleScaleCompensation.toFixed(2)}</div>
               </label>
               <label className="block">
                 <div className="mb-1 font-semibold text-[var(--color-text)]">バブル弾性（ぷにん反発）</div>
@@ -261,6 +290,19 @@ export function PopPopBubblesLabShell() {
                 />
                 <div className="tabular-nums">{burstParticleSizeScale.toFixed(2)}x</div>
               </label>
+              <label className="block">
+                <div className="mb-1 font-semibold text-[var(--color-text)]">内容物サイズ倍率</div>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={3.5}
+                  step={0.05}
+                  value={fallingAnimalSizeScale}
+                  onChange={(e) => setFallingAnimalSizeScale(Number(e.target.value))}
+                  className="w-full accent-[var(--color-primary)]"
+                />
+                <div className="tabular-nums">{fallingAnimalSizeScale.toFixed(2)}x</div>
+              </label>
             </div>
           )}
         </div>
@@ -269,11 +311,7 @@ export function PopPopBubblesLabShell() {
       <div className="hidden" aria-hidden>
         <PairLinkAdSlot slotIndex={1} />
       </div>
-      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-4 backdrop-blur sm:px-5 sm:pb-5 sm:pt-4">
-        <div className="mb-2 flex items-center justify-between text-xs text-[var(--color-muted)]">
-          <span>タップでバブルをはじこう</span>
-          <span className="tabular-nums">衝突検知: {collisionCount}</span>
-        </div>
+      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-2 backdrop-blur sm:px-5 sm:pb-5 sm:pt-2">
         <div
           ref={stageRef}
           className="relative mx-auto h-[min(70vw,460px)] min-h-[320px] w-full max-w-[460px] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[radial-gradient(circle_at_20%_18%,color-mix(in_srgb,var(--color-primary)_14%,transparent),transparent_52%),linear-gradient(180deg,color-mix(in_srgb,var(--color-bg)_92%,white_8%),color-mix(in_srgb,var(--color-bg)_98%,transparent))]"
