@@ -35,7 +35,7 @@ export function buildWispoSoftwareApplicationJsonLd(siteUrl: string): Record<str
         applicationCategory: "EducationalApplication",
         operatingSystem: "Web Browser",
         description:
-          "タップで色がふわっと広がる幼児向けの直感ぬりえ。原因と結果を楽しく体験し、色彩と集中を育みます。",
+          "タップ入力に対して色が即時に広がる設計を採用し、因果理解と色彩認知を同時に育成する知育アプリです。手眼協調、注意の持続、自己修正の反復を無理なく促し、幼児期の基礎的な非認知能力の形成を支援します。",
         featureList: ["直感操作", "原因と結果", "色彩の遊び", "幼児向け知育", "ブラウザで無料"],
         offers: freeOffer,
       },
@@ -46,7 +46,7 @@ export function buildWispoSoftwareApplicationJsonLd(siteUrl: string): Record<str
         applicationCategory: "EducationalApplication",
         operatingSystem: "Web Browser",
         description:
-          "ふわふわ漂うバブルをタップして弾ける、Kids向けの軽い知育プレイ。手眼協調と反応の楽しさを重ねます。",
+          "画面内を漂う対象へ短い間隔でタップ反応する遊びを通じ、手眼協調、注意の切替、反応速度の基礎を育てる知育ミニゲームです。難しい説明を介さずに成功体験を積み重ねられるため、低年齢層の導入教材として扱いやすい設計です。",
         featureList: ["手眼協調", "反応と集中", "直感的タッチ", "幼児向け", "無料"],
         offers: freeOffer,
       },
@@ -57,7 +57,7 @@ export function buildWispoSoftwareApplicationJsonLd(siteUrl: string): Record<str
         applicationCategory: "EducationalApplication",
         operatingSystem: "Web Browser",
         description:
-          "同じ数字を交差しない線でつなぐロジックパズル。試行錯誤しながら盤面を埋め、論理的思考力を育みます。",
+          "交差禁止と全マス充填という二重制約を同時に扱う課題設計により、論理的推論、ワーキングメモリ、先読み計画を統合的に鍛える知育パズルです。試行錯誤から仮説修正へ進む学習サイクルを自然に形成し、思考の持久力を高めます。",
         featureList: ["論理的思考", "経路推理", "試行錯誤", "算数的発想", "無料"],
         offers: freeOffer,
       },
@@ -68,7 +68,7 @@ export function buildWispoSoftwareApplicationJsonLd(siteUrl: string): Record<str
         applicationCategory: "EducationalApplication",
         operatingSystem: "Web Browser",
         description:
-          "天秤のバランスを短時間で見極める判断ゲーム。重りの配置とタイミングから、数量感覚と意思決定を鍛えます。",
+          "時間制約下で天秤の均衡を判断し続けるゲーム構造により、数量感覚、抑制制御、意思決定を一体的に訓練する知育コンテンツです。運動操作と認知負荷を連動させることで、焦りの中でも根拠を持って選ぶ実行機能の育成を狙います。",
         featureList: ["バランス判断", "時間制限下の集中", "数量感覚", "意思決定", "無料"],
         offers: freeOffer,
       },
@@ -79,7 +79,7 @@ export function buildWispoSoftwareApplicationJsonLd(siteUrl: string): Record<str
         applicationCategory: "EducationalApplication",
         operatingSystem: "Web Browser",
         description:
-          "外枠の数字を手がかりにビルの高さを推理する本格パズル。制約を積み上げる論理の筋道を体験できます。",
+          "外周ヒントから内部の高さ配置を推理する制約充足課題として設計し、空間把握、演繹推論、仮説検証の循環を強化する知育パズルです。誤りが即座に可視化されるため自己調整学習が進み、数理的思考の土台形成に有効です。",
         featureList: ["制約充足", "論理の積み上げ", "数感", "本格ロジックパズル", "無料"],
         offers: freeOffer,
       },
@@ -90,7 +90,7 @@ export function buildWispoSoftwareApplicationJsonLd(siteUrl: string): Record<str
         applicationCategory: "EducationalApplication",
         operatingSystem: "Web Browser",
         description:
-          "反射の向きを予測してゴールを目指す空間パズル。軌道を読む感覚と幾何の直感を養う知育ラボ向けコンテンツです。",
+          "反射規則と軌道予測を扱う物理シミュレーション型課題として構成し、空間推理、系列保持、戦略更新を段階的に鍛える知育ラボです。直感的な操作と記号的な判断を往復させることで、予測精度と認知的柔軟性の向上を支えます。",
         featureList: ["空間推理", "反射と角度", "軌道の予測", "幾何直感", "無料"],
         offers: freeOffer,
       },
