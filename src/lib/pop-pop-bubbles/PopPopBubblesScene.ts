@@ -64,14 +64,18 @@ const MIN_BUBBLE_COUNT = 1;
 const MAX_BUBBLE_COUNT = 8;
 const BURST_BG_PASTELS = ["#d4edda", "#fff3cd", "#e2e3e5", "#d2f4ea", "#e0f0ff"] as const;
 const BURST_PARTICLE_COLORS = ["#b8ecff", "#9ee4ff", "#c8e6ff", "#dff5ff", "#f3fbff"] as const;
+/** パーティクル半径の基準（CSS px）。`burstParticleSizeScale` はこれに掛かる倍率。 */
+const BURST_PARTICLE_BASE_RADIUS_PX = 0.5;
 
 export type PopPopBubblesDebugConfig = {
   bubbleCount: number;
   bubbleSpeedScale: number;
   animalFallGravity: number;
   bubbleRestitution: number;
-  /** はじけパーティクルの半径スケール（既定 1.5 ≒ 従来比 1.5 倍） */
+  /** はじけパーティクル半径の倍率（基準半径 0.5px に掛かる） */
   burstParticleSizeScale: number;
+  /** はじけパーティクル初速の倍率 */
+  burstParticleSpeedScale: number;
   /** モバイル時のバブル縮小補正（0=盤面比率そのまま, 1=縮小なし） */
   mobileBubbleScaleCompensation: number;
   /** はじけ後に落ちる内容物の描画スケール */
@@ -164,9 +168,10 @@ export class PopPopBubblesScene {
     bubbleSpeedScale: 1,
     animalFallGravity: 500,
     bubbleRestitution: 0.86,
-    burstParticleSizeScale: 1.5,
+    burstParticleSizeScale: 1,
+    burstParticleSpeedScale: 1,
     mobileBubbleScaleCompensation: 0.55,
-    fallingAnimalSizeScale: 1.5,
+    fallingAnimalSizeScale: 2,
     burstRingLineWidthScale: 1,
     burstRingExpandSpeedScale: 1,
     burstRingShadowBlurPx: 10,
@@ -232,6 +237,7 @@ export class PopPopBubblesScene {
       animalFallGravity: Math.max(120, Math.min(900, next.animalFallGravity ?? this.config.animalFallGravity)),
       bubbleRestitution: Math.max(0.55, Math.min(0.98, next.bubbleRestitution ?? this.config.bubbleRestitution)),
       burstParticleSizeScale: Math.max(0.25, Math.min(4, next.burstParticleSizeScale ?? this.config.burstParticleSizeScale)),
+      burstParticleSpeedScale: Math.max(0.25, Math.min(4, next.burstParticleSpeedScale ?? this.config.burstParticleSpeedScale)),
       mobileBubbleScaleCompensation: Math.max(
         0,
         Math.min(1, next.mobileBubbleScaleCompensation ?? this.config.mobileBubbleScaleCompensation)
@@ -259,7 +265,6 @@ export class PopPopBubblesScene {
 
   public respawnWaveNow(): void {
     this.bubbles = [];
-    this.randomizeBackgroundPastel();
     this.spawnWave();
   }
 
@@ -282,6 +287,7 @@ export class PopPopBubblesScene {
       clearTimeout(this.waveTimer);
       this.waveTimer = null;
     }
+    this.randomizeBackgroundPastel();
     const count = this.config.bubbleCount;
     const bubbles: Bubble[] = [];
     const imgCount = Math.max(1, this.animalImages.length);
@@ -357,7 +363,6 @@ export class PopPopBubblesScene {
     this.onPlayPop();
 
     if (this.bubbles.length === 0 && !this.waveTimer) {
-      this.randomizeBackgroundPastel();
       this.waveTimer = setTimeout(() => {
         this.waveTimer = null;
         this.spawnWave();
@@ -369,21 +374,18 @@ export class PopPopBubblesScene {
     const count = Math.floor(rand(52, 83));
     for (let i = 0; i < count; i++) {
       const a = rand(0, Math.PI * 2);
-      const speed = rand(radius * 4.8, radius * 8.2);
+      const speed = rand(radius * 4.8, radius * 8.2) * this.config.burstParticleSpeedScale;
       const tierRoll = Math.random();
-      const sizeTier =
-        tierRoll < 0.22
-          ? rand(radius * 0.16, radius * 0.24) // large
-          : tierRoll < 0.7
-            ? rand(radius * 0.09, radius * 0.15) // medium
-            : rand(radius * 0.05, radius * 0.09); // small
+      const tierMul =
+        tierRoll < 0.22 ? rand(2.0, 3.0) : tierRoll < 0.7 ? rand(1.2, 1.8) : rand(0.85, 1.15);
+      const size = BURST_PARTICLE_BASE_RADIUS_PX * tierMul * this.config.burstParticleSizeScale;
       this.particles.push({
         x,
         y,
         vx: Math.cos(a) * speed,
         vy: Math.sin(a) * speed,
         alpha: 1,
-        size: sizeTier * this.config.burstParticleSizeScale,
+        size,
         color: BURST_PARTICLE_COLORS[Math.floor(Math.random() * BURST_PARTICLE_COLORS.length)]!,
         drag: rand(0.72, 0.84), // 初速の勢いを次フレームから急減速
         fadePerSec: rand(2.4, 3.6),

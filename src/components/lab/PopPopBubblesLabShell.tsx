@@ -62,14 +62,16 @@ export function PopPopBubblesLabShell() {
   const [collisionCount, setCollisionCount] = useState(0);
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
+  const [isBubbleParamsExpanded, setIsBubbleParamsExpanded] = useState(true);
   const [isBurstFxExpanded, setIsBurstFxExpanded] = useState(true);
   const [bubbleCount, setBubbleCount] = useState(4);
   const [bubbleSpeedScale, setBubbleSpeedScale] = useState(1);
   const [animalFallGravity, setAnimalFallGravity] = useState(500);
   const [bubbleRestitution, setBubbleRestitution] = useState(0.86);
-  const [burstParticleSizeScale, setBurstParticleSizeScale] = useState(1.5);
+  const [burstParticleSizeScale, setBurstParticleSizeScale] = useState(1);
+  const [burstParticleSpeedScale, setBurstParticleSpeedScale] = useState(1);
   const [mobileBubbleScaleCompensation, setMobileBubbleScaleCompensation] = useState(0.55);
-  const [fallingAnimalSizeScale, setFallingAnimalSizeScale] = useState(1.5);
+  const [fallingAnimalSizeScale, setFallingAnimalSizeScale] = useState(2);
   const [burstRingLineWidthScale, setBurstRingLineWidthScale] = useState(1);
   const [burstRingExpandSpeedScale, setBurstRingExpandSpeedScale] = useState(1);
   const [burstRingShadowBlurPx, setBurstRingShadowBlurPx] = useState(10);
@@ -117,6 +119,7 @@ export function PopPopBubblesLabShell() {
           animalFallGravity,
           bubbleRestitution,
           burstParticleSizeScale,
+          burstParticleSpeedScale,
           mobileBubbleScaleCompensation,
           fallingAnimalSizeScale,
           burstRingLineWidthScale,
@@ -159,6 +162,7 @@ export function PopPopBubblesLabShell() {
       animalFallGravity,
       bubbleRestitution,
       burstParticleSizeScale,
+      burstParticleSpeedScale,
       mobileBubbleScaleCompensation,
       fallingAnimalSizeScale,
       burstRingLineWidthScale,
@@ -170,6 +174,7 @@ export function PopPopBubblesLabShell() {
     animalFallGravity,
     bubbleRestitution,
     burstParticleSizeScale,
+    burstParticleSpeedScale,
     mobileBubbleScaleCompensation,
     fallingAnimalSizeScale,
     burstRingLineWidthScale,
@@ -224,97 +229,73 @@ export function PopPopBubblesLabShell() {
           </div>
           {isDebugPanelExpanded && (
             <div className="space-y-3 text-[10px] text-[var(--color-muted)]">
-              <label className="block">
-                <div className="mb-1 font-semibold text-[var(--color-text)]">バブル数</div>
-                <input
-                  type="range"
-                  min={1}
-                  max={8}
-                  step={1}
-                  value={bubbleCount}
-                  onChange={(e) => setBubbleCount(Number(e.target.value))}
-                  className="w-full accent-[var(--color-primary)]"
-                />
-                <div className="tabular-nums">{bubbleCount}</div>
-              </label>
-              <label className="block">
-                <div className="mb-1 font-semibold text-[var(--color-text)]">バブル速度倍率</div>
-                <input
-                  type="range"
-                  min={0.3}
-                  max={3}
-                  step={0.1}
-                  value={bubbleSpeedScale}
-                  onChange={(e) => setBubbleSpeedScale(Number(e.target.value))}
-                  className="w-full accent-[var(--color-primary)]"
-                />
-                <div className="tabular-nums">{bubbleSpeedScale.toFixed(1)}x</div>
-              </label>
-              <label className="block">
-                <div className="mb-1 font-semibold text-[var(--color-text)]">内容物の落下速度（重力）</div>
-                <input
-                  type="range"
-                  min={120}
-                  max={900}
-                  step={10}
-                  value={animalFallGravity}
-                  onChange={(e) => setAnimalFallGravity(Number(e.target.value))}
-                  className="w-full accent-[var(--color-primary)]"
-                />
-                <div className="tabular-nums">{animalFallGravity.toFixed(0)}</div>
-              </label>
-              <label className="block">
-                <div className="mb-1 font-semibold text-[var(--color-text)]">モバイル時バブル縮小補正</div>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={mobileBubbleScaleCompensation}
-                  onChange={(e) => setMobileBubbleScaleCompensation(Number(e.target.value))}
-                  className="w-full accent-[var(--color-primary)]"
-                />
-                <div className="tabular-nums">{mobileBubbleScaleCompensation.toFixed(2)}</div>
-              </label>
-              <label className="block">
-                <div className="mb-1 font-semibold text-[var(--color-text)]">バブル弾性（ぷにん反発）</div>
-                <input
-                  type="range"
-                  min={0.55}
-                  max={0.98}
-                  step={0.01}
-                  value={bubbleRestitution}
-                  onChange={(e) => setBubbleRestitution(Number(e.target.value))}
-                  className="w-full accent-[var(--color-primary)]"
-                />
-                <div className="tabular-nums">{bubbleRestitution.toFixed(2)}</div>
-              </label>
-              <label className="block">
-                <div className="mb-1 font-semibold text-[var(--color-text)]">はじけパーティクル大きさ</div>
-                <input
-                  type="range"
-                  min={0.25}
-                  max={4}
-                  step={0.05}
-                  value={burstParticleSizeScale}
-                  onChange={(e) => setBurstParticleSizeScale(Number(e.target.value))}
-                  className="w-full accent-[var(--color-primary)]"
-                />
-                <div className="tabular-nums">{burstParticleSizeScale.toFixed(2)}x</div>
-              </label>
-              <label className="block">
-                <div className="mb-1 font-semibold text-[var(--color-text)]">内容物サイズ倍率</div>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={3.5}
-                  step={0.05}
-                  value={fallingAnimalSizeScale}
-                  onChange={(e) => setFallingAnimalSizeScale(Number(e.target.value))}
-                  className="w-full accent-[var(--color-primary)]"
-                />
-                <div className="tabular-nums">{fallingAnimalSizeScale.toFixed(2)}x</div>
-              </label>
+              <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBubbleParamsExpanded((v) => !v)}
+                  className="flex w-full items-center justify-between text-left"
+                  aria-expanded={isBubbleParamsExpanded}
+                >
+                  <span className="font-semibold text-[var(--color-text)]">バブル</span>
+                  <span className="text-[var(--color-muted)]">{isBubbleParamsExpanded ? "▲" : "▼"}</span>
+                </button>
+                {isBubbleParamsExpanded && (
+                  <div className="mt-2 space-y-2">
+                    <label className="block">
+                      <div className="mb-1 font-semibold text-[var(--color-text)]">バブル数</div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={8}
+                        step={1}
+                        value={bubbleCount}
+                        onChange={(e) => setBubbleCount(Number(e.target.value))}
+                        className="w-full accent-[var(--color-primary)]"
+                      />
+                      <div className="tabular-nums">{bubbleCount}</div>
+                    </label>
+                    <label className="block">
+                      <div className="mb-1 font-semibold text-[var(--color-text)]">バブル速度倍率</div>
+                      <input
+                        type="range"
+                        min={0.3}
+                        max={3}
+                        step={0.1}
+                        value={bubbleSpeedScale}
+                        onChange={(e) => setBubbleSpeedScale(Number(e.target.value))}
+                        className="w-full accent-[var(--color-primary)]"
+                      />
+                      <div className="tabular-nums">{bubbleSpeedScale.toFixed(1)}x</div>
+                    </label>
+                    <label className="block">
+                      <div className="mb-1 font-semibold text-[var(--color-text)]">モバイル時バブル縮小補正</div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={mobileBubbleScaleCompensation}
+                        onChange={(e) => setMobileBubbleScaleCompensation(Number(e.target.value))}
+                        className="w-full accent-[var(--color-primary)]"
+                      />
+                      <div className="tabular-nums">{mobileBubbleScaleCompensation.toFixed(2)}</div>
+                    </label>
+                    <label className="block">
+                      <div className="mb-1 font-semibold text-[var(--color-text)]">バブル弾性（ぷにん反発）</div>
+                      <input
+                        type="range"
+                        min={0.55}
+                        max={0.98}
+                        step={0.01}
+                        value={bubbleRestitution}
+                        onChange={(e) => setBubbleRestitution(Number(e.target.value))}
+                        className="w-full accent-[var(--color-primary)]"
+                      />
+                      <div className="tabular-nums">{bubbleRestitution.toFixed(2)}</div>
+                    </label>
+                  </div>
+                )}
+              </div>
               <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-2">
                 <button
                   type="button"
@@ -322,11 +303,63 @@ export function PopPopBubblesLabShell() {
                   className="flex w-full items-center justify-between text-left"
                   aria-expanded={isBurstFxExpanded}
                 >
-                  <span className="font-semibold text-[var(--color-text)]">タップ時の割れ表現</span>
+                  <span className="font-semibold text-[var(--color-text)]">破裂表現・内容物</span>
                   <span className="text-[var(--color-muted)]">{isBurstFxExpanded ? "▲" : "▼"}</span>
                 </button>
                 {isBurstFxExpanded && (
                   <div className="mt-2 space-y-2">
+                    <label className="block">
+                      <div className="mb-1 font-semibold text-[var(--color-text)]">はじけパーティクル大きさ（基準0.5pxに対する倍率）</div>
+                      <input
+                        type="range"
+                        min={0.25}
+                        max={4}
+                        step={0.05}
+                        value={burstParticleSizeScale}
+                        onChange={(e) => setBurstParticleSizeScale(Number(e.target.value))}
+                        className="w-full accent-[var(--color-primary)]"
+                      />
+                      <div className="tabular-nums">{burstParticleSizeScale.toFixed(2)}x</div>
+                    </label>
+                    <label className="block">
+                      <div className="mb-1 font-semibold text-[var(--color-text)]">はじけパーティクル初速</div>
+                      <input
+                        type="range"
+                        min={0.25}
+                        max={4}
+                        step={0.05}
+                        value={burstParticleSpeedScale}
+                        onChange={(e) => setBurstParticleSpeedScale(Number(e.target.value))}
+                        className="w-full accent-[var(--color-primary)]"
+                      />
+                      <div className="tabular-nums">{burstParticleSpeedScale.toFixed(2)}x</div>
+                    </label>
+                    <label className="block">
+                      <div className="mb-1 font-semibold text-[var(--color-text)]">内容物の落下速度（重力）</div>
+                      <input
+                        type="range"
+                        min={120}
+                        max={900}
+                        step={10}
+                        value={animalFallGravity}
+                        onChange={(e) => setAnimalFallGravity(Number(e.target.value))}
+                        className="w-full accent-[var(--color-primary)]"
+                      />
+                      <div className="tabular-nums">{animalFallGravity.toFixed(0)}</div>
+                    </label>
+                    <label className="block">
+                      <div className="mb-1 font-semibold text-[var(--color-text)]">内容物サイズ倍率</div>
+                      <input
+                        type="range"
+                        min={0.5}
+                        max={3.5}
+                        step={0.05}
+                        value={fallingAnimalSizeScale}
+                        onChange={(e) => setFallingAnimalSizeScale(Number(e.target.value))}
+                        className="w-full accent-[var(--color-primary)]"
+                      />
+                      <div className="tabular-nums">{fallingAnimalSizeScale.toFixed(2)}x</div>
+                    </label>
                     <label className="block">
                       <div className="mb-1 font-semibold text-[var(--color-text)]">リング太さ倍率</div>
                       <input
