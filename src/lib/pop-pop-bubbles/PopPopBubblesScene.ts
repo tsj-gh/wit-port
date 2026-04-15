@@ -14,6 +14,7 @@ type Bubble = {
   squashX: number;
   squashY: number;
   squashTimer: number;
+  tintColor: string;
 };
 
 type BurstParticle = {
@@ -21,8 +22,22 @@ type BurstParticle = {
   y: number;
   vx: number;
   vy: number;
-  life: number;
+  alpha: number;
   size: number;
+  color: string;
+  drag: number;
+  fadePerSec: number;
+};
+
+type BurstRing = {
+  x: number;
+  y: number;
+  radius: number;
+  lineWidth: number;
+  alpha: number;
+  expandPerSec: number;
+  fadePerSec: number;
+  color: string;
 };
 
 type FallingAnimal = {
@@ -65,6 +80,28 @@ function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
 
+function clampByte(v: number): number {
+  return Math.max(0, Math.min(255, Math.round(v)));
+}
+
+function parseHexColor(color: string): { r: number; g: number; b: number } | null {
+  const m = color.trim().match(/^#([0-9a-f]{6})$/i);
+  if (!m) return null;
+  const hex = m[1]!;
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16),
+    g: Number.parseInt(hex.slice(2, 4), 16),
+    b: Number.parseInt(hex.slice(4, 6), 16),
+  };
+}
+
+function brightenHex(color: string, amount: number): string {
+  const rgb = parseHexColor(color);
+  if (!rgb) return color;
+  const mix = (v: number) => v + (255 - v) * amount;
+  return `rgb(${clampByte(mix(rgb.r))}, ${clampByte(mix(rgb.g))}, ${clampByte(mix(rgb.b))})`;
+}
+
 function createBubbleTexture(size = 256): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = size;
@@ -105,6 +142,7 @@ export class PopPopBubblesScene {
 
   private bubbles: Bubble[] = [];
   private particles: BurstParticle[] = [];
+  private burstRings: BurstRing[] = [];
   private fallingAnimals: FallingAnimal[] = [];
   private running = false;
   private rafId = 0;
@@ -226,6 +264,7 @@ export class PopPopBubblesScene {
     const count = this.config.bubbleCount;
     const bubbles: Bubble[] = [];
     const ids = [0, 1, 2, 3];
+    const bubbleTints = ["#8fd9ff", "#9ce7ff", "#7ec8ff", "#a7dbff"];
     for (let i = ids.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [ids[i], ids[j]] = [ids[j]!, ids[i]!];
@@ -273,6 +312,7 @@ export class PopPopBubblesScene {
         squashX: 1,
         squashY: 1,
         squashTimer: 0,
+        tintColor: bubbleTints[Math.floor(Math.random() * bubbleTints.length)]!,
       });
     }
     this.bubbles = bubbles;
@@ -283,7 +323,7 @@ export class PopPopBubblesScene {
     if (idx < 0) return;
     const b = this.bubbles[idx]!;
     this.bubbles.splice(idx, 1);
-    this.spawnBurstParticles(b.x, b.y, b.radius);
+    this.spawnBurstParticles(b.x, b.y, b.radius, b.tintColor);
     this.fallingAnimals.push({
       x: b.x,
       y: b.y,
@@ -304,20 +344,35 @@ export class PopPopBubblesScene {
     }
   }
 
-  private spawnBurstParticles(x: number, y: number, radius: number): void {
-    const count = 16;
+  private spawnBurstParticles(x: number, y: number, radius: number, bubbleTint: string): void {
+    const count = Math.floor(rand(30, 51));
+    const baseColor = brightenHex(bubbleTint, 0.38);
     for (let i = 0; i < count; i++) {
-      const a = (Math.PI * 2 * i) / count + rand(-0.2, 0.2);
-      const speed = rand(55, 140);
+      const a = rand(0, Math.PI * 2);
+      const speed = rand(radius * 1.4, radius * 3.25);
       this.particles.push({
         x,
         y,
         vx: Math.cos(a) * speed,
-        vy: Math.sin(a) * speed - rand(10, 40),
-        life: rand(0.45, 0.85),
+        vy: Math.sin(a) * speed,
+        alpha: 1,
         size: rand(radius * 0.05, radius * 0.14) * this.config.burstParticleSizeScale,
+        color: baseColor,
+        drag: rand(0.94, 0.975),
+        fadePerSec: rand(2.8, 4.5),
       });
     }
+
+    this.burstRings.push({
+      x,
+      y,
+      radius: radius * 0.72,
+      lineWidth: Math.max(2.5, radius * 0.12),
+      alpha: 0.96,
+      expandPerSec: Math.max(90, radius * 3.2),
+      fadePerSec: 5.2, // 0.2 秒前後で消える
+      color: brightenHex(bubbleTint, 0.75),
+    });
   }
 
   private update(dt: number): void {
@@ -326,6 +381,7 @@ export class PopPopBubblesScene {
     for (const b of this.bubbles) this.enforceCruiseSpeed(b);
     this.updateBubbleSquash(dt);
     this.updateParticles(dt);
+    this.updateBurstRings(dt);
     this.updateFallingAnimals(dt);
   }
 
@@ -466,11 +522,20 @@ export class PopPopBubblesScene {
     for (const p of this.particles) {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vy += 160 * dt;
-      p.vx *= 0.985;
-      p.life -= dt * 1.6;
+      p.vx *= p.drag;
+      p.vy *= p.drag;
+      p.alpha -= p.fadePerSec * dt;
     }
-    this.particles = this.particles.filter((p) => p.life > 0);
+    this.particles = this.particles.filter((p) => p.alpha > 0.01);
+  }
+
+  private updateBurstRings(dt: number): void {
+    for (const r of this.burstRings) {
+      r.radius += r.expandPerSec * dt;
+      r.alpha -= r.fadePerSec * dt;
+      r.lineWidth *= 0.985;
+    }
+    this.burstRings = this.burstRings.filter((r) => r.alpha > 0.01);
   }
 
   private updateFallingAnimals(dt: number): void {
@@ -500,6 +565,7 @@ export class PopPopBubblesScene {
     ctx.fillRect(0, 0, this.width, this.height);
 
     this.renderParticles();
+    this.renderBurstRings();
     this.renderFallingAnimals();
     this.renderBubbles();
   }
@@ -508,13 +574,29 @@ export class PopPopBubblesScene {
     const ctx = this.ctx;
     for (const p of this.particles) {
       ctx.save();
-      ctx.globalAlpha = Math.max(0, p.life);
-      ctx.fillStyle = "rgba(225, 250, 255, 0.95)";
-      ctx.shadowColor = "rgba(180, 240, 255, 0.75)";
-      ctx.shadowBlur = 10;
+      ctx.globalAlpha = Math.max(0, p.alpha);
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = "rgba(220, 246, 255, 0.9)";
+      ctx.shadowBlur = 9;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  private renderBurstRings(): void {
+    const ctx = this.ctx;
+    for (const r of this.burstRings) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, r.alpha);
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = r.lineWidth;
+      ctx.shadowColor = r.color;
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.restore();
     }
   }
