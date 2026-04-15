@@ -68,12 +68,12 @@ export function PopPopBubblesLabShell() {
   const [bubbleSpeedScale, setBubbleSpeedScale] = useState(1);
   const [animalFallGravity, setAnimalFallGravity] = useState(500);
   const [bubbleRestitution, setBubbleRestitution] = useState(0.86);
-  const [burstParticleSizeScale, setBurstParticleSizeScale] = useState(1);
-  const [burstParticleSpeedScale, setBurstParticleSpeedScale] = useState(1);
+  const [burstParticleSizeScale, setBurstParticleSizeScale] = useState(3.5);
+  const [burstParticleSpeedScale, setBurstParticleSpeedScale] = useState(1.75);
   const [mobileBubbleScaleCompensation, setMobileBubbleScaleCompensation] = useState(0.55);
-  const [fallingAnimalSizeScale, setFallingAnimalSizeScale] = useState(2);
-  const [burstRingLineWidthScale, setBurstRingLineWidthScale] = useState(1);
-  const [burstRingExpandSpeedScale, setBurstRingExpandSpeedScale] = useState(1);
+  const [fallingAnimalSizeScale, setFallingAnimalSizeScale] = useState(1.5);
+  const [burstRingLineWidthScale, setBurstRingLineWidthScale] = useState(0.6);
+  const [burstRingExpandSpeedScale, setBurstRingExpandSpeedScale] = useState(0.9);
   const [burstRingShadowBlurPx, setBurstRingShadowBlurPx] = useState(10);
 
   useEffect(() => {

@@ -168,12 +168,12 @@ export class PopPopBubblesScene {
     bubbleSpeedScale: 1,
     animalFallGravity: 500,
     bubbleRestitution: 0.86,
-    burstParticleSizeScale: 1,
-    burstParticleSpeedScale: 1,
+    burstParticleSizeScale: 3.5,
+    burstParticleSpeedScale: 1.75,
     mobileBubbleScaleCompensation: 0.55,
-    fallingAnimalSizeScale: 2,
-    burstRingLineWidthScale: 1,
-    burstRingExpandSpeedScale: 1,
+    fallingAnimalSizeScale: 1.5,
+    burstRingLineWidthScale: 0.6,
+    burstRingExpandSpeedScale: 0.9,
     burstRingShadowBlurPx: 10,
   };
 
