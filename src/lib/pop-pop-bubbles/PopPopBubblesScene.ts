@@ -26,6 +26,7 @@ type BurstParticle = {
   color: string;
   drag: number;
   fadePerSec: number;
+  gravity: number;
 };
 
 type BurstRing = {
@@ -61,6 +62,8 @@ const WAVE_DELAY_MS = 1000;
 const DEFAULT_BUBBLE_COUNT = 4;
 const MIN_BUBBLE_COUNT = 1;
 const MAX_BUBBLE_COUNT = 8;
+const BURST_BG_PASTELS = ["#d4edda", "#fff3cd", "#e2e3e5", "#d2f4ea", "#e0f0ff"] as const;
+const BURST_PARTICLE_COLORS = ["#b8ecff", "#9ee4ff", "#c8e6ff", "#dff5ff", "#f3fbff"] as const;
 
 export type PopPopBubblesDebugConfig = {
   bubbleCount: number;
@@ -83,6 +86,23 @@ export type PopPopBubblesDebugConfig = {
 
 function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
+}
+
+function parseHexRgb(hex: string): { r: number; g: number; b: number } | null {
+  const m = hex.trim().match(/^#([0-9a-f]{6})$/i);
+  if (!m) return null;
+  const h = m[1]!;
+  return {
+    r: Number.parseInt(h.slice(0, 2), 16),
+    g: Number.parseInt(h.slice(2, 4), 16),
+    b: Number.parseInt(h.slice(4, 6), 16),
+  };
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const rgb = parseHexRgb(hex);
+  if (!rgb) return `rgba(224, 240, 255, ${alpha})`;
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 }
 
 const BURST_EFFECT_COLOR = "#FFFFFF";
@@ -138,6 +158,7 @@ export class PopPopBubblesScene {
   private waveTimer: ReturnType<typeof setTimeout> | null = null;
   private collisionAccumulator = 0;
   private idSeq = 0;
+  private bgPastelHex = "#e0f0ff";
   private config: PopPopBubblesDebugConfig = {
     bubbleCount: DEFAULT_BUBBLE_COUNT,
     bubbleSpeedScale: 1,
@@ -238,7 +259,13 @@ export class PopPopBubblesScene {
 
   public respawnWaveNow(): void {
     this.bubbles = [];
+    this.randomizeBackgroundPastel();
     this.spawnWave();
+  }
+
+  private randomizeBackgroundPastel(): void {
+    const next = BURST_BG_PASTELS[Math.floor(Math.random() * BURST_BG_PASTELS.length)]!;
+    this.bgPastelHex = next;
   }
 
   private readonly tick = (ts: number): void => {
@@ -330,6 +357,7 @@ export class PopPopBubblesScene {
     this.onPlayPop();
 
     if (this.bubbles.length === 0 && !this.waveTimer) {
+      this.randomizeBackgroundPastel();
       this.waveTimer = setTimeout(() => {
         this.waveTimer = null;
         this.spawnWave();
@@ -338,21 +366,28 @@ export class PopPopBubblesScene {
   }
 
   private spawnBurstParticles(x: number, y: number, radius: number): void {
-    const count = Math.floor(rand(30, 51));
-    const baseColor = BURST_EFFECT_COLOR;
+    const count = Math.floor(rand(52, 83));
     for (let i = 0; i < count; i++) {
       const a = rand(0, Math.PI * 2);
-      const speed = rand(radius * 1.4, radius * 3.25);
+      const speed = rand(radius * 4.8, radius * 8.2);
+      const tierRoll = Math.random();
+      const sizeTier =
+        tierRoll < 0.22
+          ? rand(radius * 0.16, radius * 0.24) // large
+          : tierRoll < 0.7
+            ? rand(radius * 0.09, radius * 0.15) // medium
+            : rand(radius * 0.05, radius * 0.09); // small
       this.particles.push({
         x,
         y,
         vx: Math.cos(a) * speed,
         vy: Math.sin(a) * speed,
         alpha: 1,
-        size: rand(radius * 0.05, radius * 0.14) * this.config.burstParticleSizeScale,
-        color: baseColor,
-        drag: rand(0.94, 0.975),
-        fadePerSec: rand(2.8, 4.5),
+        size: sizeTier * this.config.burstParticleSizeScale,
+        color: BURST_PARTICLE_COLORS[Math.floor(Math.random() * BURST_PARTICLE_COLORS.length)]!,
+        drag: rand(0.72, 0.84), // 初速の勢いを次フレームから急減速
+        fadePerSec: rand(2.4, 3.6),
+        gravity: rand(620, 980),
       });
     }
 
@@ -515,8 +550,10 @@ export class PopPopBubblesScene {
     for (const p of this.particles) {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vx *= p.drag;
-      p.vy *= p.drag;
+      p.vy += p.gravity * dt;
+      const damp = Math.pow(p.drag, dt * 60);
+      p.vx *= damp;
+      p.vy *= damp;
       p.alpha -= p.fadePerSec * dt;
     }
     this.particles = this.particles.filter((p) => p.alpha > 0.01);
@@ -552,8 +589,8 @@ export class PopPopBubblesScene {
     ctx.clearRect(0, 0, this.width, this.height);
 
     const bg = ctx.createLinearGradient(0, 0, 0, this.height);
-    bg.addColorStop(0, "rgba(214, 236, 255, 0.72)");
-    bg.addColorStop(1, "rgba(224, 240, 255, 0.58)");
+    bg.addColorStop(0, hexToRgba(this.bgPastelHex, 0.74));
+    bg.addColorStop(1, hexToRgba(this.bgPastelHex, 0.56));
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, this.width, this.height);
 
