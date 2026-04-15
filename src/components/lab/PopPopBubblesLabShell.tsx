@@ -12,11 +12,10 @@ import {
 } from "@/lib/gameLayout";
 import { PopPopBubblesScene } from "@/lib/pop-pop-bubbles/PopPopBubblesScene";
 
-const ANIMAL_PATHS = [
-  "/assets/tap-coloring/Pictures/Picture_Animal_01.png",
-  "/assets/tap-coloring/Pictures/Picture_Animal_02.png",
-  "/assets/tap-coloring/Pictures/Picture_Animal_03.png",
-  "/assets/tap-coloring/Pictures/Picture_Animal_04.png",
+const CONTENT_IMAGE_PATHS = [
+  ...Array.from({ length: 12 }, (_, i) => `/assets/tap-coloring/Pictures/Picture_Animal_${String(i + 1).padStart(2, "0")}.png`),
+  ...Array.from({ length: 10 }, (_, i) => `/assets/tap-coloring/Pictures/Picture_Produce_${String(i + 1).padStart(2, "0")}.png`),
+  ...Array.from({ length: 12 }, (_, i) => `/assets/tap-coloring/Pictures/Picture_Vehicle_${String(i + 1).padStart(2, "0")}.png`),
 ];
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -63,6 +62,7 @@ export function PopPopBubblesLabShell() {
   const [collisionCount, setCollisionCount] = useState(0);
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
+  const [isBurstFxExpanded, setIsBurstFxExpanded] = useState(true);
   const [bubbleCount, setBubbleCount] = useState(4);
   const [bubbleSpeedScale, setBubbleSpeedScale] = useState(1);
   const [animalFallGravity, setAnimalFallGravity] = useState(500);
@@ -70,6 +70,9 @@ export function PopPopBubblesLabShell() {
   const [burstParticleSizeScale, setBurstParticleSizeScale] = useState(1.5);
   const [mobileBubbleScaleCompensation, setMobileBubbleScaleCompensation] = useState(0.55);
   const [fallingAnimalSizeScale, setFallingAnimalSizeScale] = useState(1.5);
+  const [burstRingLineWidthScale, setBurstRingLineWidthScale] = useState(1);
+  const [burstRingExpandSpeedScale, setBurstRingExpandSpeedScale] = useState(1);
+  const [burstRingShadowBlurPx, setBurstRingShadowBlurPx] = useState(10);
 
   useEffect(() => {
     if (!isDevTj) setIsDebugMode(false);
@@ -87,7 +90,7 @@ export function PopPopBubblesLabShell() {
     popAudioRef.current.preload = "auto";
     popAudioRef.current.volume = 0.42;
 
-    Promise.all(ANIMAL_PATHS.map((src) => loadImage(src)))
+    Promise.all(CONTENT_IMAGE_PATHS.map((src) => loadImage(src)))
       .then((animalImages) => {
         if (disposed) return;
         const playPop = () => {
@@ -116,6 +119,9 @@ export function PopPopBubblesLabShell() {
           burstParticleSizeScale,
           mobileBubbleScaleCompensation,
           fallingAnimalSizeScale,
+          burstRingLineWidthScale,
+          burstRingExpandSpeedScale,
+          burstRingShadowBlurPx,
         });
 
         const resize = () => {
@@ -155,6 +161,9 @@ export function PopPopBubblesLabShell() {
       burstParticleSizeScale,
       mobileBubbleScaleCompensation,
       fallingAnimalSizeScale,
+      burstRingLineWidthScale,
+      burstRingExpandSpeedScale,
+      burstRingShadowBlurPx,
     });
   }, [
     bubbleSpeedScale,
@@ -163,6 +172,9 @@ export function PopPopBubblesLabShell() {
     burstParticleSizeScale,
     mobileBubbleScaleCompensation,
     fallingAnimalSizeScale,
+    burstRingLineWidthScale,
+    burstRingExpandSpeedScale,
+    burstRingShadowBlurPx,
   ]);
 
   useEffect(() => {
@@ -303,6 +315,60 @@ export function PopPopBubblesLabShell() {
                 />
                 <div className="tabular-nums">{fallingAnimalSizeScale.toFixed(2)}x</div>
               </label>
+              <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBurstFxExpanded((v) => !v)}
+                  className="flex w-full items-center justify-between text-left"
+                  aria-expanded={isBurstFxExpanded}
+                >
+                  <span className="font-semibold text-[var(--color-text)]">タップ時の割れ表現</span>
+                  <span className="text-[var(--color-muted)]">{isBurstFxExpanded ? "▲" : "▼"}</span>
+                </button>
+                {isBurstFxExpanded && (
+                  <div className="mt-2 space-y-2">
+                    <label className="block">
+                      <div className="mb-1 font-semibold text-[var(--color-text)]">リング太さ倍率</div>
+                      <input
+                        type="range"
+                        min={0.25}
+                        max={3}
+                        step={0.05}
+                        value={burstRingLineWidthScale}
+                        onChange={(e) => setBurstRingLineWidthScale(Number(e.target.value))}
+                        className="w-full accent-[var(--color-primary)]"
+                      />
+                      <div className="tabular-nums">{burstRingLineWidthScale.toFixed(2)}x</div>
+                    </label>
+                    <label className="block">
+                      <div className="mb-1 font-semibold text-[var(--color-text)]">リング広がり速度</div>
+                      <input
+                        type="range"
+                        min={0.25}
+                        max={3}
+                        step={0.05}
+                        value={burstRingExpandSpeedScale}
+                        onChange={(e) => setBurstRingExpandSpeedScale(Number(e.target.value))}
+                        className="w-full accent-[var(--color-primary)]"
+                      />
+                      <div className="tabular-nums">{burstRingExpandSpeedScale.toFixed(2)}x</div>
+                    </label>
+                    <label className="block">
+                      <div className="mb-1 font-semibold text-[var(--color-text)]">リング残像（shadowBlur）</div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={28}
+                        step={1}
+                        value={burstRingShadowBlurPx}
+                        onChange={(e) => setBurstRingShadowBlurPx(Number(e.target.value))}
+                        className="w-full accent-[var(--color-primary)]"
+                      />
+                      <div className="tabular-nums">{burstRingShadowBlurPx.toFixed(0)}px</div>
+                    </label>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -74,6 +74,12 @@ export type PopPopBubblesDebugConfig = {
   mobileBubbleScaleCompensation: number;
   /** はじけ後に落ちる内容物の描画スケール */
   fallingAnimalSizeScale: number;
+  /** 割れリングの線幅倍率 */
+  burstRingLineWidthScale: number;
+  /** 割れリングの広がり速度倍率 */
+  burstRingExpandSpeedScale: number;
+  /** 割れリングの残像（shadowBlur） */
+  burstRingShadowBlurPx: number;
 };
 
 function rand(min: number, max: number): number {
@@ -161,6 +167,9 @@ export class PopPopBubblesScene {
     burstParticleSizeScale: 1.5,
     mobileBubbleScaleCompensation: 0.55,
     fallingAnimalSizeScale: 1.5,
+    burstRingLineWidthScale: 1,
+    burstRingExpandSpeedScale: 1,
+    burstRingShadowBlurPx: 10,
   };
 
   constructor(options: SceneOptions) {
@@ -228,6 +237,12 @@ export class PopPopBubblesScene {
         Math.min(1, next.mobileBubbleScaleCompensation ?? this.config.mobileBubbleScaleCompensation)
       ),
       fallingAnimalSizeScale: Math.max(0.5, Math.min(3.5, next.fallingAnimalSizeScale ?? this.config.fallingAnimalSizeScale)),
+      burstRingLineWidthScale: Math.max(0.25, Math.min(3, next.burstRingLineWidthScale ?? this.config.burstRingLineWidthScale)),
+      burstRingExpandSpeedScale: Math.max(
+        0.25,
+        Math.min(3, next.burstRingExpandSpeedScale ?? this.config.burstRingExpandSpeedScale)
+      ),
+      burstRingShadowBlurPx: Math.max(0, Math.min(28, next.burstRingShadowBlurPx ?? this.config.burstRingShadowBlurPx)),
     };
 
     const nextScale = this.config.bubbleSpeedScale;
@@ -263,7 +278,8 @@ export class PopPopBubblesScene {
     }
     const count = this.config.bubbleCount;
     const bubbles: Bubble[] = [];
-    const ids = [0, 1, 2, 3];
+    const imgCount = Math.max(1, this.animalImages.length);
+    const ids = Array.from({ length: imgCount }, (_, i) => i);
     const bubbleTints = ["#8fd9ff", "#9ce7ff", "#7ec8ff", "#a7dbff"];
     for (let i = ids.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -308,7 +324,7 @@ export class PopPopBubblesScene {
         friction: 0.01,
         damping: 0.05,
         mass: 1,
-        animalIndex: ids[i % ids.length] ?? 0,
+        animalIndex: ids[i % ids.length] ?? Math.floor(Math.random() * imgCount),
         squashX: 1,
         squashY: 1,
         squashTimer: 0,
@@ -531,7 +547,7 @@ export class PopPopBubblesScene {
 
   private updateBurstRings(dt: number): void {
     for (const r of this.burstRings) {
-      r.radius += r.expandPerSec * dt;
+      r.radius += r.expandPerSec * dt * this.config.burstRingExpandSpeedScale;
       r.alpha -= r.fadePerSec * dt;
       r.lineWidth *= 0.985;
     }
@@ -591,9 +607,9 @@ export class PopPopBubblesScene {
       ctx.save();
       ctx.globalAlpha = Math.max(0, r.alpha);
       ctx.strokeStyle = r.color;
-      ctx.lineWidth = r.lineWidth;
+      ctx.lineWidth = r.lineWidth * this.config.burstRingLineWidthScale;
       ctx.shadowColor = r.color;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = this.config.burstRingShadowBlurPx;
       ctx.beginPath();
       ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
       ctx.stroke();
