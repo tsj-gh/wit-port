@@ -1,5 +1,6 @@
 type SupportedGameAppId =
   | "tap-coloring"
+  | "pop-pop-bubbles"
   | "pair-link"
   | "pres-sure-judge"
   | "skyscraper"
@@ -19,6 +20,13 @@ const GAME_JSONLD_SEEDS: Record<SupportedGameAppId, GameJsonLdSeed> = {
     description:
       "タップ入力に対して色が即時に広がる設計を採用し、因果理解と色彩認知を同時に育成する知育アプリです。手眼協調、注意の持続、自己修正の反復を無理なく促し、幼児期の基礎的な非認知能力の形成を支援します。",
     featureList: ["手眼協調", "色彩認知", "因果理解", "注意の持続", "幼児向け直感操作"],
+  },
+  "pop-pop-bubbles": {
+    name: "はじけて！バブル（Pop-Pop Bubbles）",
+    path: "/lab/pop-pop-bubbles",
+    description:
+      "浮遊する対象へ継続的にタップ反応する課題として設計し、手眼協調、注意の切替、反応速度の基礎を育てる知育ミニゲームです。短い試行で達成感を得られるため、低年齢層でも集中の再起動と自己効力感の形成を段階的に支援します。",
+    featureList: ["手眼協調", "注意の切替", "反応速度", "集中持続", "幼児向けタップ操作"],
   },
   "pair-link": {
     name: "Pair-Link（ペアリンク）",

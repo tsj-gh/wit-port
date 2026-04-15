@@ -10,9 +10,9 @@ export const gameLabPageSeo = {
       "タップぬりえの知育効果と遊び方。因果理解と色彩認知を鍛えるための専門的な設計について解説します。",
   },
   popPopBubbles: {
-    title: "はじけて！バブル（Pop-Pop Bubbles）| 手眼協調と反応の知育ミニゲーム | Wispo",
+    title: "はじけて！バブル（Pop-Pop Bubbles） | 直感と論理を育む知育パズル Wispo",
     description:
-      "漂うバブルをタップして弾ける軽いプレイ。視線と指の協調、短い集中のリズムを楽しみながら養えるKids向け知育ゲームです。",
+      "はじけて！バブルの知育効果と遊び方。手眼協調と注意切替を鍛えるための専門的な設計について解説します。",
   },
   pairLink: {
     title: "Pair-Link（ペアリンク） | 直感と論理を育む知育パズル Wispo",

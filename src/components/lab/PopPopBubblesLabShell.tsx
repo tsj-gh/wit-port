@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
+import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import {
   GAME_AD_GAP_BEFORE_SLOT_2_PX,
   GAME_AD_SLOT_MIN_HEIGHT_PX,
@@ -105,7 +106,13 @@ export function PopPopBubblesLabShell() {
           onBubbleCollision: () => setCollisionCount((n) => n + 1),
         });
         sceneRef.current = scene;
-        scene.setDebugConfig({ bubbleCount, bubbleSpeedScale, animalFallGravity, bubbleRestitution });
+        scene.setDebugConfig({
+          bubbleCount,
+          bubbleSpeedScale,
+          animalFallGravity,
+          bubbleRestitution,
+          burstParticleSizeScale,
+        });
 
         const resize = () => {
           const rect = stage.getBoundingClientRect();
@@ -276,6 +283,11 @@ export function PopPopBubblesLabShell() {
             <div className="absolute inset-0 grid place-items-center text-sm text-[var(--color-muted)]">読み込み中…</div>
           )}
         </div>
+        <GameQuickInfoNote
+          goal="手眼協調・注意の切替・反応速度の基礎づくり"
+          target="幼児〜小学校低学年"
+          operation="タップ中心の直感操作"
+        />
       </section>
       <div
         className="relative z-0 w-full"

@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 type AppCard = {
-  id: "tap-coloring" | "pair-link" | "pres-sure-judge" | "skyscraper" | "reflec-shot";
+  id: "tap-coloring" | "pop-pop-bubbles" | "pair-link" | "pres-sure-judge" | "skyscraper" | "reflec-shot";
   title: string;
   href: `/${string}`;
   emoji: string;
@@ -16,6 +16,13 @@ const APP_CARDS: AppCard[] = [
     href: "/lab/tap-coloring",
     emoji: "🖍️",
     summary: "色彩と因果を体験する直感プレイ",
+  },
+  {
+    id: "pop-pop-bubbles",
+    title: "はじけて！バブル",
+    href: "/lab/pop-pop-bubbles",
+    emoji: "🫧",
+    summary: "軽快タップで協調と集中を育てる",
   },
   {
     id: "pair-link",
