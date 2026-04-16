@@ -774,6 +774,7 @@ export default function ReflecShotGame() {
   const clearModalBackdropDebug = useClearModalBackdropDebugValues();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const topAdRef = useRef<HTMLDivElement>(null);
   const [grade, setGrade] = useState(1);
   const [seed, setSeed] = useState(() => (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0);
   const [stage, setStage] = useState<GridStage | null>(null);
@@ -2782,7 +2783,8 @@ export default function ReflecShotGame() {
     const onLoad = () => {
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
-          window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+          const top = topAdRef.current?.getBoundingClientRect().top ?? 0;
+          window.scrollTo({ top: window.scrollY + top, left: 0, behavior: "auto" });
         })
       );
     };
@@ -2816,8 +2818,8 @@ export default function ReflecShotGame() {
   const renderHelpRuleParagraphs = () => {
     const rg = stage?.grade ?? grade;
     return (
-      <div className="reflec-shot-doc-rules flex flex-col gap-2 text-left text-sm leading-relaxed text-[var(--color-muted)]">
-        <p className="m-0 font-medium md:whitespace-nowrap md:text-[13px]">{t("games.reflecShot.ruleIntro")}</p>
+      <div className="reflec-shot-doc-rules flex flex-col gap-2 text-left text-xs leading-relaxed text-[var(--color-muted)]">
+        <p className="m-0 font-medium">{t("games.reflecShot.ruleIntro")}</p>
         {rg >= 3 && rg <= 4 && <p className="m-0">{t("games.reflecShot.ruleCrossBonus")}</p>}
         {rg >= 5 && rg !== 6 && <p className="m-0">{t("games.reflecShot.ruleCrossBonus")}</p>}
         {rg >= 5 && <p className="m-0">{t("games.reflecShot.ruleTwoSidedBonus")}</p>}
@@ -3352,6 +3354,7 @@ export default function ReflecShotGame() {
 
       <div className="flex min-h-0 w-full flex-1 flex-col">
         <div
+          ref={topAdRef}
           className="order-3 mt-3 w-full shrink-0 md:order-1 md:mt-0"
           style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
         >
