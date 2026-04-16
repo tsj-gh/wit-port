@@ -457,7 +457,7 @@ export function PopPopBubblesLabShell() {
           >
             <div
               ref={stageRef}
-              className="relative mx-auto h-[min(70vw,460px)] min-h-[320px] w-full max-w-[460px] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[radial-gradient(circle_at_20%_18%,color-mix(in_srgb,var(--color-primary)_14%,transparent),transparent_52%),linear-gradient(180deg,color-mix(in_srgb,var(--color-bg)_92%,white_8%),color-mix(in_srgb,var(--color-bg)_98%,transparent))] lg:h-[min(680px,calc(100dvh-var(--pop-wrap-off)-96px))] lg:max-w-[min(920px,100%)]"
+              className="relative mx-auto aspect-square w-full max-w-[min(460px,92vw,calc(100dvh-var(--pop-wrap-off)-120px))] min-h-0 overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[radial-gradient(circle_at_20%_18%,color-mix(in_srgb,var(--color-primary)_14%,transparent),transparent_52%),linear-gradient(180deg,color-mix(in_srgb,var(--color-bg)_92%,white_8%),color-mix(in_srgb,var(--color-bg)_98%,transparent))]"
             >
               <canvas ref={canvasRef} className="h-full w-full touch-none" />
               {!isReady && (
