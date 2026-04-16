@@ -1,9 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { MutableRefObject } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
+import {
+  buildPreviewDataUrlFromDisplay,
+  prependTapColoringHistory,
+  type TapColoringHistoryEntry,
+} from "@/lib/tapColoringHistory";
 
 /** HSB 色相環に沿った 12 色（S/B はビビッド寄り: HSL 100% / 50%） */
 const HUE_RING = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330] as const;
@@ -402,7 +415,20 @@ function computeFillRatio(maskData: ImageData, paintData: ImageData, stride: num
   return filled / inside;
 }
 
-export function ColoringCanvas() {
+export type ColoringCanvasHandle = {
+  loadHistoryEntry: (entry: TapColoringHistoryEntry) => boolean;
+  /** 現在の塗り状態を履歴に追加（ゲーム進行は変えない） */
+  saveCurrentWorkToHistory: () => boolean;
+};
+
+type ColoringCanvasProps = {
+  onHistoryUpdated?: () => void;
+};
+
+export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasProps>(function ColoringCanvas(
+  { onHistoryUpdated },
+  ref,
+) {
   const searchParams = useSearchParams();
   const isDevTj = searchParams.get("devtj") === "true";
 
@@ -435,6 +461,10 @@ export function ColoringCanvas() {
   const pictureBaseRef = useRef<HTMLCanvasElement | null>(null);
   const pictureLineOverlayRef = useRef<HTMLCanvasElement | null>(null);
   const clearTriggeredRef = useRef(false);
+  /** ギャラリー再開中は 90% クリアを発動しない */
+  const freePaintWithoutClearRef = useRef(false);
+  const pendingHistoryEntryRef = useRef<TapColoringHistoryEntry | null>(null);
+  const [galleryResumeOpen, setGalleryResumeOpen] = useState(false);
   /** キャンバスでポインタが押下中（この間にクリア→次ステージへ進んだら、離すまで塗りを止める） */
   const pointerDownOnCanvasRef = useRef(false);
   /** クリア後の新ステージで、直前のドラッグが続いているとき true。対応する pointerup まで塗り禁止 */
@@ -551,6 +581,24 @@ export function ColoringCanvas() {
     return computeFillRatio(maskData, paintData, SCAN_STRIDE);
   }, []);
 
+  const appendHistorySnapshot = useCallback(() => {
+    const display = displayRef.current;
+    const paint = paintRef.current;
+    if (!display || !paint) return;
+    particlesRef.current = [];
+    cancelAnimationFrame(rafRef.current);
+    redrawDisplay();
+    const previewDataUrl = buildPreviewDataUrlFromDisplay(display);
+    const paintDataUrl = paint.toDataURL("image/png");
+    prependTapColoringHistory({
+      pictureId: currentPictureAsset.id,
+      savedBitmapSize: bitmapSize,
+      paintDataUrl,
+      previewDataUrl,
+    });
+    onHistoryUpdated?.();
+  }, [bitmapSize, currentPictureAsset.id, redrawDisplay, onHistoryUpdated]);
+
   const initStageCanvases = useCallback(() => {
     const display = displayRef.current;
     const mask = maskRef.current;
@@ -645,6 +693,33 @@ export function ColoringCanvas() {
     pctx.clearRect(0, 0, w, h);
 
     redrawDisplay();
+
+    const pend = pendingHistoryEntryRef.current;
+    if (pend && pend.pictureId === COLORING_PICTURE_ASSETS[pictureIndex]?.id) {
+      pendingHistoryEntryRef.current = null;
+      const img = new Image();
+      img.onload = () => {
+        const paintEl = paintRef.current;
+        const maskEl = maskRef.current;
+        if (!paintEl || !maskEl) return;
+        const pctx2 = paintEl.getContext("2d");
+        if (!pctx2) return;
+        pctx2.setTransform(1, 0, 0, 1, 0, 0);
+        pctx2.clearRect(0, 0, paintEl.width, paintEl.height);
+        pctx2.drawImage(img, 0, 0, paintEl.width, paintEl.height);
+        if (!DEBUG_DISABLE_MASK) {
+          pctx2.save();
+          pctx2.globalCompositeOperation = "destination-in";
+          pctx2.drawImage(maskEl, 0, 0);
+          pctx2.restore();
+        }
+        redrawDisplay();
+      };
+      img.onerror = () => {
+        redrawDisplay();
+      };
+      img.src = pend.paintDataUrl;
+    }
   }, [coloringPicturesReady, bitmapSize, pictureIndex, illustrationScale, redrawDisplay]);
 
   const initStageCanvasesRef = useRef(initStageCanvases) as MutableRefObject<typeof initStageCanvases>;
@@ -773,6 +848,7 @@ export function ColoringCanvas() {
   const runClearSequence = useCallback(async (px: number, py: number) => {
     if (sequenceRunningRef.current) return;
     sequenceRunningRef.current = true;
+    appendHistorySnapshot();
     clearTriggeredRef.current = true;
     setPhase("success");
     playSuccessPong();
@@ -800,7 +876,7 @@ export function ColoringCanvas() {
     if (!pointerDownOnCanvasRef.current) blockPaintUntilPointerUpRef.current = false;
     clearTriggeredRef.current = false;
     sequenceRunningRef.current = false;
-  }, [spawnCelebrationParticles]);
+  }, [appendHistorySnapshot, spawnCelebrationParticles]);
 
   const paintAt = (clientX: number, clientY: number) => {
     if (phase !== "play") return;
@@ -930,7 +1006,7 @@ export function ColoringCanvas() {
     spawnParticles(px, py, selected.color);
 
     const ratio = measureFill();
-    if (ratio >= fillThreshold && !clearTriggeredRef.current) {
+    if (ratio >= fillThreshold && !clearTriggeredRef.current && !freePaintWithoutClearRef.current) {
       void runClearSequence(px, py);
     }
     redrawDisplay();
@@ -965,6 +1041,39 @@ export function ColoringCanvas() {
   useEffect(() => {
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      loadHistoryEntry(entry: TapColoringHistoryEntry) {
+        if (!coloringPicturesReady || !splatterImagesReady) return false;
+        const idx = COLORING_PICTURE_ASSETS.findIndex((a) => a.id === entry.pictureId);
+        if (idx < 0) return false;
+        sequenceRunningRef.current = false;
+        clearTriggeredRef.current = false;
+        blockPaintUntilPointerUpRef.current = false;
+        pointerDownOnCanvasRef.current = false;
+        activeCanvasPointerIdRef.current = null;
+        cancelAnimationFrame(rafRef.current);
+        particlesRef.current = [];
+        pendingHistoryEntryRef.current = entry;
+        freePaintWithoutClearRef.current = true;
+        setGalleryResumeOpen(true);
+        setPictureIndex(idx);
+        setStageIndex((i) => i + 1);
+        setPhase("play");
+        return true;
+      },
+      saveCurrentWorkToHistory() {
+        if (!coloringPicturesReady || !splatterImagesReady) return false;
+        if (phase !== "play" && phase !== "resume") return false;
+        if (sequenceRunningRef.current) return false;
+        appendHistorySnapshot();
+        return true;
+      },
+    }),
+    [appendHistorySnapshot, coloringPicturesReady, phase, splatterImagesReady],
+  );
 
   return (
     <motion.div
@@ -1085,6 +1194,18 @@ export function ColoringCanvas() {
       </motion.div>
 
       <div className="relative mx-auto aspect-square w-full max-w-[420px]">
+        {galleryResumeOpen && (
+          <button
+            type="button"
+            onClick={() => {
+              freePaintWithoutClearRef.current = false;
+              setGalleryResumeOpen(false);
+            }}
+            className="absolute right-2 top-2 z-20 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_22%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_90%,transparent)] px-2 py-1 text-[10px] font-semibold text-[var(--color-text)] shadow-md backdrop-blur sm:right-3 sm:top-3 sm:text-xs"
+          >
+            編集終了
+          </button>
+        )}
         <AnimatePresence mode="wait">
           <motion.div
             key={`${stageIndex}-${currentPictureAsset.id}`}
@@ -1144,4 +1265,6 @@ export function ColoringCanvas() {
 
     </motion.div>
   );
-}
+});
+
+ColoringCanvas.displayName = "ColoringCanvas";

@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
-import { ColoringCanvas } from "@/components/lab/ColoringCanvas";
+import { ColoringCanvas, type ColoringCanvasHandle } from "@/components/lab/ColoringCanvas";
+import { TapColoringGallery } from "@/components/lab/TapColoringGallery";
 import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
+import { readTapColoringHistory, type TapColoringHistoryEntry } from "@/lib/tapColoringHistory";
 import {
   GAME_AD_GAP_BEFORE_SLOT_2_PX,
   GAME_AD_SLOT_MIN_HEIGHT_PX,
@@ -22,8 +24,22 @@ const PC_LEFT_COLUMN_MIN_SCALE = 0.72;
  */
 export function TapColoringLabShell() {
   const leftColRef = useRef<HTMLDivElement>(null);
+  const coloringRef = useRef<ColoringCanvasHandle | null>(null);
+  const [histTick, setHistTick] = useState(0);
+  const [historyEntries, setHistoryEntries] = useState<TapColoringHistoryEntry[]>([]);
+  const [tapToast, setTapToast] = useState<string | null>(null);
   const [pcBoardScale, setPcBoardScale] = useState(1);
   const [isLgViewport, setIsLgViewport] = useState(false);
+
+  useEffect(() => {
+    setHistoryEntries(readTapColoringHistory());
+  }, [histTick]);
+
+  useEffect(() => {
+    if (!tapToast) return;
+    const t = window.setTimeout(() => setTapToast(null), 2600);
+    return () => window.clearTimeout(t);
+  }, [tapToast]);
 
   useEffect(() => {
     const onLoad = () => {
@@ -81,7 +97,15 @@ export function TapColoringLabShell() {
       : undefined;
 
   return (
-    <div className={`${GAME_COLUMN_CLASS} flex min-h-0 flex-1 flex-col lg:max-w-none`}>
+    <div className={`${GAME_COLUMN_CLASS} relative flex min-h-0 flex-1 flex-col lg:max-w-none`}>
+      {tapToast && (
+        <div
+          role="status"
+          className="pointer-events-none fixed bottom-6 left-1/2 z-[60] max-w-[min(92vw,320px)] -translate-x-1/2 rounded-xl border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_95%,transparent)] px-4 py-2 text-center text-xs font-medium text-[var(--color-text)] shadow-lg backdrop-blur"
+        >
+          {tapToast}
+        </div>
+      )}
       <GamePageHeader titleEn="Tap Coloring" titleJa="タップ塗り絵" />
       <div className="hidden" aria-hidden>
         <PairLinkAdSlot slotIndex={1} />
@@ -96,11 +120,18 @@ export function TapColoringLabShell() {
           <div className="w-full lg:origin-top" style={scaledInnerStyle}>
             <section className="relative z-[1] mb-0 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-4 backdrop-blur sm:px-5 sm:pb-5 sm:pt-4 lg:mb-0">
               <div className="max-h-none lg:max-h-[min(680px,calc(100dvh-var(--tap-wrap-off)-96px))] lg:overflow-y-auto">
-                <ColoringCanvas />
+                <ColoringCanvas ref={coloringRef} onHistoryUpdated={() => setHistTick((t) => t + 1)} />
               </div>
             </section>
           </div>
         </div>
+
+        <TapColoringGallery
+          className="w-full shrink-0 lg:hidden"
+          entries={historyEntries}
+          coloringRef={coloringRef}
+          onToast={setTapToast}
+        />
 
         <aside className="order-2 w-full shrink-0 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-20px)] lg:w-[360px] lg:self-start lg:overflow-y-auto">
           <div className="mb-2 flex flex-col gap-2 lg:hidden">
@@ -127,6 +158,12 @@ export function TapColoringLabShell() {
           >
             <PairLinkAdSlot slotIndex={2} />
           </div>
+          <TapColoringGallery
+            className="mt-3 hidden lg:block"
+            entries={historyEntries}
+            coloringRef={coloringRef}
+            onToast={setTapToast}
+          />
         </aside>
       </div>
 
