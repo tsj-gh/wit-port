@@ -5,7 +5,12 @@ type Bubble = {
   vx: number;
   vy: number;
   cruiseSpeed: number;
+  /** 衝突・ヒット判定用の基準半径（px） */
   radius: number;
+  /** 膜ゆらぎの位相オフセット（ラジアン） */
+  timeOffset: number;
+  /** 膜ゆらぎの振幅（px、おおよそ 1〜2） */
+  wobbleAmp: number;
   restitution: number;
   friction: number;
   damping: number;
@@ -150,25 +155,13 @@ function createBubbleTexture(size = 256): HTMLCanvasElement {
   ctx.arc(r, r, r * 0.93, 0, Math.PI * 2);
   ctx.fill();
 
-  const R = r * 0.89;
-  ctx.lineCap = "round";
-  ctx.strokeStyle = "rgba(255,255,255,0.6)";
-  ctx.shadowBlur = 4;
-  ctx.shadowColor = "rgba(255,255,255,0.5)";
-
-  ctx.lineWidth = Math.max(2.8, size * 0.026);
+  const refract = ctx.createRadialGradient(r, r, 0, r, r, r * 0.92);
+  refract.addColorStop(0, "rgba(255,255,255,0.1)");
+  refract.addColorStop(1, "transparent");
+  ctx.fillStyle = refract;
   ctx.beginPath();
-  ctx.arc(r, r, R, northCwDegToCanvasRad(210), northCwDegToCanvasRad(330), false);
-  ctx.stroke();
-
-  ctx.lineWidth = Math.max(1.15, size * 0.012);
-  ctx.beginPath();
-  // 右下の細い円弧（Canvas 角度: 0°=右、時計回りで 30°〜90°）
-  ctx.arc(r, r, R * 0.97, (30 * Math.PI) / 180, (90 * Math.PI) / 180, false);
-  ctx.stroke();
-
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = "transparent";
+  ctx.arc(r, r, r * 0.93, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.fillStyle = "rgba(255,255,255,0.62)";
   ctx.beginPath();
@@ -192,6 +185,8 @@ export class PopPopBubblesScene {
   private running = false;
   private rafId = 0;
   private lastTs = 0;
+  /** 膜ゆらぎ用の経過秒（周期 2s の sin に使用） */
+  private wobbleT = 0;
   private width = 360;
   private height = 360;
   private dpr = 1;
@@ -377,6 +372,8 @@ export class PopPopBubblesScene {
         vy: Math.sin(angle) * speed,
         cruiseSpeed: speed,
         radius,
+        timeOffset: rand(0, Math.PI * 2),
+        wobbleAmp: rand(1, 2),
         restitution: this.config.bubbleRestitution,
         friction: 0.01,
         damping: 0.05,
@@ -452,6 +449,7 @@ export class PopPopBubblesScene {
   }
 
   private update(dt: number): void {
+    this.wobbleT += dt;
     this.updateBubbles(dt);
     this.resolveBubbleCollisions();
     for (const b of this.bubbles) this.enforceCruiseSpeed(b);
@@ -709,10 +707,50 @@ export class PopPopBubblesScene {
     }
   }
 
+  /** 膜のゆらぎを反映した見かけ半径（描画・リム用） */
+  private bubbleDisplayRadius(b: Bubble): number {
+    const omega = Math.PI;
+    return b.radius + Math.sin(omega * this.wobbleT + b.timeOffset) * b.wobbleAmp;
+  }
+
+  /** リム線幅の微細連動（半径ピークとずらして質感を保つ） */
+  private bubbleRimLineK(b: Bubble): number {
+    const omega = Math.PI;
+    return 1 + 0.045 * Math.sin(omega * this.wobbleT + b.timeOffset + 0.85);
+  }
+
+  private renderBubbleRim(ctx: CanvasRenderingContext2D, b: Bubble, rVis: number, lineK: number): void {
+    const R = rVis * 0.89;
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.scale(b.squashX, b.squashY);
+    ctx.translate(-b.x, -b.y);
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(255,255,255,0.6)";
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = "rgba(255,255,255,0.5)";
+
+    ctx.lineWidth = Math.max(2.2, rVis * 0.055) * lineK;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, R, northCwDegToCanvasRad(210), northCwDegToCanvasRad(330), false);
+    ctx.stroke();
+
+    ctx.lineWidth = Math.max(0.9, rVis * 0.024) * lineK;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, R * 0.97, (30 * Math.PI) / 180, (90 * Math.PI) / 180, false);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
+    ctx.restore();
+  }
+
   private renderBubbles(): void {
     const ctx = this.ctx;
     for (const b of this.bubbles) {
-      const d = b.radius * 2;
+      const rVis = this.bubbleDisplayRadius(b);
+      const lineK = this.bubbleRimLineK(b);
+      const d = rVis * 2;
       const drawW = d * b.squashX;
       const drawH = d * b.squashY;
 
@@ -722,15 +760,18 @@ export class PopPopBubblesScene {
       ctx.restore();
 
       const img = this.animalImages[b.animalIndex % this.animalImages.length];
-      if (!img) continue;
-      const inner = b.radius * 1.25;
-      ctx.save();
-      ctx.beginPath();
-      ctx.ellipse(b.x, b.y, b.radius * 0.78 * b.squashX, b.radius * 0.78 * b.squashY, 0, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.globalAlpha = 0.94;
-      ctx.drawImage(img, b.x - (inner * b.squashX) / 2, b.y - (inner * b.squashY) / 2, inner * b.squashX, inner * b.squashY);
-      ctx.restore();
+      if (img) {
+        const inner = rVis * 1.25;
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(b.x, b.y, rVis * 0.78 * b.squashX, rVis * 0.78 * b.squashY, 0, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.globalAlpha = 0.94;
+        ctx.drawImage(img, b.x - (inner * b.squashX) / 2, b.y - (inner * b.squashY) / 2, inner * b.squashX, inner * b.squashY);
+        ctx.restore();
+      }
+
+      this.renderBubbleRim(ctx, b, rVis, lineK);
     }
   }
 }
