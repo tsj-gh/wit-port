@@ -3365,10 +3365,10 @@ export default function ReflecShotGame() {
 
         <div className="order-1 flex min-h-0 w-full flex-1 flex-col gap-3 lg:order-2 lg:flex-row lg:items-start lg:gap-5">
           <div
-            className="reflec-shot-canvas-container relative flex min-h-0 w-full flex-1 flex-col items-center justify-center lg:min-w-0 lg:aspect-[4/3] lg:max-h-[var(--reflec-pc-canvas-max-h)]"
+            className="reflec-shot-canvas-container relative flex min-h-0 w-full flex-1 flex-col items-center justify-center lg:min-w-0 lg:h-[clamp(430px,calc(100dvh-var(--reflec-top-ad-reserved)-24px),920px)] lg:max-h-[calc(100dvh-var(--reflec-top-ad-reserved)-24px)]"
             style={
               {
-                "--reflec-pc-canvas-max-h": `calc(100dvh - ${GAME_TOP_AD_RESERVED_PX}px - 100px)`,
+                "--reflec-top-ad-reserved": `${GAME_TOP_AD_RESERVED_PX}px`,
               } as CSSProperties
             }
           >
@@ -3409,7 +3409,7 @@ export default function ReflecShotGame() {
                 <div className="w-full" style={{ WebkitTapHighlightColor: "transparent" }}>
                   <div
                     ref={boardWrapRef}
-                    className="relative mx-auto aspect-square w-full max-w-[min(95vw,75dvh)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))] lg:max-w-[min(calc(100%-0.5rem),calc(var(--reflec-pc-canvas-max-h)-3.25rem))]"
+                    className="relative mx-auto aspect-square w-full max-w-[min(95vw,75dvh)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))] lg:w-[clamp(360px,calc(100dvh-var(--reflec-top-ad-reserved)-88px),860px)] lg:max-w-full"
                   >
                     <canvas
                       ref={canvasRef}
