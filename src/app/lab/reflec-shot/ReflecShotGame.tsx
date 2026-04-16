@@ -93,7 +93,6 @@ import { ReflecShotAdSlot } from "@/components/ReflecShotAdSlots";
 import { DebugClearModalBackdropControls } from "@/components/DebugClearModalBackdropControls";
 import { clearModalBackdropOverlayStyle, useClearModalBackdropDebugValues } from "@/lib/debugClearModalBackdrop";
 import { GamePageHeader } from "@/components/GamePageHeader";
-import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import { refreshAds } from "@/lib/ads";
 import {
   GAME_AD_GAP_AFTER_SLOT_1_PX,
@@ -2776,8 +2775,24 @@ export default function ReflecShotGame() {
     };
   };
 
+  useEffect(() => {
+    const centerBoard = () => {
+      boardWrapRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
+    };
+    const onLoad = () => {
+      requestAnimationFrame(() => requestAnimationFrame(centerBoard));
+    };
+    if (typeof document === "undefined") return;
+    if (document.readyState === "complete") {
+      onLoad();
+    } else {
+      window.addEventListener("load", onLoad, { once: true });
+    }
+    return () => window.removeEventListener("load", onLoad);
+  }, []);
+
   return (
-    <div className={`${GAME_COLUMN_CLASS} flex flex-col gap-3`}>
+    <div className={`${GAME_COLUMN_CLASS} flex min-h-0 flex-1 flex-col`}>
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-4 z-50">
           <button
@@ -3255,11 +3270,16 @@ export default function ReflecShotGame() {
 
       <GamePageHeader titleEn="Reflec-Shot" titleJa="リフレクショット" />
 
-      <div className="relative z-0 w-full" style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}>
-        <ReflecShotAdSlot slotIndex={1} />
-      </div>
+      <div className="flex min-h-0 w-full flex-1 flex-col">
+        <div
+          className="order-3 mt-3 w-full shrink-0 md:order-1 md:mt-0"
+          style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
+        >
+          <ReflecShotAdSlot slotIndex={1} />
+        </div>
 
-      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
+        <div className="reflec-shot-canvas-container order-1 flex min-h-0 w-full flex-1 flex-col items-center justify-center md:order-2">
+          <section className="relative z-[1] w-full max-w-[520px] rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-3 pt-0 backdrop-blur sm:px-5 sm:pb-4 sm:pt-0">
         <div className="flex w-full flex-col items-center">
           {/* 上に僅かな余白、タイマー〜盤面は gap+mb で約1行分に詰める */}
           <div className="flex w-full flex-col gap-y-1 pb-0 pt-1.5 mb-1">
@@ -3296,7 +3316,7 @@ export default function ReflecShotGame() {
           >
             <div
               ref={boardWrapRef}
-              className="relative mx-auto aspect-square w-full max-h-[min(72vh,520px)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))]"
+              className="relative mx-auto aspect-square w-full max-w-[min(95vw,75dvh)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))]"
             >
               <canvas
                 ref={canvasRef}
@@ -3372,49 +3392,12 @@ export default function ReflecShotGame() {
               </svg>
             </div>
           </div>
-          <GameQuickInfoNote
-            goal="空間推理・反射規則の理解・系列的な戦略更新の訓練"
-            target="小学校中学年〜大人"
-            operation="タップでセル選択、長押し＋スワイプでバンパー向きを設定"
-          />
-          <div
-            className="mt-2 flex w-full min-h-[6.5rem] flex-col items-stretch justify-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))]/35 px-3 py-3 text-center"
-            role="note"
-          >
-            {(() => {
-              const rg = stage?.grade ?? grade;
-              return (
-                <>
-                  <p className="mx-auto max-w-md text-sm font-medium leading-relaxed text-[var(--color-muted)] md:whitespace-nowrap md:text-[13px]">
-                    {t("games.reflecShot.ruleIntro")}
-                  </p>
-                  {rg >= 3 && rg <= 4 && (
-                    <p className="mx-auto max-w-md text-sm leading-relaxed text-[var(--color-muted)]">
-                      {t("games.reflecShot.ruleCrossBonus")}
-                    </p>
-                  )}
-                  {rg >= 5 && rg !== 6 && (
-                    <p className="mx-auto max-w-md text-sm leading-relaxed text-[var(--color-muted)]">
-                      {t("games.reflecShot.ruleCrossBonus")}
-                    </p>
-                  )}
-                  {rg >= 5 && (
-                    <p className="mx-auto max-w-md text-sm leading-relaxed text-[var(--color-muted)]">
-                      {t("games.reflecShot.ruleTwoSidedBonus")}
-                    </p>
-                  )}
-                  <p className="mx-auto max-w-md border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pt-2 text-xs leading-relaxed text-[var(--color-muted)]/90">
-                    <span className="block whitespace-pre-line md:hidden">{t("games.reflecShot.ruleControls")}</span>
-                    <span className="hidden md:block md:whitespace-nowrap md:text-center md:text-[11px]">
-                      {t("games.reflecShot.ruleControlsPc")}
-                    </span>
-                  </p>
-                </>
-              );
-            })()}
-          </div>
         </div>
-        <div className="mb-2 mt-4 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
+        </section>
+        </div>
+
+        <div className="order-2 w-full shrink-0 md:order-3">
+        <div className="mb-2 mt-2 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
           <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
             <label className="block text-xs text-[var(--color-muted)] mb-1">{t("common.chooseGrade")}</label>
             <div
@@ -3483,14 +3466,54 @@ export default function ReflecShotGame() {
             </button>
           </div>
         )}
-
-        <div
-          className="relative z-0 w-full"
-          style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}
-        >
-          <ReflecShotAdSlot slotIndex={2} />
         </div>
-      </section>
+
+        <div className="order-4 mt-1 flex w-full flex-col gap-2">
+          <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
+            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
+              {t("games.reflecShot.accordionGoalSummary")}
+            </summary>
+            <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
+              <p className="m-0">【ねらい】{t("games.reflecShot.infoGoal")}</p>
+              <p className="mt-2 m-0">【対象】{t("games.reflecShot.infoTarget")}</p>
+            </div>
+          </details>
+          <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
+            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
+              {t("games.reflecShot.accordionControlsSummary")}
+            </summary>
+            <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
+              <p className="m-0 whitespace-pre-line md:hidden">{t("games.reflecShot.ruleControls")}</p>
+              <p className="m-0 hidden md:block md:text-[11px] md:leading-relaxed">{t("games.reflecShot.ruleControlsPc")}</p>
+            </div>
+          </details>
+          <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
+            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
+              {t("games.reflecShot.accordionRulesSummary")}
+            </summary>
+            <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-sm leading-relaxed text-[var(--color-muted)]">
+              {(() => {
+                const rg = stage?.grade ?? grade;
+                return (
+                  <div className="flex flex-col gap-2 text-left">
+                    <p className="m-0 font-medium md:whitespace-nowrap md:text-[13px]">{t("games.reflecShot.ruleIntro")}</p>
+                    {rg >= 3 && rg <= 4 && <p className="m-0">{t("games.reflecShot.ruleCrossBonus")}</p>}
+                    {rg >= 5 && rg !== 6 && <p className="m-0">{t("games.reflecShot.ruleCrossBonus")}</p>}
+                    {rg >= 5 && <p className="m-0">{t("games.reflecShot.ruleTwoSidedBonus")}</p>}
+                  </div>
+                );
+              })()}
+            </div>
+          </details>
+
+          <div
+            className="relative z-0 w-full"
+            style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}
+          >
+            <ReflecShotAdSlot slotIndex={2} />
+          </div>
+        </div>
+      </div>
 
       {showWinOverlay && (
         <div
