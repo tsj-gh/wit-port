@@ -785,6 +785,7 @@ export default function ReflecShotGame() {
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [debugViewportPreset, setDebugViewportPreset] = useState<"pc" | "tablet" | "mobile">("pc");
   const [showSolutionPath, setShowSolutionPath] = useState(false);
   /** devtj+DEBUG のみ UI から変更。本番は常に curved（案2） */
   const [trajectoryStyle, setTrajectoryStyle] = useState<TrajectoryDrawStyle>("curved");
@@ -2822,8 +2823,20 @@ export default function ReflecShotGame() {
     );
   };
 
+  const debugViewportMaxWidth =
+    isDevTj && isDebugMode
+      ? debugViewportPreset === "mobile"
+        ? 430
+        : debugViewportPreset === "tablet"
+          ? 820
+          : 1440
+      : undefined;
+
   return (
-    <div className={`${GAME_COLUMN_CLASS} flex min-h-0 flex-1 flex-col lg:max-w-none`}>
+    <div
+      className={`${GAME_COLUMN_CLASS} flex min-h-0 flex-1 flex-col lg:max-w-none`}
+      style={debugViewportMaxWidth ? { maxWidth: `${debugViewportMaxWidth}px` } : undefined}
+    >
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-4 z-50">
           <button
@@ -2869,6 +2882,29 @@ export default function ReflecShotGame() {
                       : "—"}
                   </span>
                   <span>{stage ? formatPrepDurationMmSs(prepMs) : "—"}</span>
+                </div>
+              </div>
+              <div className="mt-2 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-2 py-1.5 text-[10px] text-[var(--color-text)]">
+                <div className="font-semibold text-[var(--color-primary)]">{t("games.reflecShot.debugViewportPreset")}</div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {([
+                    ["pc", t("games.reflecShot.debugViewportPc")],
+                    ["tablet", t("games.reflecShot.debugViewportTablet")],
+                    ["mobile", t("games.reflecShot.debugViewportMobile")],
+                  ] as const).map(([preset, label]) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setDebugViewportPreset(preset)}
+                      className={`rounded border px-2 py-1 text-[10px] ${
+                        debugViewportPreset === preset
+                          ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_16%,var(--color-bg))] text-[var(--color-primary)]"
+                          : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] text-[var(--color-muted)]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="mt-2 flex flex-col gap-1.5 text-[var(--color-muted)]">
@@ -3322,7 +3358,7 @@ export default function ReflecShotGame() {
 
         <div className="order-1 flex min-h-0 w-full flex-1 flex-col gap-3 lg:order-2 lg:flex-row lg:items-start lg:gap-5">
           <div className="reflec-shot-canvas-container relative flex min-h-0 w-full flex-1 flex-col items-center justify-center lg:min-w-0 lg:aspect-[4/3] lg:max-h-[85dvh]">
-            <section className="relative z-[1] w-full max-w-[520px] rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-3 pt-0 backdrop-blur sm:px-5 sm:pb-4 sm:pt-0 lg:h-full lg:max-w-none lg:px-4 lg:pb-3 lg:pt-0">
+            <section className="relative z-[1] w-full max-w-[520px] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-3 pt-0 backdrop-blur sm:px-5 sm:pb-4 sm:pt-0 lg:h-full lg:max-w-none lg:px-4 lg:pb-3 lg:pt-0">
               <button
                 type="button"
                 aria-label={t("games.reflecShot.helpOpenAria")}
@@ -3359,7 +3395,7 @@ export default function ReflecShotGame() {
                 <div className="w-full" style={{ WebkitTapHighlightColor: "transparent" }}>
                   <div
                     ref={boardWrapRef}
-                    className="relative mx-auto aspect-square w-full max-w-[min(95vw,75dvh)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))] lg:max-w-[min(100%,88dvh)]"
+                    className="relative mx-auto aspect-square w-full max-w-[min(95vw,75dvh)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))] lg:max-w-[min(calc(100%-0.5rem),calc(85dvh-3.25rem))]"
                   >
                     <canvas
                       ref={canvasRef}
