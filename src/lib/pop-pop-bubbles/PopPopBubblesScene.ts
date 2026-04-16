@@ -63,9 +63,20 @@ const DEFAULT_BUBBLE_COUNT = 4;
 const MIN_BUBBLE_COUNT = 1;
 const MAX_BUBBLE_COUNT = 8;
 const BURST_BG_PASTELS = ["#d4edda", "#fff3cd", "#e2e3e5", "#d2f4ea", "#e0f0ff"] as const;
-const BURST_PARTICLE_COLORS = ["#b8ecff", "#9ee4ff", "#c8e6ff", "#dff5ff", "#f3fbff"] as const;
+/** 視認性重視のビビッド背景（起動時・ウェーブ開始時の既定抽選プール） */
+const BURST_BG_VIVID = ["#E94E77", "#4A90E2", "#F7CA18", "#4CD964", "#A569BD"] as const;
+const BURST_PARTICLE_COLORS = [
+  "#ffffff",
+  "#fffefb",
+  "#f5fcff",
+  "#dff5ff",
+  "#c8e6ff",
+  "#b8ecff",
+] as const;
 /** パーティクル半径の基準（CSS px）。`burstParticleSizeScale` はこれに掛かる倍率。 */
 const BURST_PARTICLE_BASE_RADIUS_PX = 0.5;
+
+export type PopPopBubblesBgPaletteMode = "vivid" | "pastel";
 
 export type PopPopBubblesDebugConfig = {
   bubbleCount: number;
@@ -86,6 +97,8 @@ export type PopPopBubblesDebugConfig = {
   burstRingExpandSpeedScale: number;
   /** 割れリングの残像（shadowBlur） */
   burstRingShadowBlurPx: number;
+  /** 背景色の抽選プール（ビビッド既定／パステル切替） */
+  bgPaletteMode: PopPopBubblesBgPaletteMode;
 };
 
 function rand(min: number, max: number): number {
@@ -111,6 +124,15 @@ function hexToRgba(hex: string, alpha: number): string {
 
 const BURST_EFFECT_COLOR = "#FFFFFF";
 
+/** 12時を0°・時計回りの方位角を、Canvas 弧用のラジアン（+x=0、時計回りが正）に変換 */
+function northCwDegToCanvasRad(degFromNorthCw: number): number {
+  return -Math.PI / 2 + (degFromNorthCw * Math.PI) / 180;
+}
+
+function pickRandomBg<T extends readonly string[]>(arr: T): T[number] {
+  return arr[Math.floor(Math.random() * arr.length)]!;
+}
+
 function createBubbleTexture(size = 256): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = size;
@@ -128,15 +150,28 @@ function createBubbleTexture(size = 256): HTMLCanvasElement {
   ctx.arc(r, r, r * 0.93, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.lineWidth = Math.max(2, size * 0.02);
-  ctx.strokeStyle = "rgba(255,255,255,0.78)";
+  const R = r * 0.89;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(255,255,255,0.6)";
+  ctx.shadowBlur = 4;
+  ctx.shadowColor = "rgba(255,255,255,0.5)";
+
+  ctx.lineWidth = Math.max(2.8, size * 0.026);
   ctx.beginPath();
-  ctx.arc(r, r, r * 0.89, Math.PI * 0.15, Math.PI * 1.84);
+  ctx.arc(r, r, R, northCwDegToCanvasRad(210), northCwDegToCanvasRad(330), false);
   ctx.stroke();
+
+  ctx.lineWidth = Math.max(1.15, size * 0.012);
+  ctx.beginPath();
+  ctx.arc(r, r, R * 0.97, northCwDegToCanvasRad(30), northCwDegToCanvasRad(90), false);
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = "transparent";
 
   ctx.fillStyle = "rgba(255,255,255,0.62)";
   ctx.beginPath();
-  ctx.ellipse(r * 0.62, r * 0.4, r * 0.2, r * 0.12, -0.5, 0, Math.PI * 2);
+  ctx.ellipse(r * 0.58, r * 0.38, r * 0.19, r * 0.11, -0.48, 0, Math.PI * 2);
   ctx.fill();
   return c;
 }
@@ -162,7 +197,7 @@ export class PopPopBubblesScene {
   private waveTimer: ReturnType<typeof setTimeout> | null = null;
   private collisionAccumulator = 0;
   private idSeq = 0;
-  private bgPastelHex = "#e0f0ff";
+  private bgPastelHex: string = pickRandomBg(BURST_BG_VIVID);
   private config: PopPopBubblesDebugConfig = {
     bubbleCount: DEFAULT_BUBBLE_COUNT,
     bubbleSpeedScale: 1,
@@ -175,6 +210,7 @@ export class PopPopBubblesScene {
     burstRingLineWidthScale: 0.6,
     burstRingExpandSpeedScale: 0.9,
     burstRingShadowBlurPx: 10,
+    bgPaletteMode: "vivid",
   };
 
   constructor(options: SceneOptions) {
@@ -231,6 +267,7 @@ export class PopPopBubblesScene {
 
   public setDebugConfig(next: Partial<PopPopBubblesDebugConfig>): void {
     const prevScale = this.config.bubbleSpeedScale;
+    const prevPalette = this.config.bgPaletteMode;
     this.config = {
       bubbleCount: Math.max(MIN_BUBBLE_COUNT, Math.min(MAX_BUBBLE_COUNT, Math.round(next.bubbleCount ?? this.config.bubbleCount))),
       bubbleSpeedScale: Math.max(0.3, Math.min(3, next.bubbleSpeedScale ?? this.config.bubbleSpeedScale)),
@@ -249,7 +286,15 @@ export class PopPopBubblesScene {
         Math.min(3, next.burstRingExpandSpeedScale ?? this.config.burstRingExpandSpeedScale)
       ),
       burstRingShadowBlurPx: Math.max(0, Math.min(28, next.burstRingShadowBlurPx ?? this.config.burstRingShadowBlurPx)),
+      bgPaletteMode:
+        next.bgPaletteMode === "pastel" || next.bgPaletteMode === "vivid"
+          ? next.bgPaletteMode
+          : this.config.bgPaletteMode,
     };
+
+    if (next.bgPaletteMode !== undefined && next.bgPaletteMode !== prevPalette) {
+      this.randomizeBackgroundFromPalette();
+    }
 
     const nextScale = this.config.bubbleSpeedScale;
     if (Math.abs(prevScale - nextScale) > 0.001 && prevScale > 0) {
@@ -268,9 +313,9 @@ export class PopPopBubblesScene {
     this.spawnWave();
   }
 
-  private randomizeBackgroundPastel(): void {
-    const next = BURST_BG_PASTELS[Math.floor(Math.random() * BURST_BG_PASTELS.length)]!;
-    this.bgPastelHex = next;
+  private randomizeBackgroundFromPalette(): void {
+    const pool = this.config.bgPaletteMode === "pastel" ? BURST_BG_PASTELS : BURST_BG_VIVID;
+    this.bgPastelHex = pickRandomBg(pool);
   }
 
   private readonly tick = (ts: number): void => {
@@ -287,7 +332,7 @@ export class PopPopBubblesScene {
       clearTimeout(this.waveTimer);
       this.waveTimer = null;
     }
-    this.randomizeBackgroundPastel();
+    this.randomizeBackgroundFromPalette();
     const count = this.config.bubbleCount;
     const bubbles: Bubble[] = [];
     const imgCount = Math.max(1, this.animalImages.length);
@@ -607,13 +652,21 @@ export class PopPopBubblesScene {
     const prevComposite = ctx.globalCompositeOperation;
     ctx.globalCompositeOperation = "screen";
     for (const p of this.particles) {
+      const a = Math.max(0, p.alpha);
       ctx.save();
-      ctx.globalAlpha = Math.max(0, p.alpha);
+      ctx.globalAlpha = a * 0.58;
       ctx.fillStyle = p.color;
       ctx.shadowColor = "rgba(255, 255, 255, 0.98)";
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 26;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, p.size * 1.38, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = a;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.78)";
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * 0.62, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }

@@ -10,7 +10,7 @@ import {
   GAME_AD_SLOT_MIN_HEIGHT_PX,
   GAME_COLUMN_CLASS,
 } from "@/lib/gameLayout";
-import { PopPopBubblesScene } from "@/lib/pop-pop-bubbles/PopPopBubblesScene";
+import { PopPopBubblesScene, type PopPopBubblesBgPaletteMode } from "@/lib/pop-pop-bubbles/PopPopBubblesScene";
 
 const CONTENT_IMAGE_PATHS = [
   ...Array.from({ length: 12 }, (_, i) => `/assets/tap-coloring/Pictures/Picture_Animal_${String(i + 1).padStart(2, "0")}.png`),
@@ -75,6 +75,7 @@ export function PopPopBubblesLabShell() {
   const [burstRingLineWidthScale, setBurstRingLineWidthScale] = useState(0.6);
   const [burstRingExpandSpeedScale, setBurstRingExpandSpeedScale] = useState(0.9);
   const [burstRingShadowBlurPx, setBurstRingShadowBlurPx] = useState(10);
+  const [bgPaletteMode, setBgPaletteMode] = useState<PopPopBubblesBgPaletteMode>("vivid");
 
   useEffect(() => {
     if (!isDevTj) setIsDebugMode(false);
@@ -125,6 +126,7 @@ export function PopPopBubblesLabShell() {
           burstRingLineWidthScale,
           burstRingExpandSpeedScale,
           burstRingShadowBlurPx,
+          bgPaletteMode,
         });
 
         const resize = () => {
@@ -168,6 +170,7 @@ export function PopPopBubblesLabShell() {
       burstRingLineWidthScale,
       burstRingExpandSpeedScale,
       burstRingShadowBlurPx,
+      bgPaletteMode,
     });
   }, [
     bubbleSpeedScale,
@@ -180,6 +183,7 @@ export function PopPopBubblesLabShell() {
     burstRingLineWidthScale,
     burstRingExpandSpeedScale,
     burstRingShadowBlurPx,
+    bgPaletteMode,
   ]);
 
   useEffect(() => {
@@ -229,6 +233,20 @@ export function PopPopBubblesLabShell() {
           </div>
           {isDebugPanelExpanded && (
             <div className="space-y-3 text-[10px] text-[var(--color-muted)]">
+              <label className="block rounded-lg border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-2">
+                <div className="mb-1 font-semibold text-[var(--color-text)]">背景色パレット</div>
+                <select
+                  value={bgPaletteMode}
+                  onChange={(e) => setBgPaletteMode(e.target.value as PopPopBubblesBgPaletteMode)}
+                  className="w-full rounded border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_88%,var(--color-bg))] px-2 py-1 text-[10px] text-[var(--color-text)]"
+                >
+                  <option value="vivid">A: ビビッド（既定）</option>
+                  <option value="pastel">B: パステル</option>
+                </select>
+                <p className="mt-1 text-[9px] leading-snug text-[var(--color-muted)]">
+                  切替で抽選プールが即座に変わり、現在の背景も新プールから再抽選されます。
+                </p>
+              </label>
               <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-2">
                 <button
                   type="button"
