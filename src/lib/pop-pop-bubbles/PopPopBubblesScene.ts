@@ -163,7 +163,8 @@ function createBubbleTexture(size = 256): HTMLCanvasElement {
 
   ctx.lineWidth = Math.max(1.15, size * 0.012);
   ctx.beginPath();
-  ctx.arc(r, r, R * 0.97, northCwDegToCanvasRad(30), northCwDegToCanvasRad(90), false);
+  // 右下の細い円弧（Canvas 角度: 0°=右、時計回りで 30°〜90°）
+  ctx.arc(r, r, R * 0.97, (30 * Math.PI) / 180, (90 * Math.PI) / 180, false);
   ctx.stroke();
 
   ctx.shadowBlur = 0;
