@@ -3320,106 +3320,9 @@ export default function ReflecShotGame() {
           <ReflecShotAdSlot slotIndex={1} />
         </div>
 
-        <div className="reflec-shot-canvas-container order-1 flex min-h-0 w-full flex-1 flex-col items-center justify-center md:order-2">
-          <section className="relative z-[1] w-full max-w-[520px] rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-3 pt-0 backdrop-blur sm:px-5 sm:pb-4 sm:pt-0">
-        <div className="flex w-full flex-col items-center">
-          <div className="flex w-full flex-col gap-y-0 pb-0 pt-0.5 mb-0">
-            <div className="grid w-full min-h-5 grid-cols-1 items-center text-sm font-semibold leading-5 text-[var(--color-text)]">
-              <span className="min-w-0 truncate">
-                {phase === "move" || phase === "wallFx" || phase === "goalFx"
-                  ? t("games.reflecShot.phaseMove")
-                  : "\u00a0"}
-              </span>
-            </div>
-            <div className="flex min-h-5 w-full items-center text-sm leading-5">
-              {boardLoadWait && !statusMsg ? (
-                <span className="text-[var(--color-accent)]">{t("games.reflecShot.st.preparing")}</span>
-              ) : statusMsg &&
-                phase !== "won" &&
-                phase !== "lost" &&
-                phase !== "wallFx" &&
-                phase !== "goalFx" ? (
-                <span className="text-[var(--color-muted)]">{statusMsgDisplay}</span>
-              ) : null}
-            </div>
-          </div>
-          <div className="w-full" style={{ WebkitTapHighlightColor: "transparent" }}>
-            <div
-              ref={boardWrapRef}
-              className="relative mx-auto aspect-square w-full max-w-[min(95vw,75dvh)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))]"
-            >
-              <canvas
-                ref={canvasRef}
-                className="absolute inset-0 h-full w-full touch-none select-none cursor-default bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))]"
-                style={{ touchAction: "none" }}
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerCancel={onPointerCancel}
-              />
-              <svg
-                className="pointer-events-none absolute inset-0 h-full w-full rounded-2xl"
-                aria-hidden
-              >
-                {swipeTrailPoints.length >= 2 && (
-                  <polyline
-                    fill="none"
-                    stroke="rgba(248, 250, 252, 0.88)"
-                    strokeWidth={2.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{ strokeOpacity: trailStrokeOpacity }}
-                    points={swipeTrailPoints.map((p) => `${p.x},${p.y}`).join(" ")}
-                  />
-                )}
-                <g
-                  className="trajectory-vertex-dots"
-                  data-board-layout-rev={boardLayoutRevision}
-                >
-                  {activeTrajectoryStyle === "vertexDots" &&
-                    phase !== "edit" &&
-                    trajectoryVertexDots.map((vd) => {
-                      const lay = boardLayoutRef.current;
-                      if (!lay) return null;
-                      const cc = cellCenterPx(
-                        vd.c,
-                        vd.r,
-                        lay.cellPx,
-                        lay.ox,
-                        lay.oy,
-                        lay.rMin,
-                        lay.cMin
-                      );
-                      const dbgSolDots = isDevTj && isDebugMode && showSolutionPath;
-                      const sol = dbgSolDots && vd.isSolutionBumper;
-                      const rr = sol ? TRAJECTORY_VERTEX_DOT_R_SOLUTION : TRAJECTORY_VERTEX_DOT_R;
-                      const fill = sol ? "rgb(207, 250, 254)" : "rgb(255, 255, 255)";
-                      const filt = sol
-                        ? `drop-shadow(0 0 ${rr + 2.5}px rgba(34,211,238,0.78))`
-                        : `drop-shadow(0 0 3px rgba(165,243,252,0.5))`;
-                      return (
-                        <circle
-                          key={`${vd.born}-${vd.c}-${vd.r}`}
-                          cx={cc.x}
-                          cy={cc.y}
-                          r={rr}
-                          fill={fill}
-                          opacity={isDevTj ? 0 : TRAJECTORY_VERTEX_DOT_BASE_OPACITY}
-                          style={{ filter: filt }}
-                        >
-                          {isDevTj ? (
-                            <animate
-                              attributeName="opacity"
-                              to={String(TRAJECTORY_VERTEX_DOT_BASE_OPACITY)}
-                              dur={`${TRAJECTORY_VERTEX_DOT_FADE_MS}ms`}
-                              fill="freeze"
-                            />
-                          ) : null}
-                        </circle>
-                      );
-                    })}
-                </g>
-              </svg>
+        <div className="order-1 flex min-h-0 w-full flex-1 flex-col gap-3 lg:order-2 lg:flex-row lg:items-start lg:gap-5">
+          <div className="reflec-shot-canvas-container relative flex min-h-0 w-full flex-1 flex-col items-center justify-center lg:aspect-[4/3] lg:max-h-[85dvh]">
+            <section className="relative z-[1] w-full max-w-[520px] rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-3 pt-0 backdrop-blur sm:px-5 sm:pb-4 sm:pt-0 lg:h-full lg:max-w-none lg:px-4 lg:pb-3 lg:pt-0">
               <button
                 type="button"
                 aria-label={t("games.reflecShot.helpOpenAria")}
@@ -3428,18 +3331,116 @@ export default function ReflecShotGame() {
                   e.stopPropagation();
                   setHelpOpen(true);
                 }}
-                className="absolute right-1.5 top-1.5 z-20 grid h-9 w-9 touch-manipulation place-items-center rounded-full border border-[color-mix(in_srgb,white_28%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_42%,var(--color-text)_12%)] text-[1.15rem] leading-none shadow-md backdrop-blur-sm"
+                className="absolute right-2 top-2 z-20 grid h-9 w-9 touch-manipulation place-items-center rounded-full border border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_88%,var(--color-bg))] text-[1.15rem] leading-none shadow-md"
               >
                 📖
               </button>
-            </div>
+              <div className="flex h-full w-full flex-col items-center">
+                <div className="flex w-full flex-col gap-y-0 pb-0 pt-0.5 mb-0">
+                  <div className="grid w-full min-h-5 grid-cols-1 items-center text-sm font-semibold leading-5 text-[var(--color-text)]">
+                    <span className="min-w-0 truncate">
+                      {phase === "move" || phase === "wallFx" || phase === "goalFx"
+                        ? t("games.reflecShot.phaseMove")
+                        : "\u00a0"}
+                    </span>
+                  </div>
+                  <div className="flex min-h-5 w-full items-center text-sm leading-5">
+                    {boardLoadWait && !statusMsg ? (
+                      <span className="text-[var(--color-accent)]">{t("games.reflecShot.st.preparing")}</span>
+                    ) : statusMsg &&
+                      phase !== "won" &&
+                      phase !== "lost" &&
+                      phase !== "wallFx" &&
+                      phase !== "goalFx" ? (
+                      <span className="text-[var(--color-muted)]">{statusMsgDisplay}</span>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="w-full" style={{ WebkitTapHighlightColor: "transparent" }}>
+                  <div
+                    ref={boardWrapRef}
+                    className="relative mx-auto aspect-square w-full max-w-[min(95vw,75dvh)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))] lg:max-w-[min(100%,85dvh)]"
+                  >
+                    <canvas
+                      ref={canvasRef}
+                      className="absolute inset-0 h-full w-full touch-none select-none cursor-default bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))]"
+                      style={{ touchAction: "none" }}
+                      onPointerDown={onPointerDown}
+                      onPointerMove={onPointerMove}
+                      onPointerUp={onPointerUp}
+                      onPointerCancel={onPointerCancel}
+                    />
+                    <svg
+                      className="pointer-events-none absolute inset-0 h-full w-full rounded-2xl"
+                      aria-hidden
+                    >
+                      {swipeTrailPoints.length >= 2 && (
+                        <polyline
+                          fill="none"
+                          stroke="rgba(248, 250, 252, 0.88)"
+                          strokeWidth={2.5}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          style={{ strokeOpacity: trailStrokeOpacity }}
+                          points={swipeTrailPoints.map((p) => `${p.x},${p.y}`).join(" ")}
+                        />
+                      )}
+                      <g
+                        className="trajectory-vertex-dots"
+                        data-board-layout-rev={boardLayoutRevision}
+                      >
+                        {activeTrajectoryStyle === "vertexDots" &&
+                          phase !== "edit" &&
+                          trajectoryVertexDots.map((vd) => {
+                            const lay = boardLayoutRef.current;
+                            if (!lay) return null;
+                            const cc = cellCenterPx(
+                              vd.c,
+                              vd.r,
+                              lay.cellPx,
+                              lay.ox,
+                              lay.oy,
+                              lay.rMin,
+                              lay.cMin
+                            );
+                            const dbgSolDots = isDevTj && isDebugMode && showSolutionPath;
+                            const sol = dbgSolDots && vd.isSolutionBumper;
+                            const rr = sol ? TRAJECTORY_VERTEX_DOT_R_SOLUTION : TRAJECTORY_VERTEX_DOT_R;
+                            const fill = sol ? "rgb(207, 250, 254)" : "rgb(255, 255, 255)";
+                            const filt = sol
+                              ? `drop-shadow(0 0 ${rr + 2.5}px rgba(34,211,238,0.78))`
+                              : `drop-shadow(0 0 3px rgba(165,243,252,0.5))`;
+                            return (
+                              <circle
+                                key={`${vd.born}-${vd.c}-${vd.r}`}
+                                cx={cc.x}
+                                cy={cc.y}
+                                r={rr}
+                                fill={fill}
+                                opacity={isDevTj ? 0 : TRAJECTORY_VERTEX_DOT_BASE_OPACITY}
+                                style={{ filter: filt }}
+                              >
+                                {isDevTj ? (
+                                  <animate
+                                    attributeName="opacity"
+                                    to={String(TRAJECTORY_VERTEX_DOT_BASE_OPACITY)}
+                                    dur={`${TRAJECTORY_VERTEX_DOT_FADE_MS}ms`}
+                                    fill="freeze"
+                                  />
+                                ) : null}
+                              </circle>
+                            );
+                          })}
+                      </g>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
-        </div>
-        </section>
-        </div>
 
-        <div className="order-2 w-full shrink-0 md:order-3">
-        <div className="mb-2 mt-2 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
+          <aside className="order-2 w-full shrink-0 lg:max-h-[85dvh] lg:w-[320px] lg:overflow-y-auto">
+            <div className="mb-2 mt-2 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start lg:mt-0 lg:flex-col lg:gap-3">
           <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
             <label className="block text-xs text-[var(--color-muted)] mb-1">{t("common.chooseGrade")}</label>
             <div
@@ -3474,7 +3475,6 @@ export default function ReflecShotGame() {
               })}
             </div>
           </div>
-        </div>
 
         {isDevTj && (
           <div className="mt-3 flex flex-wrap justify-center gap-2 pb-2">
@@ -3497,7 +3497,7 @@ export default function ReflecShotGame() {
         )}
 
         {!isDevTj && (
-          <div className="mt-3 flex justify-center pb-2">
+          <div className="mt-3 flex justify-center pb-2 lg:justify-start">
             <button
               type="button"
               disabled={isGenerating || boardLoadWait}
@@ -3508,9 +3508,9 @@ export default function ReflecShotGame() {
             </button>
           </div>
         )}
-        </div>
+            </div>
 
-        <div className="order-4 mt-1 flex w-full flex-col gap-2">
+            <div className="mt-1 flex w-full flex-col gap-2 lg:hidden">
           <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
             <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
               {t("games.reflecShot.accordionRulesSummary")}
@@ -3537,13 +3537,31 @@ export default function ReflecShotGame() {
               <p className="mt-2 m-0">【対象】{t("games.reflecShot.infoTarget")}</p>
             </div>
           </details>
+            </div>
 
-          <div
-            className="relative z-0 w-full"
-            style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}
-          >
-            <ReflecShotAdSlot slotIndex={2} />
-          </div>
+            <div className="mt-1 hidden w-full flex-col gap-2 lg:flex">
+              <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
+                <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.reflecShot.accordionRulesSummary")}</h3>
+                <div className="mt-2">{renderHelpRuleParagraphs()}</div>
+              </section>
+              <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
+                <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.reflecShot.accordionControlsSummary")}</h3>
+                <p className="mt-2 m-0 text-[11px] leading-relaxed text-[var(--color-muted)]">{t("games.reflecShot.ruleControlsPc")}</p>
+              </section>
+              <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
+                <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.reflecShot.accordionGoalSummary")}</h3>
+                <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">【ねらい】{t("games.reflecShot.infoGoal")}</p>
+                <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">【対象】{t("games.reflecShot.infoTarget")}</p>
+              </section>
+            </div>
+
+            <div
+              className="relative z-0 w-full"
+              style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}
+            >
+              <ReflecShotAdSlot slotIndex={2} />
+            </div>
+          </aside>
         </div>
       </div>
 
