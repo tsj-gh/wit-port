@@ -784,6 +784,7 @@ export default function ReflecShotGame() {
   const [bumperTick, setBumperTick] = useState(0);
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [showSolutionPath, setShowSolutionPath] = useState(false);
   /** devtj+DEBUG のみ UI から変更。本番は常に curved（案2） */
   const [trajectoryStyle, setTrajectoryStyle] = useState<TrajectoryDrawStyle>("curved");
@@ -2791,6 +2792,36 @@ export default function ReflecShotGame() {
     return () => window.removeEventListener("load", onLoad);
   }, []);
 
+  useEffect(() => {
+    if (!helpOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [helpOpen]);
+
+  useEffect(() => {
+    if (!helpOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setHelpOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [helpOpen]);
+
+  const renderHelpRuleParagraphs = () => {
+    const rg = stage?.grade ?? grade;
+    return (
+      <div className="reflec-shot-doc-rules flex flex-col gap-2 text-left text-sm leading-relaxed text-[var(--color-muted)]">
+        <p className="m-0 font-medium md:whitespace-nowrap md:text-[13px]">{t("games.reflecShot.ruleIntro")}</p>
+        {rg >= 3 && rg <= 4 && <p className="m-0">{t("games.reflecShot.ruleCrossBonus")}</p>}
+        {rg >= 5 && rg !== 6 && <p className="m-0">{t("games.reflecShot.ruleCrossBonus")}</p>}
+        {rg >= 5 && <p className="m-0">{t("games.reflecShot.ruleTwoSidedBonus")}</p>}
+      </div>
+    );
+  };
+
   return (
     <div className={`${GAME_COLUMN_CLASS} flex min-h-0 flex-1 flex-col`}>
       {isDevTj && !isDebugMode && (
@@ -2829,6 +2860,17 @@ export default function ReflecShotGame() {
           </div>
           {isDebugPanelExpanded && (
             <>
+              <div className="mt-2 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-2 py-1.5 text-[10px] text-[var(--color-text)]">
+                <div className="font-semibold text-[var(--color-primary)]">{t("games.reflecShot.debugPrepTimerLabel")}</div>
+                <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 font-mono tabular-nums">
+                  <span className="text-[var(--color-muted)]">
+                    {phase === "move" || phase === "wallFx" || phase === "goalFx"
+                      ? t("games.reflecShot.phaseMove")
+                      : "—"}
+                  </span>
+                  <span>{stage ? formatPrepDurationMmSs(prepMs) : "—"}</span>
+                </div>
+              </div>
               <div className="mt-2 flex flex-col gap-1.5 text-[var(--color-muted)]">
                 <span className="text-[10px] leading-tight text-[var(--color-muted)]">
                   {t("games.reflecShot.debugTrajectoryStyleLabel")}
@@ -3281,23 +3323,14 @@ export default function ReflecShotGame() {
         <div className="reflec-shot-canvas-container order-1 flex min-h-0 w-full flex-1 flex-col items-center justify-center md:order-2">
           <section className="relative z-[1] w-full max-w-[520px] rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-3 pt-0 backdrop-blur sm:px-5 sm:pb-4 sm:pt-0">
         <div className="flex w-full flex-col items-center">
-          {/* 上に僅かな余白、タイマー〜盤面は gap+mb で約1行分に詰める */}
-          <div className="flex w-full flex-col gap-y-1 pb-0 pt-1.5 mb-1">
-            {/* 固定行高：進行中ラベル（左）＋準備タイマー（右）。text-sm / leading-5 */}
-            <div className="grid w-full min-h-5 grid-cols-[1fr_auto] items-center gap-x-2 text-sm font-semibold leading-5 text-[var(--color-text)]">
+          <div className="flex w-full flex-col gap-y-0 pb-0 pt-0.5 mb-0">
+            <div className="grid w-full min-h-5 grid-cols-1 items-center text-sm font-semibold leading-5 text-[var(--color-text)]">
               <span className="min-w-0 truncate">
                 {phase === "move" || phase === "wallFx" || phase === "goalFx"
                   ? t("games.reflecShot.phaseMove")
                   : "\u00a0"}
               </span>
-              <span
-                className="inline-block min-w-[5.25ch] shrink-0 text-right font-mono tabular-nums tracking-tight"
-                aria-live="polite"
-              >
-                {stage ? formatPrepDurationMmSs(prepMs) : "\u00a0"}
-              </span>
             </div>
-            {/* ステータス1行ぶんの高さを常に確保 */}
             <div className="flex min-h-5 w-full items-center text-sm leading-5">
               {boardLoadWait && !statusMsg ? (
                 <span className="text-[var(--color-accent)]">{t("games.reflecShot.st.preparing")}</span>
@@ -3310,10 +3343,7 @@ export default function ReflecShotGame() {
               ) : null}
             </div>
           </div>
-          <div
-            className="w-full touch-none select-none"
-            style={{ WebkitTapHighlightColor: "transparent" }}
-          >
+          <div className="w-full" style={{ WebkitTapHighlightColor: "transparent" }}>
             <div
               ref={boardWrapRef}
               className="relative mx-auto aspect-square w-full max-w-[min(95vw,75dvh)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))]"
@@ -3390,6 +3420,18 @@ export default function ReflecShotGame() {
                     })}
                 </g>
               </svg>
+              <button
+                type="button"
+                aria-label={t("games.reflecShot.helpOpenAria")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setHelpOpen(true);
+                }}
+                className="absolute right-1.5 top-1.5 z-20 grid h-9 w-9 touch-manipulation place-items-center rounded-full border border-[color-mix(in_srgb,white_28%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_42%,var(--color-text)_12%)] text-[1.15rem] leading-none shadow-md backdrop-blur-sm"
+              >
+                📖
+              </button>
             </div>
           </div>
         </div>
@@ -3471,11 +3513,10 @@ export default function ReflecShotGame() {
         <div className="order-4 mt-1 flex w-full flex-col gap-2">
           <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
             <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
-              {t("games.reflecShot.accordionGoalSummary")}
+              {t("games.reflecShot.accordionRulesSummary")}
             </summary>
-            <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
-              <p className="m-0">【ねらい】{t("games.reflecShot.infoGoal")}</p>
-              <p className="mt-2 m-0">【対象】{t("games.reflecShot.infoTarget")}</p>
+            <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-sm leading-relaxed text-[var(--color-muted)]">
+              {renderHelpRuleParagraphs()}
             </div>
           </details>
           <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
@@ -3489,20 +3530,11 @@ export default function ReflecShotGame() {
           </details>
           <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
             <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
-              {t("games.reflecShot.accordionRulesSummary")}
+              {t("games.reflecShot.accordionGoalSummary")}
             </summary>
-            <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-sm leading-relaxed text-[var(--color-muted)]">
-              {(() => {
-                const rg = stage?.grade ?? grade;
-                return (
-                  <div className="flex flex-col gap-2 text-left">
-                    <p className="m-0 font-medium md:whitespace-nowrap md:text-[13px]">{t("games.reflecShot.ruleIntro")}</p>
-                    {rg >= 3 && rg <= 4 && <p className="m-0">{t("games.reflecShot.ruleCrossBonus")}</p>}
-                    {rg >= 5 && rg !== 6 && <p className="m-0">{t("games.reflecShot.ruleCrossBonus")}</p>}
-                    {rg >= 5 && <p className="m-0">{t("games.reflecShot.ruleTwoSidedBonus")}</p>}
-                  </div>
-                );
-              })()}
+            <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
+              <p className="m-0">【ねらい】{t("games.reflecShot.infoGoal")}</p>
+              <p className="mt-2 m-0">【対象】{t("games.reflecShot.infoTarget")}</p>
             </div>
           </details>
 
@@ -3514,6 +3546,61 @@ export default function ReflecShotGame() {
           </div>
         </div>
       </div>
+
+      {helpOpen && (
+        <div
+          className="fixed inset-0 z-[10020] flex items-center justify-center bg-[rgba(0,0,0,0.52)] p-4"
+          onClick={() => setHelpOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="max-h-[min(90dvh,720px)] w-full max-w-lg overflow-y-auto rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[var(--color-surface)] p-4 text-[var(--color-text)] shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reflec-help-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-start justify-between gap-2 border-b border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pb-2">
+              <h2 id="reflec-help-title" className="text-lg font-bold text-[var(--color-primary)]">
+                {t("games.reflecShot.helpTitle")}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setHelpOpen(false)}
+                className="shrink-0 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] px-3 py-1.5 text-sm font-medium text-[var(--color-text)] hover:bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)]"
+              >
+                {t("games.reflecShot.helpClose")}
+              </button>
+            </div>
+            <div className="border-b border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pb-4">
+              <h3 className="mb-2 text-sm font-semibold text-[var(--color-text)]">{t("games.reflecShot.helpSectionOperate")}</h3>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)] p-3 text-center">
+                  <div className="mb-1 text-2xl" aria-hidden>
+                    👆
+                  </div>
+                  <p className="m-0 text-xs font-medium leading-snug text-[var(--color-muted)]">{t("games.reflecShot.helpTapRotate")}</p>
+                </div>
+                <div className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)] p-3 text-center">
+                  <div className="mb-1 text-2xl" aria-hidden>
+                    ↗️
+                  </div>
+                  <p className="m-0 text-xs font-medium leading-snug text-[var(--color-muted)]">{t("games.reflecShot.helpSwipeLaunch")}</p>
+                </div>
+              </div>
+              <p className="mt-3 m-0 text-[11px] leading-relaxed text-[var(--color-muted)]">{t("games.reflecShot.helpPcNote")}</p>
+              <p className="mt-2 m-0 whitespace-pre-line text-[11px] leading-relaxed text-[var(--color-muted)] md:hidden">
+                {t("games.reflecShot.ruleControls")}
+              </p>
+              <p className="mt-2 m-0 hidden text-[11px] leading-relaxed text-[var(--color-muted)] md:block">{t("games.reflecShot.ruleControlsPc")}</p>
+            </div>
+            <div className="pt-4">
+              <h3 className="mb-2 text-sm font-semibold text-[var(--color-text)]">{t("games.reflecShot.accordionRulesSummary")}</h3>
+              {renderHelpRuleParagraphs()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showWinOverlay && (
         <div
