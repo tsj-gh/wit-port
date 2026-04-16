@@ -2823,7 +2823,7 @@ export default function ReflecShotGame() {
   };
 
   return (
-    <div className={`${GAME_COLUMN_CLASS} flex min-h-0 flex-1 flex-col`}>
+    <div className={`${GAME_COLUMN_CLASS} flex min-h-0 flex-1 flex-col lg:max-w-none`}>
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-4 z-50">
           <button
@@ -3321,7 +3321,7 @@ export default function ReflecShotGame() {
         </div>
 
         <div className="order-1 flex min-h-0 w-full flex-1 flex-col gap-3 lg:order-2 lg:flex-row lg:items-start lg:gap-5">
-          <div className="reflec-shot-canvas-container relative flex min-h-0 w-full flex-1 flex-col items-center justify-center lg:aspect-[4/3] lg:max-h-[85dvh]">
+          <div className="reflec-shot-canvas-container relative flex min-h-0 w-full flex-1 flex-col items-center justify-center lg:min-w-0 lg:aspect-[4/3] lg:max-h-[85dvh]">
             <section className="relative z-[1] w-full max-w-[520px] rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-3 pt-0 backdrop-blur sm:px-5 sm:pb-4 sm:pt-0 lg:h-full lg:max-w-none lg:px-4 lg:pb-3 lg:pt-0">
               <button
                 type="button"
@@ -3359,7 +3359,7 @@ export default function ReflecShotGame() {
                 <div className="w-full" style={{ WebkitTapHighlightColor: "transparent" }}>
                   <div
                     ref={boardWrapRef}
-                    className="relative mx-auto aspect-square w-full max-w-[min(95vw,75dvh)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))] lg:max-w-[min(100%,85dvh)]"
+                    className="relative mx-auto aspect-square w-full max-w-[min(95vw,75dvh)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))] lg:max-w-[min(100%,88dvh)]"
                   >
                     <canvas
                       ref={canvasRef}
@@ -3439,7 +3439,7 @@ export default function ReflecShotGame() {
             </section>
           </div>
 
-          <aside className="order-2 w-full shrink-0 lg:max-h-[85dvh] lg:w-[320px] lg:overflow-y-auto">
+          <aside className="order-2 w-full shrink-0 lg:max-h-[85dvh] lg:w-[360px] lg:overflow-y-auto">
             <div className="mb-2 mt-2 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start lg:mt-0 lg:flex-col lg:gap-3">
           <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
             <label className="block text-xs text-[var(--color-muted)] mb-1">{t("common.chooseGrade")}</label>
