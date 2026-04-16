@@ -1,7 +1,7 @@
 "use client";
 
 import confetti from "canvas-confetti";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   applyBumper,
@@ -98,6 +98,7 @@ import {
   GAME_AD_GAP_AFTER_SLOT_1_PX,
   GAME_AD_GAP_BEFORE_SLOT_2_PX,
   GAME_COLUMN_CLASS,
+  GAME_TOP_AD_RESERVED_PX,
 } from "@/lib/gameLayout";
 import { useI18n } from "@/lib/i18n-context";
 import { translateReflecStatus } from "@/lib/i18n-runtime-status";
@@ -2778,11 +2779,12 @@ export default function ReflecShotGame() {
   };
 
   useEffect(() => {
-    const centerBoard = () => {
-      boardWrapRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
-    };
     const onLoad = () => {
-      requestAnimationFrame(() => requestAnimationFrame(centerBoard));
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+        })
+      );
     };
     if (typeof document === "undefined") return;
     if (document.readyState === "complete") {
@@ -3353,11 +3355,20 @@ export default function ReflecShotGame() {
           className="order-3 mt-3 w-full shrink-0 md:order-1 md:mt-0"
           style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
         >
-          <ReflecShotAdSlot slotIndex={1} />
+          <div className="mx-auto w-full max-w-[980px]">
+            <ReflecShotAdSlot slotIndex={1} />
+          </div>
         </div>
 
         <div className="order-1 flex min-h-0 w-full flex-1 flex-col gap-3 lg:order-2 lg:flex-row lg:items-start lg:gap-5">
-          <div className="reflec-shot-canvas-container relative flex min-h-0 w-full flex-1 flex-col items-center justify-center lg:min-w-0 lg:aspect-[4/3] lg:max-h-[85dvh]">
+          <div
+            className="reflec-shot-canvas-container relative flex min-h-0 w-full flex-1 flex-col items-center justify-center lg:min-w-0 lg:aspect-[4/3] lg:max-h-[var(--reflec-pc-canvas-max-h)]"
+            style={
+              {
+                "--reflec-pc-canvas-max-h": `calc(100dvh - ${GAME_TOP_AD_RESERVED_PX}px - 100px)`,
+              } as CSSProperties
+            }
+          >
             <section className="relative z-[1] w-full max-w-[520px] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-3 pt-0 backdrop-blur sm:px-5 sm:pb-4 sm:pt-0 lg:h-full lg:max-w-none lg:px-4 lg:pb-3 lg:pt-0">
               <button
                 type="button"
@@ -3395,7 +3406,7 @@ export default function ReflecShotGame() {
                 <div className="w-full" style={{ WebkitTapHighlightColor: "transparent" }}>
                   <div
                     ref={boardWrapRef}
-                    className="relative mx-auto aspect-square w-full max-w-[min(95vw,75dvh)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))] lg:max-w-[min(calc(100%-0.5rem),calc(85dvh-3.25rem))]"
+                    className="relative mx-auto aspect-square w-full max-w-[min(95vw,75dvh)] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_90%,var(--color-bg))] lg:max-w-[min(calc(100%-0.5rem),calc(var(--reflec-pc-canvas-max-h)-3.25rem))]"
                   >
                     <canvas
                       ref={canvasRef}
@@ -3475,7 +3486,7 @@ export default function ReflecShotGame() {
             </section>
           </div>
 
-          <aside className="order-2 w-full shrink-0 lg:max-h-[85dvh] lg:w-[360px] lg:overflow-y-auto">
+          <aside className="order-2 w-full shrink-0 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-20px)] lg:w-[360px] lg:self-start lg:overflow-y-auto">
             <div className="mb-2 mt-2 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start lg:mt-0 lg:flex-col lg:gap-3">
           <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
             <label className="block text-xs text-[var(--color-muted)] mb-1">{t("common.chooseGrade")}</label>
