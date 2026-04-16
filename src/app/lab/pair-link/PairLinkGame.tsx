@@ -604,28 +604,23 @@ export default function PairLinkGame() {
   }, [forcedWidth]);
 
   const topAdRef = useRef<HTMLDivElement>(null);
+  const didInitialAutoScrollRef = useRef(false);
 
   useEffect(() => {
-    const onLoad = () => {
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          if (window.innerWidth < 1024) {
-            window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-            return;
-          }
+    if (didInitialAutoScrollRef.current) return;
+    if (loading || numbers.length === 0) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (window.innerWidth < 1024) {
+          window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+        } else {
           const top = topAdRef.current?.getBoundingClientRect().top ?? 0;
           window.scrollTo({ top: window.scrollY + top, left: 0, behavior: "auto" });
-        })
-      );
-    };
-    if (typeof document === "undefined") return;
-    if (document.readyState === "complete") {
-      onLoad();
-    } else {
-      window.addEventListener("load", onLoad, { once: true });
-    }
-    return () => window.removeEventListener("load", onLoad);
-  }, []);
+        }
+        didInitialAutoScrollRef.current = true;
+      })
+    );
+  }, [loading, numbers.length]);
 
   const effectiveViewportWidth = forcedWidth ?? windowWidth - 40;
   const canvasPixelSize = useMemo(() => {
