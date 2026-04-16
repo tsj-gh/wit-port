@@ -3613,7 +3613,7 @@ export default function ReflecShotGame() {
           </aside>
         </div>
 
-        <section className="mt-3 hidden w-full rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2 lg:block">
+        <section className="order-4 mt-3 hidden w-full rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2 lg:block">
           <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.reflecShot.accordionGoalSummary")}</h3>
           <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">【ねらい】{t("games.reflecShot.infoGoal")}</p>
           <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">【対象】{t("games.reflecShot.infoTarget")}</p>
