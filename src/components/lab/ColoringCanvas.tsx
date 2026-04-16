@@ -95,6 +95,8 @@ function pickTriadPalette(): TapColoringSwatch[] {
 
 const DEFAULT_FILL_THRESHOLD = 0.9;
 const DEFAULT_SPLATTER_RADIUS_VB = 12.5;
+/** 黒枠内イラストの拡大（`createPictureFrame` の 0.76 に乗算。デバッグで変更可） */
+const DEFAULT_ILLUSTRATION_SCALE = 1.25;
 const SCAN_STRIDE = 2;
 /** マスク干渉切り分け用（true で枠外でも描ける） */
 const DEBUG_DISABLE_MASK = false;
@@ -318,12 +320,14 @@ function playSlideWhoosh(): void {
   src.stop(t0 + 0.21);
 }
 
+/** 塗り絵シルエットの最大占有（canvas 一辺に対する比率）。`illustrationScale` で拡大（既定 ~1.25） */
 function createPictureFrame(
   canvasSize: number,
   srcW: number,
   srcH: number,
+  illustrationScale: number,
 ): { drawW: number; drawH: number; drawX: number; drawY: number } {
-  const maxBox = canvasSize * 0.76;
+  const maxBox = canvasSize * Math.min(0.94, 0.76 * illustrationScale);
   const scale = Math.min(maxBox / srcW, maxBox / srcH);
   const drawW = Math.max(1, Math.round(srcW * scale));
   const drawH = Math.max(1, Math.round(srcH * scale));
@@ -419,9 +423,12 @@ export function ColoringCanvas() {
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
   const [debugSplatterRadiusVb, setDebugSplatterRadiusVb] = useState(DEFAULT_SPLATTER_RADIUS_VB);
   const [debugFillThreshold, setDebugFillThreshold] = useState(DEFAULT_FILL_THRESHOLD);
+  const [debugIllustrationScale, setDebugIllustrationScale] = useState(DEFAULT_ILLUSTRATION_SCALE);
 
   const splatterRadiusVb = isDevTj && isDebugMode ? debugSplatterRadiusVb : DEFAULT_SPLATTER_RADIUS_VB;
   const fillThreshold = isDevTj && isDebugMode ? debugFillThreshold : DEFAULT_FILL_THRESHOLD;
+  const illustrationScale =
+    isDevTj && isDebugMode ? debugIllustrationScale : DEFAULT_ILLUSTRATION_SCALE;
 
   const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number>(0);
@@ -570,6 +577,7 @@ export function ColoringCanvas() {
       bitmapSize,
       picture.naturalWidth,
       picture.naturalHeight,
+      illustrationScale,
     );
 
     mctx.clearRect(0, 0, w, h);
@@ -637,7 +645,7 @@ export function ColoringCanvas() {
     pctx.clearRect(0, 0, w, h);
 
     redrawDisplay();
-  }, [coloringPicturesReady, bitmapSize, pictureIndex, redrawDisplay]);
+  }, [coloringPicturesReady, bitmapSize, pictureIndex, illustrationScale, redrawDisplay]);
 
   const initStageCanvasesRef = useRef(initStageCanvases) as MutableRefObject<typeof initStageCanvases>;
   useLayoutEffect(() => {
@@ -721,7 +729,7 @@ export function ColoringCanvas() {
     if (!displayRef.current) return;
     if (!coloringPicturesReady) return;
     initStageCanvasesRef.current();
-  }, [coloringPicturesReady, size]);
+  }, [coloringPicturesReady, size, illustrationScale]);
 
   const spawnParticles = (cx: number, cy: number, color: string) => {
     const n = 14;
@@ -961,7 +969,7 @@ export function ColoringCanvas() {
   return (
     <motion.div
       ref={containerRef}
-      className="relative mx-auto flex w-full max-w-lg flex-col gap-4 rounded-2xl px-0 pb-2 pt-0"
+      className="relative mx-auto flex w-full max-w-lg flex-col gap-4 rounded-2xl px-0 pb-2 pt-0 lg:pt-4"
       animate={{ backgroundColor: sceneBgColor }}
       transition={{ duration: TRANSITION_BG_MS / 1000, ease: "linear" }}
     >
@@ -1026,6 +1034,19 @@ export function ColoringCanvas() {
                 />
                 <div className="tabular-nums text-stone-500">{Math.round(debugFillThreshold * 100)}%</div>
               </div>
+              <div>
+                <div className="mb-1 font-semibold text-stone-700">塗り絵イラスト拡大（黒枠内）</div>
+                <input
+                  type="range"
+                  min={0.7}
+                  max={1.45}
+                  step={0.05}
+                  value={debugIllustrationScale}
+                  onChange={(e) => setDebugIllustrationScale(Number(e.target.value))}
+                  className="w-full accent-amber-600"
+                />
+                <div className="tabular-nums text-stone-500">{debugIllustrationScale.toFixed(2)}×</div>
+              </div>
             </div>
           )}
         </div>
@@ -1036,7 +1057,7 @@ export function ColoringCanvas() {
       )}
 
       <motion.div
-        className={`flex flex-wrap items-center justify-center gap-3 ${
+        className={`flex flex-wrap items-center justify-center gap-3 lg:-translate-y-1 ${
           phase === "play" || phase === "resume" ? "pointer-events-auto" : "pointer-events-none"
         }`}
         animate={{

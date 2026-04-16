@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { ColoringCanvas } from "@/components/lab/ColoringCanvas";
@@ -12,10 +12,19 @@ import {
   GAME_NO_TOP_AD_LAYOUT_OFFSET_PX,
 } from "@/lib/gameLayout";
 
+/** PC 左カラムを縮小し始める目安の高さ（px）。これより小さいと縮小し、下限でスクロール */
+const PC_LEFT_COLUMN_REFERENCE_HEIGHT = 580;
+/** これ以下には縮小せずスクロールで吸収（≈ モバイル相当の見た目） */
+const PC_LEFT_COLUMN_MIN_SCALE = 0.72;
+
 /**
  * 他ラボゲームと同型のヘッダー・列幅。広告#1 は出さず、#2 のみ Pair-Link と同一コンポーネントで配置（GPT 用に #1 は DOM のみ非表示）。
  */
 export function TapColoringLabShell() {
+  const leftColRef = useRef<HTMLDivElement>(null);
+  const [pcBoardScale, setPcBoardScale] = useState(1);
+  const [isLgViewport, setIsLgViewport] = useState(false);
+
   useEffect(() => {
     const onLoad = () => {
       requestAnimationFrame(() =>
@@ -33,6 +42,44 @@ export function TapColoringLabShell() {
     return () => window.removeEventListener("load", onLoad);
   }, []);
 
+  useEffect(() => {
+    const el = leftColRef.current;
+    if (!el) return;
+
+    const apply = () => {
+      const lg = window.innerWidth >= 1024;
+      setIsLgViewport(lg);
+      if (!lg) {
+        setPcBoardScale(1);
+        return;
+      }
+      const h = el.clientHeight;
+      const raw = h / PC_LEFT_COLUMN_REFERENCE_HEIGHT;
+      const s = Math.min(1, Math.max(PC_LEFT_COLUMN_MIN_SCALE, raw));
+      setPcBoardScale(s);
+    };
+
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    window.addEventListener("resize", apply);
+    apply();
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", apply);
+    };
+  }, []);
+
+  const scaledInnerStyle: CSSProperties | undefined =
+    isLgViewport
+      ? {
+          transform: `scale(${pcBoardScale})`,
+          transformOrigin: "top center",
+          width: pcBoardScale < 0.999 ? `${(100 / pcBoardScale).toFixed(4)}%` : "100%",
+          marginLeft: pcBoardScale < 0.999 ? "auto" : undefined,
+          marginRight: pcBoardScale < 0.999 ? "auto" : undefined,
+        }
+      : undefined;
+
   return (
     <div className={`${GAME_COLUMN_CLASS} flex min-h-0 flex-1 flex-col lg:max-w-none`}>
       <GamePageHeader titleEn="Tap Coloring" titleJa="タップ塗り絵" />
@@ -42,14 +89,17 @@ export function TapColoringLabShell() {
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row lg:items-start lg:gap-5">
         <div
-          className="flex min-h-0 w-full flex-1 flex-col lg:max-h-[calc(100dvh-var(--tap-wrap-off)-80px)] lg:min-w-0 lg:justify-center"
+          ref={leftColRef}
+          className="flex min-h-0 w-full flex-1 flex-col lg:max-h-[calc(100dvh-var(--tap-wrap-off)-80px)] lg:min-w-0 lg:justify-center lg:overflow-y-auto"
           style={{ "--tap-wrap-off": `${GAME_NO_TOP_AD_LAYOUT_OFFSET_PX}px` } as CSSProperties}
         >
-          <section className="relative z-[1] mb-0 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-4 backdrop-blur sm:px-5 sm:pb-5 sm:pt-4 lg:mb-0">
-            <div className="max-h-none lg:max-h-[min(680px,calc(100dvh-var(--tap-wrap-off)-96px))] lg:overflow-y-auto">
-              <ColoringCanvas />
-            </div>
-          </section>
+          <div className="w-full lg:origin-top" style={scaledInnerStyle}>
+            <section className="relative z-[1] mb-0 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-4 backdrop-blur sm:px-5 sm:pb-5 sm:pt-4 lg:mb-0">
+              <div className="max-h-none lg:max-h-[min(680px,calc(100dvh-var(--tap-wrap-off)-96px))] lg:overflow-y-auto">
+                <ColoringCanvas />
+              </div>
+            </section>
+          </div>
         </div>
 
         <aside className="order-2 w-full shrink-0 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-20px)] lg:w-[360px] lg:self-start lg:overflow-y-auto">
