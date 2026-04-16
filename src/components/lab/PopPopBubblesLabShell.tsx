@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
@@ -9,6 +9,7 @@ import {
   GAME_AD_GAP_BEFORE_SLOT_2_PX,
   GAME_AD_SLOT_MIN_HEIGHT_PX,
   GAME_COLUMN_CLASS,
+  GAME_NO_TOP_AD_LAYOUT_OFFSET_PX,
 } from "@/lib/gameLayout";
 import { PopPopBubblesScene, type PopPopBubblesBgPaletteMode } from "@/lib/pop-pop-bubbles/PopPopBubblesScene";
 
@@ -193,8 +194,25 @@ export function PopPopBubblesLabShell() {
     scene.respawnWaveNow();
   }, [bubbleCount]);
 
+  useEffect(() => {
+    const onLoad = () => {
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+        })
+      );
+    };
+    if (typeof document === "undefined") return;
+    if (document.readyState === "complete") {
+      onLoad();
+    } else {
+      window.addEventListener("load", onLoad, { once: true });
+    }
+    return () => window.removeEventListener("load", onLoad);
+  }, []);
+
   return (
-    <div className={GAME_COLUMN_CLASS}>
+    <div className={`${GAME_COLUMN_CLASS} flex min-h-0 flex-1 flex-col lg:max-w-none`}>
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-4 z-50">
           <button
@@ -428,28 +446,60 @@ export function PopPopBubblesLabShell() {
       <div className="hidden" aria-hidden>
         <PairLinkAdSlot slotIndex={1} />
       </div>
-      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-2 backdrop-blur sm:px-5 sm:pb-5 sm:pt-2">
-        <div
-          ref={stageRef}
-          className="relative mx-auto h-[min(70vw,460px)] min-h-[320px] w-full max-w-[460px] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[radial-gradient(circle_at_20%_18%,color-mix(in_srgb,var(--color-primary)_14%,transparent),transparent_52%),linear-gradient(180deg,color-mix(in_srgb,var(--color-bg)_92%,white_8%),color-mix(in_srgb,var(--color-bg)_98%,transparent))]"
-        >
-          <canvas ref={canvasRef} className="h-full w-full touch-none" />
-          {!isReady && (
-            <div className="absolute inset-0 grid place-items-center text-sm text-[var(--color-muted)]">読み込み中…</div>
-          )}
+
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row lg:items-start lg:gap-5">
+        <div className="flex min-h-0 w-full flex-1 flex-col lg:max-h-[calc(100dvh-var(--pop-wrap-off)-80px)] lg:min-w-0 lg:justify-center">
+          <section
+            className="relative z-[1] mb-0 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-2 backdrop-blur sm:px-5 sm:pb-5 sm:pt-2 lg:mb-0"
+            style={
+              { "--pop-wrap-off": `${GAME_NO_TOP_AD_LAYOUT_OFFSET_PX}px` } as CSSProperties
+            }
+          >
+            <div
+              ref={stageRef}
+              className="relative mx-auto h-[min(70vw,460px)] min-h-[320px] w-full max-w-[460px] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[radial-gradient(circle_at_20%_18%,color-mix(in_srgb,var(--color-primary)_14%,transparent),transparent_52%),linear-gradient(180deg,color-mix(in_srgb,var(--color-bg)_92%,white_8%),color-mix(in_srgb,var(--color-bg)_98%,transparent))] lg:h-[min(680px,calc(100dvh-var(--pop-wrap-off)-96px))] lg:max-w-[min(920px,100%)]"
+            >
+              <canvas ref={canvasRef} className="h-full w-full touch-none" />
+              {!isReady && (
+                <div className="absolute inset-0 grid place-items-center text-sm text-[var(--color-muted)]">読み込み中…</div>
+              )}
+            </div>
+          </section>
         </div>
+
+        <aside className="order-2 w-full shrink-0 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-20px)] lg:w-[360px] lg:self-start lg:overflow-y-auto">
+          <div className="mb-2 flex flex-col gap-2 lg:hidden">
+            <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
+              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
+                あそびかた・ねらい（要約）
+              </summary>
+              <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
+                <p className="m-0">【ねらい】手眼協調・注意の切替・反応速度の基礎づくり</p>
+                <p className="mt-2 m-0">【対象】幼児〜小学校低学年</p>
+                <p className="mt-2 m-0">【操作】タップ中心の直感操作</p>
+              </div>
+            </details>
+          </div>
+          <section className="mb-3 hidden rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2 lg:block">
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">あそびかた（要約）</h3>
+            <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">タップでバブルを割り、落ちてくる内容物をキャッチする直感操作です。</p>
+          </section>
+          <div
+            className="relative z-0 w-full"
+            style={{ minHeight: GAME_AD_SLOT_MIN_HEIGHT_PX, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}
+          >
+            <PairLinkAdSlot slotIndex={2} />
+          </div>
+        </aside>
+      </div>
+
+      <section className="mx-auto mt-6 w-full max-w-3xl">
         <GameQuickInfoNote
           goal="手眼協調・注意の切替・反応速度の基礎づくり"
           target="幼児〜小学校低学年"
           operation="タップ中心の直感操作"
         />
       </section>
-      <div
-        className="relative z-0 w-full"
-        style={{ minHeight: GAME_AD_SLOT_MIN_HEIGHT_PX, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}
-      >
-        <PairLinkAdSlot slotIndex={2} />
-      </div>
     </div>
   );
 }

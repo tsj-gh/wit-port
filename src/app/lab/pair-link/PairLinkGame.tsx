@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import { DevLink } from "@/components/DevLink";
@@ -22,6 +22,7 @@ import {
   GAME_AD_GAP_AFTER_SLOT_1_PX,
   GAME_AD_GAP_BEFORE_SLOT_2_PX,
   GAME_COLUMN_CLASS,
+  GAME_TOP_AD_RESERVED_PX,
 } from "@/lib/gameLayout";
 import { useUserSyncContext } from "@/components/UserSyncProvider";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
@@ -602,8 +603,38 @@ export default function PairLinkGame() {
     return () => window.removeEventListener("resize", update);
   }, [forcedWidth]);
 
+  const topAdRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onLoad = () => {
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (window.innerWidth < 1024) {
+            window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+            return;
+          }
+          const top = topAdRef.current?.getBoundingClientRect().top ?? 0;
+          window.scrollTo({ top: window.scrollY + top, left: 0, behavior: "auto" });
+        })
+      );
+    };
+    if (typeof document === "undefined") return;
+    if (document.readyState === "complete") {
+      onLoad();
+    } else {
+      window.addEventListener("load", onLoad, { once: true });
+    }
+    return () => window.removeEventListener("load", onLoad);
+  }, []);
+
   const effectiveViewportWidth = forcedWidth ?? windowWidth - 40;
-  const canvasPixelSize = Math.min(500, Math.max(300, effectiveViewportWidth));
+  const canvasPixelSize = useMemo(() => {
+    const base = Math.max(300, effectiveViewportWidth);
+    const wCap = windowWidth >= 1024 ? 860 : 500;
+    if (typeof window === "undefined") return Math.min(wCap, base);
+    const hCap = window.innerHeight - GAME_TOP_AD_RESERVED_PX - 96;
+    return Math.floor(Math.min(wCap, base, hCap));
+  }, [windowWidth, effectiveViewportWidth]);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeSecondsRef = useRef(0);
@@ -1514,7 +1545,7 @@ export default function PairLinkGame() {
   }
 
   return (
-    <div className="mx-auto max-w-[1080px] w-full px-4 py-4">
+    <div className="w-full">
       {isDevTj && lastPuzzleDebugInfo && !useLegacyMode && (
         <div
           className="fixed left-4 bottom-4 z-40 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_82%,var(--color-bg))] px-2 py-1.5 text-[10px] font-mono text-[var(--color-muted)]"
@@ -2153,69 +2184,77 @@ export default function PairLinkGame() {
             : undefined
         }
       >
-        <div className={GAME_COLUMN_CLASS}>
-        <GamePageHeader
-          titleEn="Pair-Link"
-          titleJa="ペアリンク"
-          trailing={
-            <>
-              <span className="tabular-nums">{formatTime(timeSeconds)}</span>
-              {solved && <span className="text-[var(--color-primary)]">{t("games.pairLink.clear")}</span>}
-            </>
-          }
-        />
+        <div className={`${GAME_COLUMN_CLASS} flex min-h-0 flex-1 flex-col lg:max-w-none`}>
+          <GamePageHeader
+            titleEn="Pair-Link"
+            titleJa="ペアリンク"
+            trailing={
+              <>
+                <span className="tabular-nums">{formatTime(timeSeconds)}</span>
+                {solved && <span className="text-[var(--color-primary)]">{t("games.pairLink.clear")}</span>}
+              </>
+            }
+          />
 
-      <div
-        className="relative z-0 w-full"
-        style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
-      >
-        <PairLinkAdSlot slotIndex={1} />
-      </div>
-
-      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
-        <div className="flex w-full flex-col items-center">
-          <div className="mb-2 w-full text-sm font-semibold text-[var(--color-text)]">
-            <span>{statusDisplay}</span>
-          </div>
-          <div
-            className="w-full touch-none select-none"
-            style={{ minHeight: canvasSize, WebkitTapHighlightColor: "transparent" }}
-          >
-            <div className="relative w-full max-w-[500px] mx-auto border-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] rounded-xl shadow-lg overflow-hidden bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))]">
-              <canvas
-                ref={attachCanvasRef}
-                width={canvasSize}
-                height={canvasSize}
-                className="w-full h-auto cursor-crosshair block align-top bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))]"
-                style={{ touchAction: "none" }}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerLeave={handlePointerUp}
-                onPointerCancel={handlePointerUp}
-              />
-              {tapFx != null && spacing > 0 && canvasSize > 0 && (
-                <PairLinkEndpointTapOverlay
-                  key={tapFx.id}
-                  tapFx={tapFx}
-                  canvasSize={canvasSize}
-                  spacing={spacing}
-                  tapScaleFactor={tapScaleFactor}
-                  rippleMaxScale={tapRippleMaxScale}
-                  color={
-                    numbers.find((n) => String(n.val) === tapFx.valStr)?.color ?? "#10b981"
-                  }
-                />
-              )}
+          <div className="flex min-h-0 w-full flex-1 flex-col">
+            <div
+              ref={topAdRef}
+              className="order-3 mt-3 w-full shrink-0 md:order-1 md:mt-0"
+              style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
+            >
+              <div className="mx-auto w-full max-w-[980px]">
+                <PairLinkAdSlot slotIndex={1} />
+              </div>
             </div>
-          </div>
-        </div>
-        <GameQuickInfoNote
-          goal="論理的推論・先読み計画・ワーキングメモリの強化"
-          target="小学生〜大人（推奨: 小学校中学年以上）"
-          operation="タップまたはドラッグで経路を接続"
-        />
-        <div className="mx-auto mt-4 mb-2 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start">
+
+            <div className="order-1 flex min-h-0 w-full flex-1 flex-col gap-3 lg:order-2 lg:flex-row lg:items-start lg:gap-5">
+              <div
+                className="relative flex min-h-0 w-full flex-1 flex-col items-stretch lg:min-w-0 lg:max-h-[calc(100dvh-var(--pair-top-ad-reserved)-80px)]"
+                style={{ "--pair-top-ad-reserved": `${GAME_TOP_AD_RESERVED_PX}px` } as CSSProperties}
+              >
+                <section className="relative z-[1] mb-4 w-full flex-1 rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0 lg:mb-0 lg:flex lg:min-h-0 lg:flex-col">
+                  <div className="flex w-full flex-col items-center lg:min-h-0 lg:flex-1 lg:justify-center">
+                    <div className="mb-2 w-full text-sm font-semibold text-[var(--color-text)]">
+                      <span>{statusDisplay}</span>
+                    </div>
+                    <div
+                      className="w-full touch-none select-none"
+                      style={{ minHeight: canvasSize, WebkitTapHighlightColor: "transparent" }}
+                    >
+                      <div className="relative mx-auto w-full max-w-[500px] overflow-hidden rounded-xl border-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))] shadow-lg lg:max-w-[min(860px,calc(100dvh-var(--pair-top-ad-reserved)-100px))]">
+                        <canvas
+                          ref={attachCanvasRef}
+                          width={canvasSize}
+                          height={canvasSize}
+                          className="block h-auto w-full cursor-crosshair bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))] align-top"
+                          style={{ touchAction: "none" }}
+                          onPointerDown={handlePointerDown}
+                          onPointerMove={handlePointerMove}
+                          onPointerUp={handlePointerUp}
+                          onPointerLeave={handlePointerUp}
+                          onPointerCancel={handlePointerUp}
+                        />
+                        {tapFx != null && spacing > 0 && canvasSize > 0 && (
+                          <PairLinkEndpointTapOverlay
+                            key={tapFx.id}
+                            tapFx={tapFx}
+                            canvasSize={canvasSize}
+                            spacing={spacing}
+                            tapScaleFactor={tapScaleFactor}
+                            rippleMaxScale={tapRippleMaxScale}
+                            color={
+                              numbers.find((n) => String(n.val) === tapFx.valStr)?.color ?? "#10b981"
+                            }
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <aside className="order-2 w-full shrink-0 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-20px)] lg:w-[360px] lg:self-start lg:overflow-y-auto">
+                <div className="mx-auto mb-2 flex w-full min-w-0 flex-col gap-4 lg:mt-0">
           {useLegacyMode ? (
             <>
               <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
@@ -2355,21 +2394,61 @@ export default function PairLinkGame() {
               </div>
             </>
           )}
-        </div>
-        {/* 広告枠2: 操作UIの直下（余白を確保して接触を回避） */}
-        <div
-          className="relative z-0 mt-0 w-full"
-          style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}
-        >
-          <PairLinkAdSlot slotIndex={2} />
-        </div>
-        {!useLegacyMode && GRADE_MAP.get(currentGrade) && (
-          <p className="mx-auto mt-3 w-full px-1 text-center text-xs text-[var(--color-muted)]">
-            {GRADE_MAP.get(currentGrade)!.theme}
-          </p>
-        )}
-        <p className="mt-3 text-xs text-[var(--color-muted)]">{t("games.pairLink.ruleHint")}</p>
-      </section>
+                </div>
+
+                {!useLegacyMode && GRADE_MAP.get(currentGrade) && (
+                  <p className="mt-1 w-full px-1 text-center text-xs text-[var(--color-muted)] lg:text-left">
+                    {GRADE_MAP.get(currentGrade)!.theme}
+                  </p>
+                )}
+
+                <div className="mt-1 flex w-full flex-col gap-2 lg:hidden">
+                  <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
+                    <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
+                      {t("games.skyscraper.rulesTitle")}
+                    </summary>
+                    <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
+                      <p className="m-0">{t("games.pairLink.ruleHint")}</p>
+                    </div>
+                  </details>
+                  <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
+                    <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
+                      {t("games.reflecShot.accordionControlsSummary")}
+                    </summary>
+                    <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
+                      <p className="m-0">タップまたはドラッグで経路を接続</p>
+                    </div>
+                  </details>
+                </div>
+
+                <div className="mt-1 hidden w-full flex-col gap-2 lg:flex">
+                  <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
+                    <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.skyscraper.rulesTitle")}</h3>
+                    <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">{t("games.pairLink.ruleHint")}</p>
+                  </section>
+                  <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
+                    <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.reflecShot.accordionControlsSummary")}</h3>
+                    <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">タップまたはドラッグで経路を接続</p>
+                  </section>
+                </div>
+
+                <div
+                  className="relative z-0 mt-0 w-full"
+                  style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}
+                >
+                  <PairLinkAdSlot slotIndex={2} />
+                </div>
+              </aside>
+            </div>
+
+            <section className="order-4 mx-auto mt-6 w-full max-w-3xl">
+              <GameQuickInfoNote
+                goal="論理的推論・先読み計画・ワーキングメモリの強化"
+                target="小学生〜大人（推奨: 小学校中学年以上）"
+                operation="タップまたはドラッグで経路を接続"
+              />
+            </section>
+          </div>
         </div>
 
       {showClearOverlay && (

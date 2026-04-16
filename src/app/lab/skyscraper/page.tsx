@@ -27,9 +27,11 @@ export default function SkyscraperPage() {
     <>
       <SmartGuardLock />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(skyscraperJsonLd) }} />
-      <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)] text-[var(--color-muted)]">読み込み中…</div>}>
-        <SkyscraperGame />
-      </Suspense>
+      <main className="mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-1 flex-col px-4 py-4 md:py-6 lg:max-w-[1400px] lg:px-6">
+        <Suspense fallback={<div className="flex min-h-[40dvh] flex-1 items-center justify-center bg-[var(--color-bg)] text-[var(--color-muted)]">読み込み中…</div>}>
+          <SkyscraperGame />
+        </Suspense>
+      </main>
       <SkyscraperEducationalI18n />
       <OtherPuzzlesSection currentId="skyscraper" />
     </>

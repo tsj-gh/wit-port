@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import confetti from "canvas-confetti";
 import { GamePageHeader } from "@/components/GamePageHeader";
@@ -11,6 +11,7 @@ import {
   GAME_AD_GAP_AFTER_SLOT_1_PX,
   GAME_AD_GAP_BEFORE_SLOT_2_PX,
   GAME_COLUMN_CLASS,
+  GAME_TOP_AD_RESERVED_PX,
 } from "@/lib/gameLayout";
 import {
   generatePuzzleAction,
@@ -114,6 +115,30 @@ export default function SkyscraperGame() {
   useEffect(() => {
     loadPuzzle(n, difficulty);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const topAdRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onLoad = () => {
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (window.innerWidth < 1024) {
+            window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+            return;
+          }
+          const top = topAdRef.current?.getBoundingClientRect().top ?? 0;
+          window.scrollTo({ top: window.scrollY + top, left: 0, behavior: "auto" });
+        })
+      );
+    };
+    if (typeof document === "undefined") return;
+    if (document.readyState === "complete") {
+      onLoad();
+    } else {
+      window.addEventListener("load", onLoad, { once: true });
+    }
+    return () => window.removeEventListener("load", onLoad);
+  }, []);
 
   useEffect(() => {
     if (timerActive && !solved) {
@@ -368,7 +393,7 @@ export default function SkyscraperGame() {
   }
 
   return (
-    <div className="relative mx-auto max-w-[1080px] w-full px-4 py-4 isolate">
+    <div className="relative isolate w-full">
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-4 z-50">
           <button
@@ -479,24 +504,36 @@ export default function SkyscraperGame() {
           )}
         </div>
       )}
-      <div className={GAME_COLUMN_CLASS}>
-      <GamePageHeader
-        titleEn="Skyscraper"
-        titleJa="スカイスクレイパー"
-        trailing={
-          <>
-            <span className="tabular-nums">{formatTime(timeSeconds)}</span>
-            {solved && <span className="text-[var(--color-primary)]">{t("games.skyscraper.clearBanner")}</span>}
-          </>
-        }
-      />
+      <div className={`${GAME_COLUMN_CLASS} flex min-h-0 flex-1 flex-col lg:max-w-none`}>
+        <GamePageHeader
+          titleEn="Skyscraper"
+          titleJa="スカイスクレイパー"
+          trailing={
+            <>
+              <span className="tabular-nums">{formatTime(timeSeconds)}</span>
+              {solved && <span className="text-[var(--color-primary)]">{t("games.skyscraper.clearBanner")}</span>}
+            </>
+          }
+        />
 
-      <div className="relative z-0 w-full" style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}>
-        <SkyscraperAdSlot slotIndex={1} />
-      </div>
+        <div className="flex min-h-0 w-full flex-1 flex-col">
+          <div
+            ref={topAdRef}
+            className="order-3 mt-3 w-full shrink-0 md:order-1 md:mt-0"
+            style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
+          >
+            <div className="mx-auto w-full max-w-[980px]">
+              <SkyscraperAdSlot slotIndex={1} />
+            </div>
+          </div>
 
-      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0">
-        <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
+          <div className="order-1 flex min-h-0 w-full flex-1 flex-col gap-3 lg:order-2 lg:flex-row lg:items-start lg:gap-5">
+            <div
+              className="relative flex min-h-0 w-full flex-1 flex-col lg:min-w-0 lg:max-h-[calc(100dvh-var(--sky-top-ad-reserved)-80px)] lg:overflow-y-auto"
+              style={{ "--sky-top-ad-reserved": `${GAME_TOP_AD_RESERVED_PX}px` } as CSSProperties}
+            >
+              <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-0 backdrop-blur sm:px-5 sm:pb-5 sm:pt-0 lg:mb-0">
+                <div className="flex flex-col items-center justify-center gap-6 sm:flex-row">
           <div className="flex flex-col gap-2 items-center">
             <div className="grid gap-1 justify-items-center" style={{ gridTemplateColumns: `repeat(${n + 2}, auto)` }}>
               <div />
@@ -659,17 +696,13 @@ export default function SkyscraperGame() {
           </div>
         </div>
 
-        <div className="mt-3 min-h-[1.5em] text-center text-sm font-medium text-[var(--color-muted)]">{statusDisplay}</div>
-      </section>
+                <div className="mt-3 min-h-[1.5em] text-center text-sm font-medium text-[var(--color-muted)]">{statusDisplay}</div>
+              </section>
+            </div>
 
-      <GameQuickInfoNote
-        goal="空間把握・演繹推論・仮説検証の反復訓練"
-        target="小学校中学年〜大人"
-        operation="タップで数字入力、推理しながら検証"
-      />
-
-      <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-3 backdrop-blur sm:px-5 sm:pb-5 sm:pt-3">
-        <div className="flex w-full min-w-0 flex-col gap-4">
+            <aside className="order-2 w-full shrink-0 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-20px)] lg:w-[360px] lg:self-start lg:overflow-y-auto">
+              <section className="relative z-[1] mb-4 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-3 backdrop-blur sm:px-5 sm:pb-5 sm:pt-3 lg:mb-3">
+                <div className="flex w-full min-w-0 flex-col gap-4">
           <div className="w-full min-w-0">
             <label className="mb-1 block text-xs text-[var(--color-muted)]">{t("games.skyscraper.sizeLabel")}</label>
             <div
@@ -759,32 +792,74 @@ export default function SkyscraperGame() {
               {t("games.skyscraper.autoSolve")}
             </button>
           </div>
-          <div className="flex justify-center">
-            <button
-              onClick={() => loadPuzzle(n, difficulty)}
-              disabled={loading}
-              className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-on-primary)] hover:brightness-95 disabled:opacity-50"
-            >
-              {t("games.skyscraper.newPuzzle")}
-            </button>
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => loadPuzzle(n, difficulty)}
+                      disabled={loading}
+                      className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-on-primary)] hover:brightness-95 disabled:opacity-50"
+                    >
+                      {t("games.skyscraper.newPuzzle")}
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <div className="mt-1 flex w-full flex-col gap-2 lg:hidden">
+                <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
+                  <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
+                    {t("games.reflecShot.accordionControlsSummary")}
+                  </summary>
+                  <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
+                    <p className="m-0">タップで数字入力、推理しながら検証</p>
+                  </div>
+                </details>
+                <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
+                  <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
+                    {t("games.skyscraper.rulesTitle")}
+                  </summary>
+                  <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
+                    <p className="mb-3 m-0">{t("games.skyscraper.rulesIntro")}</p>
+                    <ol className="list-inside list-decimal space-y-2 text-sm leading-relaxed text-[var(--color-muted)]">
+                      <li>{t("games.skyscraper.rulesLi1")}</li>
+                      <li>{t("games.skyscraper.rulesLi2")}</li>
+                      <li>{t("games.skyscraper.rulesLi3")}</li>
+                      <li>{t("games.skyscraper.rulesLi4")}</li>
+                    </ol>
+                  </div>
+                </details>
+              </div>
+
+              <div className="mt-1 hidden w-full flex-col gap-2 lg:flex">
+                <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
+                  <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.reflecShot.accordionControlsSummary")}</h3>
+                  <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">タップで数字入力、推理しながら検証</p>
+                </section>
+                <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
+                  <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.skyscraper.rulesTitle")}</h3>
+                  <p className="mt-2 mb-3 text-xs leading-relaxed text-[var(--color-muted)]">{t("games.skyscraper.rulesIntro")}</p>
+                  <ol className="list-inside list-decimal space-y-2 text-sm leading-relaxed text-[var(--color-muted)]">
+                    <li>{t("games.skyscraper.rulesLi1")}</li>
+                    <li>{t("games.skyscraper.rulesLi2")}</li>
+                    <li>{t("games.skyscraper.rulesLi3")}</li>
+                    <li>{t("games.skyscraper.rulesLi4")}</li>
+                  </ol>
+                </section>
+              </div>
+
+              <div className="relative z-0 w-full" style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}>
+                <SkyscraperAdSlot slotIndex={2} />
+              </div>
+            </aside>
           </div>
+
+          <section className="order-4 mx-auto mt-6 w-full max-w-3xl">
+            <GameQuickInfoNote
+              goal="空間把握・演繹推論・仮説検証の反復訓練"
+              target="小学校中学年〜大人"
+              operation="タップで数字入力、推理しながら検証"
+            />
+          </section>
         </div>
-      </section>
-
-      <div className="relative z-0 w-full" style={{ minHeight: 100, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}>
-        <SkyscraperAdSlot slotIndex={2} />
-      </div>
-
-      <section className="w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-4 backdrop-blur sm:p-5">
-        <h2 className="mb-3 text-lg font-bold text-[var(--color-text)]">{t("games.skyscraper.rulesTitle")}</h2>
-        <p className="mb-3 text-xs leading-relaxed text-[var(--color-muted)]">{t("games.skyscraper.rulesIntro")}</p>
-        <ol className="list-inside list-decimal space-y-2 text-sm leading-relaxed text-[var(--color-muted)]">
-          <li>{t("games.skyscraper.rulesLi1")}</li>
-          <li>{t("games.skyscraper.rulesLi2")}</li>
-          <li>{t("games.skyscraper.rulesLi3")}</li>
-          <li>{t("games.skyscraper.rulesLi4")}</li>
-        </ol>
-      </section>
       </div>
 
       {showClearOverlay && (

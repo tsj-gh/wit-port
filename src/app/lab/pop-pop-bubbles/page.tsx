@@ -25,7 +25,7 @@ export default function PopPopBubblesPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(popPopBubblesJsonLd) }}
       />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 px-4 py-4 md:py-6">
+      <main className="mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-1 flex-col px-4 py-4 md:py-6 lg:max-w-[1400px] lg:px-6">
         <Suspense fallback={<div className="py-8 text-sm text-[var(--color-muted)]">読み込み中…</div>}>
           <PopPopBubblesLabShell />
         </Suspense>

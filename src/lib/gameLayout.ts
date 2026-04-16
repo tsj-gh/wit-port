@@ -31,3 +31,9 @@ export const GAME_TOP_AD_RESERVED_PX =
   GAME_AD_SLOT_MIN_HEIGHT_PX +
   GAME_AD_GAP_AFTER_SLOT_1_PX +
   32;
+
+/**
+ * 上部に広告#1 を出さないゲーム向けの、盤面 max-height 計算用オフセット（px）
+ * （`calc(100dvh - [この値])` でヘッダー周りの余白を確保）
+ */
+export const GAME_NO_TOP_AD_LAYOUT_OFFSET_PX = 80;
