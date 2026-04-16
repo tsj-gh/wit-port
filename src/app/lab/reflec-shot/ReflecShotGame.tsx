@@ -2783,6 +2783,10 @@ export default function ReflecShotGame() {
     const onLoad = () => {
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
+          if (window.innerWidth < 1024) {
+            window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+            return;
+          }
           const top = topAdRef.current?.getBoundingClientRect().top ?? 0;
           window.scrollTo({ top: window.scrollY + top, left: 0, behavior: "auto" });
         })
@@ -3490,7 +3494,7 @@ export default function ReflecShotGame() {
           </div>
 
           <aside className="order-2 w-full shrink-0 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-20px)] lg:w-[360px] lg:self-start lg:overflow-y-auto">
-            <div className="mb-2 mt-2 flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start lg:mt-0 lg:flex-col lg:gap-3">
+            <div className="mb-1 mt-2 flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-start lg:mt-0 lg:flex-col lg:gap-3">
           <div className="w-full min-w-0 sm:flex-1 sm:min-w-0">
             <label className="block text-xs text-[var(--color-muted)] mb-1">{t("common.chooseGrade")}</label>
             <div
@@ -3527,7 +3531,7 @@ export default function ReflecShotGame() {
           </div>
 
         {isDevTj && (
-          <div className="mt-3 flex flex-wrap justify-center gap-2 pb-2">
+          <div className="mt-2 flex flex-wrap justify-center gap-2 pb-1 lg:justify-start">
             <button
               type="button"
               disabled={isGenerating || boardLoadWait}
@@ -3547,7 +3551,7 @@ export default function ReflecShotGame() {
         )}
 
         {!isDevTj && (
-          <div className="mt-3 flex justify-center pb-2 lg:justify-start">
+          <div className="mt-2 flex justify-center pb-1 lg:justify-start">
             <button
               type="button"
               disabled={isGenerating || boardLoadWait}
@@ -3598,11 +3602,6 @@ export default function ReflecShotGame() {
                 <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.reflecShot.accordionControlsSummary")}</h3>
                 <p className="mt-2 m-0 text-[11px] leading-relaxed text-[var(--color-muted)]">{t("games.reflecShot.ruleControlsPc")}</p>
               </section>
-              <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
-                <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.reflecShot.accordionGoalSummary")}</h3>
-                <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">【ねらい】{t("games.reflecShot.infoGoal")}</p>
-                <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">【対象】{t("games.reflecShot.infoTarget")}</p>
-              </section>
             </div>
 
             <div
@@ -3613,6 +3612,12 @@ export default function ReflecShotGame() {
             </div>
           </aside>
         </div>
+
+        <section className="mt-3 hidden w-full rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2 lg:block">
+          <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.reflecShot.accordionGoalSummary")}</h3>
+          <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">【ねらい】{t("games.reflecShot.infoGoal")}</p>
+          <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">【対象】{t("games.reflecShot.infoTarget")}</p>
+        </section>
       </div>
 
       {helpOpen && (
