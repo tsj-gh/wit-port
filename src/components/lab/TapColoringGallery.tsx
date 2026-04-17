@@ -10,6 +10,8 @@ import { toggleTapColoringHistoryPinned, type TapColoringHistoryEntry } from "@/
 type TapColoringGalleryProps = {
   entries: TapColoringHistoryEntry[];
   coloringRef: RefObject<ColoringCanvasHandle | null>;
+  /** 編集中の履歴エントリ ID（該当カードのフッターを「編集終了」に差し替え） */
+  editingHistoryEntryId?: string | null;
   className?: string;
   onToast?: (message: string) => void;
   /** 直近に差し替えた履歴 ID（サムネ揺れ） */
@@ -42,6 +44,7 @@ function IconSave({ className }: { className?: string }) {
 export function TapColoringGallery({
   entries,
   coloringRef,
+  editingHistoryEntryId = null,
   className = "",
   onToast,
   shakeEntryId,
@@ -196,20 +199,36 @@ export function TapColoringGallery({
                     <span className="sr-only">再開</span>
                   </button>
                   <div className="flex items-center justify-center border-t border-[color-mix(in_srgb,var(--color-text)_8%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)] px-1 py-1">
-                    <button
-                      type="button"
-                      disabled={btnDisabled}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openExportHistory(entry);
-                      }}
-                      className="inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-[10px] font-medium text-[var(--color-muted)] transition enabled:hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] enabled:hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-45"
-                      aria-label="絵を保存・共有"
-                      title="絵を保存・共有"
-                    >
-                      <IconSave className="h-3.5 w-3.5" />
-                      <span className="whitespace-nowrap">絵を保存・共有</span>
-                    </button>
+                    {editingHistoryEntryId === entry.id ? (
+                      <button
+                        type="button"
+                        disabled={btnDisabled}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          coloringRef.current?.exitHistoryEditing();
+                        }}
+                        className="inline-flex h-8 min-w-[6.5rem] items-center justify-center rounded-lg border-2 border-orange-950/25 bg-orange-600 px-2.5 text-[11px] font-bold text-white shadow-sm transition enabled:hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-45 sm:h-8 sm:text-xs"
+                        aria-label="編集終了"
+                        title="編集終了"
+                      >
+                        編集終了
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={btnDisabled}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openExportHistory(entry);
+                        }}
+                        className="inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-[10px] font-medium text-[var(--color-muted)] transition enabled:hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] enabled:hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-45"
+                        aria-label="絵を保存・共有"
+                        title="絵を保存・共有"
+                      >
+                        <IconSave className="h-3.5 w-3.5" />
+                        <span className="whitespace-nowrap">絵を保存・共有</span>
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               </li>

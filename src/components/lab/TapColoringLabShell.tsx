@@ -4,7 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
-import { ColoringCanvas, type ColoringCanvasHandle } from "@/components/lab/ColoringCanvas";
+import {
+  ColoringCanvas,
+  type ColoringCanvasHandle,
+  type TapColoringHistoryEditChrome,
+} from "@/components/lab/ColoringCanvas";
 import { TapColoringGallery } from "@/components/lab/TapColoringGallery";
 import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import { readTapColoringHistory, type TapColoringHistoryEntry } from "@/lib/tapColoringHistory";
@@ -30,6 +34,10 @@ export function TapColoringLabShell() {
   const [isLocked, setIsLocked] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [sceneBgColor, setSceneBgColor] = useState("#fafaf9");
+  const [historyEditChrome, setHistoryEditChrome] = useState<TapColoringHistoryEditChrome>({
+    editingId: null,
+    exitReady: false,
+  });
   const onHistorySequenceInteractionChange = useCallback((allowed: boolean) => {
     setIsLocked(!allowed);
   }, []);
@@ -115,6 +123,15 @@ export function TapColoringLabShell() {
                   : undefined
               }
             >
+              {historyEditChrome.exitReady && !isMobileLayout && (
+                <button
+                  type="button"
+                  onClick={() => coloringRef.current?.exitHistoryEditing()}
+                  className="absolute right-3 top-3 z-20 min-w-[8.5rem] rounded-xl border-2 border-orange-950/30 bg-orange-600 px-4 py-2.5 text-base font-bold text-white shadow-lg transition hover:bg-orange-500 active:scale-[0.98] sm:right-4 sm:top-4 sm:min-w-[9.5rem] sm:px-5 sm:py-3 sm:text-lg"
+                >
+                  編集終了
+                </button>
+              )}
               <div className="max-h-none lg:max-h-none lg:overflow-visible">
                 <ColoringCanvas
                   ref={coloringRef}
@@ -122,6 +139,7 @@ export function TapColoringLabShell() {
                   debugOnControlRef={tapDebugOnButtonRef}
                   onDebugModeChange={setCanvasDebugMode}
                   onSceneBgColorChange={setSceneBgColor}
+                  onHistoryEditChromeChange={setHistoryEditChrome}
                   onHistoryUpdated={() => setHistTick((t) => t + 1)}
                   onHistoryEntryReplaced={(id) => {
                     setShakeEntryId(id);
@@ -135,10 +153,21 @@ export function TapColoringLabShell() {
           </div>
         </div>
 
+        {historyEditChrome.exitReady && isMobileLayout && (
+          <button
+            type="button"
+            onClick={() => coloringRef.current?.exitHistoryEditing()}
+            className="w-full shrink-0 rounded-xl border-2 border-orange-950/30 bg-orange-600 px-4 py-4 text-lg font-bold text-white shadow-lg transition hover:bg-orange-500 active:scale-[0.99] sm:py-4 sm:text-xl"
+          >
+            編集終了
+          </button>
+        )}
+
         <TapColoringGallery
           className="w-full shrink-0 lg:hidden"
           entries={historyEntries}
           coloringRef={coloringRef}
+          editingHistoryEntryId={historyEditChrome.editingId}
           shakeEntryId={shakeEntryId}
           onToast={setTapToast}
           isLocked={isLocked}
@@ -174,6 +203,7 @@ export function TapColoringLabShell() {
             className="mt-3 hidden lg:block"
             entries={historyEntries}
             coloringRef={coloringRef}
+            editingHistoryEntryId={historyEditChrome.editingId}
             shakeEntryId={shakeEntryId}
             onToast={setTapToast}
             isLocked={isLocked}

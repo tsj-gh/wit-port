@@ -453,6 +453,8 @@ function computeFillRatio(maskData: ImageData, paintData: ImageData, stride: num
 
 export type ColoringCanvasHandle = {
   loadHistoryEntry: (entry: TapColoringHistoryEntry) => boolean;
+  /** 履歴編集を終了（Canvas 内の「編集終了」と同一処理） */
+  exitHistoryEditing: () => void;
   /** 現在の塗り状態を履歴に追加（ゲーム進行は変えない） */
   saveCurrentWorkToHistory: () => boolean;
   /** 高画質合成プレビュー用 PNG をプレビューとして履歴に保存 */
@@ -463,10 +465,18 @@ export type ColoringCanvasHandle = {
   setDebugMode: (enabled: boolean) => void;
 };
 
+export type TapColoringHistoryEditChrome = {
+  editingId: string | null;
+  /** 履歴の塗りが載り、編集終了が有効になったとき true */
+  exitReady: boolean;
+};
+
 type ColoringCanvasProps = {
   onHistoryUpdated?: () => void;
   /** 履歴サムネの差し替え直後（揺れ演出用） */
   onHistoryEntryReplaced?: (entryId: string) => void;
+  /** Shell 側の「編集終了」配置用に、編集中の履歴 ID と終了可能フラグを通知 */
+  onHistoryEditChromeChange?: (state: TapColoringHistoryEditChrome) => void;
   /** 履歴シーケンス中は false（作品履歴の操作を止める） */
   onHistorySequenceInteractionChange?: (interactionAllowed: boolean) => void;
   /** 背景同期用（主にモバイルの外枠レイアウト） */
@@ -482,6 +492,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   {
     onHistoryUpdated,
     onHistoryEntryReplaced,
+    onHistoryEditChromeChange,
     onHistorySequenceInteractionChange,
     onSceneBgColorChange,
     debugOnControlRef,
@@ -631,6 +642,14 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
 
   const [showHistoryExitButton, setShowHistoryExitButton] = useState(false);
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
+
+  useEffect(() => {
+    onHistoryEditChromeChange?.({
+      editingId: editingHistoryId,
+      exitReady: showHistoryExitButton,
+    });
+  }, [editingHistoryId, showHistoryExitButton, onHistoryEditChromeChange]);
+
   const displayInteractionCleanupRef = useRef<(() => void) | null>(null);
   const debugTapProbeTimerRef = useRef<number | null>(null);
   /** キャンバスでポインタが押下中（この間にクリア→次ステージへ進んだら、離すまで塗りを止める） */
@@ -1590,11 +1609,15 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         setIsDebugMode(enabled);
         if (enabled) setIsDebugPanelExpanded(true);
       },
+      exitHistoryEditing() {
+        handleHistoryExitClick();
+      },
     }),
     [
       activePalette,
       appendHistorySnapshot,
       coloringPicturesReady,
+      handleHistoryExitClick,
       onHistorySequenceInteractionChange,
       phase,
       pictureIndex,
@@ -1882,15 +1905,6 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           />
         )}
 
-        {showHistoryExitButton && (
-          <button
-            type="button"
-            onClick={handleHistoryExitClick}
-            className="absolute right-2 top-2 z-40 min-w-[7.8rem] rounded-lg border border-[color-mix(in_srgb,var(--color-text)_22%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_90%,transparent)] px-4 py-2.5 text-xs font-semibold text-[var(--color-text)] shadow-md backdrop-blur sm:right-3 sm:top-3 sm:min-w-[9rem] sm:px-5 sm:py-3 sm:text-sm"
-          >
-            編集終了
-          </button>
-        )}
         <AnimatePresence mode="wait">
           <motion.div
             key={`${stageIndex}-${currentPictureAsset.id}`}
