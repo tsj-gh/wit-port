@@ -21,16 +21,27 @@ type TapColoringGalleryProps = {
   onHistorySaved?: () => void;
 };
 
-function IconPin({ className, filled }: { className?: string; filled: boolean }) {
+/** 斜めの画びょう（📌 イメージ） */
+function IconPushPin({ className, filled }: { className?: string; filled: boolean }) {
   return (
-    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} aria-hidden>
-      <path
-        d="M12 2 4 10v2h4v8l4-3 4 3v-8h4v-2L12 2Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-      />
+    <svg className={className} viewBox="0 0 24 24" width="12" height="12" aria-hidden>
+      <g transform="rotate(-36 12 12)">
+        <circle
+          cx="14.2"
+          cy="6.8"
+          r="3.15"
+          fill={filled ? "currentColor" : "none"}
+          stroke="currentColor"
+          strokeWidth="1.35"
+        />
+        <path
+          d="M12.4 9.2 L7.6 20.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.15"
+          strokeLinecap="round"
+        />
+      </g>
     </svg>
   );
 }
@@ -167,7 +178,7 @@ export function TapColoringGallery({
                     type="button"
                     disabled={btnDisabled}
                     onClick={(e) => onTogglePin(e, entry.id)}
-                    className={`absolute left-1 top-1 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_88%,transparent)] shadow-sm backdrop-blur-sm transition enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 ${
+                    className={`absolute left-1 top-1 z-20 flex h-[22px] w-[22px] min-h-[22px] min-w-[22px] items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_88%,transparent)] shadow-sm backdrop-blur-sm transition enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 ${
                       entry.isPinned
                         ? "border-amber-500/70 text-amber-600"
                         : "text-[var(--color-muted)] opacity-55 hover:opacity-100 group-hover:opacity-90"
@@ -175,7 +186,7 @@ export function TapColoringGallery({
                     aria-label={entry.isPinned ? "ピン留めを解除" : "ピン留めする"}
                     title={entry.isPinned ? "ピン留めを解除" : "ピン留めする"}
                   >
-                    <IconPin filled={!!entry.isPinned} className="h-3.5 w-3.5" />
+                    <IconPushPin filled={!!entry.isPinned} className="h-3 w-3" />
                   </button>
                   <button
                     type="button"

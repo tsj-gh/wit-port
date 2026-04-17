@@ -474,6 +474,8 @@ type ColoringCanvasProps = {
   /** Shell 側 DEBUG ON ボタン（パネル位置の基準） */
   debugOnControlRef?: RefObject<HTMLElement | null>;
   onDebugModeChange?: (enabled: boolean) => void;
+  /** true のときシーン背景は Shell の角丸枠に任せ、Canvas ルートは透過（主にモバイル） */
+  deferSceneBackgroundToShell?: boolean;
 };
 
 export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasProps>(function ColoringCanvas(
@@ -484,6 +486,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     onSceneBgColorChange,
     debugOnControlRef,
     onDebugModeChange,
+    deferSceneBackgroundToShell = false,
   },
   ref,
 ) {
@@ -1601,7 +1604,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     <motion.div
       ref={containerRef}
       className="relative mx-auto flex w-full max-w-lg flex-col gap-4 rounded-2xl px-0 pb-2 pt-0 lg:pt-4"
-      animate={{ backgroundColor: sceneBgColor }}
+      animate={{ backgroundColor: deferSceneBackgroundToShell ? "transparent" : sceneBgColor }}
       transition={{ duration: TRANSITION_BG_MS / 1000, ease: "linear" }}
     >
       {isDevTj &&
@@ -1610,7 +1613,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         createPortal(
           <div
             style={debugPanelStyle}
-            className={`rounded-2xl border border-stone-300 bg-white/95 text-left text-xs text-stone-800 shadow-lg backdrop-blur-sm transition-[width] duration-200 ease-out ${
+            className={`rounded-2xl border border-amber-300/80 bg-amber-50/95 text-left text-xs text-stone-900 shadow-lg backdrop-blur-sm transition-[width] duration-200 ease-out ${
               isDebugPanelExpanded
                 ? "max-h-[90vh] overflow-y-auto p-3"
                 : "flex max-h-[42px] min-h-[38px] items-center overflow-hidden px-2 py-1.5"
@@ -1628,9 +1631,11 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
                 <button
                   type="button"
                   onClick={() => setIsDebugMode(false)}
-                  className="rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-amber-500 px-2 py-1 text-[10px] font-semibold text-white"
+                  className="rounded border border-amber-700/40 bg-amber-500 px-2 py-1 text-[10px] font-semibold text-white shadow-sm"
+                  title="デバッグを終了"
+                  aria-label="デバッグを終了"
                 >
-                  DEBUG OFF
+                  DEBUG ON
                 </button>
                 <button
                   type="button"

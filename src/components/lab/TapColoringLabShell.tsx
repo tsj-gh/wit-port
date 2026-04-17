@@ -70,13 +70,7 @@ export function TapColoringLabShell() {
   }, []);
 
   return (
-    <div
-      className={`${GAME_COLUMN_CLASS} relative flex min-h-0 flex-1 flex-col lg:max-w-none`}
-      style={{
-        backgroundColor: isMobileLayout ? sceneBgColor : undefined,
-        transition: "background-color 1000ms linear",
-      }}
-    >
+    <div className={`${GAME_COLUMN_CLASS} relative flex min-h-0 flex-1 flex-col lg:max-w-none`}>
       {tapToast && (
         <div
           role="status"
@@ -99,8 +93,10 @@ export function TapColoringLabShell() {
             className={`rounded border border-stone-300 bg-white/90 px-2 py-1 font-mono text-xs text-stone-800 shadow-sm ${
               canvasDebugMode ? "opacity-0" : ""
             }`}
+            title="デバッグを開始"
+            aria-label="デバッグを開始"
           >
-            DEBUG ON
+            DEBUG OFF
           </button>
         </div>
       )}
@@ -111,10 +107,18 @@ export function TapColoringLabShell() {
       <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row lg:items-start lg:gap-5">
         <div className="flex min-h-0 w-full flex-1 flex-col lg:min-w-0 lg:justify-start lg:overflow-visible">
           <div className="w-full">
-            <section className="relative z-[1] mb-0 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-4 backdrop-blur sm:px-5 sm:pb-5 sm:pt-4 lg:mb-0">
+            <section
+              className="relative z-[1] mb-0 w-full rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-4 pb-4 pt-4 backdrop-blur sm:px-5 sm:pb-5 sm:pt-4 lg:mb-0"
+              style={
+                isMobileLayout
+                  ? { backgroundColor: sceneBgColor, transition: "background-color 1000ms linear" }
+                  : undefined
+              }
+            >
               <div className="max-h-none lg:max-h-none lg:overflow-visible">
                 <ColoringCanvas
                   ref={coloringRef}
+                  deferSceneBackgroundToShell={isMobileLayout}
                   debugOnControlRef={tapDebugOnButtonRef}
                   onDebugModeChange={setCanvasDebugMode}
                   onSceneBgColorChange={setSceneBgColor}
