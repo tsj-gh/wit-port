@@ -190,11 +190,6 @@ export function TapColoringExportModal({
 
   if (!open || !mode) return null;
 
-  const presetRows: (typeof EXPORT_SURFACE_PRESETS)[] = [
-    EXPORT_SURFACE_PRESETS.slice(0, 4),
-    EXPORT_SURFACE_PRESETS.slice(4, 8),
-  ];
-
   const portal = (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-3 backdrop-blur-sm"
@@ -233,29 +228,41 @@ export function TapColoringExportModal({
 
           <div className="space-y-3 text-xs sm:text-sm">
             <div>
+              <div className="mb-1 flex justify-between font-medium">
+                <span>絵のサイズ</span>
+                <span className="tabular-nums text-[var(--color-muted)]">{pictureScale.toFixed(2)}×</span>
+              </div>
+              <input
+                type="range"
+                min={0.5}
+                max={1.5}
+                step={0.01}
+                value={pictureScale}
+                onChange={(e) => setPictureScale(Number(e.target.value))}
+                className="w-full accent-amber-600"
+              />
+            </div>
+
+            <div>
               <div className="mb-1.5 font-medium text-[var(--color-text)]">内枠の背景</div>
-              <div className="space-y-2">
-                {presetRows.map((row, ri) => (
-                  <div key={ri} className="flex flex-wrap gap-2">
-                    {row.map((p) => {
-                      const active = exportBackgroundColor.toLowerCase() === p.color.toLowerCase();
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          title={p.label}
-                          aria-label={`背景 ${p.label}`}
-                          aria-pressed={active}
-                          onClick={() => setExportBackgroundColor(p.color)}
-                          className={`h-8 w-8 shrink-0 rounded-full border-2 shadow-sm transition ring-offset-2 ring-offset-[var(--color-bg)] ${
-                            active ? "border-amber-500 ring-2 ring-amber-400" : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)]"
-                          }`}
-                          style={{ backgroundColor: p.color }}
-                        />
-                      );
-                    })}
-                  </div>
-                ))}
+              <div className="flex max-w-full flex-wrap justify-center gap-1.5 sm:gap-2">
+                {EXPORT_SURFACE_PRESETS.map((p) => {
+                  const active = exportBackgroundColor.toLowerCase() === p.color.toLowerCase();
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      title={p.label}
+                      aria-label={`背景 ${p.label}`}
+                      aria-pressed={active}
+                      onClick={() => setExportBackgroundColor(p.color)}
+                      className={`h-6 w-6 shrink-0 rounded-full border-2 shadow-sm transition ring-offset-1 ring-offset-[var(--color-bg)] sm:h-7 sm:w-7 sm:ring-offset-2 ${
+                        active ? "border-amber-500 ring-2 ring-amber-400" : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)]"
+                      }`}
+                      style={{ backgroundColor: p.color }}
+                    />
+                  );
+                })}
               </div>
             </div>
 
@@ -304,22 +311,6 @@ export function TapColoringExportModal({
                   onChange={(e) => setIncludeDate(e.target.checked)}
                 />
               </label>
-            </div>
-
-            <div>
-              <div className="mb-1 flex justify-between font-medium">
-                <span>絵のサイズ</span>
-                <span className="tabular-nums text-[var(--color-muted)]">{pictureScale.toFixed(2)}×</span>
-              </div>
-              <input
-                type="range"
-                min={0.5}
-                max={1.5}
-                step={0.01}
-                value={pictureScale}
-                onChange={(e) => setPictureScale(Number(e.target.value))}
-                className="w-full accent-amber-600"
-              />
             </div>
 
             <div>
