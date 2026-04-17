@@ -12,6 +12,7 @@ export type TapColoringExportOptions = {
   includeFrame: boolean;
   includeDate: boolean;
   pictureScale: number;
+  pictureRotationDeg: number;
   exportBackgroundColor: string;
   /** 作品領域に対するロゴ・日付の内側マージン率（0.03 = 3%） */
   overlayMarginPct: number;
@@ -36,8 +37,8 @@ export const FRAME_CONFIG: Record<
 };
 
 export const EXPORT_SURFACE_PRESETS: readonly { id: string; label: string; color: string }[] = [
-  { id: "white", label: "白", color: "#FFFFFF" },
-  { id: "paper", label: "紙白", color: "#FDFDFD" },
+  { id: "linen", label: "キャンバス・リネン", color: "#FAF9F6" },
+  { id: "sky-lavender", label: "スカイ・ラベンダー", color: "#E6E6FA" },
   { id: "blackboard", label: "黒板", color: "#333333" },
   { id: "black", label: "黒", color: "#000000" },
   { id: "navy", label: "ネイビー", color: "#2C3E50" },
@@ -381,9 +382,14 @@ export async function composeTapColoringExport(
   const coverSide = Math.max(hole.width, hole.height);
   const side = coverSide * Math.max(0.5, Math.min(1.5, options.pictureScale));
   const art = prepareArtWithFloodFill(artSource, side, bgHex);
-  const ax = hole.x + hole.width / 2 - side / 2;
-  const ay = hole.y + hole.height / 2 - side / 2;
-  ctx.drawImage(art, ax, ay, side, side);
+  const cx = hole.x + hole.width / 2;
+  const cy = hole.y + hole.height / 2;
+  const rotationRad = (Math.max(-180, Math.min(180, options.pictureRotationDeg)) * Math.PI) / 180;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotationRad);
+  ctx.drawImage(art, -side / 2, -side / 2, side, side);
+  ctx.restore();
 
   // STEP3 額縁
   if (options.includeFrame) {

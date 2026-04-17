@@ -55,8 +55,9 @@ export function TapColoringExportModal({
   const [includeFrame, setIncludeFrame] = useState(true);
   const [includeDate, setIncludeDate] = useState(true);
   const [pictureScale, setPictureScale] = useState(1);
+  const [pictureRotationDeg, setPictureRotationDeg] = useState(0);
   const [frameVariant, setFrameVariant] = useState<TapColoringFrameVariant>("01");
-  const [exportBackgroundColor, setExportBackgroundColor] = useState("#FFFFFF");
+  const [exportBackgroundColor, setExportBackgroundColor] = useState("#FAF9F6");
   const [overlayMarginPct, setOverlayMarginPct] = useState(0.04);
   const [shareMessage, setShareMessage] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
@@ -69,10 +70,19 @@ export function TapColoringExportModal({
       includeFrame,
       includeDate,
       pictureScale,
+      pictureRotationDeg,
       exportBackgroundColor,
       overlayMarginPct,
     }),
-    [frameVariant, includeFrame, includeDate, pictureScale, exportBackgroundColor, overlayMarginPct],
+    [
+      frameVariant,
+      includeFrame,
+      includeDate,
+      pictureScale,
+      pictureRotationDeg,
+      exportBackgroundColor,
+      overlayMarginPct,
+    ],
   );
 
   useEffect(() => {
@@ -84,8 +94,9 @@ export function TapColoringExportModal({
     setIncludeFrame(true);
     setIncludeDate(true);
     setPictureScale(1);
+    setPictureRotationDeg(0);
     setFrameVariant("01");
-    setExportBackgroundColor("#FFFFFF");
+    setExportBackgroundColor("#FAF9F6");
     setOverlayMarginPct(0.04);
     setShareMessage(defaultShareMessageBody());
   }, [open]);
@@ -225,7 +236,7 @@ export function TapColoringExportModal({
               <p className="py-16 text-center text-xs text-[var(--color-muted)]">プレビューを生成中…</p>
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={preview} alt="" className="max-h-full w-full max-w-[min(92vw,400px)] object-contain" />
+              <img src={preview} alt="" className="max-h-full max-w-full object-contain" />
             )}
           </div>
 
@@ -242,6 +253,22 @@ export function TapColoringExportModal({
                 step={0.01}
                 value={pictureScale}
                 onChange={(e) => setPictureScale(Number(e.target.value))}
+                className="w-full accent-amber-600"
+              />
+            </div>
+
+            <div>
+              <div className="mb-1 flex justify-between font-medium">
+                <span>絵の回転</span>
+                <span className="tabular-nums text-[var(--color-muted)]">{Math.round(pictureRotationDeg)}°</span>
+              </div>
+              <input
+                type="range"
+                min={-180}
+                max={180}
+                step={1}
+                value={pictureRotationDeg}
+                onChange={(e) => setPictureRotationDeg(Number(e.target.value))}
                 className="w-full accent-amber-600"
               />
             </div>
@@ -316,29 +343,24 @@ export function TapColoringExportModal({
               </label>
             </div>
 
-            <details className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 py-2">
-              <summary className="cursor-pointer select-none text-[11px] font-medium text-[var(--color-muted)]">
-                デバッグ調整
-              </summary>
-              <div className="mt-2">
-                <div className="mb-1 flex justify-between font-medium">
-                  <span className="text-[11px]">ロゴ余白%</span>
-                  <span className="tabular-nums text-[11px] text-[var(--color-muted)]">
-                    {(overlayMarginPct * 100).toFixed(1)}%
-                  </span>
-                </div>
-                <input
-                  id="logo-margin-debug"
-                  type="range"
-                  min={0.02}
-                  max={0.08}
-                  step={0.001}
-                  value={overlayMarginPct}
-                  onChange={(e) => setOverlayMarginPct(Number(e.target.value))}
-                  className="w-full accent-amber-600"
-                />
+            <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 py-2">
+              <div className="mb-1 flex justify-between font-medium">
+                <span className="text-[11px]">ロゴ余白</span>
+                <span className="tabular-nums text-[11px] text-[var(--color-muted)]">
+                  {(overlayMarginPct * 100).toFixed(1)}%
+                </span>
               </div>
-            </details>
+              <input
+                id="logo-margin-debug"
+                type="range"
+                min={0.02}
+                max={0.08}
+                step={0.001}
+                value={overlayMarginPct}
+                onChange={(e) => setOverlayMarginPct(Number(e.target.value))}
+                className="w-full accent-amber-600"
+              />
+            </div>
 
             <div>
               <label htmlFor="tap-export-share-msg" className="mb-1 block font-medium text-[var(--color-text)]">
