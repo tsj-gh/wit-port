@@ -35,6 +35,8 @@ export type TapColoringHistoryEntry = {
   paintDataUrl: string;
   /** 一覧・ダウンロード用の合成プレビュー（長辺 PREVIEW_MAX_SIDE 程度） */
   previewDataUrl: string;
+  /** ピン留め（上限超過時は未ピンから古い順に削除。旧データは false 扱い） */
+  isPinned?: boolean;
   /** 保存時の3色パレット（旧データには無い） */
   paletteSwatches?: TapColoringSwatch[];
   /** 保存時に選んでいた色（`#rrggbb`） */
@@ -67,6 +69,8 @@ function parseEntry(raw: unknown): TapColoringHistoryEntry | null {
     typeof paletteSelectedColorRaw === "string" && isHexColor6(paletteSelectedColorRaw)
       ? paletteSelectedColorRaw.toLowerCase()
       : undefined;
+  const isPinnedRaw = raw.isPinned;
+  const isPinned = isPinnedRaw === true;
   const entry: TapColoringHistoryEntry = {
     id,
     createdAt,
@@ -75,9 +79,30 @@ function parseEntry(raw: unknown): TapColoringHistoryEntry | null {
     paintDataUrl,
     previewDataUrl,
   };
+  if (isPinned) entry.isPinned = true;
   if (paletteSwatches) entry.paletteSwatches = paletteSwatches;
   if (paletteSelectedColor) entry.paletteSelectedColor = paletteSelectedColor;
   return entry;
+}
+
+/** 先頭が最新。上限を超えたら末尾から未ピンを優先して落とす（未ピンが無いときのみ末尾を削除）。 */
+function trimHistoryToMax(entries: TapColoringHistoryEntry[], max: number): TapColoringHistoryEntry[] {
+  const out = [...entries];
+  while (out.length > max) {
+    let removeIdx = -1;
+    for (let i = out.length - 1; i >= 0; i--) {
+      if (!out[i]!.isPinned) {
+        removeIdx = i;
+        break;
+      }
+    }
+    if (removeIdx < 0) {
+      out.pop();
+    } else {
+      out.splice(removeIdx, 1);
+    }
+  }
+  return out;
 }
 
 export function readTapColoringHistory(): TapColoringHistoryEntry[] {
@@ -130,8 +155,10 @@ export function prependTapColoringHistory(entry: Omit<TapColoringHistoryEntry, "
     ...entry,
     id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `tc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     createdAt: Date.now(),
+    isPinned: entry.isPinned === true ? true : undefined,
   };
-  const next = [full, ...readTapColoringHistory()].slice(0, MAX_ENTRIES);
+  const merged = [full, ...readTapColoringHistory()];
+  const next = trimHistoryToMax(merged, MAX_ENTRIES);
   writeAll(next);
   return next;
 }
@@ -141,7 +168,12 @@ export function updateTapColoringHistoryEntry(
   patch: Partial<
     Pick<
       TapColoringHistoryEntry,
-      "paintDataUrl" | "previewDataUrl" | "savedBitmapSize" | "paletteSwatches" | "paletteSelectedColor"
+      | "paintDataUrl"
+      | "previewDataUrl"
+      | "savedBitmapSize"
+      | "paletteSwatches"
+      | "paletteSelectedColor"
+      | "isPinned"
     >
   >,
 ): TapColoringHistoryEntry[] | null {
@@ -150,6 +182,22 @@ export function updateTapColoringHistoryEntry(
   if (i < 0) return null;
   const next = [...list];
   next[i] = { ...next[i]!, ...patch };
+  writeAll(next);
+  return next;
+}
+
+/** ピン留めをトグル（一覧の並び順は維持） */
+export function toggleTapColoringHistoryPinned(id: string): TapColoringHistoryEntry[] | null {
+  const list = readTapColoringHistory();
+  const i = list.findIndex((e) => e.id === id);
+  if (i < 0) return null;
+  const cur = list[i]!;
+  const nextPinned = !cur.isPinned;
+  const next = [...list];
+  next[i] = {
+    ...cur,
+    isPinned: nextPinned ? true : undefined,
+  };
   writeAll(next);
   return next;
 }

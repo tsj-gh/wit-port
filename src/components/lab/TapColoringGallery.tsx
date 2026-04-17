@@ -1,10 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useCallback, useState, type RefObject } from "react";
+import { useCallback, useState, type MouseEvent, type RefObject } from "react";
 import type { ColoringCanvasHandle } from "@/components/lab/ColoringCanvas";
 import { TapColoringExportModal, type TapColoringExportModalMode } from "@/components/lab/TapColoringExportModal";
-import type { TapColoringHistoryEntry } from "@/lib/tapColoringHistory";
+import { toggleTapColoringHistoryPinned, type TapColoringHistoryEntry } from "@/lib/tapColoringHistory";
 
 type TapColoringGalleryProps = {
   entries: TapColoringHistoryEntry[];
@@ -20,6 +20,20 @@ type TapColoringGalleryProps = {
   isLocked: boolean;
   onHistorySaved?: () => void;
 };
+
+function IconPin({ className, filled }: { className?: string; filled: boolean }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} aria-hidden>
+      <path
+        d="M12 2 4 10v2h4v8l4-3 4 3v-8h4v-2L12 2Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
 
 function IconSave({ className }: { className?: string }) {
   return (
@@ -93,6 +107,18 @@ export function TapColoringGallery({
     if (!ok) showToast("再開できませんでした");
   };
 
+  const onTogglePin = (e: MouseEvent, entryId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isLocked) {
+      showToast("ロック中はピン留めできません");
+      return;
+    }
+    const next = toggleTapColoringHistoryPinned(entryId);
+    if (!next) showToast("ピン留めを更新できませんでした");
+    else onHistorySaved?.();
+  };
+
   const btnDisabled = isLocked;
 
   return (
@@ -127,7 +153,9 @@ export function TapColoringGallery({
             {entries.map((entry) => (
               <li key={entry.id} className="min-w-0">
                 <motion.div
-                  className="overflow-hidden rounded-xl bg-[var(--color-bg)] shadow-md ring-1 ring-[color-mix(in_srgb,var(--color-text)_8%,transparent)]"
+                  className={`group relative overflow-hidden rounded-xl bg-[var(--color-bg)] shadow-md ring-1 ring-[color-mix(in_srgb,var(--color-text)_8%,transparent)] ${
+                    entry.isPinned ? "ring-2 ring-amber-400/95 ring-offset-1 ring-offset-[var(--color-bg)]" : ""
+                  }`}
                   animate={
                     shakeEntryId === entry.id
                       ? { x: [0, -5, 5, -4, 4, -2, 2, 0], rotate: [0, -0.8, 0.8, -0.5, 0.5, 0] }
@@ -135,6 +163,20 @@ export function TapColoringGallery({
                   }
                   transition={{ duration: 0.48, ease: "easeInOut" }}
                 >
+                  <button
+                    type="button"
+                    disabled={btnDisabled}
+                    onClick={(e) => onTogglePin(e, entry.id)}
+                    className={`absolute left-1 top-1 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_88%,transparent)] shadow-sm backdrop-blur-sm transition enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 ${
+                      entry.isPinned
+                        ? "border-amber-500/70 text-amber-600"
+                        : "text-[var(--color-muted)] opacity-55 hover:opacity-100 group-hover:opacity-90"
+                    }`}
+                    aria-label={entry.isPinned ? "ピン留めを解除" : "ピン留めする"}
+                    title={entry.isPinned ? "ピン留めを解除" : "ピン留めする"}
+                  >
+                    <IconPin filled={!!entry.isPinned} className="h-3.5 w-3.5" />
+                  </button>
                   <button
                     type="button"
                     disabled={btnDisabled}

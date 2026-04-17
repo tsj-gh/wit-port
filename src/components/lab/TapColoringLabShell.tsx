@@ -21,6 +21,8 @@ export function TapColoringLabShell() {
   const searchParams = useSearchParams();
   const isDevTj = searchParams.get("devtj") === "true";
   const coloringRef = useRef<ColoringCanvasHandle | null>(null);
+  const tapDebugOnButtonRef = useRef<HTMLButtonElement>(null);
+  const [canvasDebugMode, setCanvasDebugMode] = useState(false);
   const [histTick, setHistTick] = useState(0);
   const [historyEntries, setHistoryEntries] = useState<TapColoringHistoryEntry[]>([]);
   const [tapToast, setTapToast] = useState<string | null>(null);
@@ -85,11 +87,18 @@ export function TapColoringLabShell() {
       )}
       <GamePageHeader titleEn="Tap Coloring" titleJa="タップ塗り絵" />
       {isDevTj && (
-        <div className="fixed right-3 top-14 z-[55] sm:right-4 sm:top-16">
+        <div
+          className={`fixed right-3 top-14 z-[55] sm:right-4 sm:top-16 ${canvasDebugMode ? "pointer-events-none" : ""}`}
+        >
           <button
+            ref={tapDebugOnButtonRef}
             type="button"
+            disabled={canvasDebugMode}
+            aria-hidden={canvasDebugMode}
             onClick={() => coloringRef.current?.setDebugMode(true)}
-            className="rounded border border-stone-300 bg-white/90 px-2 py-1 font-mono text-xs text-stone-800 shadow-sm"
+            className={`rounded border border-stone-300 bg-white/90 px-2 py-1 font-mono text-xs text-stone-800 shadow-sm ${
+              canvasDebugMode ? "opacity-0" : ""
+            }`}
           >
             DEBUG ON
           </button>
@@ -106,6 +115,8 @@ export function TapColoringLabShell() {
               <div className="max-h-none lg:max-h-none lg:overflow-visible">
                 <ColoringCanvas
                   ref={coloringRef}
+                  debugOnControlRef={tapDebugOnButtonRef}
+                  onDebugModeChange={setCanvasDebugMode}
                   onSceneBgColorChange={setSceneBgColor}
                   onHistoryUpdated={() => setHistTick((t) => t + 1)}
                   onHistoryEntryReplaced={(id) => {

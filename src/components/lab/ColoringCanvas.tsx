@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { MutableRefObject } from "react";
+import type { CSSProperties, MutableRefObject, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
@@ -121,6 +121,10 @@ const DEFAULT_FILL_THRESHOLD = 0.9;
 const DEFAULT_SPLATTER_RADIUS_VB = 12.5;
 /** 黒枠内イラストの拡大（`createPictureFrame` の 0.76 に乗算。デバッグで変更可） */
 const DEFAULT_ILLUSTRATION_SCALE = 1.25;
+/** 線画タップ時の白領域探索半径（本番・デバッグ初期値） */
+const DEFAULT_LINE_TAP_SEARCH_RADIUS_PX = 10;
+const DEBUG_PANEL_MAX_W = 280;
+const DEBUG_PANEL_EDGE = 8;
 const SCAN_STRIDE = 2;
 /** マスク干渉切り分け用（true で枠外でも描ける） */
 const DEBUG_DISABLE_MASK = false;
@@ -467,10 +471,20 @@ type ColoringCanvasProps = {
   onHistorySequenceInteractionChange?: (interactionAllowed: boolean) => void;
   /** 背景同期用（主にモバイルの外枠レイアウト） */
   onSceneBgColorChange?: (color: string) => void;
+  /** Shell 側 DEBUG ON ボタン（パネル位置の基準） */
+  debugOnControlRef?: RefObject<HTMLElement | null>;
+  onDebugModeChange?: (enabled: boolean) => void;
 };
 
 export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasProps>(function ColoringCanvas(
-  { onHistoryUpdated, onHistoryEntryReplaced, onHistorySequenceInteractionChange, onSceneBgColorChange },
+  {
+    onHistoryUpdated,
+    onHistoryEntryReplaced,
+    onHistorySequenceInteractionChange,
+    onSceneBgColorChange,
+    debugOnControlRef,
+    onDebugModeChange,
+  },
   ref,
 ) {
   const searchParams = useSearchParams();
@@ -494,7 +508,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const [debugSplatterRadiusVb, setDebugSplatterRadiusVb] = useState(DEFAULT_SPLATTER_RADIUS_VB);
   const [debugFillThreshold, setDebugFillThreshold] = useState(DEFAULT_FILL_THRESHOLD);
   const [debugIllustrationScale, setDebugIllustrationScale] = useState(DEFAULT_ILLUSTRATION_SCALE);
-  const [debugLineTapSearchRadius, setDebugLineTapSearchRadius] = useState(5);
+  const [debugLineTapSearchRadius, setDebugLineTapSearchRadius] = useState(DEFAULT_LINE_TAP_SEARCH_RADIUS_PX);
   const [debugTapProbe, setDebugTapProbe] = useState<{
     xRatio: number;
     yRatio: number;
@@ -505,11 +519,59 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const fillThreshold = isDevTj && isDebugMode ? debugFillThreshold : DEFAULT_FILL_THRESHOLD;
   const illustrationScale =
     isDevTj && isDebugMode ? debugIllustrationScale : DEFAULT_ILLUSTRATION_SCALE;
-  const lineTapSearchRadius = isDevTj && isDebugMode ? debugLineTapSearchRadius : 5;
+  const lineTapSearchRadius =
+    isDevTj && isDebugMode ? debugLineTapSearchRadius : DEFAULT_LINE_TAP_SEARCH_RADIUS_PX;
+
+  const [debugPanelStyle, setDebugPanelStyle] = useState<CSSProperties>(() => ({
+    position: "fixed",
+    top: 96,
+    right: DEBUG_PANEL_EDGE,
+    width: DEBUG_PANEL_MAX_W,
+    zIndex: 58,
+  }));
 
   useEffect(() => {
     onSceneBgColorChange?.(sceneBgColor);
   }, [onSceneBgColorChange, sceneBgColor]);
+
+  useEffect(() => {
+    onDebugModeChange?.(isDebugMode);
+  }, [isDebugMode, onDebugModeChange]);
+
+  useLayoutEffect(() => {
+    if (!isDevTj || !isDebugMode) return;
+    const panelWidthCollapsed = 148;
+    const panelWidth = isDebugPanelExpanded
+      ? Math.min(DEBUG_PANEL_MAX_W, window.innerWidth - 2 * DEBUG_PANEL_EDGE)
+      : panelWidthCollapsed;
+    const update = () => {
+      const anchor = debugOnControlRef?.current;
+      if (anchor) {
+        const r = anchor.getBoundingClientRect();
+        const left = Math.max(
+          DEBUG_PANEL_EDGE,
+          Math.min(r.right - panelWidth, window.innerWidth - panelWidth - DEBUG_PANEL_EDGE),
+        );
+        const top = Math.max(DEBUG_PANEL_EDGE, Math.min(r.bottom + 6, window.innerHeight - DEBUG_PANEL_EDGE));
+        setDebugPanelStyle({ position: "fixed", top, left, width: panelWidth, zIndex: 58 });
+      } else {
+        setDebugPanelStyle({
+          position: "fixed",
+          top: 96,
+          right: DEBUG_PANEL_EDGE,
+          width: Math.min(DEBUG_PANEL_MAX_W, window.innerWidth - 2 * DEBUG_PANEL_EDGE),
+          zIndex: 58,
+        });
+      }
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [isDevTj, isDebugMode, isDebugPanelExpanded, debugOnControlRef]);
 
   const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number>(0);
@@ -1131,7 +1193,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         shouldSearchNearby = true;
       }
       if (shouldSearchNearby) {
-        // 線画タップ時は近傍5px内から最寄りの白領域を探索し、そこにスプラッターを置く。
+        // 線画タップ時は近傍半径内から最寄りの白領域を探索し、そこにスプラッターを置く。
         const radius = Math.max(1, Math.round(lineTapSearchRadius));
         if (isDevTj && isDebugMode) {
           if (debugTapProbeTimerRef.current !== null) {
@@ -1546,22 +1608,36 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         isDebugMode &&
         typeof document !== "undefined" &&
         createPortal(
-          <div className="fixed right-3 top-24 z-[58] max-h-[90vh] w-[min(92vw,280px)] overflow-y-auto rounded-2xl border border-stone-300 bg-white/95 p-3 text-left text-xs text-stone-800 shadow-lg sm:right-4 sm:top-24">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              {isDebugPanelExpanded && <span className="font-bold text-stone-700">タップぬりえ DEBUG</span>}
-              <div className="ml-auto flex items-center gap-1">
+          <div
+            style={debugPanelStyle}
+            className={`rounded-2xl border border-stone-300 bg-white/95 text-left text-xs text-stone-800 shadow-lg backdrop-blur-sm transition-[width] duration-200 ease-out ${
+              isDebugPanelExpanded
+                ? "max-h-[90vh] overflow-y-auto p-3"
+                : "flex max-h-[42px] min-h-[38px] items-center overflow-hidden px-2 py-1.5"
+            }`}
+          >
+            <div
+              className={`flex w-full min-w-0 items-center gap-2 ${
+                isDebugPanelExpanded ? "mb-2 justify-between" : "mb-0 justify-end"
+              }`}
+            >
+              {isDebugPanelExpanded && (
+                <span className="min-w-0 shrink truncate font-bold text-stone-700">タップぬりえ DEBUG</span>
+              )}
+              <div className="ml-auto flex shrink-0 items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setIsDebugMode(false)}
-                  className="rounded border border-stone-400 bg-amber-500 px-2 py-1 text-[10px] font-semibold text-white"
+                  className="rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-amber-500 px-2 py-1 text-[10px] font-semibold text-white"
                 >
-                  DEBUG ON
+                  DEBUG OFF
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsDebugPanelExpanded((v) => !v)}
-                  className="rounded border border-stone-300 p-1 text-stone-500"
+                  className="rounded border border-stone-300 p-1 text-stone-500 hover:bg-stone-100"
                   aria-expanded={isDebugPanelExpanded}
+                  title={isDebugPanelExpanded ? "パネルを閉じる" : "パネルを開く"}
                 >
                   {isDebugPanelExpanded ? "▲" : "▼"}
                 </button>
