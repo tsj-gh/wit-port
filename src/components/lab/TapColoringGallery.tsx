@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { type RefObject } from "react";
 import type { ColoringCanvasHandle } from "@/components/lab/ColoringCanvas";
 import type { TapColoringHistoryEntry } from "@/lib/tapColoringHistory";
@@ -9,6 +10,8 @@ type TapColoringGalleryProps = {
   coloringRef: RefObject<ColoringCanvasHandle | null>;
   className?: string;
   onToast?: (message: string) => void;
+  /** 直近に差し替えた履歴 ID（サムネ揺れ） */
+  shakeEntryId?: string | null;
 };
 
 function downloadDataUrlPng(dataUrl: string, filename: string) {
@@ -23,7 +26,7 @@ function downloadDataUrlPng(dataUrl: string, filename: string) {
 
 function IconSave({ className }: { className?: string }) {
   return (
-    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M12 3v12M8 11l4 4 4-4M5 21h14a2 2 0 0 0 2-2v-7l-5-5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2Z"
         stroke="currentColor"
@@ -38,7 +41,13 @@ function IconSave({ className }: { className?: string }) {
 /**
  * 完成作品のローカル履歴（最大5件）。PC はサイドバー、モバイルは Canvas 下に配置する想定。
  */
-export function TapColoringGallery({ entries, coloringRef, className = "", onToast }: TapColoringGalleryProps) {
+export function TapColoringGallery({
+  entries,
+  coloringRef,
+  className = "",
+  onToast,
+  shakeEntryId,
+}: TapColoringGalleryProps) {
   const showToast = (message: string) => {
     onToast?.(message);
   };
@@ -75,7 +84,6 @@ export function TapColoringGallery({ entries, coloringRef, className = "", onToa
             いまの塗りを保存
           </button>
         </div>
-        <p className="mb-3 text-[10px] leading-relaxed text-[var(--color-muted)] sm:text-xs">最大5件（この端末のみ）</p>
 
         {entries.length === 0 ? (
           <div className="min-h-[2.5rem] rounded-lg border border-dashed border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_40%,transparent)]" />
@@ -83,7 +91,15 @@ export function TapColoringGallery({ entries, coloringRef, className = "", onToa
           <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
             {entries.map((entry) => (
               <li key={entry.id} className="min-w-0">
-                <div className="overflow-hidden rounded-xl bg-[var(--color-bg)] shadow-md ring-1 ring-[color-mix(in_srgb,var(--color-text)_8%,transparent)]">
+                <motion.div
+                  className="overflow-hidden rounded-xl bg-[var(--color-bg)] shadow-md ring-1 ring-[color-mix(in_srgb,var(--color-text)_8%,transparent)]"
+                  animate={
+                    shakeEntryId === entry.id
+                      ? { x: [0, -5, 5, -4, 4, -2, 2, 0], rotate: [0, -0.8, 0.8, -0.5, 0.5, 0] }
+                      : { x: 0, rotate: 0 }
+                  }
+                  transition={{ duration: 0.48, ease: "easeInOut" }}
+                >
                   <button
                     type="button"
                     onClick={() => onResume(entry)}
@@ -99,18 +115,18 @@ export function TapColoringGallery({ entries, coloringRef, className = "", onToa
                     />
                     <span className="sr-only">再開</span>
                   </button>
-                  <div className="flex flex-wrap items-center justify-end gap-1 border-t border-[color-mix(in_srgb,var(--color-text)_8%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)] px-1.5 py-1">
+                  <div className="flex flex-nowrap items-center justify-between gap-1 border-t border-[color-mix(in_srgb,var(--color-text)_8%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)] px-1 py-1">
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         onDownload(entry);
                       }}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-muted)] transition hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] hover:text-[var(--color-text)]"
+                      className="inline-flex h-7 shrink-0 items-center justify-center rounded-md text-[var(--color-muted)] transition hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] hover:text-[var(--color-text)]"
                       aria-label="PNGで保存"
                       title="PNGで保存"
                     >
-                      <IconSave className="h-4 w-4" />
+                      <IconSave className="h-3.5 w-3.5" />
                     </button>
                     <button
                       type="button"
@@ -118,16 +134,18 @@ export function TapColoringGallery({ entries, coloringRef, className = "", onToa
                         e.stopPropagation();
                         onSns();
                       }}
-                      className="rounded-lg px-2 py-1 text-[10px] font-medium text-[var(--color-muted)] transition hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] hover:text-[var(--color-text)] sm:text-xs"
+                      className="min-w-0 truncate rounded-md px-1.5 py-0.5 text-[9px] font-medium leading-tight text-[var(--color-muted)] transition hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] hover:text-[var(--color-text)] lg:text-[10px]"
                     >
                       SNSに送る
                     </button>
                   </div>
-                </div>
+                </motion.div>
               </li>
             ))}
           </ul>
         )}
+
+        <p className="mt-3 text-[10px] leading-relaxed text-[var(--color-muted)] sm:text-xs">最大5件（この端末のみ）</p>
       </div>
     </div>
   );

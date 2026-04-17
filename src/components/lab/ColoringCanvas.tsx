@@ -15,6 +15,7 @@ import { useSearchParams } from "next/navigation";
 import {
   buildPreviewDataUrlFromDisplay,
   prependTapColoringHistory,
+  updateTapColoringHistoryEntry,
   type TapColoringHistoryEntry,
 } from "@/lib/tapColoringHistory";
 
@@ -141,8 +142,21 @@ const TRANSITION_BG_MS = 1000;
 const TRANSITION_SLIDE_MS = 560;
 const SETUP_ENTER_MS = 620;
 const RESUME_UI_MS = 300;
+/** 履歴編集の深度クロスフェード（スライド切替とは別） */
+const HISTORY_DEPTH_OVERLAY_S = 0.48;
 
 type PictureCategory = "animal" | "produce" | "vehicle";
+
+type StashedPlaySession = {
+  pictureIndex: number;
+  paintDataUrl: string;
+  previewDataUrl: string;
+};
+
+type HistoryOverlayState =
+  | null
+  | { kind: "enter"; stashUrl: string; historyUrl: string }
+  | { kind: "exit"; stashUrl: string; outgoingUrl: string };
 
 type ColoringPictureAsset = {
   id: string;
@@ -423,10 +437,12 @@ export type ColoringCanvasHandle = {
 
 type ColoringCanvasProps = {
   onHistoryUpdated?: () => void;
+  /** 履歴サムネの差し替え直後（揺れ演出用） */
+  onHistoryEntryReplaced?: (entryId: string) => void;
 };
 
 export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasProps>(function ColoringCanvas(
-  { onHistoryUpdated },
+  { onHistoryUpdated, onHistoryEntryReplaced },
   ref,
 ) {
   const searchParams = useSearchParams();
@@ -464,7 +480,23 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   /** ギャラリー再開中は 90% クリアを発動しない */
   const freePaintWithoutClearRef = useRef(false);
   const pendingHistoryEntryRef = useRef<TapColoringHistoryEntry | null>(null);
-  const [galleryResumeOpen, setGalleryResumeOpen] = useState(false);
+  const stashSessionRef = useRef<StashedPlaySession | null>(null);
+  const editingHistoryEntryRef = useRef<TapColoringHistoryEntry | null>(null);
+  const historyOverlayEnterTargetRef = useRef<TapColoringHistoryEntry | null>(null);
+  const shouldShowExitAfterPendingPaintRef = useRef(false);
+  const overlayAnimArmedRef = useRef<"enter" | "exit" | null>(null);
+  const overlayAnimDoneCountRef = useRef(0);
+
+  const [historyOverlay, setHistoryOverlay] = useState<HistoryOverlayState>(null);
+  const historyOverlayRef = useRef<HistoryOverlayState>(null);
+  useEffect(() => {
+    historyOverlayRef.current = historyOverlay;
+  }, [historyOverlay]);
+
+  const [showHistoryExitButton, setShowHistoryExitButton] = useState(false);
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
+  /** ギャラリー経由のマウント時のみスライドではなく奥行きでキャンバスを出す */
+  const [galleryDepthMount, setGalleryDepthMount] = useState(false);
   /** キャンバスでポインタが押下中（この間にクリア→次ステージへ進んだら、離すまで塗りを止める） */
   const pointerDownOnCanvasRef = useRef(false);
   /** クリア後の新ステージで、直前のドラッグが続いているとき true。対応する pointerup まで塗り禁止 */
@@ -714,9 +746,17 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           pctx2.restore();
         }
         redrawDisplay();
+        if (shouldShowExitAfterPendingPaintRef.current) {
+          shouldShowExitAfterPendingPaintRef.current = false;
+          setShowHistoryExitButton(true);
+        }
       };
       img.onerror = () => {
         redrawDisplay();
+        if (shouldShowExitAfterPendingPaintRef.current) {
+          shouldShowExitAfterPendingPaintRef.current = false;
+          setShowHistoryExitButton(true);
+        }
       };
       img.src = pend.paintDataUrl;
     }
@@ -790,12 +830,22 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     if (!el) return;
     const ro = new ResizeObserver(() => {
       const cw = el.clientWidth;
-      const next = Math.max(280, Math.min(420, Math.floor(cw - 8)));
+      const isLg = typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+      const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+      const reserveY = isLg ? 210 : 160;
+      const maxByHeight = Math.max(240, Math.floor((vh - reserveY) * 0.62));
+      const capW = isLg ? Math.min(380, maxByHeight, cw - 12) : Math.min(420, cw - 8);
+      const next = Math.max(260, Math.min(420, Math.floor(capW), maxByHeight));
       setSize((s) => (Math.abs(s - next) > 4 ? next : s));
     });
     ro.observe(el);
     const cw = el.clientWidth;
-    setSize(Math.max(280, Math.min(420, Math.floor(cw - 8))));
+    const isLg = typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+    const reserveY = isLg ? 210 : 160;
+    const maxByHeight = Math.max(240, Math.floor((vh - reserveY) * 0.62));
+    const capW = isLg ? Math.min(380, maxByHeight, cw - 12) : Math.min(420, cw - 8);
+    setSize(Math.max(260, Math.min(420, Math.floor(capW), maxByHeight)));
     return () => ro.disconnect();
   }, []);
 
@@ -1042,13 +1092,111 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
+  const completeHistoryEnter = useCallback(() => {
+    const target = historyOverlayEnterTargetRef.current;
+    if (!target) return;
+    historyOverlayEnterTargetRef.current = null;
+    setHistoryOverlay(null);
+    const idx = COLORING_PICTURE_ASSETS.findIndex((a) => a.id === target.pictureId);
+    if (idx < 0) {
+      stashSessionRef.current = null;
+      return;
+    }
+    setGalleryDepthMount(true);
+    pendingHistoryEntryRef.current = target;
+    freePaintWithoutClearRef.current = true;
+    shouldShowExitAfterPendingPaintRef.current = true;
+    editingHistoryEntryRef.current = target;
+    setEditingHistoryId(target.id);
+    setPictureIndex(idx);
+    setStageIndex((i) => i + 1);
+    setPhase("play");
+  }, []);
+
+  const completeHistoryExit = useCallback(() => {
+    const stash = stashSessionRef.current;
+    setHistoryOverlay(null);
+    if (!stash) {
+      editingHistoryEntryRef.current = null;
+      freePaintWithoutClearRef.current = false;
+      setEditingHistoryId(null);
+      return;
+    }
+    setGalleryDepthMount(true);
+    pendingHistoryEntryRef.current = {
+      id: "__stash_restore__",
+      createdAt: 0,
+      pictureId: COLORING_PICTURE_ASSETS[stash.pictureIndex]!.id,
+      savedBitmapSize: bitmapSize,
+      paintDataUrl: stash.paintDataUrl,
+      previewDataUrl: stash.previewDataUrl,
+    };
+    editingHistoryEntryRef.current = null;
+    freePaintWithoutClearRef.current = false;
+    setShowHistoryExitButton(false);
+    stashSessionRef.current = null;
+    setEditingHistoryId(null);
+    setPictureIndex(stash.pictureIndex);
+    setStageIndex((i) => i + 1);
+    setPhase("play");
+  }, [bitmapSize]);
+
+  const onOverlayImageAnimComplete = useCallback(() => {
+    overlayAnimDoneCountRef.current += 1;
+    if (overlayAnimDoneCountRef.current < 2) return;
+    overlayAnimDoneCountRef.current = 0;
+    const arm = overlayAnimArmedRef.current;
+    overlayAnimArmedRef.current = null;
+    if (arm === "enter") completeHistoryEnter();
+    else if (arm === "exit") completeHistoryExit();
+  }, [completeHistoryEnter, completeHistoryExit]);
+
+  const handleHistoryExitClick = useCallback(() => {
+    const editing = editingHistoryEntryRef.current;
+    const stash = stashSessionRef.current;
+    if (!editing || !stash) return;
+
+    const display = displayRef.current;
+    const paint = paintRef.current;
+    if (!display || !paint) return;
+
+    particlesRef.current = [];
+    cancelAnimationFrame(rafRef.current);
+    redrawDisplay();
+
+    const newPreview = buildPreviewDataUrlFromDisplay(display);
+    const newPaint = paint.toDataURL("image/png");
+    updateTapColoringHistoryEntry(editing.id, {
+      previewDataUrl: newPreview,
+      paintDataUrl: newPaint,
+      savedBitmapSize: bitmapSize,
+    });
+    onHistoryEntryReplaced?.(editing.id);
+    onHistoryUpdated?.();
+
+    overlayAnimArmedRef.current = "exit";
+    overlayAnimDoneCountRef.current = 0;
+    setShowHistoryExitButton(false);
+    setHistoryOverlay({
+      kind: "exit",
+      stashUrl: stash.previewDataUrl,
+      outgoingUrl: newPreview,
+    });
+  }, [bitmapSize, onHistoryEntryReplaced, onHistoryUpdated, redrawDisplay]);
+
   useImperativeHandle(
     ref,
     () => ({
       loadHistoryEntry(entry: TapColoringHistoryEntry) {
         if (!coloringPicturesReady || !splatterImagesReady) return false;
+        if (historyOverlayRef.current !== null || editingHistoryEntryRef.current) return false;
         const idx = COLORING_PICTURE_ASSETS.findIndex((a) => a.id === entry.pictureId);
         if (idx < 0) return false;
+
+        const display = displayRef.current;
+        const paint = paintRef.current;
+        if (!display || !paint) return false;
+
         sequenceRunningRef.current = false;
         clearTriggeredRef.current = false;
         blockPaintUntilPointerUpRef.current = false;
@@ -1056,23 +1204,33 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         activeCanvasPointerIdRef.current = null;
         cancelAnimationFrame(rafRef.current);
         particlesRef.current = [];
-        pendingHistoryEntryRef.current = entry;
-        freePaintWithoutClearRef.current = true;
-        setGalleryResumeOpen(true);
-        setPictureIndex(idx);
-        setStageIndex((i) => i + 1);
-        setPhase("play");
+        redrawDisplay();
+
+        const stashPreview = buildPreviewDataUrlFromDisplay(display);
+        const stashPaint = paint.toDataURL("image/png");
+        stashSessionRef.current = {
+          pictureIndex,
+          paintDataUrl: stashPaint,
+          previewDataUrl: stashPreview,
+        };
+
+        historyOverlayEnterTargetRef.current = entry;
+        overlayAnimArmedRef.current = "enter";
+        overlayAnimDoneCountRef.current = 0;
+        setShowHistoryExitButton(false);
+        setHistoryOverlay({ kind: "enter", stashUrl: stashPreview, historyUrl: entry.previewDataUrl });
         return true;
       },
       saveCurrentWorkToHistory() {
         if (!coloringPicturesReady || !splatterImagesReady) return false;
+        if (historyOverlayRef.current !== null || editingHistoryEntryRef.current) return false;
         if (phase !== "play" && phase !== "resume") return false;
         if (sequenceRunningRef.current) return false;
         appendHistorySnapshot();
         return true;
       },
     }),
-    [appendHistorySnapshot, coloringPicturesReady, phase, splatterImagesReady],
+    [appendHistorySnapshot, coloringPicturesReady, phase, pictureIndex, splatterImagesReady],
   );
 
   return (
@@ -1193,15 +1351,69 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         })}
       </motion.div>
 
-      <div className="relative mx-auto aspect-square w-full max-w-[420px]">
-        {galleryResumeOpen && (
+      <div
+        className={`relative mx-auto aspect-square w-full max-w-[420px] ${
+          historyOverlay !== null || (editingHistoryId !== null && !showHistoryExitButton)
+            ? "[&_canvas]:invisible [&_canvas]:pointer-events-none"
+            : ""
+        }`}
+      >
+        {historyOverlay?.kind === "enter" && (
+          <div
+            className="pointer-events-none absolute inset-0 z-30 overflow-hidden rounded-2xl border-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))] shadow-inner"
+            aria-hidden
+          >
+            <motion.img
+              src={historyOverlay.stashUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-contain"
+              initial={{ scale: 1, opacity: 1 }}
+              animate={{ scale: 0.86, opacity: 0.08 }}
+              transition={{ duration: HISTORY_DEPTH_OVERLAY_S, ease: [0.33, 0, 0.2, 1] }}
+              onAnimationComplete={onOverlayImageAnimComplete}
+            />
+            <motion.img
+              src={historyOverlay.historyUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-contain"
+              initial={{ scale: 0.78, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: HISTORY_DEPTH_OVERLAY_S, ease: [0.22, 1, 0.36, 1] }}
+              onAnimationComplete={onOverlayImageAnimComplete}
+            />
+          </div>
+        )}
+        {historyOverlay?.kind === "exit" && (
+          <div
+            className="pointer-events-none absolute inset-0 z-30 overflow-hidden rounded-2xl border-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))] shadow-inner"
+            aria-hidden
+          >
+            <motion.img
+              src={historyOverlay.outgoingUrl}
+              alt=""
+              className="absolute inset-0 z-0 h-full w-full object-contain"
+              initial={{ scale: 1, opacity: 1 }}
+              animate={{ scale: 0.86, opacity: 0.06 }}
+              transition={{ duration: HISTORY_DEPTH_OVERLAY_S, ease: [0.33, 0, 0.2, 1] }}
+              onAnimationComplete={onOverlayImageAnimComplete}
+            />
+            <motion.img
+              src={historyOverlay.stashUrl}
+              alt=""
+              className="absolute inset-0 z-10 h-full w-full object-contain"
+              initial={{ scale: 0.78, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: HISTORY_DEPTH_OVERLAY_S, ease: [0.22, 1, 0.36, 1] }}
+              onAnimationComplete={onOverlayImageAnimComplete}
+            />
+          </div>
+        )}
+
+        {showHistoryExitButton && (
           <button
             type="button"
-            onClick={() => {
-              freePaintWithoutClearRef.current = false;
-              setGalleryResumeOpen(false);
-            }}
-            className="absolute right-2 top-2 z-20 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_22%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_90%,transparent)] px-2 py-1 text-[10px] font-semibold text-[var(--color-text)] shadow-md backdrop-blur sm:right-3 sm:top-3 sm:text-xs"
+            onClick={handleHistoryExitClick}
+            className="absolute right-2 top-2 z-40 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_22%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_90%,transparent)] px-2 py-1 text-[10px] font-semibold text-[var(--color-text)] shadow-md backdrop-blur sm:right-3 sm:top-3 sm:text-xs"
           >
             編集終了
           </button>
@@ -1209,8 +1421,14 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         <AnimatePresence mode="wait">
           <motion.div
             key={`${stageIndex}-${currentPictureAsset.id}`}
-            className="absolute inset-0 flex items-center justify-center"
-            initial={{ x: "-120%", scale: 0.98, opacity: 0.96, rotate: -3 }}
+            className={`absolute inset-0 flex items-center justify-center ${
+              historyOverlay ? "pointer-events-none" : ""
+            }`}
+            initial={
+              galleryDepthMount
+                ? { scale: 0.86, opacity: 0.1, x: 0, rotate: 0 }
+                : { x: "-120%", scale: 0.98, opacity: 0.96, rotate: -3 }
+            }
             animate={
               phase === "success"
                 ? { x: 0, opacity: 1, rotate: 0, scale: [1, 1.07, 0.94, 1.03, 1] }
@@ -1227,8 +1445,13 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
                     ? TRANSITION_SLIDE_MS / 1000
                     : phase === "setup"
                       ? 0.56
-                      : 0.3,
+                      : galleryDepthMount
+                        ? 0.42
+                        : 0.3,
               ease: phase === "setup" ? "easeOut" : phase === "transition" ? "easeIn" : "easeOut",
+            }}
+            onAnimationComplete={() => {
+              setGalleryDepthMount((gd) => (gd ? false : gd));
             }}
           >
             <canvas

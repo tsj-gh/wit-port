@@ -96,3 +96,16 @@ export function prependTapColoringHistory(entry: Omit<TapColoringHistoryEntry, "
   writeAll(next);
   return next;
 }
+
+export function updateTapColoringHistoryEntry(
+  id: string,
+  patch: Partial<Pick<TapColoringHistoryEntry, "paintDataUrl" | "previewDataUrl" | "savedBitmapSize">>,
+): TapColoringHistoryEntry[] | null {
+  const list = readTapColoringHistory();
+  const i = list.findIndex((e) => e.id === id);
+  if (i < 0) return null;
+  const next = [...list];
+  next[i] = { ...next[i]!, ...patch };
+  writeAll(next);
+  return next;
+}
