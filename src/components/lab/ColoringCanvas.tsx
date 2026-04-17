@@ -155,8 +155,8 @@ type StashedPlaySession = {
 
 type HistoryOverlayState =
   | null
-  | { kind: "enter"; stashUrl: string; historyUrl: string }
-  | { kind: "exit"; stashUrl: string; outgoingUrl: string };
+  | { kind: "enter"; phase: "stash-shrink" | "history-expand"; stashUrl: string; historyUrl: string }
+  | { kind: "exit"; phase: "outgoing-shrink" | "stash-expand"; stashUrl: string; outgoingUrl: string };
 
 type ColoringPictureAsset = {
   id: string;
@@ -484,8 +484,8 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const editingHistoryEntryRef = useRef<TapColoringHistoryEntry | null>(null);
   const historyOverlayEnterTargetRef = useRef<TapColoringHistoryEntry | null>(null);
   const shouldShowExitAfterPendingPaintRef = useRef(false);
-  const overlayAnimArmedRef = useRef<"enter" | "exit" | null>(null);
-  const overlayAnimDoneCountRef = useRef(0);
+  /** 履歴編集でキャンバス key 切替時にスライドではなく奥行きのみ使う */
+  const [canvasPresenceDepth, setCanvasPresenceDepth] = useState(false);
 
   const [historyOverlay, setHistoryOverlay] = useState<HistoryOverlayState>(null);
   const historyOverlayRef = useRef<HistoryOverlayState>(null);
@@ -495,8 +495,6 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
 
   const [showHistoryExitButton, setShowHistoryExitButton] = useState(false);
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
-  /** ギャラリー経由のマウント時のみスライドではなく奥行きでキャンバスを出す */
-  const [galleryDepthMount, setGalleryDepthMount] = useState(false);
   /** キャンバスでポインタが押下中（この間にクリア→次ステージへ進んだら、離すまで塗りを止める） */
   const pointerDownOnCanvasRef = useRef(false);
   /** クリア後の新ステージで、直前のドラッグが続いているとき true。対応する pointerup まで塗り禁止 */
@@ -1100,9 +1098,9 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     const idx = COLORING_PICTURE_ASSETS.findIndex((a) => a.id === target.pictureId);
     if (idx < 0) {
       stashSessionRef.current = null;
+      setCanvasPresenceDepth(false);
       return;
     }
-    setGalleryDepthMount(true);
     pendingHistoryEntryRef.current = target;
     freePaintWithoutClearRef.current = true;
     shouldShowExitAfterPendingPaintRef.current = true;
@@ -1122,7 +1120,6 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       setEditingHistoryId(null);
       return;
     }
-    setGalleryDepthMount(true);
     pendingHistoryEntryRef.current = {
       id: "__stash_restore__",
       createdAt: 0,
@@ -1140,16 +1137,6 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     setStageIndex((i) => i + 1);
     setPhase("play");
   }, [bitmapSize]);
-
-  const onOverlayImageAnimComplete = useCallback(() => {
-    overlayAnimDoneCountRef.current += 1;
-    if (overlayAnimDoneCountRef.current < 2) return;
-    overlayAnimDoneCountRef.current = 0;
-    const arm = overlayAnimArmedRef.current;
-    overlayAnimArmedRef.current = null;
-    if (arm === "enter") completeHistoryEnter();
-    else if (arm === "exit") completeHistoryExit();
-  }, [completeHistoryEnter, completeHistoryExit]);
 
   const handleHistoryExitClick = useCallback(() => {
     const editing = editingHistoryEntryRef.current;
@@ -1174,11 +1161,10 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     onHistoryEntryReplaced?.(editing.id);
     onHistoryUpdated?.();
 
-    overlayAnimArmedRef.current = "exit";
-    overlayAnimDoneCountRef.current = 0;
     setShowHistoryExitButton(false);
     setHistoryOverlay({
       kind: "exit",
+      phase: "outgoing-shrink",
       stashUrl: stash.previewDataUrl,
       outgoingUrl: newPreview,
     });
@@ -1215,10 +1201,14 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         };
 
         historyOverlayEnterTargetRef.current = entry;
-        overlayAnimArmedRef.current = "enter";
-        overlayAnimDoneCountRef.current = 0;
+        setCanvasPresenceDepth(true);
         setShowHistoryExitButton(false);
-        setHistoryOverlay({ kind: "enter", stashUrl: stashPreview, historyUrl: entry.previewDataUrl });
+        setHistoryOverlay({
+          kind: "enter",
+          phase: "stash-shrink",
+          stashUrl: stashPreview,
+          historyUrl: entry.previewDataUrl,
+        });
         return true;
       },
       saveCurrentWorkToHistory() {
@@ -1358,7 +1348,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
             : ""
         }`}
       >
-        {historyOverlay?.kind === "enter" && (
+        {historyOverlay?.kind === "enter" && historyOverlay.phase === "stash-shrink" && (
           <div
             className="pointer-events-none absolute inset-0 z-30 overflow-hidden rounded-2xl border-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))] shadow-inner"
             aria-hidden
@@ -1370,8 +1360,22 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
               initial={{ scale: 1, opacity: 1 }}
               animate={{ scale: 0.86, opacity: 0.08 }}
               transition={{ duration: HISTORY_DEPTH_OVERLAY_S, ease: [0.33, 0, 0.2, 1] }}
-              onAnimationComplete={onOverlayImageAnimComplete}
+              onAnimationComplete={() => {
+                setHistoryOverlay({
+                  kind: "enter",
+                  phase: "history-expand",
+                  stashUrl: historyOverlay.stashUrl,
+                  historyUrl: historyOverlay.historyUrl,
+                });
+              }}
             />
+          </div>
+        )}
+        {historyOverlay?.kind === "enter" && historyOverlay.phase === "history-expand" && (
+          <div
+            className="pointer-events-none absolute inset-0 z-30 overflow-hidden rounded-2xl border-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))] shadow-inner"
+            aria-hidden
+          >
             <motion.img
               src={historyOverlay.historyUrl}
               alt=""
@@ -1379,11 +1383,13 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
               initial={{ scale: 0.78, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: HISTORY_DEPTH_OVERLAY_S, ease: [0.22, 1, 0.36, 1] }}
-              onAnimationComplete={onOverlayImageAnimComplete}
+              onAnimationComplete={() => {
+                completeHistoryEnter();
+              }}
             />
           </div>
         )}
-        {historyOverlay?.kind === "exit" && (
+        {historyOverlay?.kind === "exit" && historyOverlay.phase === "outgoing-shrink" && (
           <div
             className="pointer-events-none absolute inset-0 z-30 overflow-hidden rounded-2xl border-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))] shadow-inner"
             aria-hidden
@@ -1391,20 +1397,36 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
             <motion.img
               src={historyOverlay.outgoingUrl}
               alt=""
-              className="absolute inset-0 z-0 h-full w-full object-contain"
+              className="absolute inset-0 h-full w-full object-contain"
               initial={{ scale: 1, opacity: 1 }}
               animate={{ scale: 0.86, opacity: 0.06 }}
               transition={{ duration: HISTORY_DEPTH_OVERLAY_S, ease: [0.33, 0, 0.2, 1] }}
-              onAnimationComplete={onOverlayImageAnimComplete}
+              onAnimationComplete={() => {
+                setHistoryOverlay({
+                  kind: "exit",
+                  phase: "stash-expand",
+                  stashUrl: historyOverlay.stashUrl,
+                  outgoingUrl: historyOverlay.outgoingUrl,
+                });
+              }}
             />
+          </div>
+        )}
+        {historyOverlay?.kind === "exit" && historyOverlay.phase === "stash-expand" && (
+          <div
+            className="pointer-events-none absolute inset-0 z-30 overflow-hidden rounded-2xl border-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))] shadow-inner"
+            aria-hidden
+          >
             <motion.img
               src={historyOverlay.stashUrl}
               alt=""
-              className="absolute inset-0 z-10 h-full w-full object-contain"
+              className="absolute inset-0 h-full w-full object-contain"
               initial={{ scale: 0.78, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: HISTORY_DEPTH_OVERLAY_S, ease: [0.22, 1, 0.36, 1] }}
-              onAnimationComplete={onOverlayImageAnimComplete}
+              onAnimationComplete={() => {
+                completeHistoryExit();
+              }}
             />
           </div>
         )}
@@ -1425,7 +1447,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
               historyOverlay ? "pointer-events-none" : ""
             }`}
             initial={
-              galleryDepthMount
+              canvasPresenceDepth
                 ? { scale: 0.86, opacity: 0.1, x: 0, rotate: 0 }
                 : { x: "-120%", scale: 0.98, opacity: 0.96, rotate: -3 }
             }
@@ -1436,7 +1458,11 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
                   ? { x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }
                   : { x: 0, opacity: 1, rotate: 0, scale: 1 }
             }
-            exit={{ x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }}
+            exit={
+              canvasPresenceDepth
+                ? { scale: 0.86, opacity: 0.08, x: 0, rotate: 0 }
+                : { x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }
+            }
             transition={{
               duration:
                 phase === "success"
@@ -1445,13 +1471,15 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
                     ? TRANSITION_SLIDE_MS / 1000
                     : phase === "setup"
                       ? 0.56
-                      : galleryDepthMount
+                      : canvasPresenceDepth
                         ? 0.42
                         : 0.3,
               ease: phase === "setup" ? "easeOut" : phase === "transition" ? "easeIn" : "easeOut",
             }}
             onAnimationComplete={() => {
-              setGalleryDepthMount((gd) => (gd ? false : gd));
+              if (!editingHistoryEntryRef.current && historyOverlayRef.current == null) {
+                setCanvasPresenceDepth(false);
+              }
             }}
           >
             <canvas
