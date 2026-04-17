@@ -339,6 +339,52 @@ function scoreAnchor(
   return total > 0 ? hit / total : 0;
 }
 
+/**
+ * iOS Safari 等で `ctx.filter` が toDataURL 経路で効かないことがあるため、
+ * 反転が必要なときはピクセル処理でロゴを焼き込む。
+ */
+function drawLogoWithOptionalInvert(
+  ctx: CanvasRenderingContext2D,
+  logo: HTMLImageElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  invert: boolean,
+) {
+  const rw = Math.max(1, Math.round(w));
+  const rh = Math.max(1, Math.round(h));
+  if (!invert) {
+    ctx.drawImage(logo, x, y, w, h);
+    return;
+  }
+  const oc = document.createElement("canvas");
+  oc.width = rw;
+  oc.height = rh;
+  const ox = oc.getContext("2d", { willReadFrequently: true });
+  if (!ox) {
+    ctx.save();
+    ctx.filter = "invert(1) brightness(1.06)";
+    ctx.drawImage(logo, x, y, w, h);
+    ctx.filter = "none";
+    ctx.restore();
+    return;
+  }
+  ox.clearRect(0, 0, rw, rh);
+  ox.drawImage(logo, 0, 0, rw, rh);
+  const img = ox.getImageData(0, 0, rw, rh);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3]!;
+    if (a < 8) continue;
+    d[i] = 255 - d[i]!;
+    d[i + 1] = 255 - d[i + 1]!;
+    d[i + 2] = 255 - d[i + 2]!;
+  }
+  ox.putImageData(img, 0, 0);
+  ctx.drawImage(oc, x, y, w, h);
+}
+
 function layoutOverlay(
   hole: TapColoringExportRect,
   blockW: number,
@@ -426,15 +472,19 @@ export async function composeTapColoringExport(
   }
   const pos = layoutOverlay(hole, blockW, blockH, pad, best);
 
-  // STEP4 ロゴ
+  // STEP4 ロゴ（反転は drawLogoWithOptionalInvert で端末差を吸収）
   ctx.save();
-  if (style.invertLogo) {
-    ctx.filter = "invert(1) brightness(1.06)";
-  }
   ctx.globalAlpha = 0.94;
-  ctx.drawImage(logo, pos.x + blockW - logoW, pos.y + blockH - logoH, logoW, logoH);
+  drawLogoWithOptionalInvert(
+    ctx,
+    logo,
+    pos.x + blockW - logoW,
+    pos.y + blockH - logoH,
+    logoW,
+    logoH,
+    style.invertLogo,
+  );
   ctx.globalAlpha = 1;
-  ctx.filter = "none";
   ctx.restore();
 
   // STEP5 日付

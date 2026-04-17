@@ -80,7 +80,7 @@ export function SmartGuardLock() {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-[9998] select-none">
+    <div className="fixed bottom-4 right-4 z-[9998] flex select-none flex-col items-end">
       {showHint && (
         <div className="mb-2 max-w-[240px] rounded-lg border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_92%,var(--color-bg))] px-3 py-1.5 text-xs text-[var(--color-muted)] shadow-lg">
           {hintText}

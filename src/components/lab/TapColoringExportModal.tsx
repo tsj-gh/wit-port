@@ -427,12 +427,12 @@ export function TapColoringExportModal({
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-4 py-3 sm:flex-row sm:justify-end">
+        <div className="flex flex-col gap-2 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-4 py-3 md:flex-row md:justify-end">
           <button
             type="button"
             disabled={isLocked || !preview || busy}
             onClick={onSaveFinal}
-            className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] px-4 py-2 text-sm font-semibold text-[var(--color-text)] disabled:opacity-40"
+            className="hidden rounded-xl border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] px-4 py-2 text-sm font-semibold text-[var(--color-text)] disabled:opacity-40 md:inline-flex md:shrink-0"
           >
             {mode === "current" ? "この内容で保存" : "この内容で保存（PNG）"}
           </button>
@@ -440,9 +440,10 @@ export function TapColoringExportModal({
             type="button"
             disabled={isLocked || !preview || busy}
             onClick={() => void onShareFinal()}
-            className="rounded-xl border border-amber-600/50 bg-amber-500/90 px-4 py-2 text-sm font-semibold text-stone-900 disabled:opacity-40"
+            className="rounded-xl border border-amber-600/50 bg-amber-500/90 px-4 py-2 text-sm font-semibold text-stone-900 disabled:opacity-40 md:shrink-0"
           >
-            送信・共有
+            <span className="md:hidden">画像を保存・共有</span>
+            <span className="hidden md:inline">送信・共有</span>
           </button>
         </div>
       </div>

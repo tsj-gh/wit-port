@@ -91,7 +91,7 @@ export function TapColoringGallery({
       return;
     }
     const ok = coloringRef.current?.loadHistoryEntry(entry) ?? false;
-    if (!ok) showToast("再開できませんでした");
+    if (!ok) showToast("今の絵を編集終了してください");
   };
 
   const onTogglePin = (e: MouseEvent, entryId: string) => {

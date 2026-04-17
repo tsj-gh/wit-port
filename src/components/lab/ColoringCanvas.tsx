@@ -1886,7 +1886,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           <button
             type="button"
             onClick={handleHistoryExitClick}
-            className="absolute right-2 top-2 z-40 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_22%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_90%,transparent)] px-2 py-1 text-[10px] font-semibold text-[var(--color-text)] shadow-md backdrop-blur sm:right-3 sm:top-3 sm:text-xs"
+            className="absolute right-2 top-2 z-40 min-w-[7.8rem] rounded-lg border border-[color-mix(in_srgb,var(--color-text)_22%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_90%,transparent)] px-4 py-2.5 text-xs font-semibold text-[var(--color-text)] shadow-md backdrop-blur sm:right-3 sm:top-3 sm:min-w-[9rem] sm:px-5 sm:py-3 sm:text-sm"
           >
             編集終了
           </button>
