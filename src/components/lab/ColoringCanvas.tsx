@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import type { MutableRefObject } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import {
@@ -464,10 +465,12 @@ type ColoringCanvasProps = {
   onHistoryEntryReplaced?: (entryId: string) => void;
   /** 履歴シーケンス中は false（作品履歴の操作を止める） */
   onHistorySequenceInteractionChange?: (interactionAllowed: boolean) => void;
+  /** 背景同期用（主にモバイルの外枠レイアウト） */
+  onSceneBgColorChange?: (color: string) => void;
 };
 
 export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasProps>(function ColoringCanvas(
-  { onHistoryUpdated, onHistoryEntryReplaced, onHistorySequenceInteractionChange },
+  { onHistoryUpdated, onHistoryEntryReplaced, onHistorySequenceInteractionChange, onSceneBgColorChange },
   ref,
 ) {
   const searchParams = useSearchParams();
@@ -503,6 +506,10 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const illustrationScale =
     isDevTj && isDebugMode ? debugIllustrationScale : DEFAULT_ILLUSTRATION_SCALE;
   const lineTapSearchRadius = isDevTj && isDebugMode ? debugLineTapSearchRadius : 5;
+
+  useEffect(() => {
+    onSceneBgColorChange?.(sceneBgColor);
+  }, [onSceneBgColorChange, sceneBgColor]);
 
   const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number>(0);
@@ -1111,11 +1118,19 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       const my = Math.max(0, Math.min(mask.height - 1, Math.floor(py)));
       const pixel = mctx.getImageData(mx, my, 1, 1).data;
       const alpha = pixel[3]!;
-      // 透明（塗り絵外）は描画しない
-      if (alpha < 10) return;
       const bright = pixel[0]! + pixel[1]! + pixel[2]!;
-      const isDirectFillable = bright >= 380;
-      if (!isDirectFillable) {
+      let shouldSearchNearby = false;
+      if (alpha < 10) {
+        // マスクは白領域のみ不透明なので、線画タップ時は lineOverlay 側で判定する。
+        const lineOverlay = pictureLineOverlayRef.current;
+        const lctx = lineOverlay?.getContext("2d", { willReadFrequently: true });
+        const lineAlpha = lctx?.getImageData(mx, my, 1, 1).data[3] ?? 0;
+        if (lineAlpha < 12) return; // 線画でも白領域でもない（外側）タップは無視
+        shouldSearchNearby = true;
+      } else if (bright < 380) {
+        shouldSearchNearby = true;
+      }
+      if (shouldSearchNearby) {
         // 線画タップ時は近傍5px内から最寄りの白領域を探索し、そこにスプラッターを置く。
         const radius = Math.max(1, Math.round(lineTapSearchRadius));
         if (isDevTj && isDebugMode) {
@@ -1527,86 +1542,90 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       animate={{ backgroundColor: sceneBgColor }}
       transition={{ duration: TRANSITION_BG_MS / 1000, ease: "linear" }}
     >
-      {isDevTj && isDebugMode && (
-        <div className="fixed right-3 top-24 z-50 max-h-[90vh] w-[min(92vw,280px)] overflow-y-auto rounded-2xl border border-stone-300 bg-white/95 p-3 text-left text-xs text-stone-800 shadow-lg sm:right-4 sm:top-24">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            {isDebugPanelExpanded && <span className="font-bold text-stone-700">タップぬりえ DEBUG</span>}
-            <div className="ml-auto flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setIsDebugMode(false)}
-                className="rounded border border-stone-400 bg-amber-500 px-2 py-1 text-[10px] font-semibold text-white"
-              >
-                DEBUG ON
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsDebugPanelExpanded((v) => !v)}
-                className="rounded border border-stone-300 p-1 text-stone-500"
-                aria-expanded={isDebugPanelExpanded}
-              >
-                {isDebugPanelExpanded ? "▲" : "▼"}
-              </button>
-            </div>
-          </div>
-          {isDebugPanelExpanded && (
-            <div className="space-y-3 text-[10px] text-stone-600">
-              <div>
-                <div className="mb-1 font-semibold text-stone-700">シミのサイズ（VB換算の基準）</div>
-                <input
-                  type="range"
-                  min={2}
-                  max={18}
-                  step={0.5}
-                  value={debugSplatterRadiusVb}
-                  onChange={(e) => setDebugSplatterRadiusVb(Number(e.target.value))}
-                  className="w-full accent-amber-600"
-                />
-                <div className="tabular-nums text-stone-500">{debugSplatterRadiusVb.toFixed(1)}</div>
-              </div>
-              <div>
-                <div className="mb-1 font-semibold text-stone-700">クリア閾値（内側に対する割合）</div>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={0.99}
-                  step={0.01}
-                  value={debugFillThreshold}
-                  onChange={(e) => setDebugFillThreshold(Number(e.target.value))}
-                  className="w-full accent-amber-600"
-                />
-                <div className="tabular-nums text-stone-500">{Math.round(debugFillThreshold * 100)}%</div>
-              </div>
-              <div>
-                <div className="mb-1 font-semibold text-stone-700">塗り絵イラスト拡大（黒枠内）</div>
-                <input
-                  type="range"
-                  min={0.7}
-                  max={1.45}
-                  step={0.05}
-                  value={debugIllustrationScale}
-                  onChange={(e) => setDebugIllustrationScale(Number(e.target.value))}
-                  className="w-full accent-amber-600"
-                />
-                <div className="tabular-nums text-stone-500">{debugIllustrationScale.toFixed(2)}×</div>
-              </div>
-              <div>
-                <div className="mb-1 font-semibold text-stone-700">線タップ探索半径（px）</div>
-                <input
-                  type="range"
-                  min={1}
-                  max={16}
-                  step={1}
-                  value={debugLineTapSearchRadius}
-                  onChange={(e) => setDebugLineTapSearchRadius(Number(e.target.value))}
-                  className="w-full accent-amber-600"
-                />
-                <div className="tabular-nums text-stone-500">{Math.round(debugLineTapSearchRadius)}px</div>
+      {isDevTj &&
+        isDebugMode &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed right-3 top-24 z-[58] max-h-[90vh] w-[min(92vw,280px)] overflow-y-auto rounded-2xl border border-stone-300 bg-white/95 p-3 text-left text-xs text-stone-800 shadow-lg sm:right-4 sm:top-24">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              {isDebugPanelExpanded && <span className="font-bold text-stone-700">タップぬりえ DEBUG</span>}
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setIsDebugMode(false)}
+                  className="rounded border border-stone-400 bg-amber-500 px-2 py-1 text-[10px] font-semibold text-white"
+                >
+                  DEBUG ON
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDebugPanelExpanded((v) => !v)}
+                  className="rounded border border-stone-300 p-1 text-stone-500"
+                  aria-expanded={isDebugPanelExpanded}
+                >
+                  {isDebugPanelExpanded ? "▲" : "▼"}
+                </button>
               </div>
             </div>
-          )}
-        </div>
-      )}
+            {isDebugPanelExpanded && (
+              <div className="space-y-3 text-[10px] text-stone-600">
+                <div>
+                  <div className="mb-1 font-semibold text-stone-700">シミのサイズ（VB換算の基準）</div>
+                  <input
+                    type="range"
+                    min={2}
+                    max={18}
+                    step={0.5}
+                    value={debugSplatterRadiusVb}
+                    onChange={(e) => setDebugSplatterRadiusVb(Number(e.target.value))}
+                    className="w-full accent-amber-600"
+                  />
+                  <div className="tabular-nums text-stone-500">{debugSplatterRadiusVb.toFixed(1)}</div>
+                </div>
+                <div>
+                  <div className="mb-1 font-semibold text-stone-700">クリア閾値（内側に対する割合）</div>
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={0.99}
+                    step={0.01}
+                    value={debugFillThreshold}
+                    onChange={(e) => setDebugFillThreshold(Number(e.target.value))}
+                    className="w-full accent-amber-600"
+                  />
+                  <div className="tabular-nums text-stone-500">{Math.round(debugFillThreshold * 100)}%</div>
+                </div>
+                <div>
+                  <div className="mb-1 font-semibold text-stone-700">塗り絵イラスト拡大（黒枠内）</div>
+                  <input
+                    type="range"
+                    min={0.7}
+                    max={1.45}
+                    step={0.05}
+                    value={debugIllustrationScale}
+                    onChange={(e) => setDebugIllustrationScale(Number(e.target.value))}
+                    className="w-full accent-amber-600"
+                  />
+                  <div className="tabular-nums text-stone-500">{debugIllustrationScale.toFixed(2)}×</div>
+                </div>
+                <div>
+                  <div className="mb-1 font-semibold text-stone-700">線タップ探索半径（px）</div>
+                  <input
+                    type="range"
+                    min={1}
+                    max={16}
+                    step={1}
+                    value={debugLineTapSearchRadius}
+                    onChange={(e) => setDebugLineTapSearchRadius(Number(e.target.value))}
+                    className="w-full accent-amber-600"
+                  />
+                  <div className="tabular-nums text-stone-500">{Math.round(debugLineTapSearchRadius)}px</div>
+                </div>
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
 
       {(!splatterImagesReady || !coloringPicturesReady) && (
         <p className="text-center text-[10px] text-[var(--color-muted)]">画像を読み込み中…</p>

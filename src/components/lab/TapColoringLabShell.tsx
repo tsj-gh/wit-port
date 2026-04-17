@@ -26,6 +26,8 @@ export function TapColoringLabShell() {
   const [tapToast, setTapToast] = useState<string | null>(null);
   const [shakeEntryId, setShakeEntryId] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [sceneBgColor, setSceneBgColor] = useState("#fafaf9");
   const onHistorySequenceInteractionChange = useCallback((allowed: boolean) => {
     setIsLocked(!allowed);
   }, []);
@@ -57,8 +59,22 @@ export function TapColoringLabShell() {
     return () => window.removeEventListener("load", onLoad);
   }, []);
 
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const apply = () => setIsMobileLayout(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
   return (
-    <div className={`${GAME_COLUMN_CLASS} relative flex min-h-0 flex-1 flex-col lg:max-w-none`}>
+    <div
+      className={`${GAME_COLUMN_CLASS} relative flex min-h-0 flex-1 flex-col lg:max-w-none`}
+      style={{
+        backgroundColor: isMobileLayout ? sceneBgColor : undefined,
+        transition: "background-color 1000ms linear",
+      }}
+    >
       {tapToast && (
         <div
           role="status"
@@ -90,6 +106,7 @@ export function TapColoringLabShell() {
               <div className="max-h-none lg:max-h-none lg:overflow-visible">
                 <ColoringCanvas
                   ref={coloringRef}
+                  onSceneBgColorChange={setSceneBgColor}
                   onHistoryUpdated={() => setHistTick((t) => t + 1)}
                   onHistoryEntryReplaced={(id) => {
                     setShakeEntryId(id);
