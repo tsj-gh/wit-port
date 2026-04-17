@@ -22,9 +22,9 @@ export function TapColoringLabShell() {
   const [historyEntries, setHistoryEntries] = useState<TapColoringHistoryEntry[]>([]);
   const [tapToast, setTapToast] = useState<string | null>(null);
   const [shakeEntryId, setShakeEntryId] = useState<string | null>(null);
-  const [historyGalleryInteractionLocked, setHistoryGalleryInteractionLocked] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
   const onHistorySequenceInteractionChange = useCallback((allowed: boolean) => {
-    setHistoryGalleryInteractionLocked(!allowed);
+    setIsLocked(!allowed);
   }, []);
 
   useEffect(() => {
@@ -95,7 +95,8 @@ export function TapColoringLabShell() {
           coloringRef={coloringRef}
           shakeEntryId={shakeEntryId}
           onToast={setTapToast}
-          interactionLocked={historyGalleryInteractionLocked}
+          isLocked={isLocked}
+          onHistorySaved={() => setHistTick((t) => t + 1)}
         />
 
         <aside className="order-2 w-full shrink-0 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-20px)] lg:w-[360px] lg:self-start lg:overflow-y-auto">
@@ -129,7 +130,8 @@ export function TapColoringLabShell() {
             coloringRef={coloringRef}
             shakeEntryId={shakeEntryId}
             onToast={setTapToast}
-            interactionLocked={historyGalleryInteractionLocked}
+            isLocked={isLocked}
+            onHistorySaved={() => setHistTick((t) => t + 1)}
           />
         </aside>
       </div>

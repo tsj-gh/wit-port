@@ -19,8 +19,10 @@ import {
   type TapColoringHistoryEntry,
   type TapColoringSwatch,
 } from "@/lib/tapColoringHistory";
+import { composeTapColoringExport, type TapColoringExportOptions } from "@/lib/tapColoringExport";
 
 export type { TapColoringSwatch } from "@/lib/tapColoringHistory";
+export type { TapColoringExportOptions } from "@/lib/tapColoringExport";
 
 /** HSB 色相環に沿った 12 色（S/B はビビッド寄り: HSL 100% / 50%） */
 const HUE_RING = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330] as const;
@@ -442,6 +444,10 @@ export type ColoringCanvasHandle = {
   loadHistoryEntry: (entry: TapColoringHistoryEntry) => boolean;
   /** 現在の塗り状態を履歴に追加（ゲーム進行は変えない） */
   saveCurrentWorkToHistory: () => boolean;
+  /** 高画質合成プレビュー用 PNG をプレビューとして履歴に保存 */
+  saveCurrentWorkToHistoryWithPreview: (previewDataUrl: string) => boolean;
+  /** 表示キャンバス＋背景色から 1024 出力用 data URL を生成 */
+  composeHighResExport: (options: TapColoringExportOptions) => Promise<string | null>;
 };
 
 type ColoringCanvasProps = {
@@ -650,25 +656,36 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     return computeFillRatio(maskData, paintData, SCAN_STRIDE);
   }, []);
 
+  const pushHistoryFromCanvas = useCallback(
+    (previewDataUrl: string) => {
+      const display = displayRef.current;
+      const paint = paintRef.current;
+      if (!display || !paint) return false;
+      particlesRef.current = [];
+      cancelAnimationFrame(rafRef.current);
+      redrawDisplay();
+      const paintDataUrl = paint.toDataURL("image/png");
+      prependTapColoringHistory({
+        pictureId: currentPictureAsset.id,
+        savedBitmapSize: bitmapSize,
+        paintDataUrl,
+        previewDataUrl,
+        paletteSwatches: activePalette.map((s) => ({ label: s.label, color: s.color.toLowerCase() })),
+        paletteSelectedColor: selected.color.toLowerCase(),
+      });
+      onHistoryUpdated?.();
+      return true;
+    },
+    [activePalette, bitmapSize, currentPictureAsset.id, redrawDisplay, onHistoryUpdated, selected.color],
+  );
+
   const appendHistorySnapshot = useCallback(() => {
     const display = displayRef.current;
     const paint = paintRef.current;
     if (!display || !paint) return;
-    particlesRef.current = [];
-    cancelAnimationFrame(rafRef.current);
-    redrawDisplay();
     const previewDataUrl = buildPreviewDataUrlFromDisplay(display);
-    const paintDataUrl = paint.toDataURL("image/png");
-    prependTapColoringHistory({
-      pictureId: currentPictureAsset.id,
-      savedBitmapSize: bitmapSize,
-      paintDataUrl,
-      previewDataUrl,
-      paletteSwatches: activePalette.map((s) => ({ label: s.label, color: s.color.toLowerCase() })),
-      paletteSelectedColor: selected.color.toLowerCase(),
-    });
-    onHistoryUpdated?.();
-  }, [activePalette, bitmapSize, currentPictureAsset.id, redrawDisplay, onHistoryUpdated, selected.color]);
+    void pushHistoryFromCanvas(previewDataUrl);
+  }, [pushHistoryFromCanvas]);
 
   const initStageCanvases = useCallback(() => {
     const display = displayRef.current;
@@ -1368,6 +1385,24 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         appendHistorySnapshot();
         return true;
       },
+      saveCurrentWorkToHistoryWithPreview(previewDataUrl: string) {
+        if (!coloringPicturesReady || !splatterImagesReady) return false;
+        if (historyOverlayRef.current !== null || editingHistoryEntryRef.current) return false;
+        if (phase !== "play" && phase !== "resume") return false;
+        if (sequenceRunningRef.current) return false;
+        if (!previewDataUrl.startsWith("data:image/")) return false;
+        return pushHistoryFromCanvas(previewDataUrl);
+      },
+      async composeHighResExport(options: TapColoringExportOptions) {
+        const display = displayRef.current;
+        if (!display || display.width < 1 || display.height < 1) return null;
+        redrawDisplay();
+        try {
+          return await composeTapColoringExport(display, sceneBgColor, options);
+        } catch {
+          return null;
+        }
+      },
     }),
     [
       activePalette,
@@ -1376,6 +1411,9 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       onHistorySequenceInteractionChange,
       phase,
       pictureIndex,
+      pushHistoryFromCanvas,
+      redrawDisplay,
+      sceneBgColor,
       selected.color,
       splatterImagesReady,
     ],

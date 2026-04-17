@@ -1,8 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { type RefObject } from "react";
+import { useCallback, useState, type RefObject } from "react";
 import type { ColoringCanvasHandle } from "@/components/lab/ColoringCanvas";
+import { TapColoringExportModal, type TapColoringExportModalMode } from "@/components/lab/TapColoringExportModal";
 import type { TapColoringHistoryEntry } from "@/lib/tapColoringHistory";
 
 type TapColoringGalleryProps = {
@@ -12,19 +13,13 @@ type TapColoringGalleryProps = {
   onToast?: (message: string) => void;
   /** 直近に差し替えた履歴 ID（サムネ揺れ） */
   shakeEntryId?: string | null;
-  /** 履歴の読み込み・編集終了の演出中は true（タップ無効） */
-  interactionLocked?: boolean;
+  /**
+   * 履歴演出・編集中など。true の間は保存・シェア・再開など作品履歴まわりを無効化し、
+   * 保存・シェア系ボタンは disabled。
+   */
+  isLocked: boolean;
+  onHistorySaved?: () => void;
 };
-
-function downloadDataUrlPng(dataUrl: string, filename: string) {
-  const a = document.createElement("a");
-  a.href = dataUrl;
-  a.download = filename;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
 
 function IconSave({ className }: { className?: string }) {
   return (
@@ -49,47 +44,77 @@ export function TapColoringGallery({
   className = "",
   onToast,
   shakeEntryId,
-  interactionLocked = false,
+  isLocked,
+  onHistorySaved,
 }: TapColoringGalleryProps) {
   const showToast = (message: string) => {
     onToast?.(message);
   };
 
-  const onSaveCurrent = () => {
-    const ok = coloringRef.current?.saveCurrentWorkToHistory() ?? false;
-    if (!ok) showToast("まだ保存できません（読み込み中など）");
-  };
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<TapColoringExportModalMode>(null);
+  const [exportEntry, setExportEntry] = useState<TapColoringHistoryEntry | null>(null);
+
+  const closeExport = useCallback(() => {
+    setExportOpen(false);
+    setExportMode(null);
+    setExportEntry(null);
+  }, []);
+
+  const openExportCurrent = useCallback(() => {
+    if (isLocked) {
+      showToast("ロック中は保存できません");
+      return;
+    }
+    setExportMode("current");
+    setExportEntry(null);
+    setExportOpen(true);
+  }, [isLocked]);
+
+  const openExportHistory = useCallback(
+    (entry: TapColoringHistoryEntry) => {
+      if (isLocked) {
+        showToast("ロック中は保存・共有できません");
+        return;
+      }
+      setExportMode("history");
+      setExportEntry(entry);
+      setExportOpen(true);
+    },
+    [isLocked],
+  );
 
   const onResume = (entry: TapColoringHistoryEntry) => {
+    if (isLocked) {
+      showToast("ロック中は再開できません");
+      return;
+    }
     const ok = coloringRef.current?.loadHistoryEntry(entry) ?? false;
     if (!ok) showToast("再開できませんでした");
   };
 
-  const onDownload = (entry: TapColoringHistoryEntry) => {
-    const safe = entry.pictureId.replace(/[^\w-]+/g, "_");
-    downloadDataUrlPng(entry.previewDataUrl, `tap-coloring-${safe}-${entry.createdAt}.png`);
-  };
-
-  const onSns = () => {
-    showToast("画像を生成中...");
-  };
+  const btnDisabled = isLocked;
 
   return (
-    <div
-      className={`relative ${className}`}
-      aria-busy={interactionLocked || undefined}
-    >
-      <div
-        className={`rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-3 text-[var(--color-text)] ${
-          interactionLocked ? "pointer-events-none select-none" : ""
-        }`}
-      >
+    <div className={`relative ${className}`} aria-busy={isLocked || undefined}>
+      <TapColoringExportModal
+        open={exportOpen}
+        mode={exportMode}
+        historyEntry={exportEntry}
+        coloringRef={coloringRef}
+        onClose={closeExport}
+        onToast={onToast}
+        onHistorySaved={onHistorySaved}
+        isLocked={isLocked}
+      />
+      <div className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-3 text-[var(--color-text)]">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">作品履歴</h3>
           <button
             type="button"
-            onClick={onSaveCurrent}
-            className="shrink-0 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_88%,transparent)] px-2 py-1 text-[10px] font-semibold text-[var(--color-muted)] transition hover:text-[var(--color-text)] sm:text-xs"
+            disabled={btnDisabled}
+            onClick={openExportCurrent}
+            className="shrink-0 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_88%,transparent)] px-2 py-1 text-[10px] font-semibold text-[var(--color-muted)] transition hover:text-[var(--color-text)] enabled:hover:bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] disabled:cursor-not-allowed disabled:opacity-45 sm:text-xs"
           >
             いまの塗りを保存
           </button>
@@ -112,8 +137,9 @@ export function TapColoringGallery({
                 >
                   <button
                     type="button"
+                    disabled={btnDisabled}
                     onClick={() => onResume(entry)}
-                    className="relative block w-full cursor-pointer text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
+                    className="relative block w-full cursor-pointer text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 disabled:cursor-not-allowed disabled:opacity-45"
                     aria-label="この作品をキャンバスに読み込んで続きから塗る"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -128,23 +154,25 @@ export function TapColoringGallery({
                   <div className="flex flex-nowrap items-center justify-between gap-1 border-t border-[color-mix(in_srgb,var(--color-text)_8%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)] px-1 py-1">
                     <button
                       type="button"
+                      disabled={btnDisabled}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDownload(entry);
+                        openExportHistory(entry);
                       }}
-                      className="inline-flex h-7 shrink-0 items-center justify-center rounded-md text-[var(--color-muted)] transition hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] hover:text-[var(--color-text)]"
-                      aria-label="PNGで保存"
-                      title="PNGで保存"
+                      className="inline-flex h-7 shrink-0 items-center justify-center rounded-md text-[var(--color-muted)] transition enabled:hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] enabled:hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-45"
+                      aria-label="高画質PNGで保存"
+                      title="高画質PNGで保存"
                     >
                       <IconSave className="h-3.5 w-3.5" />
                     </button>
                     <button
                       type="button"
+                      disabled={btnDisabled}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onSns();
+                        openExportHistory(entry);
                       }}
-                      className="min-w-0 truncate rounded-md px-1.5 py-0.5 text-[9px] font-medium leading-tight text-[var(--color-muted)] transition hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] hover:text-[var(--color-text)] lg:text-[10px]"
+                      className="min-w-0 truncate rounded-md px-1.5 py-0.5 text-[9px] font-medium leading-tight text-[var(--color-muted)] transition enabled:hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] enabled:hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-45 lg:text-[10px]"
                     >
                       SNSに送る
                     </button>
