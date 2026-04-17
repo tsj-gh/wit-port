@@ -486,12 +486,20 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const shouldShowExitAfterPendingPaintRef = useRef(false);
   /** 履歴編集でキャンバス key 切替時にスライドではなく奥行きのみ使う */
   const [canvasPresenceDepth, setCanvasPresenceDepth] = useState(false);
+  /** オーバーレイ解除＋ペイント適用後、奥行き途中のキャンバスを一瞬で最終姿勢へ（二重拡大防止） */
+  const [galleryHandoffSkipToRest, setGalleryHandoffSkipToRest] = useState(false);
 
   const [historyOverlay, setHistoryOverlay] = useState<HistoryOverlayState>(null);
   const historyOverlayRef = useRef<HistoryOverlayState>(null);
   useEffect(() => {
     historyOverlayRef.current = historyOverlay;
   }, [historyOverlay]);
+
+  useEffect(() => {
+    if (!galleryHandoffSkipToRest) return;
+    const id = requestAnimationFrame(() => setGalleryHandoffSkipToRest(false));
+    return () => cancelAnimationFrame(id);
+  }, [galleryHandoffSkipToRest]);
 
   const [showHistoryExitButton, setShowHistoryExitButton] = useState(false);
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
@@ -746,14 +754,30 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         redrawDisplay();
         if (shouldShowExitAfterPendingPaintRef.current) {
           shouldShowExitAfterPendingPaintRef.current = false;
+          setGalleryHandoffSkipToRest(true);
+          setHistoryOverlay(null);
           setShowHistoryExitButton(true);
+        } else if (pend.id === "__stash_restore__") {
+          setGalleryHandoffSkipToRest(true);
+          setHistoryOverlay(null);
+          requestAnimationFrame(() => {
+            setCanvasPresenceDepth(false);
+          });
         }
       };
       img.onerror = () => {
         redrawDisplay();
         if (shouldShowExitAfterPendingPaintRef.current) {
           shouldShowExitAfterPendingPaintRef.current = false;
+          setGalleryHandoffSkipToRest(true);
+          setHistoryOverlay(null);
           setShowHistoryExitButton(true);
+        } else if (pend.id === "__stash_restore__") {
+          setGalleryHandoffSkipToRest(true);
+          setHistoryOverlay(null);
+          requestAnimationFrame(() => {
+            setCanvasPresenceDepth(false);
+          });
         }
       };
       img.src = pend.paintDataUrl;
@@ -1094,10 +1118,10 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     const target = historyOverlayEnterTargetRef.current;
     if (!target) return;
     historyOverlayEnterTargetRef.current = null;
-    setHistoryOverlay(null);
     const idx = COLORING_PICTURE_ASSETS.findIndex((a) => a.id === target.pictureId);
     if (idx < 0) {
       stashSessionRef.current = null;
+      setHistoryOverlay(null);
       setCanvasPresenceDepth(false);
       return;
     }
@@ -1113,8 +1137,8 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
 
   const completeHistoryExit = useCallback(() => {
     const stash = stashSessionRef.current;
-    setHistoryOverlay(null);
     if (!stash) {
+      setHistoryOverlay(null);
       editingHistoryEntryRef.current = null;
       freePaintWithoutClearRef.current = false;
       setEditingHistoryId(null);
@@ -1343,9 +1367,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
 
       <div
         className={`relative mx-auto aspect-square w-full max-w-[420px] ${
-          historyOverlay !== null || (editingHistoryId !== null && !showHistoryExitButton)
-            ? "[&_canvas]:invisible [&_canvas]:pointer-events-none"
-            : ""
+          historyOverlay !== null ? "[&_canvas]:invisible [&_canvas]:pointer-events-none" : ""
         }`}
       >
         {historyOverlay?.kind === "enter" && historyOverlay.phase === "stash-shrink" && (
@@ -1452,11 +1474,13 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
                 : { x: "-120%", scale: 0.98, opacity: 0.96, rotate: -3 }
             }
             animate={
-              phase === "success"
-                ? { x: 0, opacity: 1, rotate: 0, scale: [1, 1.07, 0.94, 1.03, 1] }
-                : phase === "transition"
-                  ? { x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }
-                  : { x: 0, opacity: 1, rotate: 0, scale: 1 }
+              galleryHandoffSkipToRest
+                ? { x: 0, opacity: 1, rotate: 0, scale: 1 }
+                : phase === "success"
+                  ? { x: 0, opacity: 1, rotate: 0, scale: [1, 1.07, 0.94, 1.03, 1] }
+                  : phase === "transition"
+                    ? { x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }
+                    : { x: 0, opacity: 1, rotate: 0, scale: 1 }
             }
             exit={
               canvasPresenceDepth
@@ -1464,8 +1488,9 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
                 : { x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }
             }
             transition={{
-              duration:
-                phase === "success"
+              duration: galleryHandoffSkipToRest
+                ? 0
+                : phase === "success"
                   ? SUCCESS_SQUASH_DURATION_S
                   : phase === "transition"
                     ? TRANSITION_SLIDE_MS / 1000
@@ -1475,11 +1500,6 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
                         ? 0.42
                         : 0.3,
               ease: phase === "setup" ? "easeOut" : phase === "transition" ? "easeIn" : "easeOut",
-            }}
-            onAnimationComplete={() => {
-              if (!editingHistoryEntryRef.current && historyOverlayRef.current == null) {
-                setCanvasPresenceDepth(false);
-              }
             }}
           >
             <canvas
