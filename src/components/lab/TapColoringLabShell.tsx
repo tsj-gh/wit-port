@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { ColoringCanvas, type ColoringCanvasHandle } from "@/components/lab/ColoringCanvas";
@@ -22,6 +22,10 @@ export function TapColoringLabShell() {
   const [historyEntries, setHistoryEntries] = useState<TapColoringHistoryEntry[]>([]);
   const [tapToast, setTapToast] = useState<string | null>(null);
   const [shakeEntryId, setShakeEntryId] = useState<string | null>(null);
+  const [historyGalleryInteractionLocked, setHistoryGalleryInteractionLocked] = useState(false);
+  const onHistorySequenceInteractionChange = useCallback((allowed: boolean) => {
+    setHistoryGalleryInteractionLocked(!allowed);
+  }, []);
 
   useEffect(() => {
     setHistoryEntries(readTapColoringHistory());
@@ -78,6 +82,7 @@ export function TapColoringLabShell() {
                     setHistTick((t) => t + 1);
                     window.setTimeout(() => setShakeEntryId(null), 700);
                   }}
+                  onHistorySequenceInteractionChange={onHistorySequenceInteractionChange}
                 />
               </div>
             </section>
@@ -90,6 +95,7 @@ export function TapColoringLabShell() {
           coloringRef={coloringRef}
           shakeEntryId={shakeEntryId}
           onToast={setTapToast}
+          interactionLocked={historyGalleryInteractionLocked}
         />
 
         <aside className="order-2 w-full shrink-0 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-20px)] lg:w-[360px] lg:self-start lg:overflow-y-auto">
@@ -123,6 +129,7 @@ export function TapColoringLabShell() {
             coloringRef={coloringRef}
             shakeEntryId={shakeEntryId}
             onToast={setTapToast}
+            interactionLocked={historyGalleryInteractionLocked}
           />
         </aside>
       </div>

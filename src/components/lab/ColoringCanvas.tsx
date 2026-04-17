@@ -439,10 +439,12 @@ type ColoringCanvasProps = {
   onHistoryUpdated?: () => void;
   /** 履歴サムネの差し替え直後（揺れ演出用） */
   onHistoryEntryReplaced?: (entryId: string) => void;
+  /** 履歴シーケンス中は false（作品履歴の操作を止める） */
+  onHistorySequenceInteractionChange?: (interactionAllowed: boolean) => void;
 };
 
 export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasProps>(function ColoringCanvas(
-  { onHistoryUpdated, onHistoryEntryReplaced },
+  { onHistoryUpdated, onHistoryEntryReplaced, onHistorySequenceInteractionChange },
   ref,
 ) {
   const searchParams = useSearchParams();
@@ -488,6 +490,8 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const [canvasPresenceDepth, setCanvasPresenceDepth] = useState(false);
   /** オーバーレイ解除＋ペイント適用後、奥行き途中のキャンバスを一瞬で最終姿勢へ（二重拡大防止） */
   const [galleryHandoffSkipToRest, setGalleryHandoffSkipToRest] = useState(false);
+  /** true の間はパレット・キャンバス塗り・（親経由で）作品履歴を無効化 */
+  const [historyChromeInteractionLocked, setHistoryChromeInteractionLocked] = useState(false);
 
   const [historyOverlay, setHistoryOverlay] = useState<HistoryOverlayState>(null);
   const historyOverlayRef = useRef<HistoryOverlayState>(null);
@@ -756,12 +760,22 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           shouldShowExitAfterPendingPaintRef.current = false;
           setGalleryHandoffSkipToRest(true);
           setHistoryOverlay(null);
-          setShowHistoryExitButton(true);
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              setShowHistoryExitButton(true);
+              setHistoryChromeInteractionLocked(false);
+              onHistorySequenceInteractionChange?.(true);
+            });
+          });
         } else if (pend.id === "__stash_restore__") {
           setGalleryHandoffSkipToRest(true);
           setHistoryOverlay(null);
           requestAnimationFrame(() => {
             setCanvasPresenceDepth(false);
+            requestAnimationFrame(() => {
+              setHistoryChromeInteractionLocked(false);
+              onHistorySequenceInteractionChange?.(true);
+            });
           });
         }
       };
@@ -771,18 +785,35 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           shouldShowExitAfterPendingPaintRef.current = false;
           setGalleryHandoffSkipToRest(true);
           setHistoryOverlay(null);
-          setShowHistoryExitButton(true);
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              setShowHistoryExitButton(true);
+              setHistoryChromeInteractionLocked(false);
+              onHistorySequenceInteractionChange?.(true);
+            });
+          });
         } else if (pend.id === "__stash_restore__") {
           setGalleryHandoffSkipToRest(true);
           setHistoryOverlay(null);
           requestAnimationFrame(() => {
             setCanvasPresenceDepth(false);
+            requestAnimationFrame(() => {
+              setHistoryChromeInteractionLocked(false);
+              onHistorySequenceInteractionChange?.(true);
+            });
           });
         }
       };
       img.src = pend.paintDataUrl;
     }
-  }, [coloringPicturesReady, bitmapSize, pictureIndex, illustrationScale, redrawDisplay]);
+  }, [
+    coloringPicturesReady,
+    bitmapSize,
+    pictureIndex,
+    illustrationScale,
+    redrawDisplay,
+    onHistorySequenceInteractionChange,
+  ]);
 
   const initStageCanvasesRef = useRef(initStageCanvases) as MutableRefObject<typeof initStageCanvases>;
   useLayoutEffect(() => {
@@ -951,6 +982,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   }, [appendHistorySnapshot, spawnCelebrationParticles]);
 
   const paintAt = (clientX: number, clientY: number) => {
+    if (historyChromeInteractionLocked) return;
     if (phase !== "play") return;
     if (blockPaintUntilPointerUpRef.current) return;
     const canvas = displayRef.current;
@@ -1085,6 +1117,10 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (historyChromeInteractionLocked) {
+      e.preventDefault();
+      return;
+    }
     if (phase !== "play") {
       e.preventDefault();
       pointerDownOnCanvasRef.current = true;
@@ -1100,6 +1136,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (historyChromeInteractionLocked) return;
     if (phase !== "play") return;
     if (blockPaintUntilPointerUpRef.current) return;
     if (e.buttons !== 1 && e.pointerType !== "touch") return;
@@ -1123,6 +1160,8 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       stashSessionRef.current = null;
       setHistoryOverlay(null);
       setCanvasPresenceDepth(false);
+      setHistoryChromeInteractionLocked(false);
+      onHistorySequenceInteractionChange?.(true);
       return;
     }
     pendingHistoryEntryRef.current = target;
@@ -1133,7 +1172,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     setPictureIndex(idx);
     setStageIndex((i) => i + 1);
     setPhase("play");
-  }, []);
+  }, [onHistorySequenceInteractionChange]);
 
   const completeHistoryExit = useCallback(() => {
     const stash = stashSessionRef.current;
@@ -1171,6 +1210,9 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     const paint = paintRef.current;
     if (!display || !paint) return;
 
+    setHistoryChromeInteractionLocked(true);
+    onHistorySequenceInteractionChange?.(false);
+
     particlesRef.current = [];
     cancelAnimationFrame(rafRef.current);
     redrawDisplay();
@@ -1192,7 +1234,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       stashUrl: stash.previewDataUrl,
       outgoingUrl: newPreview,
     });
-  }, [bitmapSize, onHistoryEntryReplaced, onHistoryUpdated, redrawDisplay]);
+  }, [bitmapSize, onHistoryEntryReplaced, onHistorySequenceInteractionChange, onHistoryUpdated, redrawDisplay]);
 
   useImperativeHandle(
     ref,
@@ -1224,6 +1266,9 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           previewDataUrl: stashPreview,
         };
 
+        setHistoryChromeInteractionLocked(true);
+        onHistorySequenceInteractionChange?.(false);
+
         historyOverlayEnterTargetRef.current = entry;
         setCanvasPresenceDepth(true);
         setShowHistoryExitButton(false);
@@ -1244,7 +1289,14 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         return true;
       },
     }),
-    [appendHistorySnapshot, coloringPicturesReady, phase, pictureIndex, splatterImagesReady],
+    [
+      appendHistorySnapshot,
+      coloringPicturesReady,
+      onHistorySequenceInteractionChange,
+      phase,
+      pictureIndex,
+      splatterImagesReady,
+    ],
   );
 
   return (
@@ -1339,11 +1391,14 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
 
       <motion.div
         className={`flex flex-wrap items-center justify-center gap-3 lg:-translate-y-1 ${
-          phase === "play" || phase === "resume" ? "pointer-events-auto" : "pointer-events-none"
+          !historyChromeInteractionLocked && (phase === "play" || phase === "resume")
+            ? "pointer-events-auto"
+            : "pointer-events-none"
         }`}
         animate={{
-          opacity: phase === "play" || phase === "resume" ? 1 : 0,
-          y: phase === "play" || phase === "resume" ? 0 : -14,
+          opacity:
+            !historyChromeInteractionLocked && (phase === "play" || phase === "resume") ? 1 : 0,
+          y: !historyChromeInteractionLocked && (phase === "play" || phase === "resume") ? 0 : -14,
         }}
         transition={{ duration: SUCCESS_UI_FADE_MS / 1000, ease: "easeOut" }}
       >
@@ -1470,7 +1525,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
             }`}
             initial={
               canvasPresenceDepth
-                ? { scale: 0.86, opacity: 0.1, x: 0, rotate: 0 }
+                ? { scale: 1, opacity: 0.12, x: 0, rotate: 0 }
                 : { x: "-120%", scale: 0.98, opacity: 0.96, rotate: -3 }
             }
             animate={
@@ -1484,7 +1539,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
             }
             exit={
               canvasPresenceDepth
-                ? { scale: 0.86, opacity: 0.08, x: 0, rotate: 0 }
+                ? { scale: 1, opacity: 0.08, x: 0, rotate: 0 }
                 : { x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }
             }
             transition={{

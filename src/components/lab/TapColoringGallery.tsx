@@ -12,6 +12,8 @@ type TapColoringGalleryProps = {
   onToast?: (message: string) => void;
   /** 直近に差し替えた履歴 ID（サムネ揺れ） */
   shakeEntryId?: string | null;
+  /** 履歴の読み込み・編集終了の演出中は true（タップ無効） */
+  interactionLocked?: boolean;
 };
 
 function downloadDataUrlPng(dataUrl: string, filename: string) {
@@ -47,6 +49,7 @@ export function TapColoringGallery({
   className = "",
   onToast,
   shakeEntryId,
+  interactionLocked = false,
 }: TapColoringGalleryProps) {
   const showToast = (message: string) => {
     onToast?.(message);
@@ -72,8 +75,15 @@ export function TapColoringGallery({
   };
 
   return (
-    <div className={`relative ${className}`}>
-      <div className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-3 text-[var(--color-text)]">
+    <div
+      className={`relative ${className}`}
+      aria-busy={interactionLocked || undefined}
+    >
+      <div
+        className={`rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-3 text-[var(--color-text)] ${
+          interactionLocked ? "pointer-events-none select-none" : ""
+        }`}
+      >
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">作品履歴</h3>
           <button
