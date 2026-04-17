@@ -57,6 +57,7 @@ export function TapColoringExportModal({
   const [pictureScale, setPictureScale] = useState(1);
   const [frameVariant, setFrameVariant] = useState<TapColoringFrameVariant>("01");
   const [exportBackgroundColor, setExportBackgroundColor] = useState("#FFFFFF");
+  const [overlayMarginPct, setOverlayMarginPct] = useState(0.04);
   const [shareMessage, setShareMessage] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -69,8 +70,9 @@ export function TapColoringExportModal({
       includeDate,
       pictureScale,
       exportBackgroundColor,
+      overlayMarginPct,
     }),
-    [frameVariant, includeFrame, includeDate, pictureScale, exportBackgroundColor],
+    [frameVariant, includeFrame, includeDate, pictureScale, exportBackgroundColor, overlayMarginPct],
   );
 
   useEffect(() => {
@@ -84,6 +86,7 @@ export function TapColoringExportModal({
     setPictureScale(1);
     setFrameVariant("01");
     setExportBackgroundColor("#FFFFFF");
+    setOverlayMarginPct(0.04);
     setShareMessage(defaultShareMessageBody());
   }, [open]);
 
@@ -245,7 +248,7 @@ export function TapColoringExportModal({
 
             <div>
               <div className="mb-1.5 font-medium text-[var(--color-text)]">内枠の背景</div>
-              <div className="flex max-w-full flex-wrap justify-center gap-1.5 sm:gap-2">
+              <div className="grid w-full grid-cols-8 justify-items-center gap-1 sm:gap-1.5">
                 {EXPORT_SURFACE_PRESETS.map((p) => {
                   const active = exportBackgroundColor.toLowerCase() === p.color.toLowerCase();
                   return (
@@ -256,7 +259,7 @@ export function TapColoringExportModal({
                       aria-label={`背景 ${p.label}`}
                       aria-pressed={active}
                       onClick={() => setExportBackgroundColor(p.color)}
-                      className={`h-6 w-6 shrink-0 rounded-full border-2 shadow-sm transition ring-offset-1 ring-offset-[var(--color-bg)] sm:h-7 sm:w-7 sm:ring-offset-2 ${
+                      className={`h-5 w-5 shrink-0 rounded-full border-2 shadow-sm transition ring-offset-1 ring-offset-[var(--color-bg)] sm:h-6 sm:w-6 sm:ring-offset-2 ${
                         active ? "border-amber-500 ring-2 ring-amber-400" : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)]"
                       }`}
                       style={{ backgroundColor: p.color }}
@@ -312,6 +315,30 @@ export function TapColoringExportModal({
                 />
               </label>
             </div>
+
+            <details className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 py-2">
+              <summary className="cursor-pointer select-none text-[11px] font-medium text-[var(--color-muted)]">
+                デバッグ調整
+              </summary>
+              <div className="mt-2">
+                <div className="mb-1 flex justify-between font-medium">
+                  <span className="text-[11px]">ロゴ余白%</span>
+                  <span className="tabular-nums text-[11px] text-[var(--color-muted)]">
+                    {(overlayMarginPct * 100).toFixed(1)}%
+                  </span>
+                </div>
+                <input
+                  id="logo-margin-debug"
+                  type="range"
+                  min={0.02}
+                  max={0.08}
+                  step={0.001}
+                  value={overlayMarginPct}
+                  onChange={(e) => setOverlayMarginPct(Number(e.target.value))}
+                  className="w-full accent-amber-600"
+                />
+              </div>
+            </details>
 
             <div>
               <label htmlFor="tap-export-share-msg" className="mb-1 block font-medium text-[var(--color-text)]">

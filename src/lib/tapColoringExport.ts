@@ -1,9 +1,7 @@
 /**
  * Tap Coloring 用の高解像度エクスポート合成。
- * 外側白の洪水塗り透過 → 1024 作業面合成 → 額縁外寸トリミング → 空洞内にロゴ・日付。
+ * フレームの内枠を自動検出し、作品領域基準でロゴ・日付を配置する。
  */
-
-export const EXPORT_WORK_SIZE = 1024;
 
 export type TapColoringFrameVariant = "01" | "02" | "03";
 
@@ -15,59 +13,26 @@ export type TapColoringExportOptions = {
   includeDate: boolean;
   pictureScale: number;
   exportBackgroundColor: string;
+  /** 作品領域に対するロゴ・日付の内側マージン率（0.03 = 3%） */
+  overlayMarginPct: number;
 };
 
 const FRAME_PUBLIC = "/assets/tap-coloring/Frame";
 const LOGO_SRC = "/assets/logo/logo_wispo.png";
 
-/**
- * cropArea: 1024 作業 Canvas から切り出す「額縁の外寸」
- * innerHoleAfterCrop: トリミング後の画像座標（左上 0,0）での「開口」＝ロゴ配置・被り判定領域
- */
 export const FRAME_CONFIG: Record<
   TapColoringFrameVariant,
   {
     file: string;
-    cropArea: TapColoringExportRect;
-    /** 開口内からロゴ・日付をさらに内側へ寄せるマージン */
-    logoMarginInner: number;
-    innerHoleAfterCrop: TapColoringExportRect;
-    centerX: number;
-    centerY: number;
-    artBase: number;
-    overlapScale: number;
+    /** 検出失敗時の保険（横幅に対する内枠の左右余白率） */
+    fallbackInsetXPct: number;
+    /** 検出失敗時の保険（高さに対する内枠の上下余白率） */
+    fallbackInsetYPct: number;
   }
 > = {
-  "01": {
-    file: `${FRAME_PUBLIC}/frame_01.png`,
-    cropArea: { x: 22, y: 22, width: 980, height: 980 },
-    logoMarginInner: 10,
-    innerHoleAfterCrop: { x: 158, y: 164, width: 664, height: 648 },
-    centerX: 512,
-    centerY: 508,
-    artBase: 548,
-    overlapScale: 1.022,
-  },
-  "02": {
-    file: `${FRAME_PUBLIC}/frame_02.png`,
-    cropArea: { x: 26, y: 24, width: 972, height: 976 },
-    logoMarginInner: 10,
-    innerHoleAfterCrop: { x: 162, y: 168, width: 648, height: 632 },
-    centerX: 512,
-    centerY: 510,
-    artBase: 544,
-    overlapScale: 1.026,
-  },
-  "03": {
-    file: `${FRAME_PUBLIC}/frame_03.png`,
-    cropArea: { x: 18, y: 20, width: 988, height: 984 },
-    logoMarginInner: 10,
-    innerHoleAfterCrop: { x: 152, y: 158, width: 684, height: 664 },
-    centerX: 512,
-    centerY: 506,
-    artBase: 550,
-    overlapScale: 1.02,
-  },
+  "01": { file: `${FRAME_PUBLIC}/frame_01.png`, fallbackInsetXPct: 0.15, fallbackInsetYPct: 0.15 },
+  "02": { file: `${FRAME_PUBLIC}/frame_02.png`, fallbackInsetXPct: 0.16, fallbackInsetYPct: 0.16 },
+  "03": { file: `${FRAME_PUBLIC}/frame_03.png`, fallbackInsetXPct: 0.145, fallbackInsetYPct: 0.145 },
 };
 
 export const EXPORT_SURFACE_PRESETS: readonly { id: string; label: string; color: string }[] = [
@@ -81,7 +46,13 @@ export const EXPORT_SURFACE_PRESETS: readonly { id: string; label: string; color
   { id: "taupe", label: "トープ", color: "#D5CABD" },
 ] as const;
 
+type FrameMeta = {
+  image: HTMLImageElement;
+  innerHole: TapColoringExportRect;
+};
+
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
+const frameMetaCache = new Map<TapColoringFrameVariant, Promise<FrameMeta>>();
 
 function loadImageCached(src: string): Promise<HTMLImageElement> {
   let p = imageCache.get(src);
@@ -96,13 +67,6 @@ function loadImageCached(src: string): Promise<HTMLImageElement> {
     imageCache.set(src, p);
   }
   return p;
-}
-
-function formatExportDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}/${m}/${day}`;
 }
 
 function parseHexRgb(hex: string): { r: number; g: number; b: number } {
@@ -121,53 +85,176 @@ function relativeLuminanceFromHex(hex: string): number {
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 
-/** 暗い背景ならロゴ反転・日付は白、明るい背景なら日付は黒 */
 export function pickExportUiStyle(bgHex: string): { invertLogo: boolean; dateFill: string } {
   const lum = relativeLuminanceFromHex(bgHex);
-  if (lum < 0.48) {
-    return { invertLogo: true, dateFill: "rgba(255, 255, 255, 0.95)" };
-  }
+  if (lum < 0.48) return { invertLogo: true, dateFill: "rgba(255, 255, 255, 0.95)" };
   return { invertLogo: false, dateFill: "rgba(28, 28, 28, 0.9)" };
 }
 
-/** (0,0) から輪郭外の白〜下地を透明化（内側の白は線で遮断されれば維持） */
-function floodFillOutsideTransparent(
-  data: ImageData,
+function formatExportDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}/${m}/${day}`;
+}
+
+function fallbackInnerHole(variant: TapColoringFrameVariant, w: number, h: number): TapColoringExportRect {
+  const cfg = FRAME_CONFIG[variant];
+  const ix = Math.round(w * cfg.fallbackInsetXPct);
+  const iy = Math.round(h * cfg.fallbackInsetYPct);
+  return {
+    x: ix,
+    y: iy,
+    width: Math.max(1, w - ix * 2),
+    height: Math.max(1, h - iy * 2),
+  };
+}
+
+function detectInnerHoleFromFrame(
+  variant: TapColoringFrameVariant,
+  image: HTMLImageElement,
+): TapColoringExportRect {
+  const w = image.naturalWidth;
+  const h = image.naturalHeight;
+  if (w < 4 || h < 4) return fallbackInnerHole(variant, Math.max(4, w), Math.max(4, h));
+
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext("2d");
+  if (!ctx) return fallbackInnerHole(variant, w, h);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(image, 0, 0, w, h);
+  const img = ctx.getImageData(0, 0, w, h);
+  const data = img.data;
+
+  const isTransparent = (x: number, y: number): boolean => {
+    if (x < 0 || x >= w || y < 0 || y >= h) return false;
+    const i = (y * w + x) * 4;
+    return data[i + 3]! <= 16;
+  };
+
+  // まず中心近傍から透明ピクセルを探索（内枠空洞のシード想定）
+  const cx = Math.floor(w / 2);
+  const cy = Math.floor(h / 2);
+  let sx = -1;
+  let sy = -1;
+  const maxR = Math.max(cx, cy);
+  for (let r = 0; r <= maxR; r++) {
+    const x0 = Math.max(0, cx - r);
+    const x1 = Math.min(w - 1, cx + r);
+    const y0 = Math.max(0, cy - r);
+    const y1 = Math.min(h - 1, cy + r);
+    for (let x = x0; x <= x1; x++) {
+      if (isTransparent(x, y0)) {
+        sx = x;
+        sy = y0;
+        break;
+      }
+      if (isTransparent(x, y1)) {
+        sx = x;
+        sy = y1;
+        break;
+      }
+    }
+    if (sx >= 0) break;
+    for (let y = y0 + 1; y < y1; y++) {
+      if (isTransparent(x0, y)) {
+        sx = x0;
+        sy = y;
+        break;
+      }
+      if (isTransparent(x1, y)) {
+        sx = x1;
+        sy = y;
+        break;
+      }
+    }
+    if (sx >= 0) break;
+  }
+  if (sx < 0 || sy < 0) return fallbackInnerHole(variant, w, h);
+
+  const visited = new Uint8Array(w * h);
+  const qx: number[] = [sx];
+  const qy: number[] = [sy];
+  let head = 0;
+  let minX = sx;
+  let minY = sy;
+  let maxX = sx;
+  let maxY = sy;
+  let count = 0;
+  while (head < qx.length) {
+    const x = qx[head]!;
+    const y = qy[head]!;
+    head++;
+    if (x < 0 || x >= w || y < 0 || y >= h) continue;
+    const vi = y * w + x;
+    if (visited[vi]) continue;
+    if (!isTransparent(x, y)) continue;
+    visited[vi] = 1;
+    count++;
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+    qx.push(x + 1, x - 1, x, x);
+    qy.push(y, y, y + 1, y - 1);
+  }
+
+  const bw = maxX - minX + 1;
+  const bh = maxY - minY + 1;
+  const tooSmall = bw < w * 0.25 || bh < h * 0.25 || count < (w * h * 0.08);
+  const touchesEdge = minX <= 0 || minY <= 0 || maxX >= w - 1 || maxY >= h - 1;
+  if (tooSmall || touchesEdge) return fallbackInnerHole(variant, w, h);
+
+  return { x: minX, y: minY, width: bw, height: bh };
+}
+
+async function loadFrameMeta(variant: TapColoringFrameVariant): Promise<FrameMeta> {
+  let p = frameMetaCache.get(variant);
+  if (!p) {
+    const cfg = FRAME_CONFIG[variant];
+    p = loadImageCached(cfg.file).then((image) => ({
+      image,
+      innerHole: detectInnerHoleFromFrame(variant, image),
+    }));
+    frameMetaCache.set(variant, p);
+  }
+  return p;
+}
+
+/** (0,0) から連結する外側白のみを背景色へ置換（内側白は保持） */
+function floodFillOutsideToBg(
+  imageData: ImageData,
   width: number,
   height: number,
-  startX: number,
-  startY: number,
-  seedTolerance: number,
+  bg: { r: number; g: number; b: number },
 ): void {
-  const d = data.data;
+  const d = imageData.data;
   const idx = (x: number, y: number) => (y * width + x) * 4;
-  if (startX < 0 || startX >= width || startY < 0 || startY >= height) return;
-  const si = idx(startX, startY);
-  const sr = d[si]!;
-  const sg = d[si + 1]!;
-  const sb = d[si + 2]!;
-  const sa = d[si + 3]!;
-  if (sa < 8) return;
+  const sr = d[0]!;
+  const sg = d[1]!;
+  const sb = d[2]!;
+  const seedTolerance = 28;
 
   const fillable = (x: number, y: number): boolean => {
     if (x < 0 || x >= width || y < 0 || y >= height) return false;
     const i = idx(x, y);
     const a = d[i + 3]!;
-    if (a < 16) return false;
+    if (a < 12) return false;
     const r = d[i]!;
     const g = d[i + 1]!;
     const b = d[i + 2]!;
-    const dr = Math.abs(r - sr);
-    const dg = Math.abs(g - sg);
-    const db = Math.abs(b - sb);
-    if (dr + dg + db <= seedTolerance) return true;
-    if (r > 250 && g > 250 && b > 250) return true;
+    const diffSeed = Math.abs(r - sr) + Math.abs(g - sg) + Math.abs(b - sb);
+    if (diffSeed <= seedTolerance) return true;
+    if (r >= 248 && g >= 248 && b >= 248) return true;
     return false;
   };
 
   const visited = new Uint8Array(width * height);
-  const qx: number[] = [startX];
-  const qy: number[] = [startY];
+  const qx: number[] = [0];
+  const qy: number[] = [0];
   let head = 0;
   while (head < qx.length) {
     const x = qx[head]!;
@@ -179,69 +266,43 @@ function floodFillOutsideTransparent(
     if (!fillable(x, y)) continue;
     visited[vi] = 1;
     const i = idx(x, y);
-    d[i + 3] = 0;
+    d[i] = bg.r;
+    d[i + 1] = bg.g;
+    d[i + 2] = bg.b;
+    d[i + 3] = 255;
     qx.push(x + 1, x - 1, x, x);
     qy.push(y, y, y + 1, y - 1);
   }
 }
 
-/** 塗り絵を指定サイズに描画し、外側白を透明化した Canvas を返す */
-function rasterizeArtWithOutsideTransparent(
+function prepareArtWithFloodFill(
   artSource: CanvasImageSource,
-  pixelW: number,
-  pixelH: number,
+  sidePx: number,
+  bgHex: string,
 ): HTMLCanvasElement {
   const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(pixelW));
-  c.height = Math.max(1, Math.round(pixelH));
-  const xctx = c.getContext("2d");
-  if (!xctx) return c;
-  xctx.imageSmoothingEnabled = true;
-  xctx.imageSmoothingQuality = "high";
-  xctx.clearRect(0, 0, c.width, c.height);
-  xctx.drawImage(artSource, 0, 0, c.width, c.height);
-  const img = xctx.getImageData(0, 0, c.width, c.height);
-  floodFillOutsideTransparent(img, c.width, c.height, 0, 0, 28);
-  xctx.putImageData(img, 0, 0);
+  c.width = Math.max(1, Math.round(sidePx));
+  c.height = Math.max(1, Math.round(sidePx));
+  const ctx = c.getContext("2d");
+  if (!ctx) return c;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.drawImage(artSource, 0, 0, c.width, c.height);
+  const data = ctx.getImageData(0, 0, c.width, c.height);
+  floodFillOutsideToBg(data, c.width, c.height, parseHexRgb(bgHex));
+  ctx.putImageData(data, 0, 0);
   return c;
-}
-
-function clampRectToBounds(r: TapColoringExportRect, bw: number, bh: number): TapColoringExportRect {
-  const x = Math.max(0, Math.min(bw - 1, Math.floor(r.x)));
-  const y = Math.max(0, Math.min(bh - 1, Math.floor(r.y)));
-  const x2 = Math.max(x + 1, Math.min(bw, Math.ceil(r.x + r.width)));
-  const y2 = Math.max(y + 1, Math.min(bh, Math.ceil(r.y + r.height)));
-  return { x, y, width: x2 - x, height: y2 - y };
-}
-
-/** 開口内で「塗り」（背景と十分違う不透明画素）の占有率 */
-function regionPaintScore(imageData: ImageData, bg: { r: number; g: number; b: number }): number {
-  const d = imageData.data;
-  let hit = 0;
-  let denom = 0;
-  for (let i = 0; i < d.length; i += 4) {
-    const a = d[i + 3]!;
-    if (a < 36) continue;
-    denom++;
-    const r = d[i]!;
-    const g = d[i + 1]!;
-    const b = d[i + 2]!;
-    const diff = Math.abs(r - bg.r) + Math.abs(g - bg.g) + Math.abs(b - bg.b);
-    if (diff > 42) hit++;
-  }
-  return denom > 0 ? hit / denom : 0;
 }
 
 type AnchorId = "BR" | "TR" | "RM";
 
-function scoreAnchorOnAnalysis(
-  actx: CanvasRenderingContext2D,
-  aw: number,
-  ah: number,
+function scoreAnchor(
+  ctx: CanvasRenderingContext2D,
   hole: TapColoringExportRect,
-  pad: number,
   blockW: number,
   blockH: number,
+  pad: number,
   anchor: AnchorId,
   bg: { r: number; g: number; b: number },
 ): number {
@@ -258,69 +319,51 @@ function scoreAnchorOnAnalysis(
     bx = ix + iw - pad - blockW;
     by = iy + ih / 2 - blockH / 2;
   }
-  const r = clampRectToBounds({ x: bx, y: by, width: blockW, height: blockH }, aw, ah);
-  const data = actx.getImageData(r.x, r.y, r.width, r.height);
-  return regionPaintScore(data, bg);
+  const rx = Math.max(0, Math.floor(bx));
+  const ry = Math.max(0, Math.floor(by));
+  const rw = Math.max(1, Math.min(ctx.canvas.width - rx, Math.ceil(blockW)));
+  const rh = Math.max(1, Math.min(ctx.canvas.height - ry, Math.ceil(blockH)));
+  const region = ctx.getImageData(rx, ry, rw, rh);
+  const d = region.data;
+  let hit = 0;
+  let total = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3]!;
+    if (a < 40) continue;
+    total++;
+    const diff = Math.abs(d[i]! - bg.r) + Math.abs(d[i + 1]! - bg.g) + Math.abs(d[i + 2]! - bg.b);
+    if (diff > 44) hit++;
+  }
+  return total > 0 ? hit / total : 0;
 }
 
-function layoutOverlayInHole(
+function layoutOverlay(
   hole: TapColoringExportRect,
+  blockW: number,
+  blockH: number,
   pad: number,
   anchor: AnchorId,
-  lw: number,
-  lh: number,
-  dateW: number,
-  dateH: number,
-  gap: number,
-  includeDate: boolean,
-): { logoX: number; logoY: number; textX: number; textY: number } {
-  const blockW = includeDate ? dateW + gap + lw : lw;
-  const blockH = Math.max(lh, includeDate ? dateH : lh);
+): { x: number; y: number } {
   const { x: ix, y: iy, width: iw, height: ih } = hole;
-  let bx = 0;
-  let by = 0;
-  if (anchor === "BR") {
-    bx = ix + iw - pad - blockW;
-    by = iy + ih - pad - blockH;
-  } else if (anchor === "TR") {
-    bx = ix + iw - pad - blockW;
-    by = iy + pad;
-  } else {
-    bx = ix + iw - pad - blockW;
-    by = iy + ih / 2 - blockH / 2;
-  }
-  return {
-    logoX: bx + blockW - lw,
-    logoY: by + blockH - lh,
-    textX: bx,
-    textY: by + blockH - 2,
-  };
+  if (anchor === "BR") return { x: ix + iw - pad - blockW, y: iy + ih - pad - blockH };
+  if (anchor === "TR") return { x: ix + iw - pad - blockW, y: iy + pad };
+  return { x: ix + iw - pad - blockW, y: iy + ih / 2 - blockH / 2 };
 }
 
-/**
- * 表示用キャンバス（正方形）を合成し、額縁外寸でトリミングした PNG data URL を返す。
- */
 export async function composeTapColoringExport(
   artSource: CanvasImageSource,
   options: TapColoringExportOptions,
 ): Promise<string> {
-  const W = EXPORT_WORK_SIZE;
-  const H = EXPORT_WORK_SIZE;
-  const cfg = FRAME_CONFIG[options.frameVariant];
-  const crop = options.includeFrame
-    ? cfg.cropArea
-    : ({ x: 0, y: 0, width: W, height: H } satisfies TapColoringExportRect);
+  const meta = await loadFrameMeta(options.frameVariant);
+  const frame = meta.image;
+  const W = frame.naturalWidth;
+  const H = frame.naturalHeight;
+  if (W < 2 || H < 2) throw new Error("invalid frame dimensions");
 
+  const hole = meta.innerHole;
   const bgHex = options.exportBackgroundColor;
   const bgRgb = parseHexRgb(bgHex);
-  const uiStyle = pickExportUiStyle(bgHex);
-
-  const side =
-    cfg.artBase * cfg.overlapScale * Math.max(0.5, Math.min(1.5, options.pictureScale));
-  const ax = cfg.centerX - side / 2;
-  const ay = cfg.centerY - side / 2;
-
-  const artPrepared = rasterizeArtWithOutsideTransparent(artSource, side, side);
+  const style = pickExportUiStyle(bgHex);
 
   const work = document.createElement("canvas");
   work.width = W;
@@ -330,98 +373,74 @@ export async function composeTapColoringExport(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
+  // STEP1 背景
   ctx.fillStyle = bgHex;
   ctx.fillRect(0, 0, W, H);
-  ctx.drawImage(artPrepared, ax, ay, side, side);
 
-  const analysis = document.createElement("canvas");
-  analysis.width = crop.width;
-  analysis.height = crop.height;
-  const actx = analysis.getContext("2d");
-  if (!actx) throw new Error("no analysis ctx");
-  actx.imageSmoothingEnabled = true;
-  actx.imageSmoothingQuality = "high";
-  actx.drawImage(work, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  // STEP2 絵（内枠中心・隙間を出さない cover ベース）
+  const coverSide = Math.max(hole.width, hole.height);
+  const side = coverSide * Math.max(0.5, Math.min(1.5, options.pictureScale));
+  const art = prepareArtWithFloodFill(artSource, side, bgHex);
+  const ax = hole.x + hole.width / 2 - side / 2;
+  const ay = hole.y + hole.height / 2 - side / 2;
+  ctx.drawImage(art, ax, ay, side, side);
 
-  const holeRaw = options.includeFrame
-    ? cfg.innerHoleAfterCrop
-    : { x: 56, y: 56, width: crop.width - 112, height: crop.height - 112 };
-  const hole = clampRectToBounds(holeRaw, analysis.width, analysis.height);
-  const innerPad = cfg.logoMarginInner;
+  // STEP3 額縁
+  if (options.includeFrame) {
+    ctx.drawImage(frame, 0, 0, W, H);
+  }
 
   const logo = await loadImageCached(LOGO_SRC);
-  const logoMaxW = 112;
-  const lw = Math.min(logoMaxW, logo.naturalWidth);
-  const lh = (logo.naturalHeight / logo.naturalWidth) * lw;
   const dateStr = formatExportDate(new Date());
-
-  const mEl = document.createElement("canvas");
-  const measure = mEl.getContext("2d");
-  if (measure) {
-    measure.font = "300 20px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif";
+  const logoW = Math.min(Math.round(hole.width * 0.19), 116);
+  const logoH = (logo.naturalHeight / logo.naturalWidth) * logoW;
+  const measureEl = document.createElement("canvas");
+  const measureCtx = measureEl.getContext("2d");
+  if (measureCtx) {
+    measureCtx.font = "300 20px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif";
   }
-  const dateW = options.includeDate && measure ? measure.measureText(dateStr).width : 0;
+  const dateW = options.includeDate && measureCtx ? measureCtx.measureText(dateStr).width : 0;
   const dateH = 22;
   const gap = 10;
-  const blockW = (options.includeDate ? dateW + gap : 0) + lw;
-  const blockH = Math.max(lh, options.includeDate ? dateH : lh);
+  const blockW = (options.includeDate ? dateW + gap : 0) + logoW;
+  const blockH = Math.max(logoH, options.includeDate ? dateH : logoH);
+  const pad = Math.max(6, Math.round(Math.min(hole.width, hole.height) * options.overlayMarginPct));
 
+  // STEP5 被り判定（右下→右上→右中央）
   const anchors: AnchorId[] = ["BR", "TR", "RM"];
   let best: AnchorId = "BR";
   let bestScore = Infinity;
   for (const a of anchors) {
-    const s = scoreAnchorOnAnalysis(actx, analysis.width, analysis.height, hole, innerPad, blockW, blockH, a, bgRgb);
+    const s = scoreAnchor(ctx, hole, blockW, blockH, pad, a, bgRgb);
     if (s < bestScore) {
       bestScore = s;
       best = a;
     }
   }
+  const pos = layoutOverlay(hole, blockW, blockH, pad, best);
 
-  if (options.includeFrame) {
-    const frame = await loadImageCached(cfg.file);
-    ctx.drawImage(frame, 0, 0, W, H);
+  // STEP4 ロゴ
+  ctx.save();
+  if (style.invertLogo) {
+    ctx.filter = "invert(1) brightness(1.06)";
   }
+  ctx.globalAlpha = 0.94;
+  ctx.drawImage(logo, pos.x + blockW - logoW, pos.y + blockH - logoH, logoW, logoH);
+  ctx.globalAlpha = 1;
+  ctx.filter = "none";
+  ctx.restore();
 
-  const out = document.createElement("canvas");
-  out.width = crop.width;
-  out.height = crop.height;
-  const octx = out.getContext("2d");
-  if (!octx) throw new Error("no out ctx");
-  octx.imageSmoothingEnabled = true;
-  octx.imageSmoothingQuality = "high";
-  octx.drawImage(work, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
-
-  const { logoX, logoY, textX, textY } = layoutOverlayInHole(
-    hole,
-    innerPad,
-    best,
-    lw,
-    lh,
-    dateW,
-    dateH,
-    gap,
-    options.includeDate,
-  );
-
-  octx.save();
-  if (uiStyle.invertLogo) {
-    octx.filter = "invert(1) brightness(1.06)";
-  }
-  octx.globalAlpha = 0.94;
-  octx.drawImage(logo, logoX, logoY, lw, lh);
-  octx.filter = "none";
-  octx.globalAlpha = 1;
-  octx.restore();
-
+  // STEP5 日付
   if (options.includeDate) {
-    octx.save();
-    octx.font = "300 20px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif";
-    octx.fillStyle = uiStyle.dateFill;
-    octx.textAlign = "left";
-    octx.textBaseline = "bottom";
-    octx.fillText(dateStr, textX, textY);
-    octx.restore();
+    ctx.save();
+    ctx.font = "300 20px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif";
+    ctx.fillStyle = style.dateFill;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(dateStr, pos.x, pos.y + blockH - 2);
+    ctx.restore();
   }
 
-  return out.toDataURL("image/png");
+  // 出力はフレーム物理寸法に完全一致（余白なし）
+  return work.toDataURL("image/png");
 }
