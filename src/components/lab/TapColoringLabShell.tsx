@@ -79,7 +79,7 @@ export function TapColoringLabShell() {
           {tapToast}
         </div>
       )}
-      <GamePageHeader titleEn="Tap Coloring" titleJa="タップ塗り絵" />
+      <GamePageHeader titleEn="Tap Coloring" titleJa="タップぬりえ" />
       {isDevTj && (
         <div
           className={`fixed right-3 top-14 z-[55] sm:right-4 sm:top-16 ${canvasDebugMode ? "pointer-events-none" : ""}`}

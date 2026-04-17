@@ -512,6 +512,8 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const [debugFillThreshold, setDebugFillThreshold] = useState(DEFAULT_FILL_THRESHOLD);
   const [debugIllustrationScale, setDebugIllustrationScale] = useState(DEFAULT_ILLUSTRATION_SCALE);
   const [debugLineTapSearchRadius, setDebugLineTapSearchRadius] = useState(DEFAULT_LINE_TAP_SEARCH_RADIUS_PX);
+  /** devtj+DEBUG 時のみ有効。オフのときは pointerdown のみ塗り、move では塗らない */
+  const [debugSwipePaintEnabled, setDebugSwipePaintEnabled] = useState(false);
   const [debugTapProbe, setDebugTapProbe] = useState<{
     xRatio: number;
     yRatio: number;
@@ -524,6 +526,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     isDevTj && isDebugMode ? debugIllustrationScale : DEFAULT_ILLUSTRATION_SCALE;
   const lineTapSearchRadius =
     isDevTj && isDebugMode ? debugLineTapSearchRadius : DEFAULT_LINE_TAP_SEARCH_RADIUS_PX;
+  const swipePaintAllowed = !isDevTj || !isDebugMode || debugSwipePaintEnabled;
 
   const [debugPanelStyle, setDebugPanelStyle] = useState<CSSProperties>(() => ({
     position: "fixed",
@@ -1381,6 +1384,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     if (historyChromeInteractionLocked) return;
     if (phase !== "play") return;
     if (blockPaintUntilPointerUpRef.current) return;
+    if (!swipePaintAllowed) return;
     if (e.buttons !== 1 && e.pointerType !== "touch") return;
     paintAt(e.clientX, e.clientY);
   };
@@ -1650,6 +1654,31 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
             </div>
             {isDebugPanelExpanded && (
               <div className="space-y-3 text-[10px] text-stone-600">
+                <div className="rounded-lg border border-stone-200/90 bg-stone-50/90 px-2 py-2">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={debugSwipePaintEnabled}
+                    onClick={() => setDebugSwipePaintEnabled((v) => !v)}
+                    className="flex w-full items-center justify-between gap-2 text-left"
+                  >
+                    <span className="font-semibold text-stone-800">スワイプ／ドラッグ連続塗り</span>
+                    <span
+                      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                        debugSwipePaintEnabled ? "bg-amber-500" : "bg-stone-400"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                          debugSwipePaintEnabled ? "translate-x-5" : "translate-x-0.5"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                  <p className="mt-1 text-[9px] leading-snug text-stone-500">
+                    オフのときは指を離してからのタップ／クリックでのみ塗ります。
+                  </p>
+                </div>
                 <div>
                   <div className="mb-1 font-semibold text-stone-700">シミのサイズ（VB換算の基準）</div>
                   <input

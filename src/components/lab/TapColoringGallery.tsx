@@ -21,31 +21,6 @@ type TapColoringGalleryProps = {
   onHistorySaved?: () => void;
 };
 
-/** 斜めの画びょう（📌 イメージ） */
-function IconPushPin({ className, filled }: { className?: string; filled: boolean }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" width="12" height="12" aria-hidden>
-      <g transform="rotate(-36 12 12)">
-        <circle
-          cx="14.2"
-          cy="6.8"
-          r="3.15"
-          fill={filled ? "currentColor" : "none"}
-          stroke="currentColor"
-          strokeWidth="1.35"
-        />
-        <path
-          d="M12.4 9.2 L7.6 20.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.15"
-          strokeLinecap="round"
-        />
-      </g>
-    </svg>
-  );
-}
-
 function IconSave({ className }: { className?: string }) {
   return (
     <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -165,7 +140,7 @@ export function TapColoringGallery({
               <li key={entry.id} className="min-w-0">
                 <motion.div
                   className={`group relative overflow-hidden rounded-xl bg-[var(--color-bg)] shadow-md ring-1 ring-[color-mix(in_srgb,var(--color-text)_8%,transparent)] ${
-                    entry.isPinned ? "ring-2 ring-amber-400/95 ring-offset-1 ring-offset-[var(--color-bg)]" : ""
+                    entry.isPinned ? "ring-2 ring-yellow-400 ring-offset-1 ring-offset-[var(--color-bg)]" : ""
                   }`}
                   animate={
                     shakeEntryId === entry.id
@@ -178,15 +153,15 @@ export function TapColoringGallery({
                     type="button"
                     disabled={btnDisabled}
                     onClick={(e) => onTogglePin(e, entry.id)}
-                    className={`absolute left-1 top-1 z-20 flex h-[22px] w-[22px] min-h-[22px] min-w-[22px] items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_88%,transparent)] shadow-sm backdrop-blur-sm transition enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 ${
-                      entry.isPinned
-                        ? "border-amber-500/70 text-amber-600"
-                        : "text-[var(--color-muted)] opacity-55 hover:opacity-100 group-hover:opacity-90"
+                    className={`absolute left-1 top-1 z-20 flex h-[22px] w-[22px] min-h-[22px] min-w-[22px] items-center justify-center rounded-full border-2 border-yellow-400 bg-[color-mix(in_srgb,var(--color-bg)_92%,transparent)] shadow-sm backdrop-blur-sm transition enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 ${
+                      entry.isPinned ? "text-yellow-400" : "text-yellow-400/45 hover:text-yellow-400/85"
                     }`}
                     aria-label={entry.isPinned ? "ピン留めを解除" : "ピン留めする"}
                     title={entry.isPinned ? "ピン留めを解除" : "ピン留めする"}
                   >
-                    <IconPushPin filled={!!entry.isPinned} className="h-3 w-3" />
+                    <span className="select-none text-[15px] font-bold leading-none" aria-hidden>
+                      ★
+                    </span>
                   </button>
                   <button
                     type="button"
