@@ -219,6 +219,12 @@ function applyCanvasInkQuality(ctx: CanvasRenderingContext2D) {
 }
 
 const canvasInkStyle = { imageRendering: "auto" } as const;
+const canvasInteractionGuardStyle = {
+  touchAction: "none",
+  userSelect: "none",
+  WebkitUserSelect: "none",
+  WebkitTouchCallout: "none",
+} as const;
 
 /**
  * インク用スプラッター PNG を、小さな drawImage に耐える解像度へ一度だけ整える
@@ -448,6 +454,8 @@ export type ColoringCanvasHandle = {
   saveCurrentWorkToHistoryWithPreview: (previewDataUrl: string) => boolean;
   /** 表示キャンバス＋背景色から 1024 出力用 data URL を生成 */
   composeHighResExport: (options: TapColoringExportOptions) => Promise<string | null>;
+  /** Shell 側のボタンからデバッグ表示を切替 */
+  setDebugMode: (enabled: boolean) => void;
 };
 
 type ColoringCanvasProps = {
@@ -483,6 +491,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const [debugSplatterRadiusVb, setDebugSplatterRadiusVb] = useState(DEFAULT_SPLATTER_RADIUS_VB);
   const [debugFillThreshold, setDebugFillThreshold] = useState(DEFAULT_FILL_THRESHOLD);
   const [debugIllustrationScale, setDebugIllustrationScale] = useState(DEFAULT_ILLUSTRATION_SCALE);
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
 
   const splatterRadiusVb = isDevTj && isDebugMode ? debugSplatterRadiusVb : DEFAULT_SPLATTER_RADIUS_VB;
   const fillThreshold = isDevTj && isDebugMode ? debugFillThreshold : DEFAULT_FILL_THRESHOLD;
@@ -540,6 +549,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
 
   const [showHistoryExitButton, setShowHistoryExitButton] = useState(false);
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
+  const displayInteractionCleanupRef = useRef<(() => void) | null>(null);
   /** キャンバスでポインタが押下中（この間にクリア→次ステージへ進んだら、離すまで塗りを止める） */
   const pointerDownOnCanvasRef = useRef(false);
   /** クリア後の新ステージで、直前のドラッグが続いているとき true。対応する pointerup まで塗り禁止 */
@@ -572,6 +582,14 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       window.removeEventListener("pointercancel", onWindowPointerEnd);
     };
   }, [releaseCanvasPointer]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const apply = () => setIsMobileLayout(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   useEffect(() => {
     setSelected((prev) => {
@@ -896,8 +914,24 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
 
   /** AnimatePresence の新しい表示 canvas マウント後に初期化（古い canvas へ描いて捨てられるのを防ぐ） */
   const setDisplayCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
+    if (displayInteractionCleanupRef.current) {
+      displayInteractionCleanupRef.current();
+      displayInteractionCleanupRef.current = null;
+    }
     displayRef.current = node;
     if (node) {
+      const preventContextMenu = (e: Event) => e.preventDefault();
+      const preventMultiTouchZoom = (e: TouchEvent) => {
+        if (e.touches.length > 1) e.preventDefault();
+      };
+      node.addEventListener("contextmenu", preventContextMenu);
+      node.addEventListener("touchstart", preventMultiTouchZoom, { passive: false });
+      node.addEventListener("touchmove", preventMultiTouchZoom, { passive: false });
+      displayInteractionCleanupRef.current = () => {
+        node.removeEventListener("contextmenu", preventContextMenu);
+        node.removeEventListener("touchstart", preventMultiTouchZoom);
+        node.removeEventListener("touchmove", preventMultiTouchZoom);
+      };
       queueMicrotask(() => {
         initStageCanvasesRef.current();
       });
@@ -1222,7 +1256,13 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   };
 
   useEffect(() => {
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      if (displayInteractionCleanupRef.current) {
+        displayInteractionCleanupRef.current();
+        displayInteractionCleanupRef.current = null;
+      }
+    };
   }, []);
 
   const completeHistoryEnter = useCallback(() => {
@@ -1403,6 +1443,10 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           return null;
         }
       },
+      setDebugMode(enabled: boolean) {
+        setIsDebugMode(enabled);
+        if (enabled) setIsDebugPanelExpanded(true);
+      },
     }),
     [
       activePalette,
@@ -1422,20 +1466,9 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     <motion.div
       ref={containerRef}
       className="relative mx-auto flex w-full max-w-lg flex-col gap-4 rounded-2xl px-0 pb-2 pt-0 lg:pt-4"
-      animate={{ backgroundColor: sceneBgColor }}
+      animate={{ backgroundColor: isMobileLayout ? "transparent" : sceneBgColor }}
       transition={{ duration: TRANSITION_BG_MS / 1000, ease: "linear" }}
     >
-      {isDevTj && !isDebugMode && (
-        <div className="fixed right-3 top-14 z-50 sm:right-4 sm:top-16">
-          <button
-            type="button"
-            onClick={() => setIsDebugMode(true)}
-            className="rounded border border-stone-300 bg-white/90 px-2 py-1 font-mono text-xs text-stone-800 shadow-sm"
-          >
-            DEBUG OFF
-          </button>
-        </div>
-      )}
       {isDevTj && isDebugMode && (
         <div className="fixed right-3 top-14 z-50 max-h-[90vh] w-[min(92vw,280px)] overflow-y-auto rounded-2xl border border-stone-300 bg-white/95 p-3 text-left text-xs text-stone-800 shadow-lg sm:right-4 sm:top-16">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -1542,10 +1575,13 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         })}
       </motion.div>
 
-      <div
+      <motion.div
         className={`relative mx-auto aspect-square w-full max-w-[420px] ${
           historyOverlay !== null ? "[&_canvas]:invisible [&_canvas]:pointer-events-none" : ""
         }`}
+        style={canvasInteractionGuardStyle}
+        animate={{ backgroundColor: isMobileLayout ? sceneBgColor : "transparent" }}
+        transition={{ duration: TRANSITION_BG_MS / 1000, ease: "linear" }}
       >
         {historyOverlay?.kind === "enter" && historyOverlay.phase === "stash-shrink" && (
           <div
@@ -1688,7 +1724,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
               ref={setDisplayCanvasRef}
               width={bitmapSize}
               height={bitmapSize}
-              style={canvasInkStyle}
+              style={{ ...canvasInkStyle, ...canvasInteractionGuardStyle }}
               className="relative z-10 h-full w-full touch-none rounded-2xl border-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_85%,var(--color-bg))] shadow-inner"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
@@ -1702,7 +1738,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           ref={maskRef}
           width={bitmapSize}
           height={bitmapSize}
-          style={canvasInkStyle}
+          style={{ ...canvasInkStyle, ...canvasInteractionGuardStyle }}
           className="hidden"
           aria-hidden
         />
@@ -1710,11 +1746,11 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           ref={paintRef}
           width={bitmapSize}
           height={bitmapSize}
-          style={canvasInkStyle}
+          style={{ ...canvasInkStyle, ...canvasInteractionGuardStyle }}
           className="hidden"
           aria-hidden
         />
-      </div>
+      </motion.div>
 
     </motion.div>
   );

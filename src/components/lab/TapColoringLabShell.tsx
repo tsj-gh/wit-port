@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { ColoringCanvas, type ColoringCanvasHandle } from "@/components/lab/ColoringCanvas";
@@ -17,6 +18,8 @@ import {
  * 他ラボゲームと同型のヘッダー・列幅。広告#1 は出さず、#2 のみ Pair-Link と同一コンポーネントで配置（GPT 用に #1 は DOM のみ非表示）。
  */
 export function TapColoringLabShell() {
+  const searchParams = useSearchParams();
+  const isDevTj = searchParams.get("devtj") === "true";
   const coloringRef = useRef<ColoringCanvasHandle | null>(null);
   const [histTick, setHistTick] = useState(0);
   const [historyEntries, setHistoryEntries] = useState<TapColoringHistoryEntry[]>([]);
@@ -65,6 +68,17 @@ export function TapColoringLabShell() {
         </div>
       )}
       <GamePageHeader titleEn="Tap Coloring" titleJa="タップ塗り絵" />
+      {isDevTj && (
+        <div className="fixed right-3 top-14 z-[55] sm:right-4 sm:top-16">
+          <button
+            type="button"
+            onClick={() => coloringRef.current?.setDebugMode(true)}
+            className="rounded border border-stone-300 bg-white/90 px-2 py-1 font-mono text-xs text-stone-800 shadow-sm"
+          >
+            DEBUG ON
+          </button>
+        </div>
+      )}
       <div className="hidden" aria-hidden>
         <PairLinkAdSlot slotIndex={1} />
       </div>
@@ -112,7 +126,7 @@ export function TapColoringLabShell() {
               </div>
             </details>
           </div>
-          <section className="mb-3 hidden rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2 lg:block">
+          <section className="mb-1.5 hidden rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2 lg:block">
             <h3 className="text-sm font-semibold text-[var(--color-text)]">あそびかた（要約）</h3>
             <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">
               タップで塗りつぶし、色と領域の因果を直感的に確かめます。
@@ -120,7 +134,7 @@ export function TapColoringLabShell() {
           </section>
           <div
             className="relative z-0 w-full"
-            style={{ minHeight: GAME_AD_SLOT_MIN_HEIGHT_PX, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}
+            style={{ minHeight: GAME_AD_SLOT_MIN_HEIGHT_PX, marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX / 2 }}
           >
             <PairLinkAdSlot slotIndex={2} />
           </div>
