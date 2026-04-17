@@ -505,6 +505,11 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const stashPaletteRestoreRef = useRef<{ swatches: TapColoringSwatch[]; selectedColor: string } | null>(null);
   /** 履歴シーケンス直後のパレット表示だけフェードを切り、キャンバスとの合成チラつきを抑える */
   const paletteUnlockNoFadeRef = useRef(false);
+  /**
+   * 履歴の「編集開始でステージ更新」「編集終了でスタッシュ復元」のマウント時に
+   * スライド／opacity 入場を掛けない（Framer の initial/exit を実質オフにする）。
+   */
+  const historyCanvasSuppressMountTransitionRef = useRef(false);
 
   const [historyOverlay, setHistoryOverlay] = useState<HistoryOverlayState>(null);
   const historyOverlayRef = useRef<HistoryOverlayState>(null);
@@ -787,6 +792,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           setCanvasPresenceDepth(false);
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
+              historyCanvasSuppressMountTransitionRef.current = false;
               paletteUnlockNoFadeRef.current = true;
               redrawDisplay();
               setShowHistoryExitButton(true);
@@ -807,6 +813,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
                 const want = pr.selectedColor.toLowerCase();
                 setSelected(pr.swatches.find((s) => s.color === want) ?? pr.swatches[0]!);
               }
+              historyCanvasSuppressMountTransitionRef.current = false;
               paletteUnlockNoFadeRef.current = true;
               redrawDisplay();
               setHistoryChromeInteractionLocked(false);
@@ -824,6 +831,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           setCanvasPresenceDepth(false);
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
+              historyCanvasSuppressMountTransitionRef.current = false;
               paletteUnlockNoFadeRef.current = true;
               redrawDisplay();
               setShowHistoryExitButton(true);
@@ -844,6 +852,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
                 const want = pr.selectedColor.toLowerCase();
                 setSelected(pr.swatches.find((s) => s.color === want) ?? pr.swatches[0]!);
               }
+              historyCanvasSuppressMountTransitionRef.current = false;
               paletteUnlockNoFadeRef.current = true;
               redrawDisplay();
               setHistoryChromeInteractionLocked(false);
@@ -1221,6 +1230,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     setActivePalette(pal);
     const want = target.paletteSelectedColor?.toLowerCase();
     setSelected(pal.find((s) => s.color === want) ?? pal[0]!);
+    historyCanvasSuppressMountTransitionRef.current = true;
     setPictureIndex(idx);
     setStageIndex((i) => i + 1);
     setPhase("play");
@@ -1229,6 +1239,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const completeHistoryExit = useCallback(() => {
     const stash = stashSessionRef.current;
     if (!stash) {
+      historyCanvasSuppressMountTransitionRef.current = false;
       setHistoryOverlay(null);
       editingHistoryEntryRef.current = null;
       freePaintWithoutClearRef.current = false;
@@ -1268,6 +1279,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
 
     setHistoryChromeInteractionLocked(true);
     onHistorySequenceInteractionChange?.(false);
+    historyCanvasSuppressMountTransitionRef.current = true;
 
     particlesRef.current = [];
     cancelAnimationFrame(rafRef.current);
@@ -1597,9 +1609,11 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
               historyOverlay ? "pointer-events-none" : ""
             }`}
             initial={
-              canvasPresenceDepth
-                ? { scale: 1, opacity: 0.12, x: 0, rotate: 0 }
-                : { x: "-120%", scale: 0.98, opacity: 0.96, rotate: -3 }
+              historyCanvasSuppressMountTransitionRef.current
+                ? false
+                : canvasPresenceDepth
+                  ? { scale: 1, opacity: 0.12, x: 0, rotate: 0 }
+                  : { x: "-120%", scale: 0.98, opacity: 0.96, rotate: -3 }
             }
             animate={
               galleryHandoffSkipToRest
@@ -1611,22 +1625,25 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
                     : { x: 0, opacity: 1, rotate: 0, scale: 1 }
             }
             exit={
-              canvasPresenceDepth
-                ? { scale: 1, opacity: 0.08, x: 0, rotate: 0 }
-                : { x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }
+              historyCanvasSuppressMountTransitionRef.current
+                ? { x: 0, opacity: 1, scale: 1, rotate: 0 }
+                : canvasPresenceDepth
+                  ? { scale: 1, opacity: 0.08, x: 0, rotate: 0 }
+                  : { x: "126%", opacity: 0.98, rotate: 2, scale: 1.02 }
             }
             transition={{
-              duration: galleryHandoffSkipToRest
-                ? 0
-                : phase === "success"
-                  ? SUCCESS_SQUASH_DURATION_S
-                  : phase === "transition"
-                    ? TRANSITION_SLIDE_MS / 1000
-                    : phase === "setup"
-                      ? 0.56
-                      : canvasPresenceDepth
-                        ? 0.42
-                        : 0.3,
+              duration:
+                historyCanvasSuppressMountTransitionRef.current || galleryHandoffSkipToRest
+                  ? 0
+                  : phase === "success"
+                    ? SUCCESS_SQUASH_DURATION_S
+                    : phase === "transition"
+                      ? TRANSITION_SLIDE_MS / 1000
+                      : phase === "setup"
+                        ? 0.56
+                        : canvasPresenceDepth
+                          ? 0.42
+                          : 0.3,
               ease: phase === "setup" ? "easeOut" : phase === "transition" ? "easeIn" : "easeOut",
             }}
           >
