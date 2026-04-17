@@ -491,12 +491,18 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const [debugSplatterRadiusVb, setDebugSplatterRadiusVb] = useState(DEFAULT_SPLATTER_RADIUS_VB);
   const [debugFillThreshold, setDebugFillThreshold] = useState(DEFAULT_FILL_THRESHOLD);
   const [debugIllustrationScale, setDebugIllustrationScale] = useState(DEFAULT_ILLUSTRATION_SCALE);
-  const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [debugLineTapSearchRadius, setDebugLineTapSearchRadius] = useState(5);
+  const [debugTapProbe, setDebugTapProbe] = useState<{
+    xRatio: number;
+    yRatio: number;
+    radiusRatio: number;
+  } | null>(null);
 
   const splatterRadiusVb = isDevTj && isDebugMode ? debugSplatterRadiusVb : DEFAULT_SPLATTER_RADIUS_VB;
   const fillThreshold = isDevTj && isDebugMode ? debugFillThreshold : DEFAULT_FILL_THRESHOLD;
   const illustrationScale =
     isDevTj && isDebugMode ? debugIllustrationScale : DEFAULT_ILLUSTRATION_SCALE;
+  const lineTapSearchRadius = isDevTj && isDebugMode ? debugLineTapSearchRadius : 5;
 
   const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number>(0);
@@ -550,6 +556,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const [showHistoryExitButton, setShowHistoryExitButton] = useState(false);
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const displayInteractionCleanupRef = useRef<(() => void) | null>(null);
+  const debugTapProbeTimerRef = useRef<number | null>(null);
   /** キャンバスでポインタが押下中（この間にクリア→次ステージへ進んだら、離すまで塗りを止める） */
   const pointerDownOnCanvasRef = useRef(false);
   /** クリア後の新ステージで、直前のドラッグが続いているとき true。対応する pointerup まで塗り禁止 */
@@ -582,14 +589,6 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       window.removeEventListener("pointercancel", onWindowPointerEnd);
     };
   }, [releaseCanvasPointer]);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 1023px)");
-    const apply = () => setIsMobileLayout(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
 
   useEffect(() => {
     setSelected((prev) => {
@@ -1118,7 +1117,22 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       const isDirectFillable = bright >= 380;
       if (!isDirectFillable) {
         // 線画タップ時は近傍5px内から最寄りの白領域を探索し、そこにスプラッターを置く。
-        const radius = 5;
+        const radius = Math.max(1, Math.round(lineTapSearchRadius));
+        if (isDevTj && isDebugMode) {
+          if (debugTapProbeTimerRef.current !== null) {
+            window.clearTimeout(debugTapProbeTimerRef.current);
+            debugTapProbeTimerRef.current = null;
+          }
+          setDebugTapProbe({
+            xRatio: mx / Math.max(1, mask.width),
+            yRatio: my / Math.max(1, mask.height),
+            radiusRatio: radius / Math.max(1, mask.width),
+          });
+          debugTapProbeTimerRef.current = window.setTimeout(() => {
+            setDebugTapProbe(null);
+            debugTapProbeTimerRef.current = null;
+          }, 1000);
+        }
         const sx0 = Math.max(0, mx - radius);
         const sy0 = Math.max(0, my - radius);
         const sx1 = Math.min(mask.width - 1, mx + radius);
@@ -1298,6 +1312,10 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   useEffect(() => {
     return () => {
       cancelAnimationFrame(rafRef.current);
+      if (debugTapProbeTimerRef.current !== null) {
+        window.clearTimeout(debugTapProbeTimerRef.current);
+        debugTapProbeTimerRef.current = null;
+      }
       if (displayInteractionCleanupRef.current) {
         displayInteractionCleanupRef.current();
         displayInteractionCleanupRef.current = null;
@@ -1506,11 +1524,11 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     <motion.div
       ref={containerRef}
       className="relative mx-auto flex w-full max-w-lg flex-col gap-4 rounded-2xl px-0 pb-2 pt-0 lg:pt-4"
-      animate={{ backgroundColor: isMobileLayout ? "transparent" : sceneBgColor }}
+      animate={{ backgroundColor: sceneBgColor }}
       transition={{ duration: TRANSITION_BG_MS / 1000, ease: "linear" }}
     >
       {isDevTj && isDebugMode && (
-        <div className="fixed right-3 top-14 z-50 max-h-[90vh] w-[min(92vw,280px)] overflow-y-auto rounded-2xl border border-stone-300 bg-white/95 p-3 text-left text-xs text-stone-800 shadow-lg sm:right-4 sm:top-16">
+        <div className="fixed right-3 top-24 z-50 max-h-[90vh] w-[min(92vw,280px)] overflow-y-auto rounded-2xl border border-stone-300 bg-white/95 p-3 text-left text-xs text-stone-800 shadow-lg sm:right-4 sm:top-24">
           <div className="mb-2 flex items-center justify-between gap-2">
             {isDebugPanelExpanded && <span className="font-bold text-stone-700">タップぬりえ DEBUG</span>}
             <div className="ml-auto flex items-center gap-1">
@@ -1572,6 +1590,19 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
                 />
                 <div className="tabular-nums text-stone-500">{debugIllustrationScale.toFixed(2)}×</div>
               </div>
+              <div>
+                <div className="mb-1 font-semibold text-stone-700">線タップ探索半径（px）</div>
+                <input
+                  type="range"
+                  min={1}
+                  max={16}
+                  step={1}
+                  value={debugLineTapSearchRadius}
+                  onChange={(e) => setDebugLineTapSearchRadius(Number(e.target.value))}
+                  className="w-full accent-amber-600"
+                />
+                <div className="tabular-nums text-stone-500">{Math.round(debugLineTapSearchRadius)}px</div>
+              </div>
             </div>
           )}
         </div>
@@ -1605,7 +1636,10 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
               type="button"
               aria-label={p.label}
               title={p.label}
-              onClick={() => setSelected(p)}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                setSelected(p);
+              }}
               className={`h-14 w-14 shrink-0 rounded-full border-4 shadow-md transition-transform active:scale-90 ${
                 active ? "border-stone-800 ring-2 ring-amber-400 ring-offset-2" : "border-white"
               }`}
@@ -1620,7 +1654,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           historyOverlay !== null ? "[&_canvas]:invisible [&_canvas]:pointer-events-none" : ""
         }`}
         style={canvasInteractionGuardStyle}
-        animate={{ backgroundColor: isMobileLayout ? sceneBgColor : "transparent" }}
+        animate={{ backgroundColor: "transparent" }}
         transition={{ duration: TRANSITION_BG_MS / 1000, ease: "linear" }}
       >
         {historyOverlay?.kind === "enter" && historyOverlay.phase === "stash-shrink" && (
@@ -1704,6 +1738,18 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
               }}
             />
           </div>
+        )}
+        {isDevTj && isDebugMode && debugTapProbe && (
+          <div
+            className="pointer-events-none absolute z-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-red-500/90"
+            style={{
+              left: `${debugTapProbe.xRatio * 100}%`,
+              top: `${debugTapProbe.yRatio * 100}%`,
+              width: `${debugTapProbe.radiusRatio * 200}%`,
+              height: `${debugTapProbe.radiusRatio * 200}%`,
+            }}
+            aria-hidden
+          />
         )}
 
         {showHistoryExitButton && (
