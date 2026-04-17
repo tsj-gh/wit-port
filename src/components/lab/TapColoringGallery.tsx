@@ -109,7 +109,7 @@ export function TapColoringGallery({
       />
       <div className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] p-3 text-[var(--color-text)]">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">作品履歴</h3>
+          <h3 className="text-sm font-semibold">作品履歴（最大5件）</h3>
           <button
             type="button"
             disabled={btnDisabled}
@@ -172,8 +172,6 @@ export function TapColoringGallery({
             ))}
           </ul>
         )}
-
-        <p className="mt-3 text-[10px] leading-relaxed text-[var(--color-muted)] sm:text-xs">最大5件（この端末のみ）</p>
       </div>
     </div>
   );

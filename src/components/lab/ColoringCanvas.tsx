@@ -1099,8 +1099,8 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     if (!canvas || !paint || !mask) return;
 
     const rect = canvas.getBoundingClientRect();
-    const px = ((clientX - rect.left) / rect.width) * canvas.width;
-    const py = ((clientY - rect.top) / rect.height) * canvas.height;
+    let px = ((clientX - rect.left) / rect.width) * canvas.width;
+    let py = ((clientY - rect.top) / rect.height) * canvas.height;
 
     const pctx = paint.getContext("2d");
     const mctx = mask.getContext("2d", { willReadFrequently: true });
@@ -1110,8 +1110,48 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     if (!DEBUG_DISABLE_MASK) {
       const mx = Math.max(0, Math.min(mask.width - 1, Math.floor(px)));
       const my = Math.max(0, Math.min(mask.height - 1, Math.floor(py)));
-      const a = mctx.getImageData(mx, my, 1, 1).data[3]!;
-      if (a < 10) return;
+      const pixel = mctx.getImageData(mx, my, 1, 1).data;
+      const alpha = pixel[3]!;
+      // 透明（塗り絵外）は描画しない
+      if (alpha < 10) return;
+      const bright = pixel[0]! + pixel[1]! + pixel[2]!;
+      const isDirectFillable = bright >= 380;
+      if (!isDirectFillable) {
+        // 線画タップ時は近傍5px内から最寄りの白領域を探索し、そこにスプラッターを置く。
+        const radius = 5;
+        const sx0 = Math.max(0, mx - radius);
+        const sy0 = Math.max(0, my - radius);
+        const sx1 = Math.min(mask.width - 1, mx + radius);
+        const sy1 = Math.min(mask.height - 1, my + radius);
+        const sw = sx1 - sx0 + 1;
+        const sh = sy1 - sy0 + 1;
+        const area = mctx.getImageData(sx0, sy0, sw, sh).data;
+        let bestX = -1;
+        let bestY = -1;
+        let bestDist2 = Number.POSITIVE_INFINITY;
+        for (let y = 0; y < sh; y++) {
+          for (let x = 0; x < sw; x++) {
+            const i = (y * sw + x) * 4;
+            const a = area[i + 3]!;
+            if (a < 10) continue;
+            const b = area[i]! + area[i + 1]! + area[i + 2]!;
+            if (b < 380) continue;
+            const cx = sx0 + x;
+            const cy = sy0 + y;
+            const dx = cx - mx;
+            const dy = cy - my;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < bestDist2) {
+              bestDist2 = d2;
+              bestX = cx;
+              bestY = cy;
+            }
+          }
+        }
+        if (bestX < 0 || bestY < 0) return;
+        px = bestX + 0.5;
+        py = bestY + 0.5;
+      }
     }
 
     const selRgb = parseHexRgb(selected.color);
