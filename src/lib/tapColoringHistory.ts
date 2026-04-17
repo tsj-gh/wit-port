@@ -2,6 +2,29 @@ const STORAGE_KEY = "wispo:tap-coloring:gallery:v1";
 const MAX_ENTRIES = 5;
 const PREVIEW_MAX_SIDE = 512;
 
+export type TapColoringSwatch = { label: string; color: string };
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+function isHexColor6(s: string): boolean {
+  return /^#[0-9a-fA-F]{6}$/.test(s);
+}
+
+function parsePaletteSwatches(raw: unknown): TapColoringSwatch[] | undefined {
+  if (!Array.isArray(raw) || raw.length !== 3) return undefined;
+  const out: TapColoringSwatch[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) return undefined;
+    const label = item.label;
+    const color = item.color;
+    if (typeof label !== "string" || typeof color !== "string" || !isHexColor6(color)) return undefined;
+    out.push({ label, color: color.toLowerCase() });
+  }
+  return out;
+}
+
 export type TapColoringHistoryEntry = {
   id: string;
   createdAt: number;
@@ -12,11 +35,11 @@ export type TapColoringHistoryEntry = {
   paintDataUrl: string;
   /** 一覧・ダウンロード用の合成プレビュー（長辺 PREVIEW_MAX_SIDE 程度） */
   previewDataUrl: string;
+  /** 保存時の3色パレット（旧データには無い） */
+  paletteSwatches?: TapColoringSwatch[];
+  /** 保存時に選んでいた色（`#rrggbb`） */
+  paletteSelectedColor?: string;
 };
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
 
 function parseEntry(raw: unknown): TapColoringHistoryEntry | null {
   if (!isRecord(raw)) return null;
@@ -38,7 +61,23 @@ function parseEntry(raw: unknown): TapColoringHistoryEntry | null {
   ) {
     return null;
   }
-  return { id, createdAt, pictureId, savedBitmapSize, paintDataUrl, previewDataUrl };
+  const paletteSwatches = parsePaletteSwatches(raw.paletteSwatches);
+  const paletteSelectedColorRaw = raw.paletteSelectedColor;
+  const paletteSelectedColor =
+    typeof paletteSelectedColorRaw === "string" && isHexColor6(paletteSelectedColorRaw)
+      ? paletteSelectedColorRaw.toLowerCase()
+      : undefined;
+  const entry: TapColoringHistoryEntry = {
+    id,
+    createdAt,
+    pictureId,
+    savedBitmapSize,
+    paintDataUrl,
+    previewDataUrl,
+  };
+  if (paletteSwatches) entry.paletteSwatches = paletteSwatches;
+  if (paletteSelectedColor) entry.paletteSelectedColor = paletteSelectedColor;
+  return entry;
 }
 
 export function readTapColoringHistory(): TapColoringHistoryEntry[] {
@@ -99,7 +138,12 @@ export function prependTapColoringHistory(entry: Omit<TapColoringHistoryEntry, "
 
 export function updateTapColoringHistoryEntry(
   id: string,
-  patch: Partial<Pick<TapColoringHistoryEntry, "paintDataUrl" | "previewDataUrl" | "savedBitmapSize">>,
+  patch: Partial<
+    Pick<
+      TapColoringHistoryEntry,
+      "paintDataUrl" | "previewDataUrl" | "savedBitmapSize" | "paletteSwatches" | "paletteSelectedColor"
+    >
+  >,
 ): TapColoringHistoryEntry[] | null {
   const list = readTapColoringHistory();
   const i = list.findIndex((e) => e.id === id);

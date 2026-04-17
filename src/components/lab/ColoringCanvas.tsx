@@ -17,7 +17,10 @@ import {
   prependTapColoringHistory,
   updateTapColoringHistoryEntry,
   type TapColoringHistoryEntry,
+  type TapColoringSwatch,
 } from "@/lib/tapColoringHistory";
+
+export type { TapColoringSwatch } from "@/lib/tapColoringHistory";
 
 /** HSB 色相環に沿った 12 色（S/B はビビッド寄り: HSL 100% / 50%） */
 const HUE_RING = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330] as const;
@@ -36,8 +39,6 @@ const HUE_LABELS = [
   "H330",
 ] as const;
 const NON_RED_HUE_INDICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const;
-
-export type TapColoringSwatch = { label: string; color: string };
 
 function hslToHex(h: number, sPct: number, lPct: number): string {
   const s = sPct / 100;
@@ -107,6 +108,12 @@ function pickTriadPalette(): TapColoringSwatch[] {
   return resolved.map((idx) => FULL_PALETTE_12[idx]!);
 }
 
+function paletteForHistoryEntry(entry: TapColoringHistoryEntry): TapColoringSwatch[] {
+  const sw = entry.paletteSwatches;
+  if (sw && sw.length === 3) return sw.map((s) => ({ label: s.label, color: s.color.toLowerCase() }));
+  return pickTriadPalette();
+}
+
 const DEFAULT_FILL_THRESHOLD = 0.9;
 const DEFAULT_SPLATTER_RADIUS_VB = 12.5;
 /** 黒枠内イラストの拡大（`createPictureFrame` の 0.76 に乗算。デバッグで変更可） */
@@ -151,6 +158,8 @@ type StashedPlaySession = {
   pictureIndex: number;
   paintDataUrl: string;
   previewDataUrl: string;
+  activePalette: TapColoringSwatch[];
+  selectedColor: string;
 };
 
 type HistoryOverlayState =
@@ -492,6 +501,10 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const [galleryHandoffSkipToRest, setGalleryHandoffSkipToRest] = useState(false);
   /** true の間はパレット・キャンバス塗り・（親経由で）作品履歴を無効化 */
   const [historyChromeInteractionLocked, setHistoryChromeInteractionLocked] = useState(false);
+  /** 編集終了後スタッシュ復元時にパレットを戻す（`stashSessionRef` は completeHistoryExit で先に消す） */
+  const stashPaletteRestoreRef = useRef<{ swatches: TapColoringSwatch[]; selectedColor: string } | null>(null);
+  /** 履歴シーケンス直後のパレット表示だけフェードを切り、キャンバスとの合成チラつきを抑える */
+  const paletteUnlockNoFadeRef = useRef(false);
 
   const [historyOverlay, setHistoryOverlay] = useState<HistoryOverlayState>(null);
   const historyOverlayRef = useRef<HistoryOverlayState>(null);
@@ -504,6 +517,15 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     const id = requestAnimationFrame(() => setGalleryHandoffSkipToRest(false));
     return () => cancelAnimationFrame(id);
   }, [galleryHandoffSkipToRest]);
+
+  useLayoutEffect(() => {
+    if (!historyChromeInteractionLocked && paletteUnlockNoFadeRef.current) {
+      const id = requestAnimationFrame(() => {
+        paletteUnlockNoFadeRef.current = false;
+      });
+      return () => cancelAnimationFrame(id);
+    }
+  }, [historyChromeInteractionLocked]);
 
   const [showHistoryExitButton, setShowHistoryExitButton] = useState(false);
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
@@ -637,9 +659,11 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       savedBitmapSize: bitmapSize,
       paintDataUrl,
       previewDataUrl,
+      paletteSwatches: activePalette.map((s) => ({ label: s.label, color: s.color.toLowerCase() })),
+      paletteSelectedColor: selected.color.toLowerCase(),
     });
     onHistoryUpdated?.();
-  }, [bitmapSize, currentPictureAsset.id, redrawDisplay, onHistoryUpdated]);
+  }, [activePalette, bitmapSize, currentPictureAsset.id, redrawDisplay, onHistoryUpdated, selected.color]);
 
   const initStageCanvases = useCallback(() => {
     const display = displayRef.current;
@@ -760,8 +784,11 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           shouldShowExitAfterPendingPaintRef.current = false;
           setGalleryHandoffSkipToRest(true);
           setHistoryOverlay(null);
+          setCanvasPresenceDepth(false);
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
+              paletteUnlockNoFadeRef.current = true;
+              redrawDisplay();
               setShowHistoryExitButton(true);
               setHistoryChromeInteractionLocked(false);
               onHistorySequenceInteractionChange?.(true);
@@ -773,6 +800,15 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           requestAnimationFrame(() => {
             setCanvasPresenceDepth(false);
             requestAnimationFrame(() => {
+              const pr = stashPaletteRestoreRef.current;
+              stashPaletteRestoreRef.current = null;
+              if (pr) {
+                setActivePalette(pr.swatches);
+                const want = pr.selectedColor.toLowerCase();
+                setSelected(pr.swatches.find((s) => s.color === want) ?? pr.swatches[0]!);
+              }
+              paletteUnlockNoFadeRef.current = true;
+              redrawDisplay();
               setHistoryChromeInteractionLocked(false);
               onHistorySequenceInteractionChange?.(true);
             });
@@ -785,8 +821,11 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           shouldShowExitAfterPendingPaintRef.current = false;
           setGalleryHandoffSkipToRest(true);
           setHistoryOverlay(null);
+          setCanvasPresenceDepth(false);
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
+              paletteUnlockNoFadeRef.current = true;
+              redrawDisplay();
               setShowHistoryExitButton(true);
               setHistoryChromeInteractionLocked(false);
               onHistorySequenceInteractionChange?.(true);
@@ -798,6 +837,15 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           requestAnimationFrame(() => {
             setCanvasPresenceDepth(false);
             requestAnimationFrame(() => {
+              const pr = stashPaletteRestoreRef.current;
+              stashPaletteRestoreRef.current = null;
+              if (pr) {
+                setActivePalette(pr.swatches);
+                const want = pr.selectedColor.toLowerCase();
+                setSelected(pr.swatches.find((s) => s.color === want) ?? pr.swatches[0]!);
+              }
+              paletteUnlockNoFadeRef.current = true;
+              redrawDisplay();
               setHistoryChromeInteractionLocked(false);
               onHistorySequenceInteractionChange?.(true);
             });
@@ -1169,6 +1217,10 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     shouldShowExitAfterPendingPaintRef.current = true;
     editingHistoryEntryRef.current = target;
     setEditingHistoryId(target.id);
+    const pal = paletteForHistoryEntry(target);
+    setActivePalette(pal);
+    const want = target.paletteSelectedColor?.toLowerCase();
+    setSelected(pal.find((s) => s.color === want) ?? pal[0]!);
     setPictureIndex(idx);
     setStageIndex((i) => i + 1);
     setPhase("play");
@@ -1183,6 +1235,10 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       setEditingHistoryId(null);
       return;
     }
+    stashPaletteRestoreRef.current = {
+      swatches: stash.activePalette.map((s) => ({ label: s.label, color: s.color.toLowerCase() })),
+      selectedColor: stash.selectedColor.toLowerCase(),
+    };
     pendingHistoryEntryRef.current = {
       id: "__stash_restore__",
       createdAt: 0,
@@ -1223,6 +1279,8 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       previewDataUrl: newPreview,
       paintDataUrl: newPaint,
       savedBitmapSize: bitmapSize,
+      paletteSwatches: activePalette.map((s) => ({ label: s.label, color: s.color.toLowerCase() })),
+      paletteSelectedColor: selected.color.toLowerCase(),
     });
     onHistoryEntryReplaced?.(editing.id);
     onHistoryUpdated?.();
@@ -1234,7 +1292,15 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       stashUrl: stash.previewDataUrl,
       outgoingUrl: newPreview,
     });
-  }, [bitmapSize, onHistoryEntryReplaced, onHistorySequenceInteractionChange, onHistoryUpdated, redrawDisplay]);
+  }, [
+    activePalette,
+    bitmapSize,
+    onHistoryEntryReplaced,
+    onHistorySequenceInteractionChange,
+    onHistoryUpdated,
+    redrawDisplay,
+    selected.color,
+  ]);
 
   useImperativeHandle(
     ref,
@@ -1264,6 +1330,8 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
           pictureIndex,
           paintDataUrl: stashPaint,
           previewDataUrl: stashPreview,
+          activePalette: activePalette.map((s) => ({ label: s.label, color: s.color.toLowerCase() })),
+          selectedColor: selected.color.toLowerCase(),
         };
 
         setHistoryChromeInteractionLocked(true);
@@ -1290,11 +1358,13 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       },
     }),
     [
+      activePalette,
       appendHistorySnapshot,
       coloringPicturesReady,
       onHistorySequenceInteractionChange,
       phase,
       pictureIndex,
+      selected.color,
       splatterImagesReady,
     ],
   );
@@ -1400,7 +1470,10 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
             !historyChromeInteractionLocked && (phase === "play" || phase === "resume") ? 1 : 0,
           y: !historyChromeInteractionLocked && (phase === "play" || phase === "resume") ? 0 : -14,
         }}
-        transition={{ duration: SUCCESS_UI_FADE_MS / 1000, ease: "easeOut" }}
+        transition={{
+          duration: paletteUnlockNoFadeRef.current ? 0 : SUCCESS_UI_FADE_MS / 1000,
+          ease: "easeOut",
+        }}
       >
         {activePalette.map((p) => {
           const active = p.color === selected.color;
