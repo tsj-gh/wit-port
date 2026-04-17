@@ -512,8 +512,8 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
   const [debugFillThreshold, setDebugFillThreshold] = useState(DEFAULT_FILL_THRESHOLD);
   const [debugIllustrationScale, setDebugIllustrationScale] = useState(DEFAULT_ILLUSTRATION_SCALE);
   const [debugLineTapSearchRadius, setDebugLineTapSearchRadius] = useState(DEFAULT_LINE_TAP_SEARCH_RADIUS_PX);
-  /** devtj+DEBUG 時のみ有効。オフのときは pointerdown のみ塗り、move では塗らない */
-  const [debugSwipePaintEnabled, setDebugSwipePaintEnabled] = useState(false);
+  /** devtj+DEBUG 時のみ参照。オフのときは pointerdown のみ塗り、move では塗らない */
+  const [debugSwipePaintEnabled, setDebugSwipePaintEnabled] = useState(true);
   const [debugTapProbe, setDebugTapProbe] = useState<{
     xRatio: number;
     yRatio: number;
@@ -526,7 +526,8 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     isDevTj && isDebugMode ? debugIllustrationScale : DEFAULT_ILLUSTRATION_SCALE;
   const lineTapSearchRadius =
     isDevTj && isDebugMode ? debugLineTapSearchRadius : DEFAULT_LINE_TAP_SEARCH_RADIUS_PX;
-  const swipePaintAllowed = !isDevTj || !isDebugMode || debugSwipePaintEnabled;
+  /** デバッグオフ時は常にタップのみ。デバッグオン時はスイッチで連続塗りを切替（既定オン） */
+  const swipePaintAllowed = isDebugMode && debugSwipePaintEnabled;
 
   const [debugPanelStyle, setDebugPanelStyle] = useState<CSSProperties>(() => ({
     position: "fixed",
@@ -1676,7 +1677,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
                     </span>
                   </button>
                   <p className="mt-1 text-[9px] leading-snug text-stone-500">
-                    オフのときは指を離してからのタップ／クリックでのみ塗ります。
+                    通常はタップ／クリックのみで塗れます。DEBUG 中はこのスイッチでドラッグ連続塗りを切り替えられます。
                   </p>
                 </div>
                 <div>

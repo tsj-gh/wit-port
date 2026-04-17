@@ -1,9 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useCallback, useState, type MouseEvent, type RefObject } from "react";
+import { useCallback, useState, type CSSProperties, type MouseEvent, type RefObject } from "react";
 import type { ColoringCanvasHandle } from "@/components/lab/ColoringCanvas";
 import { TapColoringExportModal, type TapColoringExportModalMode } from "@/components/lab/TapColoringExportModal";
+import { TAP_COLORING_VIVID_YELLOW_HEX } from "@/lib/tapColoringPalette";
 import { toggleTapColoringHistoryPinned, type TapColoringHistoryEntry } from "@/lib/tapColoringHistory";
 
 type TapColoringGalleryProps = {
@@ -140,8 +141,15 @@ export function TapColoringGallery({
               <li key={entry.id} className="min-w-0">
                 <motion.div
                   className={`group relative overflow-hidden rounded-xl bg-[var(--color-bg)] shadow-md ring-1 ring-[color-mix(in_srgb,var(--color-text)_8%,transparent)] ${
-                    entry.isPinned ? "ring-2 ring-yellow-400 ring-offset-1 ring-offset-[var(--color-bg)]" : ""
+                    entry.isPinned ? "ring-4 ring-offset-2 ring-offset-[var(--color-bg)]" : ""
                   }`}
+                  style={
+                    entry.isPinned
+                      ? ({
+                          ["--tw-ring-color" as string]: TAP_COLORING_VIVID_YELLOW_HEX,
+                        } as CSSProperties)
+                      : undefined
+                  }
                   animate={
                     shakeEntryId === entry.id
                       ? { x: [0, -5, 5, -4, 4, -2, 2, 0], rotate: [0, -0.8, 0.8, -0.5, 0.5, 0] }
@@ -153,9 +161,17 @@ export function TapColoringGallery({
                     type="button"
                     disabled={btnDisabled}
                     onClick={(e) => onTogglePin(e, entry.id)}
-                    className={`absolute left-1 top-1 z-20 flex h-[22px] w-[22px] min-h-[22px] min-w-[22px] items-center justify-center rounded-full border-2 border-yellow-400 bg-[color-mix(in_srgb,var(--color-bg)_92%,transparent)] shadow-sm backdrop-blur-sm transition enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 ${
-                      entry.isPinned ? "text-yellow-400" : "text-yellow-400/45 hover:text-yellow-400/85"
+                    className={`absolute left-1 top-1 z-20 flex h-[22px] w-[22px] min-h-[22px] min-w-[22px] items-center justify-center rounded-full border-2 bg-[color-mix(in_srgb,var(--color-bg)_92%,transparent)] shadow-sm backdrop-blur-sm transition enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 ${
+                      entry.isPinned ? "" : "border-stone-300 text-stone-400 hover:border-stone-400 hover:text-stone-500"
                     }`}
+                    style={
+                      entry.isPinned
+                        ? ({
+                            borderColor: TAP_COLORING_VIVID_YELLOW_HEX,
+                            color: TAP_COLORING_VIVID_YELLOW_HEX,
+                          } as CSSProperties)
+                        : undefined
+                    }
                     aria-label={entry.isPinned ? "ピン留めを解除" : "ピン留めする"}
                     title={entry.isPinned ? "ピン留めを解除" : "ピン留めする"}
                   >
