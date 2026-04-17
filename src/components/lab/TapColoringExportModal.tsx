@@ -231,12 +231,12 @@ export function TapColoringExportModal({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-          <div className="mx-auto mb-3 flex max-h-[min(48vh,360px)] items-center justify-center overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] p-2">
+          <div className="mx-auto mb-3 flex h-[min(48vh,360px)] items-center justify-center overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] p-2">
             {busy || !preview ? (
               <p className="py-16 text-center text-xs text-[var(--color-muted)]">プレビューを生成中…</p>
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={preview} alt="" className="max-h-full max-w-full object-contain" />
+              <img src={preview} alt="" className="h-full w-full object-contain" />
             )}
           </div>
 
@@ -246,15 +246,24 @@ export function TapColoringExportModal({
                 <span>絵のサイズ</span>
                 <span className="tabular-nums text-[var(--color-muted)]">{pictureScale.toFixed(2)}×</span>
               </div>
-              <input
-                type="range"
-                min={0.5}
-                max={1.5}
-                step={0.01}
-                value={pictureScale}
-                onChange={(e) => setPictureScale(Number(e.target.value))}
-                className="w-full accent-amber-600"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min={0.5}
+                  max={1.5}
+                  step={0.01}
+                  value={pictureScale}
+                  onChange={(e) => setPictureScale(Number(e.target.value))}
+                  className="w-[78%] accent-amber-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPictureScale(1)}
+                  className="ml-auto rounded-md border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] px-2 py-1 text-[11px] font-medium text-[var(--color-muted)] transition hover:text-[var(--color-text)]"
+                >
+                  リセット
+                </button>
+              </div>
             </div>
 
             <div>
@@ -262,15 +271,52 @@ export function TapColoringExportModal({
                 <span>絵の回転</span>
                 <span className="tabular-nums text-[var(--color-muted)]">{Math.round(pictureRotationDeg)}°</span>
               </div>
-              <input
-                type="range"
-                min={-180}
-                max={180}
-                step={1}
-                value={pictureRotationDeg}
-                onChange={(e) => setPictureRotationDeg(Number(e.target.value))}
-                className="w-full accent-amber-600"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min={-180}
+                  max={180}
+                  step={1}
+                  value={pictureRotationDeg}
+                  onChange={(e) => setPictureRotationDeg(Number(e.target.value))}
+                  className="w-[78%] accent-amber-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPictureRotationDeg(0)}
+                  className="ml-auto rounded-md border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] px-2 py-1 text-[11px] font-medium text-[var(--color-muted)] transition hover:text-[var(--color-text)]"
+                >
+                  リセット
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-1 flex justify-between font-medium">
+                <span>ロゴ余白</span>
+                <span className="tabular-nums text-[11px] text-[var(--color-muted)]">
+                  {(overlayMarginPct * 100).toFixed(1)}%
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="logo-margin-debug"
+                  type="range"
+                  min={0.02}
+                  max={0.08}
+                  step={0.001}
+                  value={overlayMarginPct}
+                  onChange={(e) => setOverlayMarginPct(Number(e.target.value))}
+                  className="w-[78%] accent-amber-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setOverlayMarginPct(0.04)}
+                  className="ml-auto rounded-md border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] px-2 py-1 text-[11px] font-medium text-[var(--color-muted)] transition hover:text-[var(--color-text)]"
+                >
+                  リセット
+                </button>
+              </div>
             </div>
 
             <div>
@@ -341,25 +387,6 @@ export function TapColoringExportModal({
                   onChange={(e) => setIncludeDate(e.target.checked)}
                 />
               </label>
-            </div>
-
-            <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 py-2">
-              <div className="mb-1 flex justify-between font-medium">
-                <span className="text-[11px]">ロゴ余白</span>
-                <span className="tabular-nums text-[11px] text-[var(--color-muted)]">
-                  {(overlayMarginPct * 100).toFixed(1)}%
-                </span>
-              </div>
-              <input
-                id="logo-margin-debug"
-                type="range"
-                min={0.02}
-                max={0.08}
-                step={0.001}
-                value={overlayMarginPct}
-                onChange={(e) => setOverlayMarginPct(Number(e.target.value))}
-                className="w-full accent-amber-600"
-              />
             </div>
 
             <div>
