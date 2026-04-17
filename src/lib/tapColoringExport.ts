@@ -20,6 +20,7 @@ export type TapColoringExportOptions = {
 
 const FRAME_PUBLIC = "/assets/tap-coloring/Frame";
 const LOGO_SRC = "/assets/logo/logo_wispo.png";
+const DATE_FONT_STACK = '"Zen Maru Gothic", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
 
 export const FRAME_CONFIG: Record<
   TapColoringFrameVariant,
@@ -403,7 +404,7 @@ export async function composeTapColoringExport(
   const measureEl = document.createElement("canvas");
   const measureCtx = measureEl.getContext("2d");
   if (measureCtx) {
-    measureCtx.font = "300 20px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif";
+    measureCtx.font = `300 20px ${DATE_FONT_STACK}`;
   }
   const dateW = options.includeDate && measureCtx ? measureCtx.measureText(dateStr).width : 0;
   const dateH = 22;
@@ -439,7 +440,7 @@ export async function composeTapColoringExport(
   // STEP5 日付
   if (options.includeDate) {
     ctx.save();
-    ctx.font = "300 20px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif";
+    ctx.font = `300 20px ${DATE_FONT_STACK}`;
     ctx.fillStyle = style.dateFill;
     ctx.textAlign = "left";
     ctx.textBaseline = "bottom";

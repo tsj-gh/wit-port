@@ -1426,7 +1426,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       transition={{ duration: TRANSITION_BG_MS / 1000, ease: "linear" }}
     >
       {isDevTj && !isDebugMode && (
-        <div className="fixed right-4 top-4 z-50">
+        <div className="fixed right-3 top-14 z-50 sm:right-4 sm:top-16">
           <button
             type="button"
             onClick={() => setIsDebugMode(true)}
@@ -1437,7 +1437,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         </div>
       )}
       {isDevTj && isDebugMode && (
-        <div className="fixed right-4 top-4 z-50 max-h-[90vh] w-[min(92vw,280px)] overflow-y-auto rounded-2xl border border-stone-300 bg-white/95 p-3 text-left text-xs text-stone-800 shadow-lg">
+        <div className="fixed right-3 top-14 z-50 max-h-[90vh] w-[min(92vw,280px)] overflow-y-auto rounded-2xl border border-stone-300 bg-white/95 p-3 text-left text-xs text-stone-800 shadow-lg sm:right-4 sm:top-16">
           <div className="mb-2 flex items-center justify-between gap-2">
             {isDebugPanelExpanded && <span className="font-bold text-stone-700">タップぬりえ DEBUG</span>}
             <div className="ml-auto flex items-center gap-1">

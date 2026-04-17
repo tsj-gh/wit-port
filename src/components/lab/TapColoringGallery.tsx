@@ -151,7 +151,7 @@ export function TapColoringGallery({
                     />
                     <span className="sr-only">再開</span>
                   </button>
-                  <div className="flex flex-nowrap items-center justify-between gap-1 border-t border-[color-mix(in_srgb,var(--color-text)_8%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)] px-1 py-1">
+                  <div className="flex items-center justify-center border-t border-[color-mix(in_srgb,var(--color-text)_8%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)] px-1 py-1">
                     <button
                       type="button"
                       disabled={btnDisabled}
@@ -159,22 +159,12 @@ export function TapColoringGallery({
                         e.stopPropagation();
                         openExportHistory(entry);
                       }}
-                      className="inline-flex h-7 shrink-0 items-center justify-center rounded-md text-[var(--color-muted)] transition enabled:hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] enabled:hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-45"
-                      aria-label="高画質PNGで保存"
-                      title="高画質PNGで保存"
+                      className="inline-flex h-7 items-center justify-center gap-1 rounded-md px-2 text-[10px] font-medium text-[var(--color-muted)] transition enabled:hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] enabled:hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-45"
+                      aria-label="絵を保存・共有"
+                      title="絵を保存・共有"
                     >
                       <IconSave className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={btnDisabled}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openExportHistory(entry);
-                      }}
-                      className="min-w-0 truncate rounded-md px-1.5 py-0.5 text-[9px] font-medium leading-tight text-[var(--color-muted)] transition enabled:hover:bg-[color-mix(in_srgb,var(--color-text)_8%,transparent)] enabled:hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-45 lg:text-[10px]"
-                    >
-                      SNSに送る
+                      <span className="whitespace-nowrap">絵を保存・共有</span>
                     </button>
                   </div>
                 </motion.div>

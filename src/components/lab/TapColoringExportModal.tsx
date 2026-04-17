@@ -58,7 +58,7 @@ export function TapColoringExportModal({
   const [pictureRotationDeg, setPictureRotationDeg] = useState(0);
   const [frameVariant, setFrameVariant] = useState<TapColoringFrameVariant>("01");
   const [exportBackgroundColor, setExportBackgroundColor] = useState("#FAF9F6");
-  const [overlayMarginPct, setOverlayMarginPct] = useState(0.04);
+  const [overlayMarginPct, setOverlayMarginPct] = useState(0.03);
   const [shareMessage, setShareMessage] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -97,7 +97,7 @@ export function TapColoringExportModal({
     setPictureRotationDeg(0);
     setFrameVariant("01");
     setExportBackgroundColor("#FAF9F6");
-    setOverlayMarginPct(0.04);
+    setOverlayMarginPct(0.03);
     setShareMessage(defaultShareMessageBody());
   }, [open]);
 
@@ -231,12 +231,12 @@ export function TapColoringExportModal({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-          <div className="mx-auto mb-3 flex h-[min(48vh,360px)] items-center justify-center overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] p-2">
+          <div className="mx-auto mb-3 flex max-h-[min(48vh,360px)] items-center justify-center overflow-visible rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] p-2">
             {busy || !preview ? (
               <p className="py-16 text-center text-xs text-[var(--color-muted)]">プレビューを生成中…</p>
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={preview} alt="" className="h-full w-full object-contain" />
+              <img src={preview} alt="" className="max-h-[min(48vh,360px)] w-auto max-w-full object-contain" />
             )}
           </div>
 
@@ -254,12 +254,12 @@ export function TapColoringExportModal({
                   step={0.01}
                   value={pictureScale}
                   onChange={(e) => setPictureScale(Number(e.target.value))}
-                  className="w-[78%] accent-amber-600"
+                  className="w-[75%] accent-amber-600 sm:w-[80%]"
                 />
                 <button
                   type="button"
                   onClick={() => setPictureScale(1)}
-                  className="ml-auto rounded-md border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] px-2 py-1 text-[11px] font-medium text-[var(--color-muted)] transition hover:text-[var(--color-text)]"
+                  className="ml-auto whitespace-nowrap rounded-md border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] px-1.5 py-1 text-[10px] font-medium leading-none text-[var(--color-muted)] transition hover:text-[var(--color-text)] sm:px-2 sm:text-[11px]"
                 >
                   リセット
                 </button>
@@ -279,12 +279,12 @@ export function TapColoringExportModal({
                   step={1}
                   value={pictureRotationDeg}
                   onChange={(e) => setPictureRotationDeg(Number(e.target.value))}
-                  className="w-[78%] accent-amber-600"
+                  className="w-[75%] accent-amber-600 sm:w-[80%]"
                 />
                 <button
                   type="button"
                   onClick={() => setPictureRotationDeg(0)}
-                  className="ml-auto rounded-md border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] px-2 py-1 text-[11px] font-medium text-[var(--color-muted)] transition hover:text-[var(--color-text)]"
+                  className="ml-auto whitespace-nowrap rounded-md border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] px-1.5 py-1 text-[10px] font-medium leading-none text-[var(--color-muted)] transition hover:text-[var(--color-text)] sm:px-2 sm:text-[11px]"
                 >
                   リセット
                 </button>
@@ -307,12 +307,12 @@ export function TapColoringExportModal({
                   step={0.001}
                   value={overlayMarginPct}
                   onChange={(e) => setOverlayMarginPct(Number(e.target.value))}
-                  className="w-[78%] accent-amber-600"
+                  className="w-[75%] accent-amber-600 sm:w-[80%]"
                 />
                 <button
                   type="button"
-                  onClick={() => setOverlayMarginPct(0.04)}
-                  className="ml-auto rounded-md border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] px-2 py-1 text-[11px] font-medium text-[var(--color-muted)] transition hover:text-[var(--color-text)]"
+                  onClick={() => setOverlayMarginPct(0.03)}
+                  className="ml-auto whitespace-nowrap rounded-md border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] px-1.5 py-1 text-[10px] font-medium leading-none text-[var(--color-muted)] transition hover:text-[var(--color-text)] sm:px-2 sm:text-[11px]"
                 >
                   リセット
                 </button>
@@ -368,25 +368,47 @@ export function TapColoringExportModal({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 py-2">
-              <label className="inline-flex cursor-pointer items-center gap-2 font-medium">
-                <span>額縁</span>
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-amber-600"
-                  checked={includeFrame}
-                  onChange={(e) => setIncludeFrame(e.target.checked)}
-                />
-              </label>
-              <label className="inline-flex cursor-pointer items-center gap-2 font-medium">
-                <span>日付</span>
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-amber-600"
-                  checked={includeDate}
-                  onChange={(e) => setIncludeDate(e.target.checked)}
-                />
-              </label>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={includeFrame}
+                onClick={() => setIncludeFrame((v) => !v)}
+                className="inline-flex items-center gap-2 text-left"
+              >
+                <span className="font-medium">額縁</span>
+                <span
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    includeFrame ? "bg-amber-500" : "bg-stone-400"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      includeFrame ? "translate-x-5" : "translate-x-0.5"
+                    }`}
+                  />
+                </span>
+              </button>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={includeDate}
+                onClick={() => setIncludeDate((v) => !v)}
+                className="inline-flex items-center gap-2 text-left"
+              >
+                <span className="font-medium">日付</span>
+                <span
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    includeDate ? "bg-amber-500" : "bg-stone-400"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      includeDate ? "translate-x-5" : "translate-x-0.5"
+                    }`}
+                  />
+                </span>
+              </button>
             </div>
 
             <div>
