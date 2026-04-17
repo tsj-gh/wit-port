@@ -178,19 +178,19 @@ export function TapColoringLabShell() {
           <div className="mb-2 flex flex-col gap-2 lg:hidden">
             <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
               <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
-                あそびかた・ねらい（要約）
+                あそびかた
               </summary>
               <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
-                <p className="m-0">【ねらい】色彩認知・原因と結果の理解・手眼協調の向上</p>
-                <p className="mt-2 m-0">【対象】幼児〜小学校低学年</p>
-                <p className="mt-2 m-0">【操作】タップ中心の直感操作</p>
+                <p className="m-0">
+                  パレットから色を選んでタップで塗りつぶし。重なった部分は鮮やかに混ざります。額縁や背景などを飾って保存や送信ができます。
+                </p>
               </div>
             </details>
           </div>
           <section className="mb-1.5 hidden rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2 lg:block">
-            <h3 className="text-sm font-semibold text-[var(--color-text)]">あそびかた（要約）</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">あそびかた</h3>
             <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">
-              タップで塗りつぶし、色と領域の因果を直感的に確かめます。
+              パレットから色を選んでタップで塗りつぶし。重なった部分は鮮やかに混ざります。額縁や背景などを飾って保存や送信ができます。
             </p>
           </section>
           <div
