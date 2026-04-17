@@ -1398,7 +1398,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         if (!display || display.width < 1 || display.height < 1) return null;
         redrawDisplay();
         try {
-          return await composeTapColoringExport(display, sceneBgColor, options);
+          return await composeTapColoringExport(display, options);
         } catch {
           return null;
         }
@@ -1413,7 +1413,6 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
       pictureIndex,
       pushHistoryFromCanvas,
       redrawDisplay,
-      sceneBgColor,
       selected.color,
       splatterImagesReady,
     ],
