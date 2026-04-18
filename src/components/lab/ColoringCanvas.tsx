@@ -21,6 +21,7 @@ import {
   type TapColoringSwatch,
 } from "@/lib/tapColoringHistory";
 import { composeTapColoringExport, type TapColoringExportOptions } from "@/lib/tapColoringExport";
+import { SPLATTER_VECTOR_DEFS, rasterizeSplatterVectorDef } from "@/components/lab/splatter";
 
 export type { TapColoringSwatch } from "@/lib/tapColoringHistory";
 export type { TapColoringExportOptions } from "@/lib/tapColoringExport";
@@ -129,8 +130,7 @@ const SCAN_STRIDE = 2;
 /** マスク干渉切り分け用（true で枠外でも描ける） */
 const DEBUG_DISABLE_MASK = false;
 
-const SPLATTER_IMAGE_COUNT = 9;
-const SPLATTER_PUBLIC_PREFIX = "/assets/tap-coloring";
+const SPLATTER_IMAGE_COUNT = SPLATTER_VECTOR_DEFS.length;
 const PICTURE_PUBLIC_PREFIX = "/assets/tap-coloring/Pictures";
 const ANIMAL_PICTURE_COUNT = 12;
 const PRODUCE_PICTURE_COUNT = 10;
@@ -232,11 +232,13 @@ const canvasInteractionGuardStyle = {
 } as const;
 
 /**
- * インク用スプラッター PNG を、小さな drawImage に耐える解像度へ一度だけ整える
+ * インク用スプラッター（ラスタまたは SVG 由来の canvas）を、小さな drawImage に耐える解像度へ一度だけ整える
  */
-function createInkOptimizedSplatterSource(img: HTMLImageElement): HTMLCanvasElement | HTMLImageElement {
-  const w = img.naturalWidth;
-  const h = img.naturalHeight;
+function createInkOptimizedSplatterSource(
+  img: HTMLImageElement | HTMLCanvasElement,
+): HTMLCanvasElement | HTMLImageElement {
+  const w = img instanceof HTMLCanvasElement ? img.width : img.naturalWidth;
+  const h = img instanceof HTMLCanvasElement ? img.height : img.naturalHeight;
   if (w < 1 || h < 1) return img;
   const maxSide = Math.max(w, h);
   if (maxSide <= SPLATTER_SOURCE_MAX_SIDE_PX) return img;
@@ -1032,28 +1034,12 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     }
   }, []);
 
+  /** スプラッターは SVG 定義から一度ラスタ化（従来の tintSplatterToCanvas / drawImage 経路を維持） */
   useEffect(() => {
-    let cancelled = false;
-    const imgs: HTMLImageElement[] = [];
-    let pending = SPLATTER_IMAGE_COUNT;
-    const onDone = () => {
-      pending -= 1;
-      if (pending <= 0 && !cancelled) {
-        splatterImagesRef.current = imgs.map((im) => createInkOptimizedSplatterSource(im));
-        setSplatterImagesReady(true);
-      }
-    };
-    for (let i = 1; i <= SPLATTER_IMAGE_COUNT; i++) {
-      const im = new Image();
-      im.decoding = "async";
-      im.onload = onDone;
-      im.onerror = onDone;
-      im.src = `${SPLATTER_PUBLIC_PREFIX}/splatter_${String(i).padStart(2, "0")}.png`;
-      imgs.push(im);
-    }
-    return () => {
-      cancelled = true;
-    };
+    splatterImagesRef.current = SPLATTER_VECTOR_DEFS.map((def) =>
+      createInkOptimizedSplatterSource(rasterizeSplatterVectorDef(def)),
+    );
+    setSplatterImagesReady(true);
   }, []);
 
   useEffect(() => {
@@ -1279,7 +1265,6 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     const imgs = splatterImagesRef.current;
     const img = imgs[Math.floor(Math.random() * SPLATTER_IMAGE_COUNT)];
     if (!img) return;
-    if (img instanceof HTMLImageElement && !img.complete) return;
     const { w: srcW, h: srcH } = splatterSourceSize(img);
     if (srcW < 1 || srcH < 1) return;
 
