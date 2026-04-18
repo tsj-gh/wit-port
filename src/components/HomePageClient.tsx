@@ -24,11 +24,16 @@ export function HomePageClient() {
 
       <section className="pb-8 pt-2 text-center animate-fade-in-up-delay sm:pb-10 sm:pt-1">
         <h1 className="mb-4 text-[clamp(30px,5vw,52px)] font-extrabold leading-tight bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)] bg-clip-text text-transparent sm:mb-5">
-          {t("home.heroTitle")}
+          <span className="block">{t("home.heroTitleLine1")}</span>
+          <span className="block">{t("home.heroTitleLine2")}</span>
         </h1>
         <div className="mx-auto max-w-[600px] space-y-3 text-[clamp(15px,2vw,19px)] leading-snug text-[var(--color-muted)] sm:leading-relaxed">
           <p>{t("home.heroLine1")}</p>
-          <p>{t("home.heroLine2")}</p>
+          <p>
+            {t("home.heroLine2a")}
+            <wbr />
+            {t("home.heroLine2b")}
+          </p>
         </div>
       </section>
 

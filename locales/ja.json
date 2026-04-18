@@ -19,9 +19,11 @@
     "column": "知育コラム"
   },
   "home": {
-    "heroTitle": "デジタル知育教材スポット「Wispo（ウィスポ）」",
+    "heroTitleLine1": "デジタル知育教材スポット",
+    "heroTitleLine2": "「Wispo（ウィスポ）」",
     "heroLine1": "ようこそWispo（ウィスポ）へ！",
-    "heroLine2": "幼児から大人まで、だれでも手軽に遊ぶように学べる無料の教材を公開しています。",
+    "heroLine2a": "幼児から大人まで、だれでも手軽に遊ぶように学べる",
+    "heroLine2b": "無料の教材を公開しています。",
     "sectionIntuitionTitle": "Kids / Intuition",
     "sectionLogicalTitle": "Junior / Logical",
     "sectionStrategicTitle": "Advance / Strategic",

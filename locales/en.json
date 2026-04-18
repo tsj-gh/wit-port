@@ -19,9 +19,11 @@
     "column": "Educational column"
   },
   "home": {
-    "heroTitle": "Wispo — a digital spot for playful learning",
+    "heroTitleLine1": "A digital spot for playful learning materials",
+    "heroTitleLine2": "Wispo",
     "heroLine1": "Welcome to Wispo!",
-    "heroLine2": "We publish free materials so anyone—from toddlers to adults—can learn at an easy, playful pace.",
+    "heroLine2a": "We publish ",
+    "heroLine2b": "free materials so anyone—from toddlers to adults—can learn at an easy, playful pace.",
     "sectionIntuitionTitle": "Kids / Intuition",
     "sectionLogicalTitle": "Junior / Logical",
     "sectionStrategicTitle": "Advance / Strategic",
