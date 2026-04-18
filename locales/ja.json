@@ -19,9 +19,9 @@
     "column": "知育コラム"
   },
   "home": {
-    "heroTitle": "知育スポーツの拠点",
-    "heroLine1": "直感と論理を交差させる、洗練されたパズルの世界へようこそ。",
-    "heroLine2": "あなたの「ひらめき」が、ここから始まります。",
+    "heroTitle": "デジタル知育教材スポット「Wispo（ウィスポ）」",
+    "heroLine1": "ようこそWispo（ウィスポ）へ！",
+    "heroLine2": "幼児から大人まで、だれでも手軽に遊ぶように学べる無料の教材を公開しています。",
     "sectionIntuitionTitle": "Kids / Intuition",
     "sectionLogicalTitle": "Junior / Logical",
     "sectionStrategicTitle": "Advance / Strategic",
@@ -43,7 +43,7 @@
     "sectionColumnTitle": "知育コラム",
     "sectionColumnLink": "知育コラムを読む",
     "sectionAboutTitle": "Wispoについて",
-    "sectionAboutBody": "Wispoは、論理的思考力と直感を育む知育パズルの無料サイトです。タップぬりえ・Pair-Link・Skyscraper・Reflec-Shot・Pres-Sure Judge（プレッシャージャッジ）など、様々なコンテンツをブラウザで手軽にお楽しみいただけます。",
+    "sectionAboutBody": "知育本や教室からもらってくるプリントでは足りなくなった知育教材を延々とやらせられないかという動機で自作したパズルやアプリを、Webブラウザで動くようにして公開しています。\n\n気になるものがありましたら、自由にポチッと始めてみてください！\n\n※Webブラウザ版としての公開にあたり、AI生成を使用しています。一部、表示や挙動に不自然な点があるかもしれませんが、あらかじめご了承ください。",
     "sectionUsageTitle": "遊び方・ご利用について",
     "sectionUsageBeforeContact": "各ゲームは無料でプレイ可能です。ルールや操作方法は各ゲーム画面内をご確認ください。お問い合わせは",
     "sectionUsageContact": "お問い合わせページ",

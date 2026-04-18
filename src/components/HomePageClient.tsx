@@ -26,11 +26,10 @@ export function HomePageClient() {
         <h1 className="mb-4 text-[clamp(30px,5vw,52px)] font-extrabold leading-tight bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)] bg-clip-text text-transparent sm:mb-5">
           {t("home.heroTitle")}
         </h1>
-        <p className="mx-auto max-w-[600px] text-[clamp(15px,2vw,19px)] leading-snug text-[var(--color-muted)] sm:leading-relaxed">
-          {t("home.heroLine1")}
-          <br />
-          {t("home.heroLine2")}
-        </p>
+        <div className="mx-auto max-w-[600px] space-y-3 text-[clamp(15px,2vw,19px)] leading-snug text-[var(--color-muted)] sm:leading-relaxed">
+          <p>{t("home.heroLine1")}</p>
+          <p>{t("home.heroLine2")}</p>
+        </div>
       </section>
 
       <HomePageLinks />
@@ -46,7 +45,7 @@ export function HomePageClient() {
           </Link>
         </p>
         <h2 className="mb-4 text-xl font-bold text-[var(--color-text)]">{t("home.sectionAboutTitle")}</h2>
-        <p className="mb-4 leading-relaxed text-[var(--color-muted)]">{t("home.sectionAboutBody")}</p>
+        <p className="mb-4 whitespace-pre-line leading-relaxed text-[var(--color-muted)]">{t("home.sectionAboutBody")}</p>
         <h2 className="mb-3 mt-6 text-lg font-bold text-[var(--color-text)]">{t("home.sectionUsageTitle")}</h2>
         <p className="mb-4 leading-relaxed text-[var(--color-muted)]">
           {t("home.sectionUsageBeforeContact")}

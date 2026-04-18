@@ -14,11 +14,11 @@ const wispoSoftwareApplicationJsonLd = buildWispoSoftwareApplicationJsonLd(SITE_
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Wispo（ウィスポ）| 知育スポーツの拠点",
+    default: "Wispo（ウィスポ）| デジタル知育教材スポット「Wispo（ウィスポ）」",
     template: "%s | Wispo",
   },
   description:
-    "Wispo（ウィスポ）は、知育スポーツの拠点。直感と論理を交差させる Pair-Link・Skyscraper・Reflec-Shot・Pres-Sure Judge など、洗練された知育ロジックゲームを無料でお楽しみください。",
+    "ようこそWispo（ウィスポ）へ。幼児から大人まで、遊びながら学べる無料のデジタル知育教材をWebブラウザで公開しています。タップぬりえ・Pair-Link・Skyscraper・Reflec-Shot・Pres-Sure Judge など。",
   keywords: ["知育", "パズル", "無料", "ロジックパズル", "ナンバーリンク", "スカイスクレイパー", "脳トレ"],
   openGraph: { type: "website", siteName: "Wispo" },
   manifest: "/manifest.json",

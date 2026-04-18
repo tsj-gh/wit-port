@@ -19,7 +19,7 @@ export function buildWispoSoftwareApplicationJsonLd(siteUrl: string): Record<str
     applicationCategory: "EducationalApplication",
     operatingSystem: "Web Browser",
     description:
-      "モンテッソーリ教育の視点を取り入れた、直感と論理を育む知育パズルプラットフォーム。",
+      "幼児から大人まで、遊びながら学べる無料のデジタル知育教材をWebブラウザで公開するスポット。",
     url: base,
     offers: freeOffer,
     provider: {

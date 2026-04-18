@@ -19,9 +19,9 @@
     "column": "Educational column"
   },
   "home": {
-    "heroTitle": "A home for educational sports",
-    "heroLine1": "Welcome to a refined world of puzzles where intuition meets logic.",
-    "heroLine2": "Your next insight starts here.",
+    "heroTitle": "Wispo — a digital spot for playful learning",
+    "heroLine1": "Welcome to Wispo!",
+    "heroLine2": "We publish free materials so anyone—from toddlers to adults—can learn at an easy, playful pace.",
     "sectionIntuitionTitle": "Kids / Intuition",
     "sectionLogicalTitle": "Junior / Logical",
     "sectionStrategicTitle": "Advance / Strategic",
@@ -43,7 +43,7 @@
     "sectionColumnTitle": "Educational column",
     "sectionColumnLink": "Read the column",
     "sectionAboutTitle": "About Wispo",
-    "sectionAboutBody": "Wispo is a free site of educational puzzles and gentle play that nurture logical thinking and intuition. Enjoy tap coloring, Pair-Link, Skyscraper, Reflec-Shot, Pres-Sure Judge (プレッシャージャッジ), and more in your browser.",
+    "sectionAboutBody": "These puzzles and apps started as homemade projects so we would not have to assign endless extra worksheets when books and classroom printouts were no longer enough. We brought them to the web so they run in your browser.\n\nIf something looks fun, tap in and try it freely!\n\n※For this browser release we use AI-assisted generation in places. You may notice occasional awkward visuals or behavior—thanks for your understanding.",
     "sectionUsageTitle": "How to play & usage",
     "sectionUsageBeforeContact": "All games are free. Rules and controls are on each screen. Contact us via the ",
     "sectionUsageContact": "contact page",
