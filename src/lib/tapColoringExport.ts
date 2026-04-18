@@ -423,24 +423,35 @@ export async function composeTapColoringExport(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
-  // STEP1 背景
+  // STEP1 最背面：背景
   ctx.fillStyle = bgHex;
   ctx.fillRect(0, 0, W, H);
 
-  // STEP2 絵（内枠中心・隙間を出さない cover ベース）
+  // STEP2 中間：絵（内枠＝額縁の窓でクリップ。拡大・回転で枠外へは描画されない）
   const coverSide = Math.max(hole.width, hole.height);
   const side = coverSide * Math.max(0.5, Math.min(1.5, options.pictureScale));
   const art = prepareArtWithFloodFill(artSource, side, bgHex);
   const cx = hole.x + hole.width / 2;
   const cy = hole.y + hole.height / 2;
   const rotationRad = (Math.max(-180, Math.min(180, options.pictureRotationDeg)) * Math.PI) / 180;
+  const clipInset = 0.5;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(
+    hole.x + clipInset,
+    hole.y + clipInset,
+    Math.max(1, hole.width - clipInset * 2),
+    Math.max(1, hole.height - clipInset * 2),
+  );
+  ctx.clip();
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(rotationRad);
   ctx.drawImage(art, -side / 2, -side / 2, side, side);
   ctx.restore();
+  ctx.restore();
 
-  // STEP3 額縁
+  // STEP3 最前面：額縁（窓の外に回り込んだ絵を枠で完全に隠す）
   if (options.includeFrame) {
     ctx.drawImage(frame, 0, 0, W, H);
   }

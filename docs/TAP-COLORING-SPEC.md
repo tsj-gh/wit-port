@@ -63,7 +63,7 @@
   - どうぶつ `Picture_Animal_01`〜`12`（12）、やさい・くだもの `Picture_Produce_01`〜`10`（10）、のりもの `Picture_Vehicle_01`〜`12`（12）。計 **34**。従来 PNG は `Pictures/` に残置可
 - **スプラッター（インク粒）**: 質感維持のため **PNG** `public/assets/tap-coloring/Splatter/splatter_01.png`〜`09.png`。既塗り領域への重ねは乗算に近いブレンド後に色相ステップ
 - **額縁（エクスポート用）**: **SVG** `public/assets/tap-coloring/Frame/SVG/frame_01.svg`〜`03.svg`（`tapColoringExport.ts` の `FRAME_CONFIG`）
-- **書き出し**: `TAP_COLORING_EXPORT_SUPER_SCALE`（既定 2）で合成後に拡大焼き込み。WebP 対応端末は `image/webp`、それ以外は PNG
+- **書き出し**: 合成順は **背景 → 内枠（`innerHole`）で `clip` した上で絵 → 額縁を最前面**。`TAP_COLORING_EXPORT_SUPER_SCALE`（既定 2）で拡大焼き込み。WebP 対応端末は `image/webp`、それ以外は PNG
 
 ### 3.2 解像度・表示
 
