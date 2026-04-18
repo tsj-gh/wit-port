@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "ページが見つかりません",
+  description: "指定されたページは存在しません。Wispo（ウィスポ）のトップからお探しください。",
+  robots: { index: false, follow: true },
+};
 
 export default function NotFound() {
   return (

@@ -14,7 +14,6 @@ export const metadata: Metadata = {
   title: gameLabPageSeo.tapColoring.title,
   description: gameLabPageSeo.tapColoring.description,
   keywords: ["知育", "ぬりえ", "因果", "色彩", "幼児", "モンテッソーリ", "Wispo"],
-  robots: { index: false, follow: false },
   alternates: gameLabAlternates("/lab/tap-coloring"),
 };
 

@@ -7,7 +7,7 @@ export const gameLabPageSeo = {
   tapColoring: {
     title: "タップぬりえ | 直感と論理を育む知育パズル Wispo",
     description:
-      "タップぬりえの知育効果と遊び方。因果理解と色彩認知を鍛えるための専門的な設計について解説します。",
+      "ブラウザで遊べる無料のタップぬりえ。線画にタップで色を塗り、因果理解・色彩認知を楽しく鍛えられます。知育効果と遊び方の解説付き。",
   },
   popPopBubbles: {
     title: "はじけて！バブル（Pop-Pop Bubbles） | 直感と論理を育む知育パズル Wispo",

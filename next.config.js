@@ -1,5 +1,26 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  images: {
+    formats: ["image/avif", "image/webp"],
+  },
+  async headers() {
+    const longCache =
+      "public, max-age=31536000, s-maxage=31536000, stale-while-revalidate=86400";
+    return [
+      {
+        source: "/assets/tap-coloring/Pictures/SVG/:path*",
+        headers: [{ key: "Cache-Control", value: longCache }],
+      },
+      {
+        source: "/assets/tap-coloring/Frame/SVG/:path*",
+        headers: [{ key: "Cache-Control", value: longCache }],
+      },
+      {
+        source: "/assets/tap-coloring/Splatter/:path*",
+        headers: [{ key: "Cache-Control", value: longCache }],
+      },
+    ];
+  },
   async redirects() {
     return [
       { source: "/games/pair-link", destination: "/lab/pair-link", permanent: true },

@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { HomePageClient } from "@/components/HomePageClient";
 import PuzzleStockPrefetcher from "@/components/PuzzleStockPrefetcher";
+import { getSiteUrl } from "@/lib/siteUrl";
+
+export const metadata: Metadata = {
+  alternates: { canonical: getSiteUrl() },
+};
 
 export default function HomePage() {
   return (

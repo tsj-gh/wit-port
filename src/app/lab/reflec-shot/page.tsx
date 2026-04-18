@@ -16,14 +16,6 @@ export const metadata: Metadata = {
   keywords: ["知育", "空間推理", "反射", "幾何", "パズル", "Wispo"],
   applicationName: "Wispo",
   alternates: gameLabAlternates("/lab/reflec-shot"),
-  robots: {
-    index: false,
-    follow: false,
-    googleBot: {
-      index: false,
-      follow: false,
-    },
-  },
 };
 
 export default function ReflecShotLabPage() {

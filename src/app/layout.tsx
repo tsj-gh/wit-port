@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/react";
 import Script from "next/script";
 import "./globals.css";
 import Footer from "@/components/Footer";
@@ -72,6 +73,7 @@ export default function RootLayout({
             </SiteThemeProvider>
           </I18nProvider>
         </UserSyncProvider>
+        {process.env.NODE_ENV === "production" ? <Analytics /> : null}
       </body>
     </html>
   );

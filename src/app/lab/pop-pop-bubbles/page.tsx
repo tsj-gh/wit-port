@@ -14,7 +14,6 @@ export const metadata: Metadata = {
   title: gameLabPageSeo.popPopBubbles.title,
   description: gameLabPageSeo.popPopBubbles.description,
   keywords: ["知育", "手眼協調", "集中", "幼児", "バブル", "タップゲーム", "Wispo"],
-  robots: { index: false, follow: false },
   alternates: gameLabAlternates("/lab/pop-pop-bubbles"),
 };
 export default function PopPopBubblesPage() {
