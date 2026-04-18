@@ -19,6 +19,8 @@ export type TapColoringExportOptions = {
 };
 
 const FRAME_PUBLIC = "/assets/tap-coloring/Frame";
+/** 書き出し時のスーパーサンプリング倍率（SVG 線画・額縁の細部を物理ピクセルで確保） */
+export const TAP_COLORING_EXPORT_SUPER_SCALE = 2;
 const LOGO_SRC = "/assets/logo/logo_wispo.png";
 const DATE_FONT_STACK = '"Zen Maru Gothic", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
 
@@ -32,9 +34,9 @@ export const FRAME_CONFIG: Record<
     fallbackInsetYPct: number;
   }
 > = {
-  "01": { file: `${FRAME_PUBLIC}/frame_01.png`, fallbackInsetXPct: 0.15, fallbackInsetYPct: 0.15 },
-  "02": { file: `${FRAME_PUBLIC}/frame_02.png`, fallbackInsetXPct: 0.16, fallbackInsetYPct: 0.16 },
-  "03": { file: `${FRAME_PUBLIC}/frame_03.png`, fallbackInsetXPct: 0.145, fallbackInsetYPct: 0.145 },
+  "01": { file: `${FRAME_PUBLIC}/SVG/frame_01.svg`, fallbackInsetXPct: 0.15, fallbackInsetYPct: 0.15 },
+  "02": { file: `${FRAME_PUBLIC}/SVG/frame_02.svg`, fallbackInsetXPct: 0.16, fallbackInsetYPct: 0.16 },
+  "03": { file: `${FRAME_PUBLIC}/SVG/frame_03.svg`, fallbackInsetXPct: 0.145, fallbackInsetYPct: 0.145 },
 };
 
 export const EXPORT_SURFACE_PRESETS: readonly { id: string; label: string; color: string }[] = [
@@ -413,10 +415,10 @@ export async function composeTapColoringExport(
   const bgRgb = parseHexRgb(bgHex);
   const style = pickExportUiStyle(bgHex);
 
-  const work = document.createElement("canvas");
-  work.width = W;
-  work.height = H;
-  const ctx = work.getContext("2d");
+  const inner = document.createElement("canvas");
+  inner.width = W;
+  inner.height = H;
+  const ctx = inner.getContext("2d");
   if (!ctx) throw new Error("no 2d context");
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
@@ -498,6 +500,18 @@ export async function composeTapColoringExport(
     ctx.restore();
   }
 
-  // 出力はフレーム物理寸法に完全一致（余白なし）
-  return work.toDataURL("image/png");
+  // 高解像度へ拡大（線画 SVG・額縁 SVG を表示解像度より細かく焼き込む）
+  const scale = TAP_COLORING_EXPORT_SUPER_SCALE;
+  const out = document.createElement("canvas");
+  out.width = Math.max(2, Math.round(W * scale));
+  out.height = Math.max(2, Math.round(H * scale));
+  const octx = out.getContext("2d");
+  if (!octx) throw new Error("no 2d context");
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = "high";
+  octx.drawImage(inner, 0, 0, W, H, 0, 0, out.width, out.height);
+
+  const webp = out.toDataURL("image/webp", 0.92);
+  if (webp.startsWith("data:image/webp")) return webp;
+  return out.toDataURL("image/png");
 }

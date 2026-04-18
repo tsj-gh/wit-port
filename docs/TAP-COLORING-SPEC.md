@@ -59,13 +59,11 @@
 
 ### 3.1 アセット
 
-- **線画 PNG**: `public/assets/tap-coloring/Pictures/`
-  - どうぶつ `Picture_Animal_01`〜`12`（12）
-  - やさい・くだもの `Picture_Produce_01`〜`10`（10）
-  - のりもの `Picture_Vehicle_01`〜`12`（12）
-  - 計 **34** 枚。ID は `animal-01` 形式など `COLORING_PICTURE_ASSETS` で定義
-- **スプラッター（インク粒）**: ベクター定義 `public/assets/tap-coloring/Splatter/SVG/splatter_01.svg`〜`09.svg` を `src/components/lab/splatter/splatterVectorDefs.ts` に取り込み、描画時は一度ラスタ化して従来どおり Canvas に合成。PNG は `public/assets/tap-coloring/Splatter/splatter_XX.png` に配置（参照用・再生成用）。定義の再抽出: `node scripts/generate-splatter-vector-defs.mjs`
-- **額縁（エクスポート用）**: `public/assets/tap-coloring/Frame/frame_01.png`〜`03.png`
+- **線画 SVG（Canvas 用）**: `public/assets/tap-coloring/Pictures/SVG/Picture_*.svg` を `Image` で読み込み `drawImage`（拡大・回転でもボケにくい）
+  - どうぶつ `Picture_Animal_01`〜`12`（12）、やさい・くだもの `Picture_Produce_01`〜`10`（10）、のりもの `Picture_Vehicle_01`〜`12`（12）。計 **34**。従来 PNG は `Pictures/` に残置可
+- **スプラッター（インク粒）**: 質感維持のため **PNG** `public/assets/tap-coloring/Splatter/splatter_01.png`〜`09.png`。既塗り領域への重ねは乗算に近いブレンド後に色相ステップ
+- **額縁（エクスポート用）**: **SVG** `public/assets/tap-coloring/Frame/SVG/frame_01.svg`〜`03.svg`（`tapColoringExport.ts` の `FRAME_CONFIG`）
+- **書き出し**: `TAP_COLORING_EXPORT_SUPER_SCALE`（既定 2）で合成後に拡大焼き込み。WebP 対応端末は `image/webp`、それ以外は PNG
 
 ### 3.2 解像度・表示
 

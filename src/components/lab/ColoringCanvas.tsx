@@ -20,8 +20,11 @@ import {
   type TapColoringHistoryEntry,
   type TapColoringSwatch,
 } from "@/lib/tapColoringHistory";
-import { composeTapColoringExport, type TapColoringExportOptions } from "@/lib/tapColoringExport";
-import { SPLATTER_VECTOR_DEFS, rasterizeSplatterVectorDef } from "@/components/lab/splatter";
+import {
+  composeTapColoringExport,
+  FRAME_CONFIG,
+  type TapColoringExportOptions,
+} from "@/lib/tapColoringExport";
 
 export type { TapColoringSwatch } from "@/lib/tapColoringHistory";
 export type { TapColoringExportOptions } from "@/lib/tapColoringExport";
@@ -130,7 +133,8 @@ const SCAN_STRIDE = 2;
 /** マスク干渉切り分け用（true で枠外でも描ける） */
 const DEBUG_DISABLE_MASK = false;
 
-const SPLATTER_IMAGE_COUNT = SPLATTER_VECTOR_DEFS.length;
+const SPLATTER_IMAGE_COUNT = 9;
+const SPLATTER_PUBLIC_PREFIX = "/assets/tap-coloring/Splatter";
 const PICTURE_PUBLIC_PREFIX = "/assets/tap-coloring/Pictures";
 const ANIMAL_PICTURE_COUNT = 12;
 const PRODUCE_PICTURE_COUNT = 10;
@@ -194,7 +198,7 @@ function buildPictureAssets(
       id: `${category}-${code}`,
       label: `${labelPrefix} ${code}`,
       category,
-      src: `${PICTURE_PUBLIC_PREFIX}/Picture_${prefix}_${code}.png`,
+      src: `${PICTURE_PUBLIC_PREFIX}/SVG/Picture_${prefix}_${code}.svg`,
     };
   });
 }
@@ -1034,12 +1038,44 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     }
   }, []);
 
-  /** スプラッターは SVG 定義から一度ラスタ化（従来の tintSplatterToCanvas / drawImage 経路を維持） */
   useEffect(() => {
-    splatterImagesRef.current = SPLATTER_VECTOR_DEFS.map((def) =>
-      createInkOptimizedSplatterSource(rasterizeSplatterVectorDef(def)),
-    );
-    setSplatterImagesReady(true);
+    let cancelled = false;
+    const imgs: HTMLImageElement[] = [];
+    let pending = SPLATTER_IMAGE_COUNT;
+    const onDone = () => {
+      pending -= 1;
+      if (pending <= 0 && !cancelled) {
+        splatterImagesRef.current = imgs.map((im) => createInkOptimizedSplatterSource(im));
+        setSplatterImagesReady(true);
+      }
+    };
+    for (let i = 1; i <= SPLATTER_IMAGE_COUNT; i++) {
+      const im = new Image();
+      im.decoding = "async";
+      im.onload = onDone;
+      im.onerror = onDone;
+      im.src = `${SPLATTER_PUBLIC_PREFIX}/splatter_${String(i).padStart(2, "0")}.png`;
+      imgs.push(im);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** 額縁 SVG（エクスポート）と線画 SVG・スプラッター PNG を先読み */
+  useEffect(() => {
+    const urls: string[] = [
+      ...(["01", "02", "03"] as const).map((v) => FRAME_CONFIG[v].file),
+      ...Array.from({ length: SPLATTER_IMAGE_COUNT }, (_, j) => {
+        const i = j + 1;
+        return `${SPLATTER_PUBLIC_PREFIX}/splatter_${String(i).padStart(2, "0")}.png`;
+      }),
+    ];
+    for (const src of urls) {
+      const im = new Image();
+      im.decoding = "async";
+      im.src = src;
+    }
   }, []);
 
   useEffect(() => {
@@ -1265,6 +1301,7 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
     const imgs = splatterImagesRef.current;
     const img = imgs[Math.floor(Math.random() * SPLATTER_IMAGE_COUNT)];
     if (!img) return;
+    if (img instanceof HTMLImageElement && !img.complete) return;
     const { w: srcW, h: srcH } = splatterSourceSize(img);
     if (srcW < 1 || srcH < 1) return;
 
@@ -1335,8 +1372,18 @@ export const ColoringCanvas = forwardRef<ColoringCanvasHandle, ColoringCanvasPro
         data[i + 2] = selRgb.b;
         data[i + 3] = 255;
       } else {
-        // 既塗りは「前色→選択色方向」に1ステップ色相移動
-        const curIdx = nearestHueIndexFromRgb(data[i]!, data[i + 1]!, data[i + 2]!);
+        // 既塗り: 飛沫色と乗算ブレンドしてから色相ステップ（PNG 質感を馴染ませる）
+        const sr = splatData[i]!;
+        const sg = splatData[i + 1]!;
+        const sb = splatData[i + 2]!;
+        const k = Math.min(0.5, (sa / 255) * 0.42);
+        const mr = Math.min(255, Math.floor((data[i]! * Math.max(1, sr)) / 255));
+        const mg = Math.min(255, Math.floor((data[i + 1]! * Math.max(1, sg)) / 255));
+        const mb = Math.min(255, Math.floor((data[i + 2]! * Math.max(1, sb)) / 255));
+        const br = Math.round(data[i]! * (1 - k) + mr * k);
+        const bgc = Math.round(data[i + 1]! * (1 - k) + mg * k);
+        const bb = Math.round(data[i + 2]! * (1 - k) + mb * k);
+        const curIdx = nearestHueIndexFromRgb(br, bgc, bb);
         const nextIdx = hueStepAdaptive(curIdx, targetHueIdx);
         const next = FULL_PALETTE_RGB[nextIdx]!;
         data[i] = next.r;

@@ -14,9 +14,9 @@ import {
 import { PopPopBubblesScene, type PopPopBubblesBgPaletteMode } from "@/lib/pop-pop-bubbles/PopPopBubblesScene";
 
 const CONTENT_IMAGE_PATHS = [
-  ...Array.from({ length: 12 }, (_, i) => `/assets/tap-coloring/Pictures/Picture_Animal_${String(i + 1).padStart(2, "0")}.png`),
-  ...Array.from({ length: 10 }, (_, i) => `/assets/tap-coloring/Pictures/Picture_Produce_${String(i + 1).padStart(2, "0")}.png`),
-  ...Array.from({ length: 12 }, (_, i) => `/assets/tap-coloring/Pictures/Picture_Vehicle_${String(i + 1).padStart(2, "0")}.png`),
+  ...Array.from({ length: 12 }, (_, i) => `/assets/tap-coloring/Pictures/SVG/Picture_Animal_${String(i + 1).padStart(2, "0")}.svg`),
+  ...Array.from({ length: 10 }, (_, i) => `/assets/tap-coloring/Pictures/SVG/Picture_Produce_${String(i + 1).padStart(2, "0")}.svg`),
+  ...Array.from({ length: 12 }, (_, i) => `/assets/tap-coloring/Pictures/SVG/Picture_Vehicle_${String(i + 1).padStart(2, "0")}.svg`),
 ];
 
 function loadImage(src: string): Promise<HTMLImageElement> {

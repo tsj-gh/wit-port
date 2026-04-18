@@ -25,10 +25,16 @@ type TapColoringExportModalProps = {
   isLocked?: boolean;
 };
 
-function downloadDataUrlPng(dataUrl: string, filename: string) {
+function inferExportFile(dataUrl: string): { ext: string; mime: string } {
+  if (dataUrl.startsWith("data:image/webp")) return { ext: "webp", mime: "image/webp" };
+  return { ext: "png", mime: "image/png" };
+}
+
+function downloadDataUrl(dataUrl: string, filenameWithoutExt: string) {
+  const { ext } = inferExportFile(dataUrl);
   const a = document.createElement("a");
   a.href = dataUrl;
-  a.download = filename;
+  a.download = `${filenameWithoutExt}.${ext}`;
   a.rel = "noopener";
   document.body.appendChild(a);
   a.click();
@@ -167,8 +173,8 @@ export function TapColoringExportModal({
     }
     if (mode === "history" && historyEntry) {
       const safe = historyEntry.pictureId.replace(/[^\w-]+/g, "_");
-      downloadDataUrlPng(preview, `tap-coloring-${safe}-${historyEntry.createdAt}.png`);
-      onToast?.("PNGを保存しました");
+      downloadDataUrl(preview, `tap-coloring-${safe}-${historyEntry.createdAt}`);
+      onToast?.("画像を保存しました");
       onClose();
     }
   }, [preview, mode, historyEntry, coloringRef, onHistorySaved, onToast, onClose, isLocked]);
@@ -185,7 +191,8 @@ export function TapColoringExportModal({
     try {
       const res = await fetch(preview);
       const blob = await res.blob();
-      const file = new File([blob], "tap-coloring-wispo.png", { type: "image/png" });
+      const { ext, mime } = inferExportFile(preview);
+      const file = new File([blob], `tap-coloring-wispo.${ext}`, { type: mime });
       const text = shareMessage.trim() || defaultShareMessageBody();
       if (typeof navigator !== "undefined" && navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({
