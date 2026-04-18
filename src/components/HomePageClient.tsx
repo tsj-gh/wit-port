@@ -23,9 +23,9 @@ export function HomePageClient() {
       </header>
 
       <section className="pb-8 pt-2 text-center animate-fade-in-up-delay sm:pb-10 sm:pt-1">
-        <h1 className="mb-4 text-[clamp(30px,5vw,52px)] font-extrabold leading-tight bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)] bg-clip-text text-transparent sm:mb-5">
-          <span className="block">{t("home.heroTitleLine1")}</span>
-          <span className="block">{t("home.heroTitleLine2")}</span>
+        <h1 className="mb-4 text-2xl font-extrabold leading-tight bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)] bg-clip-text text-transparent max-[374px]:text-xl sm:mb-5 sm:text-3xl md:text-4xl xl:text-5xl 2xl:text-[3.25rem]">
+          <span className="block whitespace-nowrap">{t("home.heroTitleLine1")}</span>
+          <span className="inline-block whitespace-nowrap">{t("home.heroTitleLine2")}</span>
         </h1>
         <div className="mx-auto max-w-[600px] space-y-3 text-[clamp(15px,2vw,19px)] leading-snug text-[var(--color-muted)] sm:leading-relaxed">
           <p>{t("home.heroLine1")}</p>
