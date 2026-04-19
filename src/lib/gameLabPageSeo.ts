@@ -34,6 +34,11 @@ export const gameLabPageSeo = {
     description:
       "Reflec-Shot（リフレクショット）の知育効果と遊び方。空間推理と物理的予測を鍛えるための専門的な設計について解説します。",
   },
+  hiddenStack: {
+    title: "Hidden Stack（かくれつみき） | 直感と論理を育む知育パズル Wispo",
+    description:
+      "3D の積み木の死角を推測する Hidden Stack（かくれつみき）プロトタイプ。限定角度からの観察と空間推論を組み合わせた知育ラボ向け教材です。",
+  },
 } as const;
 
 export function gameLabAlternates(path: `/${string}`): Metadata["alternates"] {

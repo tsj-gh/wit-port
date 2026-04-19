@@ -260,6 +260,26 @@
         "mismatch": "パズルが一致しません。",
         "allFilled": "すべて埋まっています。"
       }
+    },
+    "hiddenStack": {
+      "titleJa": "かくれつみき",
+      "debugPanel": "かくれつみき DEBUG",
+      "debugMaterial": "積み木の質感",
+      "matA": "A 木目調",
+      "matB": "B セミグロス",
+      "matC": "C 曇りガラス風",
+      "debugCollapse": "崩壊パターン",
+      "pat1": "パターン1 爆発",
+      "pat2": "パターン2 崩落",
+      "pat3": "パターン3 煙",
+      "debugHiddenLabel": "この問題の死角ブロック数",
+      "debugNewRound": "新しい積み上げを生成",
+      "resultCorrect": "せいかい！{n}こ",
+      "resultWrong": "こたえ：{n}こ",
+      "submit": "こたえる！",
+      "nextRound": "つぎの問題",
+      "hintSwipe": "盤面をドラッグで左右に少し回転／下の列はタップで選んでスワイプでも数を変えられます",
+      "iconAria": "積み木{n}個までを選択"
     }
   },
   "educational": {

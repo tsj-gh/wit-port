@@ -4,7 +4,8 @@ type SupportedGameAppId =
   | "pair-link"
   | "pres-sure-judge"
   | "skyscraper"
-  | "reflec-shot";
+  | "reflec-shot"
+  | "hidden-stack";
 
 type GameJsonLdSeed = {
   name: string;
@@ -55,6 +56,13 @@ const GAME_JSONLD_SEEDS: Record<SupportedGameAppId, GameJsonLdSeed> = {
     description:
       "反射規則と軌道予測を扱う物理シミュレーション型課題として構成し、空間推理、系列保持、戦略更新を段階的に鍛える知育ラボです。直感的な操作と記号的な判断を往復させることで、予測精度と認知的柔軟性の向上を支えます。",
     featureList: ["物理シミュレーション", "空間推理", "軌道予測", "戦略更新", "系列保持"],
+  },
+  "hidden-stack": {
+    name: "Hidden Stack（かくれつみき）",
+    path: "/lab/hidden-stack",
+    description:
+      "3×3×3 の積み木を限定視点から観察し、死角に隠れた立方体の個数を推測する空間課題です。落下演出と物理フィードバックを通じて、遮蔽関係の想像と検証のサイクルを促します。",
+    featureList: ["空間推理", "遮蔽と可視性", "数量推定", "物理フィードバック", "試行と検証"],
   },
 };
 

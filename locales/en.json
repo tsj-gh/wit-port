@@ -260,6 +260,26 @@
         "mismatch": "Puzzle mismatch.",
         "allFilled": "Every cell is already filled."
       }
+    },
+    "hiddenStack": {
+      "titleJa": "かくれつみき",
+      "debugPanel": "Hidden Stack DEBUG",
+      "debugMaterial": "Block material",
+      "matA": "A Wood tone",
+      "matB": "B Semi-gloss plastic",
+      "matC": "C Frosted glass",
+      "debugCollapse": "Collapse pattern",
+      "pat1": "Pattern 1 Burst",
+      "pat2": "Pattern 2 Collapse",
+      "pat3": "Pattern 3 Smoke",
+      "debugHiddenLabel": "Hidden blocks (this round)",
+      "debugNewRound": "Generate new stack",
+      "resultCorrect": "Correct! {n} hidden.",
+      "resultWrong": "Answer: {n} hidden.",
+      "submit": "Answer!",
+      "nextRound": "Next puzzle",
+      "hintSwipe": "Drag the board to rotate slightly; tap blocks below or swipe to change your count.",
+      "iconAria": "Select up to {n} blocks"
     }
   },
   "educational": {
