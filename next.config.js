@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "export",
+  // 静的書き出しでは Next の画像最適化 API が使えないため必須（CDN 側の最適化と併用可）
   images: {
     unoptimized: true,
     formats: ["image/avif", "image/webp"],
@@ -40,7 +41,12 @@ const nextConfig = {
       minute: "2-digit",
       second: "2-digit",
     }),
-    NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA: (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 7),
+    /** Vercel / Cloudflare Pages いずれでも先頭7桁を表示用に埋める */
+    NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA: (
+      process.env.VERCEL_GIT_COMMIT_SHA ||
+      process.env.CF_PAGES_COMMIT_SHA ||
+      ""
+    ).slice(0, 7),
   },
 };
 
