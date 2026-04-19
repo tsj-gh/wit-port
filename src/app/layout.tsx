@@ -40,6 +40,12 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <head>
+        {/* Cloudflare Pages の *.pages.dev 上ではクロール抑止（Vercel 本番と重複インデックス回避） */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var h=location.hostname.toLowerCase();if(h!=="wispo.pages.dev"&&!h.endsWith(".pages.dev"))return;if(document.querySelector('meta[name="robots"][data-wispo-cf-pages-noindex]'))return;var m=document.createElement("meta");m.setAttribute("name","robots");m.setAttribute("content","noindex, nofollow");m.setAttribute("data-wispo-cf-pages-noindex","1");document.head.appendChild(m);}catch(e){}})();`,
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(wispoSoftwareApplicationJsonLd) }}
