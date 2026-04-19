@@ -92,10 +92,10 @@ function diagonalScanOrder(gridSize: number): HeightPoint[] {
 
 /**
  * 壁による奥側の遮蔽禁止:
- * x0 > n かつ y0 > n のすべての n>0 について Zn > z0-n を満たす。
+ * x0 ≧ n かつ y0 ≧ n を満たすすべての n>0 について Zn > z0-n を満たす。
  */
 function satisfiesOcclusionRule(heights: number[][], x0: number, y0: number, z0: number): boolean {
-  for (let n = 1; x0 > n && y0 > n; n++) {
+  for (let n = 1; x0 >= n && y0 >= n; n++) {
     const zn = heights[x0 - n][y0 - n];
     if (!(zn > z0 - n)) return false;
   }
@@ -107,18 +107,18 @@ function satisfiesOcclusionRule(heights: number[][], x0: number, y0: number, z0:
  */
 function drawHeightWithRetry(rng: () => number, heights: number[][], x: number, y: number, gridSize: number): number {
   for (let attempt = 0; attempt < 80; attempt++) {
-    const z0 = randomIntInclusive(rng, 1, gridSize);
+    const z0 = randomIntInclusive(rng, 0, gridSize);
     if (satisfiesOcclusionRule(heights, x, y, z0)) return z0;
   }
 
   // リトライ上限に達した場合、条件を満たす上限を解析してそこから再抽選。
   let maxAllowed = gridSize;
-  for (let n = 1; x > n && y > n; n++) {
+  for (let n = 1; x >= n && y >= n; n++) {
     const zn = heights[x - n][y - n];
     maxAllowed = Math.min(maxAllowed, zn + n - 1);
   }
-  const capped = Math.max(1, maxAllowed);
-  return randomIntInclusive(rng, 1, capped);
+  const capped = Math.max(0, maxAllowed);
+  return randomIntInclusive(rng, 0, capped);
 }
 
 function buildColumnHeights(rng: () => number, gridSize: number): number[][] {
