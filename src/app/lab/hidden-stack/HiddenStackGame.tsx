@@ -1,17 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
-import {
-  GAME_AD_GAP_AFTER_SLOT_1_PX,
-  GAME_AD_GAP_BEFORE_SLOT_2_PX,
-  GAME_COLUMN_CLASS,
-  GAME_TOP_AD_RESERVED_PX,
-} from "@/lib/gameLayout";
+import { GAME_AD_GAP_AFTER_SLOT_1_PX, GAME_AD_GAP_BEFORE_SLOT_2_PX, GAME_COLUMN_CLASS } from "@/lib/gameLayout";
 import { generateHiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { useI18n } from "@/lib/i18n-context";
 import type { BlockMaterialVariant, CollapsePatternId, GoldLumpParams } from "./HiddenStackCanvas";
@@ -186,7 +181,7 @@ export default function HiddenStackGame() {
 
   return (
     <div
-      className={`relative isolate flex min-h-0 w-full flex-[1_1_0%] flex-col ${GAME_COLUMN_CLASS} lg:mx-auto lg:w-full lg:max-w-none`}
+      className={`relative isolate flex h-full min-h-0 w-full flex-1 flex-col ${GAME_COLUMN_CLASS} lg:mx-auto lg:w-full lg:max-w-none`}
     >
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-24 z-50">
@@ -370,12 +365,11 @@ export default function HiddenStackGame() {
         </div>
       )}
 
-      <GamePageHeader titleEn="Hidden Stack" titleJa={t("games.hiddenStack.titleJa")} />
+      <div className="shrink-0">
+        <GamePageHeader titleEn="Hidden Stack" titleJa={t("games.hiddenStack.titleJa")} />
+      </div>
 
-      <div
-        className="flex min-h-0 w-full flex-1 flex-col lg:min-h-0 lg:max-h-[calc(100dvh-var(--hs-top-ad-reserved)-88px)] lg:overflow-hidden"
-        style={{ "--hs-top-ad-reserved": `${GAME_TOP_AD_RESERVED_PX}px` } as CSSProperties}
-      >
+      <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
         <div
           ref={topAdRef}
           className="order-3 mt-3 w-full shrink-0 lg:order-1 lg:mt-0"
@@ -489,7 +483,7 @@ export default function HiddenStackGame() {
             </section>
           </div>
 
-          <aside className="order-2 w-full shrink-0 lg:sticky lg:top-0 lg:flex lg:max-h-[calc(100dvh-var(--hs-top-ad-reserved)-88px)] lg:min-h-0 lg:w-[min(360px,35%)] lg:max-w-[35%] lg:flex-[0_0_auto] lg:flex-col lg:self-start lg:overflow-y-auto">
+          <aside className="order-2 w-full shrink-0 lg:flex lg:min-h-0 lg:w-[min(360px,35%)] lg:max-w-[35%] lg:flex-[0_0_auto] lg:flex-col lg:self-stretch lg:overflow-y-auto">
             <div className="mt-1 flex w-full flex-col gap-2 lg:mt-0">
               <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)] lg:hidden">
                 <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
