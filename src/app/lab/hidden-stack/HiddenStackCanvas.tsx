@@ -21,15 +21,23 @@ type HiddenStackCanvasProps = {
   feedbackKey: number;
 };
 
-const LOOK = new THREE.Vector3(1.5, 1.5, 1.5);
+function lookAtForGrid(gridSize: number): THREE.Vector3 {
+  const c = gridSize / 2;
+  return new THREE.Vector3(c, c, c);
+}
 
-function RigCamera({ twistDeg }: { twistDeg: number }) {
+function cameraRadiusForGrid(gridSize: number): number {
+  return gridSize * 3.1;
+}
+
+function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number }) {
   const { camera } = useThree();
+  const look = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
   useFrame(() => {
-    const p = cameraPositionForTwist(twistDeg, 9.35, 35, 48, LOOK);
+    const p = cameraPositionForTwist(twistDeg, cameraRadiusForGrid(gridSize), 35, 48, look);
     camera.position.copy(p);
     camera.up.set(0, 1, 0);
-    camera.lookAt(LOOK);
+    camera.lookAt(look);
   });
   return null;
 }
@@ -54,17 +62,17 @@ function BlockMaterial({ variant }: { variant: BlockMaterialVariant }) {
   );
 }
 
-function FloorGrid() {
+function FloorGrid({ gridSize }: { gridSize: number }) {
   const pts: THREE.Vector3[] = [];
-  for (let i = 0; i <= 3; i++) {
-    pts.push(new THREE.Vector3(i, 0.002, 0), new THREE.Vector3(i, 0.002, 3));
-    pts.push(new THREE.Vector3(0, 0.002, i), new THREE.Vector3(3, 0.002, i));
+  for (let i = 0; i <= gridSize; i++) {
+    pts.push(new THREE.Vector3(i, 0.002, 0), new THREE.Vector3(i, 0.002, gridSize));
+    pts.push(new THREE.Vector3(0, 0.002, i), new THREE.Vector3(gridSize, 0.002, i));
   }
   return (
     <group>
       <Line points={pts} color="#9ca3af" lineWidth={1} dashed={false} transparent opacity={0.45} />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[1.5, 0, 1.5]}>
-        <planeGeometry args={[3.2, 3.2]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[gridSize / 2, 0, gridSize / 2]}>
+        <planeGeometry args={[gridSize + 0.24, gridSize + 0.24]} />
         <meshStandardMaterial color="#e8e4dc" roughness={0.95} metalness={0} transparent opacity={0.92} />
       </mesh>
     </group>
@@ -81,10 +89,12 @@ function IntroBlocks({
   cells,
   materialVariant,
   onDone,
+  gridSize,
 }: {
   cells: { key: string; center: THREE.Vector3 }[];
   materialVariant: BlockMaterialVariant;
   onDone: () => void;
+  gridSize: number;
 }) {
   const doneRef = useRef(false);
   const startRef = useRef<number | null>(null);
@@ -95,10 +105,12 @@ function IntroBlocks({
         const h = hash01(key);
         const stagger = h * 0.55 + (parseKey(key).z * 0.08 + parseKey(key).x * 0.02);
         const dropExtra = (h - 0.5) * 0.35;
-        const start = center.clone().add(new THREE.Vector3((h - 0.5) * 0.4, 5.5 + dropExtra, (hash01(key + "z") - 0.5) * 0.5));
+        const start = center
+          .clone()
+          .add(new THREE.Vector3((h - 0.5) * 0.4, gridSize * 1.7 + 0.4 + dropExtra, (hash01(key + "z") - 0.5) * 0.5));
         return { key, center, stagger, start };
       }),
-    [cells]
+    [cells, gridSize]
   );
 
   const groupRefs = useRef<Map<string, THREE.Group>>(new Map());
@@ -297,12 +309,14 @@ function FeedbackScene({
   puzzle,
   materialVariant,
   pattern,
+  gridSize,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
   pattern: CollapsePatternId;
+  gridSize: number;
 }) {
-  const center = useMemo(() => new THREE.Vector3(1.5, 1.5, 1.5), []);
+  const center = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
   const impulses = useMemo(() => {
     const out: { key: string; impulse: [number, number, number]; torque: [number, number, number]; pos: [number, number, number] }[] = [];
     for (const k of Array.from(puzzle.visibleKeys)) {
@@ -370,6 +384,7 @@ export default function HiddenStackCanvas({
   onIntroComplete,
   feedbackKey,
 }: HiddenStackCanvasProps) {
+  const gridSize = puzzle.gridSize;
   const cells = useMemo(
     () => puzzle.cells.map((c) => ({ key: cellKey(c), center: cellCenter(c) })),
     [puzzle.cells]
@@ -385,17 +400,17 @@ export default function HiddenStackCanvas({
       shadows
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: false }}
-      camera={{ fov: 39, near: 0.1, far: 80 }}
+      camera={{ fov: 37, near: 0.1, far: 120 }}
     >
       <color attach="background" args={["#f1f5f9"]} />
       <Lights />
-      <RigCamera twistDeg={twistDeg} />
-      <FloorGrid />
-      {phase === "intro" && <IntroBlocks cells={cells} materialVariant={materialVariant} onDone={onIntroDone} />}
+      <RigCamera twistDeg={twistDeg} gridSize={gridSize} />
+      <FloorGrid gridSize={gridSize} />
+      {phase === "intro" && <IntroBlocks cells={cells} materialVariant={materialVariant} onDone={onIntroDone} gridSize={gridSize} />}
       {phase === "think" && <ThinkBlocks cells={cells} materialVariant={materialVariant} />}
       {phase === "feedback" && (
         <Physics key={feedbackKey} gravity={[0, -16, 0]} defaultContactMaterial={{ friction: 0.6, restitution: 0.12 }}>
-          <FeedbackScene puzzle={puzzle} materialVariant={materialVariant} pattern={collapsePattern} />
+          <FeedbackScene puzzle={puzzle} materialVariant={materialVariant} pattern={collapsePattern} gridSize={gridSize} />
         </Physics>
       )}
     </Canvas>

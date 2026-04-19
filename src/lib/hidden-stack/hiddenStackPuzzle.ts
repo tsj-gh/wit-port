@@ -2,6 +2,25 @@ import * as THREE from "three";
 
 export type GridCell = { x: number; y: number; z: number };
 
+type HeightPoint = { x: number; y: number };
+
+export type HiddenStackPuzzle = {
+  gridSize: number;
+  columnHeights: number[][];
+  cells: GridCell[];
+  occupiedKeys: Set<string>;
+  hiddenKeys: Set<string>;
+  visibleKeys: Set<string>;
+  hiddenCount: number;
+  seed: string;
+};
+
+export type HiddenStackGenOptions = {
+  gridSize?: number;
+  minHidden?: number;
+  maxHidden?: number;
+};
+
 const DEG = Math.PI / 180;
 
 export function cellKey(c: GridCell): string {
@@ -14,7 +33,15 @@ export function parseKey(k: string): GridCell {
 }
 
 /**
- * 重力方向（Three.js の +Y／パズル index の z）に沿った柱状支え:
+ * 立方体中心。
+ * パズルの z を鉛直（Three.js +Y）として写像し、重力と一致させる。
+ */
+export function cellCenter(c: GridCell): THREE.Vector3 {
+  return new THREE.Vector3(c.x + 0.5, c.z + 0.5, c.y + 0.5);
+}
+
+/**
+ * 重力方向（z）に沿った柱状支え:
  * 各 (x,y,z) に立方体があるとき、真下 (x,y,z-1) にも立方体がある（z=0 は床が支える）。
  */
 export function hasColumnSupport(occupied: Set<string>): boolean {
@@ -26,94 +53,130 @@ export function hasColumnSupport(occupied: Set<string>): boolean {
   return true;
 }
 
-/** 生成直後の検証用。柱状支え＋各列が床 z=0 に届いていること。 */
-export function validateGravityStack(occupied: Set<string>): boolean {
-  if (!hasColumnSupport(occupied)) return false;
-  for (const k of Array.from(occupied)) {
-    const { x, y } = parseKey(k);
-    if (!occupied.has(`${x},${y},0`)) return false;
-  }
-  return true;
+function mulberry32(seed: number) {
+  return function () {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-function shuffleInPlace<T>(arr: T[], rng: () => number): void {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
+function hashSeed(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) >>> 0;
+  return h || 1;
+}
+
+function randomIntInclusive(rng: () => number, min: number, max: number): number {
+  return min + Math.floor(rng() * (max - min + 1));
 }
 
 /**
- * 立方体中心。グリッド 0..2。
- * パズルの **z を鉛直（Three.js +Y）**、x を +X、パズルの y を +Z に写像し、重力と柱状支えを一致させる。
+ * 対角線スキャン順:
+ * (0,0) → (1,0),(0,1) → ... → (G-1,G-1)
  */
-export function cellCenter(c: GridCell): THREE.Vector3 {
-  return new THREE.Vector3(c.x + 0.5, c.z + 0.5, c.y + 0.5);
-}
-
-const boxHalf = new THREE.Vector3(0.5, 0.5, 0.5);
-
-/**
- * レイが AABB と t ∈ (tMin, tMax) で交差するか（スラブ法）。
- * dir は正規化推奨。
- */
-export function rayIntersectsAabb(
-  origin: THREE.Vector3,
-  dir: THREE.Vector3,
-  center: THREE.Vector3,
-  halfExtents: THREE.Vector3,
-  tMin: number,
-  tMax: number
-): boolean {
-  let t0 = tMin;
-  let t1 = tMax;
-  for (let a = 0; a < 3; a++) {
-    const o = origin.getComponent(a);
-    const d = dir.getComponent(a);
-    const c = center.getComponent(a);
-    const h = halfExtents.getComponent(a);
-    const min = c - h;
-    const max = c + h;
-    if (Math.abs(d) < 1e-8) {
-      if (o < min || o > max) return false;
-    } else {
-      const inv = 1 / d;
-      let tNear = (min - o) * inv;
-      let tFar = (max - o) * inv;
-      if (tNear > tFar) [tNear, tFar] = [tFar, tNear];
-      t0 = Math.max(t0, tNear);
-      t1 = Math.min(t1, tFar);
-      if (t0 > t1) return false;
+function diagonalScanOrder(gridSize: number): HeightPoint[] {
+  const order: HeightPoint[] = [];
+  for (let s = 0; s <= 2 * (gridSize - 1); s++) {
+    const xMax = Math.min(s, gridSize - 1);
+    const xMin = Math.max(0, s - (gridSize - 1));
+    for (let x = xMax; x >= xMin; x--) {
+      const y = s - x;
+      order.push({ x, y });
     }
+  }
+  return order;
+}
+
+/**
+ * 壁による奥側の遮蔽禁止:
+ * x0 > n かつ y0 > n のすべての n>0 について Zn > z0-n を満たす。
+ */
+function satisfiesOcclusionRule(heights: number[][], x0: number, y0: number, z0: number): boolean {
+  for (let n = 1; x0 > n && y0 > n; n++) {
+    const zn = heights[x0 - n][y0 - n];
+    if (!(zn > z0 - n)) return false;
   }
   return true;
 }
 
 /**
- * カメラから target へのセグメント上で、target 以外のいずれかの立方体が先にレイを遮るか。
+ * 高さ z0（積み数）をランダム抽選し、条件を満たすまで再抽選する。
  */
-export function isOccludedFromCamera(
-  cameraPos: THREE.Vector3,
-  target: GridCell,
-  occupied: Set<string>,
-  eps = 1e-3
-): boolean {
-  const targetCenter = cellCenter(target);
-  const dir = targetCenter.clone().sub(cameraPos);
-  const dist = dir.length();
-  if (dist < 1e-6) return false;
-  dir.multiplyScalar(1 / dist);
-  const tHitTarget = dist - 0.02; // わずかに手前まで
+function drawHeightWithRetry(rng: () => number, heights: number[][], x: number, y: number, gridSize: number): number {
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const z0 = randomIntInclusive(rng, 1, gridSize);
+    if (satisfiesOcclusionRule(heights, x, y, z0)) return z0;
+  }
 
-  for (const k of Array.from(occupied)) {
-    const c = parseKey(k);
-    if (c.x === target.x && c.y === target.y && c.z === target.z) continue;
-    const center = cellCenter(c);
-    if (rayIntersectsAabb(cameraPos, dir, center, boxHalf, eps, tHitTarget)) {
-      return true;
+  // リトライ上限に達した場合、条件を満たす上限を解析してそこから再抽選。
+  let maxAllowed = gridSize;
+  for (let n = 1; x > n && y > n; n++) {
+    const zn = heights[x - n][y - n];
+    maxAllowed = Math.min(maxAllowed, zn + n - 1);
+  }
+  const capped = Math.max(1, maxAllowed);
+  return randomIntInclusive(rng, 1, capped);
+}
+
+function buildColumnHeights(rng: () => number, gridSize: number): number[][] {
+  const heights = Array.from({ length: gridSize }, () => Array<number>(gridSize).fill(0));
+  const order = diagonalScanOrder(gridSize);
+  for (const p of order) {
+    heights[p.x][p.y] = drawHeightWithRetry(rng, heights, p.x, p.y, gridSize);
+  }
+  return heights;
+}
+
+function buildOccupiedByHeights(heights: number[][]): Set<string> {
+  const gridSize = heights.length;
+  const occupied = new Set<string>();
+  for (let x = 0; x < gridSize; x++) {
+    for (let y = 0; y < gridSize; y++) {
+      const z0 = heights[x][y];
+      for (let z = 0; z < z0; z++) {
+        occupied.add(cellKey({ x, y, z }));
+      }
     }
   }
-  return false;
+  return occupied;
+}
+
+/**
+ * 仕様 3.5 の死角定義:
+ * 真上(z+1), カメラ側 x+1, カメラ側 y+1 の3方向がすべて埋まる個体のみ死角。
+ */
+export function computeHiddenCellsByRule(occupied: Set<string>): { hidden: Set<string>; visible: Set<string> } {
+  const hidden = new Set<string>();
+  const visible = new Set<string>();
+  for (const k of Array.from(occupied)) {
+    const { x, y, z } = parseKey(k);
+    const occludedZ = occupied.has(`${x},${y},${z + 1}`);
+    const occludedX = occupied.has(`${x + 1},${y},${z}`);
+    const occludedY = occupied.has(`${x},${y + 1},${z}`);
+    if (occludedZ && occludedX && occludedY) hidden.add(k);
+    else visible.add(k);
+  }
+  return { hidden, visible };
+}
+
+function buildPuzzleFromHeights(heights: number[][], seed: string): HiddenStackPuzzle {
+  const occupied = buildOccupiedByHeights(heights);
+  const { hidden, visible } = computeHiddenCellsByRule(occupied);
+  const cells = Array.from(occupied).map(parseKey);
+  cells.sort((a, b) => (a.z - b.z) * 10000 + (a.y - b.y) * 100 + (a.x - b.x));
+
+  return {
+    gridSize: heights.length,
+    columnHeights: heights,
+    cells,
+    occupiedKeys: occupied,
+    hiddenKeys: hidden,
+    visibleKeys: visible,
+    hiddenCount: hidden.size,
+    seed,
+  };
 }
 
 export function cameraPositionForTwist(
@@ -132,136 +195,34 @@ export function cameraPositionForTwist(
   return new THREE.Vector3(x, y, z);
 }
 
-const TWIST_SAMPLES_DEG = [-15, -10, -5, 0, 5, 10, 15];
+export function generateHiddenStackPuzzle(seedStr: string, options: HiddenStackGenOptions = {}): HiddenStackPuzzle {
+  const gridSize = Math.max(3, Math.min(6, Math.floor(options.gridSize ?? 3)));
+  const minHidden = Math.max(1, options.minHidden ?? 1);
+  const maxHidden = Math.max(minHidden, options.maxHidden ?? 10);
+  const rng = mulberry32(hashSeed(seedStr));
 
-/**
- * 死角定義: ユーザーが Z 軸（Three では Y 軸）周りに ±15° だけ回したときの
- * いずれの角度からも立方体中心への視線が他ブロックに遮られないことが一度も無い。
- */
-export function computeHiddenCells(
-  occupied: Set<string>,
-  lookAt = new THREE.Vector3(1.5, 1.5, 1.5),
-  camRadius = 9.35,
-  elevDeg = 35,
-  baseAzimDeg = 48
-): { hidden: Set<string>; visible: Set<string> } {
-  const hidden = new Set<string>();
-  const visible = new Set<string>();
-  for (const k of Array.from(occupied)) {
-    const cell = parseKey(k);
-    let everSeen = false;
-    for (const twist of TWIST_SAMPLES_DEG) {
-      const cam = cameraPositionForTwist(twist, camRadius, elevDeg, baseAzimDeg, lookAt);
-      if (!isOccludedFromCamera(cam, cell, occupied)) {
-        everSeen = true;
-        break;
-      }
+  let best: HiddenStackPuzzle | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (let attempt = 0; attempt < 640; attempt++) {
+    const heights = buildColumnHeights(rng, gridSize);
+    const candidate = buildPuzzleFromHeights(heights, `${seedStr}:${attempt}`);
+    const score =
+      candidate.hiddenCount < minHidden
+        ? minHidden - candidate.hiddenCount
+        : candidate.hiddenCount > maxHidden
+          ? candidate.hiddenCount - maxHidden
+          : 0;
+
+    if (score < bestScore) {
+      best = candidate;
+      bestScore = score;
     }
-    if (everSeen) visible.add(k);
-    else hidden.add(k);
-  }
-  return { hidden, visible };
-}
-
-export type HiddenStackPuzzle = {
-  cells: GridCell[];
-  occupiedKeys: Set<string>;
-  hiddenKeys: Set<string>;
-  visibleKeys: Set<string>;
-  hiddenCount: number;
-  seed: string;
-};
-
-function mulberry32(a: number) {
-  return function () {
-    let t = (a += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function randomOccupied(rng: () => number): Set<string> {
-  const all: GridCell[] = [];
-  for (let x = 0; x < 3; x++) {
-    for (let y = 0; y < 3; y++) {
-      for (let z = 0; z < 3; z++) {
-        all.push({ x, y, z });
-      }
-    }
-  }
-  const upper = all.filter((c) => c.z > 0);
-  shuffleInPlace(upper, rng);
-
-  let occupied = new Set<string>(all.map(cellKey));
-
-  for (const c of upper) {
-    if (rng() > 0.32) continue;
-    const k = cellKey(c);
-    const next = new Set(occupied);
-    next.delete(k);
-    if (hasColumnSupport(next)) occupied = next;
+    if (score === 0) return candidate;
   }
 
-  shuffleInPlace(upper, rng);
-  for (const c of upper) {
-    if (rng() > 0.5) continue;
-    const k = cellKey(c);
-    if (!occupied.has(k)) continue;
-    const next = new Set(occupied);
-    next.delete(k);
-    if (hasColumnSupport(next)) occupied = next;
-  }
+  if (best) return best;
 
-  if (!validateGravityStack(occupied)) {
-    return new Set<string>(all.map(cellKey));
-  }
-  return occupied;
-}
-
-export function generateHiddenStackPuzzle(seedStr: string): HiddenStackPuzzle {
-  let h = 0;
-  for (let i = 0; i < seedStr.length; i++) h = (h * 31 + seedStr.charCodeAt(i)) >>> 0;
-  const rng = mulberry32(h || 1);
-
-  const minH = 1;
-  const maxH = 8;
-
-  for (let attempt = 0; attempt < 320; attempt++) {
-    const occ = randomOccupied(rng);
-    if (!validateGravityStack(occ)) continue;
-    const { hidden, visible } = computeHiddenCells(occ);
-    if (hidden.size >= minH && hidden.size <= maxH) {
-      const cells = Array.from(occ).map(parseKey);
-      cells.sort((a, b) => (a.z - b.z) * 100 + (a.y - b.y) * 10 + (a.x - b.x));
-      return {
-        cells,
-        occupiedKeys: occ,
-        hiddenKeys: hidden,
-        visibleKeys: visible,
-        hiddenCount: hidden.size,
-        seed: `${seedStr}:${attempt}`,
-      };
-    }
-  }
-
-  const occ = new Set<string>();
-  for (let x = 0; x < 3; x++) {
-    for (let y = 0; y < 3; y++) {
-      for (let z = 0; z < 3; z++) {
-        occ.add(cellKey({ x, y, z }));
-      }
-    }
-  }
-  const { hidden, visible } = computeHiddenCells(occ);
-  const cellsFb = Array.from(occ).map(parseKey);
-  cellsFb.sort((a, b) => (a.z - b.z) * 100 + (a.y - b.y) * 10 + (a.x - b.x));
-  return {
-    cells: cellsFb,
-    occupiedKeys: occ,
-    hiddenKeys: hidden,
-    visibleKeys: visible,
-    hiddenCount: hidden.size,
-    seed: `${seedStr}:fallback`,
-  };
+  const fallbackHeights = Array.from({ length: gridSize }, () => Array<number>(gridSize).fill(1));
+  return buildPuzzleFromHeights(fallbackHeights, `${seedStr}:fallback`);
 }

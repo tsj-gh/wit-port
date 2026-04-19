@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
@@ -23,11 +23,12 @@ export default function HiddenStackGame() {
   const isDevTj = searchParams.get("devtj") === "true";
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState(true);
+  const [gridSize, setGridSize] = useState(3);
 
   const [materialVariant, setMaterialVariant] = useState<BlockMaterialVariant>("A");
   const [collapsePattern, setCollapsePattern] = useState<CollapsePatternId>(1);
 
-  const [puzzle, setPuzzle] = useState(() => generateHiddenStackPuzzle(`${Date.now()}`));
+  const [puzzle, setPuzzle] = useState(() => generateHiddenStackPuzzle(`${Date.now()}`, { gridSize: 3 }));
   const [phase, setPhase] = useState<Phase>("intro");
   const [twistDeg, setTwistDeg] = useState(0);
   const [selectedN, setSelectedN] = useState(4);
@@ -42,14 +43,25 @@ export default function HiddenStackGame() {
     stripPointerDownRef.current = false;
   }, [phase]);
 
-  const newRound = useCallback(() => {
-    setPuzzle(generateHiddenStackPuzzle(`${Date.now()}:${Math.random().toString(36).slice(2)}`));
+  const answerSlots = useMemo(() => {
+    return Math.max(ICON_SLOTS, Math.min(24, puzzle.hiddenCount + 4));
+  }, [puzzle.hiddenCount]);
+
+  const newRound = useCallback((nextGridSize?: number) => {
+    const g = nextGridSize ?? gridSize;
+    const next = generateHiddenStackPuzzle(`${Date.now()}:${Math.random().toString(36).slice(2)}`, { gridSize: g });
+    setPuzzle(next);
+    if (nextGridSize != null) setGridSize(g);
     setPhase("intro");
     setTwistDeg(0);
-    setSelectedN(4);
+    setSelectedN(Math.max(1, Math.min(answerSlots, Math.floor((next.hiddenCount + 1) / 2))));
     setResultLine(null);
     setFeedbackKey((k) => k + 1);
-  }, []);
+  }, [answerSlots, gridSize]);
+
+  useEffect(() => {
+    setSelectedN((n) => Math.max(1, Math.min(answerSlots, n)));
+  }, [answerSlots]);
 
   const onIntroComplete = useCallback(() => {
     setPhase("think");
@@ -93,12 +105,12 @@ export default function HiddenStackGame() {
       const r = el.getBoundingClientRect();
       if (r.width <= 1) return;
       const x = clientX - r.left;
-      const slotW = r.width / ICON_SLOTS;
+      const slotW = r.width / answerSlots;
       let i = Math.floor(x / slotW);
-      i = Math.max(0, Math.min(ICON_SLOTS - 1, i));
+      i = Math.max(0, Math.min(answerSlots - 1, i));
       setSelectedN(i + 1);
     },
-    [phase]
+    [answerSlots, phase]
   );
 
   const onStripPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -202,6 +214,24 @@ export default function HiddenStackGame() {
                   ))}
                 </div>
               </div>
+              <div>
+                <div className="mb-1 font-semibold text-[var(--color-text)]">
+                  {t("games.hiddenStack.debugGridSize")}: <span className="tabular-nums">{gridSize}</span>
+                </div>
+                <input
+                  type="range"
+                  min={3}
+                  max={6}
+                  step={1}
+                  value={gridSize}
+                  onChange={(e) => {
+                    const g = Number(e.target.value);
+                    if (!Number.isFinite(g)) return;
+                    newRound(Math.max(3, Math.min(6, Math.floor(g))));
+                  }}
+                  className="w-full accent-[var(--color-primary)]"
+                />
+              </div>
               <div className="rounded border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_05%,var(--color-bg))] px-2 py-1.5 text-[var(--color-text)]">
                 {t("games.hiddenStack.debugHiddenLabel")}: <span className="font-bold tabular-nums text-[var(--color-primary)]">{puzzle.hiddenCount}</span>
               </div>
@@ -247,23 +277,23 @@ export default function HiddenStackGame() {
         </div>
       </div>
 
-      <div className="z-40 mt-auto shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 backdrop-blur-md">
-        <div className={`${GAME_COLUMN_CLASS} mx-auto flex max-w-[520px] flex-col gap-3`}>
-          <div className="relative flex min-h-[88px] items-center justify-center sm:min-h-[100px]">
-            <span className="pointer-events-none select-none text-6xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.22] sm:text-7xl">
+      <div className="z-40 mt-auto shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),10px)] pt-2 backdrop-blur-md">
+        <div className={`${GAME_COLUMN_CLASS} mx-auto flex max-w-[520px] flex-col gap-2`}>
+          <div className="relative flex min-h-[54px] items-center justify-center sm:min-h-[62px]">
+            <span className="pointer-events-none select-none text-5xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.22] sm:text-6xl">
               {selectedN}
             </span>
-            <span className="absolute text-5xl font-black tabular-nums text-[var(--color-text)] drop-shadow-sm sm:text-6xl">{selectedN}</span>
+            <span className="absolute text-4xl font-black tabular-nums text-[var(--color-text)] drop-shadow-sm sm:text-5xl">{selectedN}</span>
           </div>
           <div
             ref={stripRef}
             role="slider"
             aria-valuemin={1}
-            aria-valuemax={ICON_SLOTS}
+            aria-valuemax={answerSlots}
             aria-valuenow={selectedN}
-            aria-label={t("games.hiddenStack.sliderAria")}
-            className={`mx-auto grid w-full max-w-[min(100%,400px)] touch-none select-none grid-cols-10 gap-1 sm:gap-2 ${phase === "feedback" ? "pointer-events-none opacity-45" : ""}`}
-            style={{ touchAction: "none" }}
+            aria-label={t("games.hiddenStack.sliderAria").replace("{max}", String(answerSlots))}
+            className={`mx-auto grid w-full max-w-[min(100%,420px)] touch-none select-none gap-1 sm:gap-1.5 ${phase === "feedback" ? "pointer-events-none opacity-45" : ""}`}
+            style={{ touchAction: "none", gridTemplateColumns: `repeat(${answerSlots}, minmax(0,1fr))` }}
             onPointerDown={onStripPointerDown}
             onPointerMove={onStripPointerMove}
             onPointerUp={onStripPointerEnd}
@@ -272,20 +302,20 @@ export default function HiddenStackGame() {
               stripPointerDownRef.current = false;
             }}
           >
-            {Array.from({ length: ICON_SLOTS }, (_, i) => {
+            {Array.from({ length: answerSlots }, (_, i) => {
               const n = i + 1;
               const lit = n <= selectedN;
               return (
                 <div
                   key={n}
-                  className={`flex h-12 min-w-0 flex-col items-center justify-end rounded-lg border-2 transition-colors sm:h-14 ${
+                  className={`flex h-10 min-w-0 flex-col items-center justify-end rounded-lg border-2 transition-colors sm:h-11 ${
                     lit
                       ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_22%,var(--color-bg))] shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
                       : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] opacity-55"
                   }`}
                 >
                   <span
-                    className="mb-1 block h-5 w-5 max-w-[90%] rounded-sm bg-[color-mix(in_srgb,var(--color-text)_25%,var(--color-bg))] sm:h-6 sm:w-6"
+                    className="mb-0.5 block h-4 w-4 max-w-[88%] rounded-sm bg-[color-mix(in_srgb,var(--color-text)_25%,var(--color-bg))] sm:h-5 sm:w-5"
                     style={{ clipPath: "polygon(15% 0,85% 0,100% 35%,50% 100%,0 35%)" }}
                     aria-hidden
                   />
@@ -293,7 +323,7 @@ export default function HiddenStackGame() {
               );
             })}
           </div>
-          <div className="flex items-center justify-center gap-3 pb-1">
+          <div className="flex items-center justify-center gap-3 pb-0.5">
             {phase === "feedback" ? (
               <button
                 type="button"
@@ -313,8 +343,24 @@ export default function HiddenStackGame() {
               </button>
             )}
           </div>
-          <p className="pb-1 text-center text-[11px] leading-snug text-[var(--color-muted)]">{t("games.hiddenStack.hintSwipe")}</p>
         </div>
+      </div>
+
+      <div className="mt-2 w-full">
+        <div className="mb-2 flex flex-col gap-2 lg:hidden">
+          <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
+            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
+              {t("games.hiddenStack.howToTitle")}
+            </summary>
+            <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
+              <p className="m-0">{t("games.hiddenStack.howToBody")}</p>
+            </div>
+          </details>
+        </div>
+        <section className="mb-1.5 hidden rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2 lg:block">
+          <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.hiddenStack.howToTitle")}</h3>
+          <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">{t("games.hiddenStack.howToBody")}</p>
+        </section>
       </div>
     </div>
   );
