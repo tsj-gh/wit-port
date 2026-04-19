@@ -263,7 +263,6 @@
     },
     "hiddenStack": {
       "titleJa": "かくれつみき",
-      "showSiteChrome": "Show header & footer (unlock scroll)",
       "debugPanel": "Hidden Stack DEBUG",
       "debugMaterial": "Block material",
       "matA": "A Wood tone",
