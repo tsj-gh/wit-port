@@ -19,6 +19,12 @@ export const GAME_AD_SLOT_MIN_HEIGHT_PX = 100;
 /** Hidden Stack PC 没入: 広告#1 行の固定高（スポンサー行＋枠内の余白込みの目安） */
 export const HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX = 120;
 
+/** Hidden Stack PC: Canvas の calc(100vh - …) に足す枠・ギャップの縦微調整（px） */
+export const HIDDEN_STACK_PC_CANVAS_VERTICAL_FUDGE_PX = 16;
+
+/** Hidden Stack PC: 解答帯の計測前フォールバック高さ（ResizeObserver 前・SSR 用） */
+export const HIDDEN_STACK_PC_ANSWER_BAND_FALLBACK_PX = 152;
+
 /** 「スポンサーリンク」行（font-size 10px + margin-bottom 4px の概算） */
 export const GAME_AD_SPONSOR_LABEL_BLOCK_PX = 14;
 

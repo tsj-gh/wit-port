@@ -1,12 +1,17 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
-import { GAME_AD_GAP_BEFORE_SLOT_2_PX, HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX } from "@/lib/gameLayout";
+import {
+  GAME_AD_GAP_BEFORE_SLOT_2_PX,
+  HIDDEN_STACK_PC_ANSWER_BAND_FALLBACK_PX,
+  HIDDEN_STACK_PC_CANVAS_VERTICAL_FUDGE_PX,
+  HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX,
+} from "@/lib/gameLayout";
 import { generateHiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { useI18n } from "@/lib/i18n-context";
 import type { BlockMaterialVariant, CollapsePatternId, GoldLumpParams } from "./HiddenStackCanvas";
@@ -47,7 +52,10 @@ export default function HiddenStackGame() {
   const stripPointerDownRef = useRef(false);
   const topAdRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
+  const answerBandRef = useRef<HTMLDivElement>(null);
   const didInitialAutoScrollRef = useRef(false);
+  const [isLgViewport, setIsLgViewport] = useState(false);
+  const [answerBandHeightPx, setAnswerBandHeightPx] = useState(HIDDEN_STACK_PC_ANSWER_BAND_FALLBACK_PX);
 
   useEffect(() => {
     stripPointerDownRef.current = false;
@@ -90,21 +98,49 @@ export default function HiddenStackGame() {
     setSelectedN((n) => Math.max(1, Math.min(answerSlots, n)));
   }, [answerSlots]);
 
-  useLayoutEffect(() => {
-    if (didInitialAutoScrollRef.current) return;
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        if (didInitialAutoScrollRef.current) return;
-        if (typeof window === "undefined") return;
-        if (window.innerWidth >= 1024) {
-          topAdRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
-        } else {
-          window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-        }
-        didInitialAutoScrollRef.current = true;
-      })
-    );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsLgViewport(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
   }, []);
+
+  useEffect(() => {
+    if (didInitialAutoScrollRef.current) return;
+    const t = window.setTimeout(() => {
+      if (didInitialAutoScrollRef.current) return;
+      if (typeof window === "undefined") return;
+      if (window.innerWidth >= 1024) {
+        topAdRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+      } else {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      }
+      didInitialAutoScrollRef.current = true;
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!isLgViewport) return;
+    const el = answerBandRef.current;
+    if (!el) return;
+    const apply = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      if (h > 0) setAnswerBandHeightPx(h);
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isLgViewport, answerSlots, phase, puzzle]);
+
+  const pcCanvasShellStyle = useMemo((): CSSProperties | undefined => {
+    if (!isLgViewport) return undefined;
+    const h = `calc(100vh - ${HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX}px - ${answerBandHeightPx}px - ${HIDDEN_STACK_PC_CANVAS_VERTICAL_FUDGE_PX}px)`;
+    return { height: h, minHeight: h };
+  }, [isLgViewport, answerBandHeightPx]);
 
   const onIntroComplete = useCallback(() => {
     setPhase("think");
@@ -381,14 +417,12 @@ export default function HiddenStackGame() {
         </div>
       </div>
 
-      <div
-        className="flex min-h-0 w-full flex-1 flex-col gap-3 px-4 pb-3 pt-1 lg:min-h-0 lg:flex-row lg:items-stretch lg:gap-6 lg:overflow-hidden lg:px-6 lg:pb-4 lg:pt-0 lg:[height:calc(100dvh-var(--hs-ad-h)-env(safe-area-inset-top,0px))] lg:[max-height:calc(100dvh-var(--hs-ad-h)-env(safe-area-inset-top,0px))]"
-        style={{ ["--hs-ad-h" as string]: `${HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX}px` } as CSSProperties}
-      >
+      <div className="flex h-auto min-h-0 w-full flex-1 flex-col gap-3 px-4 pb-3 pt-1 lg:min-h-0 lg:flex-row lg:items-stretch lg:gap-6 lg:px-6 lg:pb-4 lg:pt-0">
         <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:min-h-0 lg:flex-[1_1_0%] lg:overflow-hidden">
-          <section className="relative flex w-full min-h-[280px] flex-1 flex-col overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[var(--color-surface)] shadow-inner lg:min-h-0 lg:flex-1">
+          <section className="relative flex h-auto w-full min-h-[280px] flex-1 flex-col overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[var(--color-surface)] shadow-inner lg:min-h-0 lg:flex-1">
             <div
-              className="relative min-h-0 w-full flex-1 overflow-hidden rounded-2xl bg-[#f1f5f9] lg:min-h-0"
+              className={`relative min-h-0 w-full flex-1 overflow-hidden rounded-2xl bg-[#f1f5f9] lg:min-h-0 ${isLgViewport ? "lg:flex-none" : ""}`}
+              style={pcCanvasShellStyle}
               onPointerDown={onCanvasPointerDown}
               onPointerMove={onCanvasPointerMove}
               onPointerUp={onCanvasPointerUp}
@@ -416,7 +450,10 @@ export default function HiddenStackGame() {
                 )}
               </div>
 
-              <div className="z-40 w-full shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 backdrop-blur-md lg:mt-auto">
+              <div
+                ref={answerBandRef}
+                className="z-40 w-full shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 backdrop-blur-md lg:mt-auto"
+              >
                 <div className="mx-auto flex w-full max-w-[520px] flex-col gap-1.5 lg:mx-0 lg:max-w-none">
                   <div className="flex items-center justify-center gap-2">
                     <div className="relative flex min-h-[44px] min-w-[64px] -translate-x-2 items-center justify-center sm:min-h-[50px]">
@@ -487,7 +524,7 @@ export default function HiddenStackGame() {
             </section>
           </div>
 
-          <aside className="order-2 flex w-full shrink-0 flex-col lg:order-none lg:min-h-0 lg:w-[min(360px,35%)] lg:max-w-[35%] lg:flex-[0_1_auto] lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-y-contain">
+          <aside className="order-2 flex w-full shrink-0 flex-col lg:order-none lg:min-h-0 lg:w-[min(360px,35%)] lg:max-w-[35%] lg:flex-[0_1_auto] lg:self-start lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-y-contain">
             <div className="mt-1 flex w-full flex-col gap-2 lg:mt-0">
               <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)] lg:hidden">
                 <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
