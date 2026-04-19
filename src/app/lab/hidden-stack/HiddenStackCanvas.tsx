@@ -8,6 +8,9 @@ import { Line, RoundedBox } from "@react-three/drei";
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
 
+/** 物理ボディ（半辺 0.48）はそのままに、メッシュ同士の接線付近の背景露出だけを塞ぐ */
+const BLOCK_MESH_OVERLAP_SCALE = 1.002;
+
 export type BlockMaterialVariant = "A" | "B" | "C";
 export type CollapsePatternId = 1 | 2 | 3;
 
@@ -141,11 +144,18 @@ function IntroBlocks({
       {meta.map(({ key, start }) => (
         <group key={key} ref={(r) => void (r ? groupRefs.current.set(key, r) : groupRefs.current.delete(key))} position={start.clone()}>
           {materialVariant === "B" ? (
-            <RoundedBox args={[0.96, 0.96, 0.96]} radius={0.07} smoothness={3} castShadow receiveShadow>
+            <RoundedBox
+              args={[0.96, 0.96, 0.96]}
+              radius={0.07}
+              smoothness={3}
+              castShadow
+              receiveShadow
+              scale={BLOCK_MESH_OVERLAP_SCALE}
+            >
               <BlockMaterial variant={materialVariant} />
             </RoundedBox>
           ) : (
-            <mesh castShadow receiveShadow>
+            <mesh castShadow receiveShadow scale={BLOCK_MESH_OVERLAP_SCALE}>
               <boxGeometry args={[0.96, 0.96, 0.96]} />
               <BlockMaterial variant={materialVariant} />
             </mesh>
@@ -168,11 +178,18 @@ function ThinkBlocks({
       {cells.map(({ key, center }) => (
         <group key={key} position={center}>
           {materialVariant === "B" ? (
-            <RoundedBox args={[0.96, 0.96, 0.96]} radius={0.07} smoothness={3} castShadow receiveShadow>
+            <RoundedBox
+              args={[0.96, 0.96, 0.96]}
+              radius={0.07}
+              smoothness={3}
+              castShadow
+              receiveShadow
+              scale={BLOCK_MESH_OVERLAP_SCALE}
+            >
               <BlockMaterial variant={materialVariant} />
             </RoundedBox>
           ) : (
-            <mesh castShadow receiveShadow>
+            <mesh castShadow receiveShadow scale={BLOCK_MESH_OVERLAP_SCALE}>
               <boxGeometry args={[0.96, 0.96, 0.96]} />
               <BlockMaterial variant={materialVariant} />
             </mesh>
@@ -186,7 +203,7 @@ function ThinkBlocks({
 function GhostBox({ center }: { center: THREE.Vector3 }) {
   const edges = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(0.96, 0.96, 0.96)), []);
   return (
-    <lineSegments position={center} geometry={edges}>
+    <lineSegments position={center} geometry={edges} scale={BLOCK_MESH_OVERLAP_SCALE}>
       <lineBasicMaterial color="#94a3b8" transparent opacity={0.35} />
     </lineSegments>
   );
@@ -223,10 +240,12 @@ function StaticBlock({
     restitution: 0.02,
   }));
   return (
-    <mesh ref={ref as unknown as RefObject<THREE.Mesh>} castShadow receiveShadow>
-      <boxGeometry args={[0.96, 0.96, 0.96]} />
-      <BlockMaterial variant={materialVariant} />
-    </mesh>
+    <group ref={ref as unknown as RefObject<THREE.Group>}>
+      <mesh castShadow receiveShadow scale={BLOCK_MESH_OVERLAP_SCALE}>
+        <boxGeometry args={[0.96, 0.96, 0.96]} />
+        <BlockMaterial variant={materialVariant} />
+      </mesh>
+    </group>
   );
 }
 
@@ -254,6 +273,8 @@ function DynamicFallBlock({
     restitution: pattern === 1 ? 0.35 : 0.08,
   }));
 
+  const visualRef = useRef<THREE.Mesh>(null);
+
   useEffect(() => {
     api.applyImpulse(impulse, [0, 0, 0]);
     const av = api as unknown as { angularVelocity?: { set: (x: number, y: number, z: number) => void } };
@@ -265,7 +286,7 @@ function DynamicFallBlock({
     if (pattern !== 3 || !matRef.current) return;
     const m = matRef.current;
     m.opacity = Math.max(0, (m.opacity ?? 0.9) - dt * 1.1);
-    const mesh = ref.current;
+    const mesh = visualRef.current;
     if (mesh) {
       const s = mesh.scale.x * (1 - dt * 0.9);
       mesh.scale.setScalar(Math.max(0.05, s));
@@ -273,35 +294,37 @@ function DynamicFallBlock({
   });
 
   return (
-    <mesh ref={ref as unknown as RefObject<THREE.Mesh>} castShadow receiveShadow>
-      <boxGeometry args={[0.96, 0.96, 0.96]} />
-      {pattern === 3 && materialVariant === "C" ? (
-        <meshPhysicalMaterial
-          ref={matRef as never}
-          color="#bcd4e6"
-          roughness={0.5}
-          metalness={0}
-          transmission={0.38}
-          thickness={0.75}
-          transparent
-          opacity={0.9}
-        />
-      ) : pattern === 3 && materialVariant === "B" ? (
-        <meshPhysicalMaterial
-          ref={matRef as never}
-          color="#f6b8c6"
-          roughness={0.32}
-          metalness={0}
-          clearcoat={0.35}
-          transparent
-          opacity={0.95}
-        />
-      ) : pattern === 3 ? (
-        <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} transparent opacity={0.95} />
-      ) : (
-        <BlockMaterial variant={materialVariant} />
-      )}
-    </mesh>
+    <group ref={ref as unknown as RefObject<THREE.Group>}>
+      <mesh ref={visualRef} castShadow receiveShadow scale={BLOCK_MESH_OVERLAP_SCALE}>
+        <boxGeometry args={[0.96, 0.96, 0.96]} />
+        {pattern === 3 && materialVariant === "C" ? (
+          <meshPhysicalMaterial
+            ref={matRef as never}
+            color="#bcd4e6"
+            roughness={0.5}
+            metalness={0}
+            transmission={0.38}
+            thickness={0.75}
+            transparent
+            opacity={0.9}
+          />
+        ) : pattern === 3 && materialVariant === "B" ? (
+          <meshPhysicalMaterial
+            ref={matRef as never}
+            color="#f6b8c6"
+            roughness={0.32}
+            metalness={0}
+            clearcoat={0.35}
+            transparent
+            opacity={0.95}
+          />
+        ) : pattern === 3 ? (
+          <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} transparent opacity={0.95} />
+        ) : (
+          <BlockMaterial variant={materialVariant} />
+        )}
+      </mesh>
+    </group>
   );
 }
 
