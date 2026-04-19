@@ -14,6 +14,17 @@ const BLOCK_MESH_OVERLAP_SCALE = 1.0035;
 export type BlockMaterialVariant = "A" | "B" | "C";
 export type CollapsePatternId = 1 | 2 | 3;
 
+/** 正解ブロックの「金塊」表示用（デバッグパネルから調整可） */
+export type GoldLumpParams = {
+  color: string;
+  metalness: number;
+  roughness: number;
+};
+
+/** 崩落ブロックを消すまでの待ち＋フェード（秒） */
+const FEEDBACK_FALL_FADE_START_SEC = 1.0;
+const FEEDBACK_FALL_FADE_DURATION_SEC = 1.0;
+
 type HiddenStackCanvasProps = {
   phase: "intro" | "think" | "feedback";
   puzzle: HiddenStackPuzzle;
@@ -22,6 +33,7 @@ type HiddenStackCanvasProps = {
   collapsePattern: CollapsePatternId;
   onIntroComplete: () => void;
   feedbackKey: number;
+  goldLumpParams: GoldLumpParams;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -43,6 +55,24 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
     camera.lookAt(look);
   });
   return null;
+}
+
+function GoldLumpMaterial({ params }: { params: GoldLumpParams }) {
+  const color = useMemo(() => {
+    try {
+      return new THREE.Color(params.color).getStyle();
+    } catch {
+      return "#e7b008";
+    }
+  }, [params.color]);
+  return (
+    <meshStandardMaterial
+      color={color}
+      metalness={params.metalness}
+      roughness={params.roughness}
+      envMapIntensity={1.35}
+    />
+  );
 }
 
 function BlockMaterial({ variant }: { variant: BlockMaterialVariant }) {
@@ -237,13 +267,7 @@ function PhysFloor() {
   );
 }
 
-function StaticBlock({
-  position,
-  materialVariant,
-}: {
-  position: [number, number, number];
-  materialVariant: BlockMaterialVariant;
-}) {
+function StaticBlock({ position, goldParams }: { position: [number, number, number]; goldParams: GoldLumpParams }) {
   const [ref] = useBox(() => ({
     type: "Static",
     args: [0.48, 0.48, 0.48],
@@ -256,7 +280,7 @@ function StaticBlock({
     <group ref={ref as unknown as RefObject<THREE.Group>}>
       <mesh castShadow receiveShadow scale={BLOCK_MESH_OVERLAP_SCALE}>
         <boxGeometry args={[0.96, 0.96, 0.96]} />
-        <BlockMaterial variant={materialVariant} />
+        <GoldLumpMaterial params={goldParams} />
       </mesh>
     </group>
   );
@@ -295,14 +319,33 @@ function DynamicFallBlock({
   }, [api, impulse, torque]);
 
   const matRef = useRef<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial>(null);
-  useFrame((_, dt) => {
-    if (pattern !== 3 || !matRef.current) return;
-    const m = matRef.current;
-    m.opacity = Math.max(0, (m.opacity ?? 0.9) - dt * 1.1);
+  const t0Ref = useRef<number | null>(null);
+  useFrame((state, dt) => {
+    if (t0Ref.current === null) t0Ref.current = state.clock.elapsedTime;
+    const t = state.clock.elapsedTime - t0Ref.current;
     const mesh = visualRef.current;
-    if (mesh) {
+    const m = matRef.current;
+    if (pattern === 3 && mesh && t < FEEDBACK_FALL_FADE_START_SEC) {
       const s = mesh.scale.x * (1 - dt * 0.9);
       mesh.scale.setScalar(Math.max(0.05, s));
+    }
+    if (m) {
+      if (t >= FEEDBACK_FALL_FADE_START_SEC) {
+        m.transparent = true;
+        const u = THREE.MathUtils.clamp((t - FEEDBACK_FALL_FADE_START_SEC) / FEEDBACK_FALL_FADE_DURATION_SEC, 0, 1);
+        const base =
+          pattern === 3 && materialVariant === "C"
+            ? 0.9
+            : pattern === 3 && materialVariant === "B"
+              ? 0.95
+              : pattern === 3
+                ? 0.95
+                : 1;
+        m.opacity = base * (1 - u);
+      }
+    }
+    if (mesh && t > FEEDBACK_FALL_FADE_START_SEC + FEEDBACK_FALL_FADE_DURATION_SEC + 0.08) {
+      mesh.visible = false;
     }
   });
 
@@ -333,8 +376,28 @@ function DynamicFallBlock({
           />
         ) : pattern === 3 ? (
           <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} transparent opacity={0.95} />
+        ) : materialVariant === "A" ? (
+          <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} metalness={0.06} />
+        ) : materialVariant === "B" ? (
+          <meshPhysicalMaterial
+            ref={matRef as never}
+            color="#f6b8c6"
+            roughness={0.32}
+            metalness={0}
+            clearcoat={0.35}
+            clearcoatRoughness={0.4}
+          />
         ) : (
-          <BlockMaterial variant={materialVariant} />
+          <meshPhysicalMaterial
+            ref={matRef as never}
+            color="#bcd4e6"
+            roughness={0.5}
+            metalness={0}
+            transmission={0.38}
+            thickness={0.75}
+            transparent
+            opacity={0.9}
+          />
         )}
       </mesh>
     </group>
@@ -346,20 +409,23 @@ function FeedbackScene({
   materialVariant,
   pattern,
   gridSize,
+  goldLumpParams,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
   pattern: CollapsePatternId;
   gridSize: number;
+  goldLumpParams: GoldLumpParams;
 }) {
   const center = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
   const [showFalling, setShowFalling] = useState(true);
 
   useEffect(() => {
     setShowFalling(true);
+    const ms = Math.ceil((FEEDBACK_FALL_FADE_START_SEC + FEEDBACK_FALL_FADE_DURATION_SEC + 0.15) * 1000);
     const id = window.setTimeout(() => {
       setShowFalling(false);
-    }, 1500);
+    }, ms);
     return () => {
       window.clearTimeout(id);
     };
@@ -404,7 +470,7 @@ function FeedbackScene({
       ))}
       {Array.from(puzzle.hiddenKeys).map((k) => {
         const p = cellCenter(parseKey(k));
-        return <StaticBlock key={`h-${k}`} position={[p.x, p.y, p.z]} materialVariant={materialVariant} />;
+        return <StaticBlock key={`h-${k}`} position={[p.x, p.y, p.z]} goldParams={goldLumpParams} />;
       })}
       {showFalling &&
         impulses.map(({ key, impulse, torque, pos }) => (
@@ -432,6 +498,7 @@ export default function HiddenStackCanvas({
   collapsePattern,
   onIntroComplete,
   feedbackKey,
+  goldLumpParams,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const cells = useMemo(
@@ -459,7 +526,13 @@ export default function HiddenStackCanvas({
       {phase === "think" && <ThinkBlocks cells={cells} materialVariant={materialVariant} />}
       {phase === "feedback" && (
         <Physics key={feedbackKey} gravity={[0, -16, 0]} defaultContactMaterial={{ friction: 0.6, restitution: 0.12 }}>
-          <FeedbackScene puzzle={puzzle} materialVariant={materialVariant} pattern={collapsePattern} gridSize={gridSize} />
+          <FeedbackScene
+            puzzle={puzzle}
+            materialVariant={materialVariant}
+            pattern={collapsePattern}
+            gridSize={gridSize}
+            goldLumpParams={goldLumpParams}
+          />
         </Physics>
       )}
     </Canvas>

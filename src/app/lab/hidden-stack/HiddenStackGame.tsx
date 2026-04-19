@@ -9,7 +9,7 @@ import { DevDebugUserStats } from "@/components/DevDebugUserStats";
 import { GAME_AD_GAP_AFTER_SLOT_1_PX, GAME_COLUMN_CLASS, GAME_TOP_AD_RESERVED_PX } from "@/lib/gameLayout";
 import { generateHiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { useI18n } from "@/lib/i18n-context";
-import type { BlockMaterialVariant, CollapsePatternId } from "./HiddenStackCanvas";
+import type { BlockMaterialVariant, CollapsePatternId, GoldLumpParams } from "./HiddenStackCanvas";
 
 const HiddenStackCanvas = dynamic(() => import("./HiddenStackCanvas"), { ssr: false });
 
@@ -28,6 +28,11 @@ export default function HiddenStackGame() {
 
   const [materialVariant, setMaterialVariant] = useState<BlockMaterialVariant>("A");
   const [collapsePattern, setCollapsePattern] = useState<CollapsePatternId>(1);
+  const [goldLumpParams, setGoldLumpParams] = useState<GoldLumpParams>({
+    color: "#e7b008",
+    metalness: 1,
+    roughness: 0.3,
+  });
 
   const [puzzle, setPuzzle] = useState(() => generateHiddenStackPuzzle(`${Date.now()}`, { gridSize: 3 }));
   const [phase, setPhase] = useState<Phase>("intro");
@@ -232,6 +237,47 @@ export default function HiddenStackGame() {
                 </div>
               </div>
               <div>
+                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugGoldLump")}</div>
+                <div className="space-y-2">
+                  <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldMetalness")}</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={goldLumpParams.metalness}
+                      onChange={(e) => setGoldLumpParams((p) => ({ ...p, metalness: Number(e.target.value) }))}
+                      className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                    />
+                    <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.metalness.toFixed(2)}</span>
+                  </label>
+                  <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldRoughness")}</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={goldLumpParams.roughness}
+                      onChange={(e) => setGoldLumpParams((p) => ({ ...p, roughness: Number(e.target.value) }))}
+                      className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                    />
+                    <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.roughness.toFixed(2)}</span>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldColor")}</span>
+                    <input
+                      type="text"
+                      value={goldLumpParams.color}
+                      onChange={(e) => setGoldLumpParams((p) => ({ ...p, color: e.target.value }))}
+                      spellCheck={false}
+                      className="w-full rounded border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_82%,transparent)] px-2 py-1 font-mono text-[10px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                    />
+                  </label>
+                </div>
+              </div>
+              <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugCollapse")}</div>
                 <div className="flex flex-wrap gap-1">
                   {([1, 2, 3] as const).map((p) => (
@@ -351,6 +397,7 @@ export default function HiddenStackGame() {
                 collapsePattern={collapsePattern}
                 onIntroComplete={onIntroComplete}
                 feedbackKey={feedbackKey}
+                goldLumpParams={goldLumpParams}
               />
             </div>
             {phase === "feedback" && resultLine && (
