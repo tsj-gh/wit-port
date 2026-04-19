@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, useBox, usePlane } from "@react-three/cannon";
 import * as THREE from "three";
@@ -8,8 +8,8 @@ import { Line, RoundedBox } from "@react-three/drei";
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
 
-/** 物理ボディ（半辺 0.48）はそのままに、メッシュ同士の接線付近の背景露出だけを塞ぐ（斜め視点ではわずかに厚めが有効） */
-const BLOCK_MESH_OVERLAP_SCALE = 1.0035;
+/** 物理ボディ（半辺 0.48）はそのままに、AA・浮動小数の丸めで見える隙間だけをごくわずかに塞ぐ */
+const BLOCK_MESH_OVERLAP_SCALE = 1.002;
 
 export type BlockMaterialVariant = "A" | "B" | "C";
 export type CollapsePatternId = 1 | 2 | 3;
@@ -49,24 +49,33 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
   const { camera, size } = useThree();
   const look = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
 
-  useLayoutEffect(() => {
-    if (!(camera instanceof THREE.PerspectiveCamera)) return;
+  useFrame(() => {
+    if (!(camera instanceof THREE.OrthographicCamera)) return;
+
     const w = Math.max(1, size.width);
     const h = Math.max(1, size.height);
-    camera.aspect = w / h;
     const aspect = w / h;
-    /** 横長ビューポートではわずと広い視野＋やや寄りで中央の積み木を大きく見せる */
-    camera.fov = THREE.MathUtils.clamp(36 + (aspect - 0.82) * 3.2, 30, 44);
-    camera.updateProjectionMatrix();
-  }, [camera, size.width, size.height]);
+    /** 旧 Perspective 相当の縦方向視野角（横長ではやや広げる） */
+    const fovDeg = THREE.MathUtils.clamp(36 + (aspect - 0.82) * 3.2, 30, 44);
+    const fovRad = THREE.MathUtils.degToRad(fovDeg);
 
-  useFrame(() => {
-    const aspect = size.width / Math.max(1, size.height);
     const radiusScale = THREE.MathUtils.clamp(1.02 - 0.06 * Math.min(aspect, 2.4), 0.84, 1.02);
+    /** 従来と同じ軌道（仰角 31°・方位 44°＋twist）。平行投影で縦エッジは互いに平行のまま、パース由来の隙間は解消 */
     const p = cameraPositionForTwist(twistDeg, cameraRadiusForGrid(gridSize) * radiusScale, 31, 44, look);
     camera.position.copy(p);
     camera.up.set(0, 1, 0);
     camera.lookAt(look);
+
+    const dist = camera.position.distanceTo(look);
+    /** look 付近の平面で旧 fov に近い縦取り込み幅になるよう ortho の半高を決める */
+    const vExtent = dist * Math.tan(fovRad * 0.5) * 1.02;
+    const hExtent = vExtent * aspect;
+    camera.left = -hExtent;
+    camera.right = hExtent;
+    camera.top = vExtent;
+    camera.bottom = -vExtent;
+    camera.zoom = 1;
+    camera.updateProjectionMatrix();
   });
   return null;
 }
@@ -527,10 +536,11 @@ export default function HiddenStackCanvas({
   return (
     <Canvas
       className="!absolute inset-0 h-full w-full min-h-0 touch-none"
+      orthographic
       shadows
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: false, logarithmicDepthBuffer: true }}
-      camera={{ fov: 37, near: 0.1, far: 120 }}
+      camera={{ position: [0, 0, 1], near: 0.1, far: 320, zoom: 1 }}
     >
       <color attach="background" args={["#f1f5f9"]} />
       <Lights />
