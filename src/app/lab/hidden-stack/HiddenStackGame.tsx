@@ -6,11 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
-import {
-  GAME_AD_GAP_AFTER_SLOT_1_PX,
-  GAME_AD_GAP_BEFORE_SLOT_2_PX,
-  HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX,
-} from "@/lib/gameLayout";
+import { GAME_AD_GAP_BEFORE_SLOT_2_PX, HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX } from "@/lib/gameLayout";
 import { generateHiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { useI18n } from "@/lib/i18n-context";
 import type { BlockMaterialVariant, CollapsePatternId, GoldLumpParams } from "./HiddenStackCanvas";
