@@ -34,6 +34,7 @@ export default function HiddenStackGame() {
   const [selectedN, setSelectedN] = useState(4);
   const [feedbackKey, setFeedbackKey] = useState(0);
   const [resultLine, setResultLine] = useState<string | null>(null);
+  const [seedInput, setSeedInput] = useState("");
 
   const dragTwistRef = useRef<{ active: boolean; lastX: number }>({ active: false, lastX: 0 });
   const stripRef = useRef<HTMLDivElement>(null);
@@ -42,22 +43,39 @@ export default function HiddenStackGame() {
   useEffect(() => {
     stripPointerDownRef.current = false;
   }, [phase]);
+  useEffect(() => {
+    if (!seedInput) setSeedInput(puzzle.sourceSeed);
+  }, [puzzle.sourceSeed, seedInput]);
 
   const answerSlots = useMemo(() => {
     return Math.max(ICON_SLOTS, Math.min(24, puzzle.hiddenCount + 4));
   }, [puzzle.hiddenCount]);
+
+  const resetRoundStates = useCallback((nextHiddenCount: number) => {
+    setPhase("intro");
+    setTwistDeg(0);
+    setSelectedN(Math.max(1, Math.min(Math.max(ICON_SLOTS, Math.min(24, nextHiddenCount + 4)), Math.floor((nextHiddenCount + 1) / 2))));
+    setResultLine(null);
+    setFeedbackKey((k) => k + 1);
+  }, []);
 
   const newRound = useCallback((nextGridSize?: number) => {
     const g = nextGridSize ?? gridSize;
     const next = generateHiddenStackPuzzle(`${Date.now()}:${Math.random().toString(36).slice(2)}`, { gridSize: g });
     setPuzzle(next);
     if (nextGridSize != null) setGridSize(g);
-    setPhase("intro");
-    setTwistDeg(0);
-    setSelectedN(Math.max(1, Math.min(answerSlots, Math.floor((next.hiddenCount + 1) / 2))));
-    setResultLine(null);
-    setFeedbackKey((k) => k + 1);
-  }, [answerSlots, gridSize]);
+    setSeedInput(next.sourceSeed);
+    resetRoundStates(next.hiddenCount);
+  }, [gridSize, resetRoundStates]);
+
+  const generateFromSeed = useCallback(() => {
+    const s = seedInput.trim();
+    if (!s) return;
+    const next = generateHiddenStackPuzzle(s, { gridSize });
+    setPuzzle(next);
+    setSeedInput(next.sourceSeed);
+    resetRoundStates(next.hiddenCount);
+  }, [gridSize, resetRoundStates, seedInput]);
 
   useEffect(() => {
     setSelectedN((n) => Math.max(1, Math.min(answerSlots, n)));
@@ -234,6 +252,40 @@ export default function HiddenStackGame() {
               </div>
               <div className="rounded border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_05%,var(--color-bg))] px-2 py-1.5 text-[var(--color-text)]">
                 {t("games.hiddenStack.debugHiddenLabel")}: <span className="font-bold tabular-nums text-[var(--color-primary)]">{puzzle.hiddenCount}</span>
+              </div>
+              <div className="space-y-1.5 rounded border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_05%,var(--color-bg))] px-2 py-2 text-[10px]">
+                <div className="flex items-center gap-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugCurrentSeed")}</span>
+                  <code className="truncate rounded bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] px-1 text-[var(--color-text)]" title={puzzle.sourceSeed}>
+                    {puzzle.sourceSeed}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(puzzle.sourceSeed).catch(() => {});
+                    }}
+                    className="ml-auto rounded border border-[color-mix(in_srgb,var(--color-text)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-1.5 py-0.5 text-[9px]"
+                  >
+                    {t("games.hiddenStack.debugCopy")}
+                  </button>
+                </div>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={seedInput}
+                    onChange={(e) => setSeedInput(e.target.value)}
+                    placeholder={t("games.hiddenStack.debugSeedInputPlaceholder")}
+                    className="min-w-0 flex-1 rounded border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_82%,transparent)] px-2 py-1 text-[10px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={generateFromSeed}
+                    disabled={!seedInput.trim()}
+                    className="rounded border border-[color-mix(in_srgb,var(--color-primary)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-primary)_12%,var(--color-bg))] px-2 py-1 text-[10px] text-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {t("games.hiddenStack.debugGenerateFromSeed")}
+                  </button>
+                </div>
               </div>
               <button
                 type="button"

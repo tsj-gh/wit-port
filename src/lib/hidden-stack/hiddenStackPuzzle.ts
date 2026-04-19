@@ -6,6 +6,7 @@ type HeightPoint = { x: number; y: number };
 
 export type HiddenStackPuzzle = {
   gridSize: number;
+  sourceSeed: string;
   columnHeights: number[][];
   cells: GridCell[];
   occupiedKeys: Set<string>;
@@ -161,7 +162,7 @@ export function computeHiddenCellsByRule(occupied: Set<string>): { hidden: Set<s
   return { hidden, visible };
 }
 
-function buildPuzzleFromHeights(heights: number[][], seed: string): HiddenStackPuzzle {
+function buildPuzzleFromHeights(heights: number[][], sourceSeed: string, seed: string): HiddenStackPuzzle {
   const occupied = buildOccupiedByHeights(heights);
   const { hidden, visible } = computeHiddenCellsByRule(occupied);
   const cells = Array.from(occupied).map(parseKey);
@@ -169,6 +170,7 @@ function buildPuzzleFromHeights(heights: number[][], seed: string): HiddenStackP
 
   return {
     gridSize: heights.length,
+    sourceSeed,
     columnHeights: heights,
     cells,
     occupiedKeys: occupied,
@@ -206,7 +208,7 @@ export function generateHiddenStackPuzzle(seedStr: string, options: HiddenStackG
 
   for (let attempt = 0; attempt < 640; attempt++) {
     const heights = buildColumnHeights(rng, gridSize);
-    const candidate = buildPuzzleFromHeights(heights, `${seedStr}:${attempt}`);
+    const candidate = buildPuzzleFromHeights(heights, seedStr, `${seedStr}:${attempt}`);
     const score =
       candidate.hiddenCount < minHidden
         ? minHidden - candidate.hiddenCount
@@ -224,5 +226,5 @@ export function generateHiddenStackPuzzle(seedStr: string, options: HiddenStackG
   if (best) return best;
 
   const fallbackHeights = Array.from({ length: gridSize }, () => Array<number>(gridSize).fill(1));
-  return buildPuzzleFromHeights(fallbackHeights, `${seedStr}:fallback`);
+  return buildPuzzleFromHeights(fallbackHeights, seedStr, `${seedStr}:fallback`);
 }
