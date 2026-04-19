@@ -6,7 +6,12 @@ import { useSearchParams } from "next/navigation";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
-import { GAME_AD_GAP_AFTER_SLOT_1_PX, GAME_COLUMN_CLASS, GAME_TOP_AD_RESERVED_PX } from "@/lib/gameLayout";
+import {
+  GAME_AD_GAP_AFTER_SLOT_1_PX,
+  GAME_AD_GAP_BEFORE_SLOT_2_PX,
+  GAME_COLUMN_CLASS,
+  GAME_TOP_AD_RESERVED_PX,
+} from "@/lib/gameLayout";
 import { generateHiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { useI18n } from "@/lib/i18n-context";
 import type { BlockMaterialVariant, CollapsePatternId, GoldLumpParams } from "./HiddenStackCanvas";
@@ -180,7 +185,9 @@ export default function HiddenStackGame() {
   };
 
   return (
-    <div className={`relative isolate flex min-h-0 w-full flex-[1_1_0%] flex-col ${GAME_COLUMN_CLASS}`}>
+    <div
+      className={`relative isolate flex min-h-0 w-full flex-[1_1_0%] flex-col ${GAME_COLUMN_CLASS} lg:mx-auto lg:w-full lg:max-w-none`}
+    >
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-24 z-50">
           <button
@@ -366,135 +373,146 @@ export default function HiddenStackGame() {
       <GamePageHeader titleEn="Hidden Stack" titleJa={t("games.hiddenStack.titleJa")} />
 
       <div
-        ref={topAdRef}
-        className="w-full shrink-0"
-        style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
-      >
-        <div className="mx-auto w-full max-w-[980px]">
-          <PairLinkAdSlot slotIndex={1} />
-        </div>
-      </div>
-
-      <div
-        className="flex min-h-0 w-full flex-[1_1_0%] flex-col"
+        className="flex min-h-0 w-full flex-1 flex-col lg:min-h-0 lg:max-h-[calc(100dvh-var(--hs-top-ad-reserved)-88px)] lg:overflow-hidden"
         style={{ "--hs-top-ad-reserved": `${GAME_TOP_AD_RESERVED_PX}px` } as CSSProperties}
       >
-        <section className="relative flex min-h-0 w-full flex-[1_1_0%] flex-col overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[var(--color-surface)] shadow-inner">
-          <div
-            className="relative min-h-0 w-full flex-[1_1_0%] overflow-hidden rounded-2xl bg-[#f1f5f9]"
-            onPointerDown={onCanvasPointerDown}
-            onPointerMove={onCanvasPointerMove}
-            onPointerUp={onCanvasPointerUp}
-            onPointerCancel={onCanvasPointerUp}
-            onPointerLeave={onCanvasPointerUp}
-          >
-            <div className="absolute inset-0 min-h-0">
-              <HiddenStackCanvas
-                phase={phase}
-                puzzle={puzzle}
-                twistDeg={twistDeg}
-                materialVariant={materialVariant}
-                collapsePattern={collapsePattern}
-                onIntroComplete={onIntroComplete}
-                feedbackKey={feedbackKey}
-                goldLumpParams={goldLumpParams}
-              />
-            </div>
-            {phase === "feedback" && resultLine && (
-              <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center px-3">
-                <p className="max-w-[min(100%,420px)] rounded-xl border border-[color-mix(in_srgb,var(--color-primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] px-4 py-2 text-center text-lg font-black leading-snug text-[var(--color-text)] shadow-lg sm:text-xl">
-                  {resultLine}
-                </p>
-              </div>
-            )}
+        <div
+          ref={topAdRef}
+          className="order-3 mt-3 w-full shrink-0 lg:order-1 lg:mt-0"
+          style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
+        >
+          <div className="mx-auto w-full max-w-[980px]">
+            <PairLinkAdSlot slotIndex={1} />
           </div>
+        </div>
 
-          <div className="z-40 shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 backdrop-blur-md">
-            <div className={`${GAME_COLUMN_CLASS} mx-auto flex max-w-[520px] flex-col gap-1.5`}>
-              <div className="flex items-center justify-center gap-2">
-                <div className="relative flex min-h-[44px] min-w-[64px] -translate-x-2 items-center justify-center sm:min-h-[50px]">
-                  <span className="pointer-events-none select-none text-4xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.2] sm:text-5xl">
-                    {selectedN}
-                  </span>
-                  <span className="absolute text-3xl font-black tabular-nums text-[var(--color-text)] drop-shadow-sm sm:text-4xl">{selectedN}</span>
+        <div className="order-1 flex min-h-0 w-full flex-1 flex-col gap-3 lg:order-2 lg:min-h-0 lg:flex-row lg:items-stretch lg:gap-5">
+          <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:min-h-0 lg:max-w-[70%] lg:flex-[1_1_65%]">
+            <section className="relative flex w-full min-h-[280px] flex-1 flex-col overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[var(--color-surface)] shadow-inner lg:min-h-0">
+              <div
+                className="relative min-h-0 w-full flex-[1_1_0%] overflow-hidden rounded-2xl bg-[#f1f5f9]"
+                onPointerDown={onCanvasPointerDown}
+                onPointerMove={onCanvasPointerMove}
+                onPointerUp={onCanvasPointerUp}
+                onPointerCancel={onCanvasPointerUp}
+                onPointerLeave={onCanvasPointerUp}
+              >
+                <div className="absolute inset-0 min-h-0">
+                  <HiddenStackCanvas
+                    phase={phase}
+                    puzzle={puzzle}
+                    twistDeg={twistDeg}
+                    materialVariant={materialVariant}
+                    collapsePattern={collapsePattern}
+                    onIntroComplete={onIntroComplete}
+                    feedbackKey={feedbackKey}
+                    goldLumpParams={goldLumpParams}
+                  />
                 </div>
-                {phase === "feedback" ? (
-                  <button
-                    type="button"
-                    onClick={() => newRound()}
-                    className="rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] shadow-md sm:px-6 sm:text-base"
-                  >
-                    {t("games.hiddenStack.nextRound")}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={submitAnswer}
-                    disabled={phase !== "think"}
-                    className="rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-black text-[var(--color-on-primary)] shadow-md disabled:opacity-40 sm:px-6 sm:text-base"
-                  >
-                    {t("games.hiddenStack.submit")}
-                  </button>
+                {phase === "feedback" && resultLine && (
+                  <div className="pointer-events-none absolute inset-x-0 top-1 z-10 flex justify-center px-2 sm:top-2 sm:px-3">
+                    <p className="max-w-[min(100%,420px)] rounded-lg border border-[color-mix(in_srgb,var(--color-primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] px-3 py-1.5 text-center text-base font-black leading-snug text-[var(--color-text)] shadow-lg sm:rounded-xl sm:px-4 sm:py-2 sm:text-lg">
+                      {resultLine}
+                    </p>
+                  </div>
                 )}
               </div>
-              <div
-                ref={stripRef}
-                role="slider"
-                aria-valuemin={1}
-                aria-valuemax={answerSlots}
-                aria-valuenow={selectedN}
-                aria-label={t("games.hiddenStack.sliderAria").replace("{max}", String(answerSlots))}
-                className={`mx-auto grid w-full max-w-[min(100%,420px)] touch-none select-none gap-1 sm:gap-1.5 ${phase === "feedback" ? "pointer-events-none opacity-45" : ""}`}
-                style={{ touchAction: "none", gridTemplateColumns: `repeat(${answerSlots}, minmax(0,1fr))` }}
-                onPointerDown={onStripPointerDown}
-                onPointerMove={onStripPointerMove}
-                onPointerUp={onStripPointerEnd}
-                onPointerCancel={onStripPointerEnd}
-                onLostPointerCapture={() => {
-                  stripPointerDownRef.current = false;
-                }}
-              >
-                {Array.from({ length: answerSlots }, (_, i) => {
-                  const n = i + 1;
-                  const lit = n <= selectedN;
-                  return (
-                    <div
-                      key={n}
-                      className={`flex h-9 min-w-0 flex-col items-center justify-end rounded-lg border-2 transition-colors sm:h-10 ${
-                        lit
-                          ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_22%,var(--color-bg))] shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
-                          : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] opacity-55"
-                      }`}
-                    >
-                      <span
-                        className="mb-0.5 block h-4 w-4 max-w-[88%] rounded-sm bg-[color-mix(in_srgb,var(--color-text)_25%,var(--color-bg))] sm:h-5 sm:w-5"
-                        style={{ clipPath: "polygon(15% 0,85% 0,100% 35%,50% 100%,0 35%)" }}
-                        aria-hidden
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
 
-      <div className="mt-10 w-full pb-2">
-        <div className="mb-2 flex flex-col gap-2 lg:hidden">
-          <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)]">
-            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
-              {t("games.hiddenStack.howToTitle")}
-            </summary>
-            <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
-              <p className="m-0">{t("games.hiddenStack.howToBody")}</p>
+              <div className="z-40 shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 backdrop-blur-md">
+                <div className={`${GAME_COLUMN_CLASS} mx-auto flex w-full max-w-[520px] flex-col gap-1.5 lg:max-w-none`}>
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="relative flex min-h-[44px] min-w-[64px] -translate-x-2 items-center justify-center sm:min-h-[50px]">
+                      <span className="pointer-events-none select-none text-4xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.2] sm:text-5xl">
+                        {selectedN}
+                      </span>
+                      <span className="absolute text-3xl font-black tabular-nums text-[var(--color-text)] drop-shadow-sm sm:text-4xl">{selectedN}</span>
+                    </div>
+                    {phase === "feedback" ? (
+                      <button
+                        type="button"
+                        onClick={() => newRound()}
+                        className="rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] shadow-md sm:px-6 sm:text-base"
+                      >
+                        {t("games.hiddenStack.nextRound")}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={submitAnswer}
+                        disabled={phase !== "think"}
+                        className="rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-black text-[var(--color-on-primary)] shadow-md disabled:opacity-40 sm:px-6 sm:text-base"
+                      >
+                        {t("games.hiddenStack.submit")}
+                      </button>
+                    )}
+                  </div>
+                  <div
+                    ref={stripRef}
+                    role="slider"
+                    aria-valuemin={1}
+                    aria-valuemax={answerSlots}
+                    aria-valuenow={selectedN}
+                    aria-label={t("games.hiddenStack.sliderAria").replace("{max}", String(answerSlots))}
+                    className={`mx-auto grid w-full max-w-[min(100%,420px)] touch-none select-none gap-1 sm:gap-1.5 lg:max-w-full ${phase === "feedback" ? "pointer-events-none opacity-45" : ""}`}
+                    style={{ touchAction: "none", gridTemplateColumns: `repeat(${answerSlots}, minmax(0,1fr))` }}
+                    onPointerDown={onStripPointerDown}
+                    onPointerMove={onStripPointerMove}
+                    onPointerUp={onStripPointerEnd}
+                    onPointerCancel={onStripPointerEnd}
+                    onLostPointerCapture={() => {
+                      stripPointerDownRef.current = false;
+                    }}
+                  >
+                    {Array.from({ length: answerSlots }, (_, i) => {
+                      const n = i + 1;
+                      const lit = n <= selectedN;
+                      return (
+                        <div
+                          key={n}
+                          className={`flex h-9 min-w-0 flex-col items-center justify-end rounded-lg border-2 transition-colors sm:h-10 ${
+                            lit
+                              ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_22%,var(--color-bg))] shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
+                              : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] opacity-55"
+                          }`}
+                        >
+                          <span
+                            className="mb-0.5 block h-4 w-4 max-w-[88%] rounded-sm bg-[color-mix(in_srgb,var(--color-text)_25%,var(--color-bg))] sm:h-5 sm:w-5"
+                            style={{ clipPath: "polygon(15% 0,85% 0,100% 35%,50% 100%,0 35%)" }}
+                            aria-hidden
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <aside className="order-2 w-full shrink-0 lg:sticky lg:top-0 lg:flex lg:max-h-[calc(100dvh-var(--hs-top-ad-reserved)-88px)] lg:min-h-0 lg:w-[min(360px,35%)] lg:max-w-[35%] lg:flex-[0_0_auto] lg:flex-col lg:self-start lg:overflow-y-auto">
+            <div className="mt-1 flex w-full flex-col gap-2 lg:mt-0">
+              <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)] lg:hidden">
+                <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
+                  {t("games.hiddenStack.howToTitle")}
+                </summary>
+                <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
+                  <p className="m-0">{t("games.hiddenStack.howToBody")}</p>
+                </div>
+              </details>
             </div>
-          </details>
+
+            <div className="mt-1 hidden w-full flex-col gap-2 lg:mt-0 lg:flex">
+              <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
+                <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.hiddenStack.howToTitle")}</h3>
+                <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">{t("games.hiddenStack.howToBody")}</p>
+              </section>
+            </div>
+
+            <div className="relative z-0 w-full shrink-0" style={{ marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}>
+              <PairLinkAdSlot slotIndex={2} />
+            </div>
+          </aside>
         </div>
-        <section className="mb-1.5 hidden rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2 lg:block">
-          <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.hiddenStack.howToTitle")}</h3>
-          <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">{t("games.hiddenStack.howToBody")}</p>
-        </section>
       </div>
     </div>
   );

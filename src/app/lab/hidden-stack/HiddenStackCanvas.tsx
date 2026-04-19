@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, useBox, usePlane } from "@react-three/cannon";
 import * as THREE from "three";
@@ -46,10 +46,24 @@ function cameraRadiusForGrid(gridSize: number): number {
 }
 
 function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number }) {
-  const { camera } = useThree();
+  const { camera, size } = useThree();
   const look = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
+
+  useLayoutEffect(() => {
+    if (!(camera instanceof THREE.PerspectiveCamera)) return;
+    const w = Math.max(1, size.width);
+    const h = Math.max(1, size.height);
+    camera.aspect = w / h;
+    const aspect = w / h;
+    /** 横長ビューポートではわずと広い視野＋やや寄りで中央の積み木を大きく見せる */
+    camera.fov = THREE.MathUtils.clamp(36 + (aspect - 0.82) * 3.2, 30, 44);
+    camera.updateProjectionMatrix();
+  }, [camera, size.width, size.height]);
+
   useFrame(() => {
-    const p = cameraPositionForTwist(twistDeg, cameraRadiusForGrid(gridSize), 31, 44, look);
+    const aspect = size.width / Math.max(1, size.height);
+    const radiusScale = THREE.MathUtils.clamp(1.02 - 0.06 * Math.min(aspect, 2.4), 0.84, 1.02);
+    const p = cameraPositionForTwist(twistDeg, cameraRadiusForGrid(gridSize) * radiusScale, 31, 44, look);
     camera.position.copy(p);
     camera.up.set(0, 1, 0);
     camera.lookAt(look);
