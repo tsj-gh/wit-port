@@ -25,7 +25,7 @@ export default function HiddenStackPage() {
     <>
       <SmartGuardLock />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(hiddenStackJsonLd) }} />
-      <main className="mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-1 flex-col overscroll-y-contain px-4 py-2 md:py-3 lg:min-h-0 lg:max-w-none lg:flex-1 lg:px-0 lg:py-0">
+      <main className="mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-1 flex-col overscroll-y-contain px-4 py-2 md:py-3 lg:h-full lg:min-h-0 lg:max-w-none lg:flex-1 lg:overflow-hidden lg:px-0 lg:py-0">
         <Suspense
           fallback={
             <div className="flex min-h-[40dvh] flex-1 items-center justify-center bg-[var(--color-bg)] text-[var(--color-muted)] lg:min-h-[100dvh]">

@@ -1,12 +1,16 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
-import { GAME_AD_GAP_AFTER_SLOT_1_PX, GAME_AD_GAP_BEFORE_SLOT_2_PX } from "@/lib/gameLayout";
+import {
+  GAME_AD_GAP_AFTER_SLOT_1_PX,
+  GAME_AD_GAP_BEFORE_SLOT_2_PX,
+  HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX,
+} from "@/lib/gameLayout";
 import { generateHiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { useI18n } from "@/lib/i18n-context";
 import type { BlockMaterialVariant, CollapsePatternId, GoldLumpParams } from "./HiddenStackCanvas";
@@ -41,6 +45,8 @@ export default function HiddenStackGame() {
   const [feedbackKey, setFeedbackKey] = useState(0);
   const [resultLine, setResultLine] = useState<string | null>(null);
   const [seedInput, setSeedInput] = useState("");
+  /** PC 没入解除後は通常スクロールでヘッダー・フッターへ */
+  const [siteChromeUnlocked, setSiteChromeUnlocked] = useState(false);
 
   const dragTwistRef = useRef<{ active: boolean; lastX: number }>({ active: false, lastX: 0 });
   const stripRef = useRef<HTMLDivElement>(null);
@@ -98,9 +104,6 @@ export default function HiddenStackGame() {
         if (typeof window === "undefined") return;
         if (window.innerWidth < 1024) {
           window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-        } else {
-          const h = headerRef.current?.getBoundingClientRect().height ?? 0;
-          window.scrollTo({ top: h, left: 0, behavior: "auto" });
         }
         didInitialAutoScrollRef.current = true;
       })
@@ -110,22 +113,19 @@ export default function HiddenStackGame() {
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
     const apply = () => {
-      if (mq.matches) {
-        document.documentElement.style.overscrollBehaviorY = "contain";
-        document.body.style.overscrollBehaviorY = "contain";
+      if (mq.matches && !siteChromeUnlocked) {
+        document.documentElement.classList.add("hs-pc-immersive");
       } else {
-        document.documentElement.style.removeProperty("overscroll-behavior-y");
-        document.body.style.removeProperty("overscroll-behavior-y");
+        document.documentElement.classList.remove("hs-pc-immersive");
       }
     };
     apply();
     mq.addEventListener("change", apply);
     return () => {
       mq.removeEventListener("change", apply);
-      document.documentElement.style.removeProperty("overscroll-behavior-y");
-      document.body.style.removeProperty("overscroll-behavior-y");
+      document.documentElement.classList.remove("hs-pc-immersive");
     };
-  }, []);
+  }, [siteChromeUnlocked]);
 
   const onIntroComplete = useCallback(() => {
     setPhase("think");
@@ -203,7 +203,7 @@ export default function HiddenStackGame() {
   };
 
   return (
-    <div className="relative isolate flex h-full min-h-0 w-full flex-1 flex-col lg:min-h-0">
+    <div className="relative isolate flex h-full min-h-0 w-full flex-1 flex-col lg:h-full lg:min-h-0">
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-24 z-50">
           <button
@@ -386,26 +386,50 @@ export default function HiddenStackGame() {
         </div>
       )}
 
-      <div ref={headerRef} className="shrink-0 w-full px-4 pt-0 md:pt-1 lg:mx-auto lg:max-w-[min(100%,1080px)] lg:px-6 lg:pt-3">
+      {!siteChromeUnlocked && (
+        <button
+          type="button"
+          className="fixed bottom-3 left-3 z-[90] hidden max-w-[min(calc(100vw-1.5rem),300px)] rounded-lg border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_94%,var(--color-bg))] px-3 py-2 text-left text-xs leading-snug text-[var(--color-text)] shadow-md backdrop-blur-sm lg:block"
+          onClick={() => {
+            setSiteChromeUnlocked(true);
+            window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+          }}
+        >
+          {t("games.hiddenStack.showSiteChrome")}
+        </button>
+      )}
+
+      <div
+        ref={headerRef}
+        className={`w-full shrink-0 px-4 pt-0 md:pt-1 lg:px-6 lg:pt-3 ${
+          siteChromeUnlocked
+            ? "lg:static lg:z-auto lg:mx-auto lg:max-w-[min(100%,1080px)] lg:translate-y-0"
+            : "lg:absolute lg:inset-x-0 lg:top-0 lg:z-[70] lg:-translate-y-full lg:mx-auto lg:max-w-[min(100%,1080px)]"
+        }`}
+      >
         <GamePageHeader titleEn="Hidden Stack" titleJa={t("games.hiddenStack.titleJa")} className="mb-3 md:mb-4 lg:mb-0" />
       </div>
 
-      <div className="flex min-h-0 w-full flex-1 flex-col overflow-x-clip overflow-y-visible overscroll-y-contain lg:h-[100dvh] lg:max-h-[100dvh] lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+      <div
+        className={`flex min-h-0 w-full flex-1 flex-col overflow-x-clip lg:min-h-0 lg:flex-1 lg:overflow-hidden ${
+          siteChromeUnlocked ? "lg:max-h-none" : "lg:h-[100vh] lg:max-h-[100vh]"
+        }`}
+      >
         <div
           ref={topAdRef}
-          className="relative left-1/2 w-screen max-w-[100vw] shrink-0 -translate-x-1/2 lg:left-0 lg:w-full lg:translate-x-0"
-          style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
+          className="relative left-1/2 mb-6 w-screen max-w-[100vw] shrink-0 -translate-x-1/2 overflow-hidden lg:mb-0 lg:left-0 lg:flex lg:w-full lg:translate-x-0 lg:flex-shrink-0 lg:items-center lg:justify-center lg:px-4"
+          style={{ ["--hs-pc-ad-h" as string]: `${HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX}px` } as CSSProperties}
         >
-          <div className="mx-auto w-full max-w-[min(100%,1200px)] px-2 sm:px-3 lg:max-w-none lg:px-4">
+          <div className="mx-auto flex h-full w-full max-w-[min(100%,1200px)] min-h-0 flex-1 flex-col justify-center px-2 sm:px-3 lg:h-[var(--hs-pc-ad-h)] lg:min-h-[var(--hs-pc-ad-h)] lg:max-h-[var(--hs-pc-ad-h)] lg:max-w-none lg:px-4">
             <PairLinkAdSlot slotIndex={1} />
           </div>
         </div>
 
-        <div className="flex min-h-0 w-full flex-1 flex-col gap-3 px-4 pb-3 pt-1 lg:min-h-0 lg:flex-1 lg:flex-row lg:items-stretch lg:gap-6 lg:px-6 lg:pb-4 lg:pt-0">
-          <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:min-h-0 lg:flex-[1_1_0%]">
-            <section className="relative flex w-full min-h-[280px] flex-1 flex-col overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[var(--color-surface)] shadow-inner lg:min-h-0">
+        <div className="flex min-h-0 w-full flex-1 flex-col gap-3 px-4 pb-3 pt-1 lg:min-h-0 lg:flex-1 lg:flex-row lg:items-stretch lg:gap-6 lg:overflow-hidden lg:px-6 lg:pb-0 lg:pt-0">
+          <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:min-h-0 lg:flex-[1_1_0%] lg:overflow-hidden">
+            <section className="relative flex w-full min-h-[280px] flex-1 flex-col overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[var(--color-surface)] shadow-inner lg:min-h-0 lg:flex-1">
               <div
-                className="relative min-h-0 w-full flex-1 overflow-hidden rounded-2xl bg-[#f1f5f9] lg:flex-1"
+                className="relative min-h-0 w-full flex-1 overflow-hidden rounded-2xl bg-[#f1f5f9] lg:h-full lg:min-h-0"
                 onPointerDown={onCanvasPointerDown}
                 onPointerMove={onCanvasPointerMove}
                 onPointerUp={onCanvasPointerUp}
@@ -433,7 +457,7 @@ export default function HiddenStackGame() {
                 )}
               </div>
 
-              <div className="z-40 w-full shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 backdrop-blur-md">
+              <div className="z-40 w-full shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 backdrop-blur-md lg:mt-auto lg:h-[156px] lg:min-h-[156px] lg:max-h-[156px] lg:shrink-0 lg:flex-shrink-0">
                 <div className="mx-auto flex w-full max-w-[520px] flex-col gap-1.5 lg:mx-0 lg:max-w-none">
                   <div className="flex items-center justify-center gap-2">
                     <div className="relative flex min-h-[44px] min-w-[64px] -translate-x-2 items-center justify-center sm:min-h-[50px]">
@@ -504,8 +528,8 @@ export default function HiddenStackGame() {
             </section>
           </div>
 
-          <aside className="order-2 w-full shrink-0 lg:flex lg:min-h-0 lg:w-[min(360px,35%)] lg:max-w-[35%] lg:flex-[0_0_auto] lg:flex-col lg:self-stretch lg:overflow-y-auto">
-            <div className="mt-1 flex w-full flex-col gap-2 lg:mt-0">
+          <aside className="order-2 flex w-full shrink-0 flex-col lg:order-none lg:min-h-0 lg:h-full lg:w-[min(360px,35%)] lg:max-w-[35%] lg:flex-[0_1_auto] lg:overflow-hidden">
+            <div className="mt-1 flex w-full flex-col gap-2 lg:mt-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pb-2">
               <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)] lg:hidden">
                 <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
                   {t("games.hiddenStack.howToTitle")}
@@ -514,16 +538,16 @@ export default function HiddenStackGame() {
                   <p className="m-0">{t("games.hiddenStack.howToBody")}</p>
                 </div>
               </details>
+
+              <div className="mt-1 hidden w-full flex-col gap-2 lg:mt-0 lg:flex lg:shrink-0">
+                <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
+                  <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.hiddenStack.howToTitle")}</h3>
+                  <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">{t("games.hiddenStack.howToBody")}</p>
+                </section>
+              </div>
             </div>
 
-            <div className="mt-1 hidden w-full flex-col gap-2 lg:mt-0 lg:flex">
-              <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
-                <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.hiddenStack.howToTitle")}</h3>
-                <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">{t("games.hiddenStack.howToBody")}</p>
-              </section>
-            </div>
-
-            <div className="relative z-0 w-full shrink-0" style={{ marginTop: GAME_AD_GAP_BEFORE_SLOT_2_PX }}>
+            <div className="relative z-0 w-full shrink-0" style={{ marginTop: `${GAME_AD_GAP_BEFORE_SLOT_2_PX}px` }}>
               <PairLinkAdSlot slotIndex={2} />
             </div>
           </aside>

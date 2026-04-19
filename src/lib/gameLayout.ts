@@ -16,6 +16,9 @@ export const GAME_AD_GAP_BEFORE_SLOT_2_PX = 32;
 /** 広告スロットの最小高さ（プレースホルダー・CLS 対策） */
 export const GAME_AD_SLOT_MIN_HEIGHT_PX = 100;
 
+/** Hidden Stack PC 没入: 広告#1 行の固定高（スポンサー行＋枠内の余白込みの目安） */
+export const HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX = 120;
+
 /** 「スポンサーリンク」行（font-size 10px + margin-bottom 4px の概算） */
 export const GAME_AD_SPONSOR_LABEL_BLOCK_PX = 14;
 

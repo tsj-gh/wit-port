@@ -263,6 +263,7 @@
     },
     "hiddenStack": {
       "titleJa": "かくれつみき",
+      "showSiteChrome": "ヘッダー・フッターを表示（スクロール解除）",
       "debugPanel": "かくれつみき DEBUG",
       "debugMaterial": "積み木の質感",
       "matA": "A 木目調",

@@ -46,6 +46,7 @@ function FooterNav() {
 export default function Footer() {
   return (
     <footer
+      data-wispo-site-footer
       className="mt-auto border-t border-[var(--wit-border)] py-10 px-6"
       role="contentinfo"
     >

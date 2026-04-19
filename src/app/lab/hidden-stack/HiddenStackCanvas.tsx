@@ -88,9 +88,6 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
     const w = Math.max(1, size.width);
     const h = Math.max(1, size.height);
     const aspect = w / h;
-    /** 旧 Perspective 相当の縦方向視野角（横長ではやや広げる）— 取り込みの上限 */
-    const fovDeg = THREE.MathUtils.clamp(36 + (aspect - 0.82) * 3.2, 30, 44);
-    const fovRad = THREE.MathUtils.degToRad(fovDeg);
 
     const radiusScale = THREE.MathUtils.clamp(1.02 - 0.06 * Math.min(aspect, 2.4), 0.84, 1.02);
     /** 従来と同じ軌道（仰角 31°・方位 44°＋twist）。平行投影で縦エッジは互いに平行のまま、パース由来の隙間は解消 */
@@ -99,17 +96,14 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
     camera.up.set(0, 1, 0);
     camera.lookAt(look);
 
-    const dist = camera.position.distanceTo(look);
-    const vLoose = dist * Math.tan(fovRad * 0.5) * 1.02;
-    const fit = orthoExtentsForGridBBox(camera, gridSize, aspect, 1.09);
-    const s = Math.min(1, vLoose / fit.vExtent);
-    const vExtent = fit.vExtent * s;
-    const hExtent = fit.hExtent * s;
-    camera.left = -hExtent;
-    camera.right = hExtent;
-    camera.top = vExtent;
-    camera.bottom = -vExtent;
-    camera.zoom = 1;
+    /** bbox に合わせた frustum を `zoom` で拡大し、Canvas 内の積み木を大きく表示 */
+    const fit = orthoExtentsForGridBBox(camera, gridSize, aspect, 1.08);
+    const zoom = THREE.MathUtils.clamp(1.12 * (h / 200) * (gridSize / 4.2 + 0.72), 1.65, 7.5);
+    camera.left = -fit.hExtent;
+    camera.right = fit.hExtent;
+    camera.top = fit.vExtent;
+    camera.bottom = -fit.vExtent;
+    camera.zoom = zoom;
     camera.updateProjectionMatrix();
   });
   return null;
