@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, useBox, usePlane } from "@react-three/cannon";
 import * as THREE from "three";
@@ -30,14 +30,14 @@ function lookAtForGrid(gridSize: number): THREE.Vector3 {
 }
 
 function cameraRadiusForGrid(gridSize: number): number {
-  return gridSize * 3.1;
+  return gridSize * 2.75;
 }
 
 function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number }) {
   const { camera } = useThree();
   const look = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
   useFrame(() => {
-    const p = cameraPositionForTwist(twistDeg, cameraRadiusForGrid(gridSize), 35, 48, look);
+    const p = cameraPositionForTwist(twistDeg, cameraRadiusForGrid(gridSize), 31, 44, look);
     camera.position.copy(p);
     camera.up.set(0, 1, 0);
     camera.lookAt(look);
@@ -340,6 +340,18 @@ function FeedbackScene({
   gridSize: number;
 }) {
   const center = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
+  const [showFalling, setShowFalling] = useState(true);
+
+  useEffect(() => {
+    setShowFalling(true);
+    const id = window.setTimeout(() => {
+      setShowFalling(false);
+    }, 1500);
+    return () => {
+      window.clearTimeout(id);
+    };
+  }, [puzzle.sourceSeed, pattern]);
+
   const impulses = useMemo(() => {
     const out: { key: string; impulse: [number, number, number]; torque: [number, number, number]; pos: [number, number, number] }[] = [];
     for (const k of Array.from(puzzle.visibleKeys)) {
@@ -381,9 +393,10 @@ function FeedbackScene({
         const p = cellCenter(parseKey(k));
         return <StaticBlock key={`h-${k}`} position={[p.x, p.y, p.z]} materialVariant={materialVariant} />;
       })}
-      {impulses.map(({ key, impulse, torque, pos }) => (
-        <DynamicFallBlock key={`d-${key}`} position={pos} impulse={impulse} torque={torque} materialVariant={materialVariant} pattern={pattern} />
-      ))}
+      {showFalling &&
+        impulses.map(({ key, impulse, torque, pos }) => (
+          <DynamicFallBlock key={`d-${key}`} position={pos} impulse={impulse} torque={torque} materialVariant={materialVariant} pattern={pattern} />
+        ))}
     </>
   );
 }
