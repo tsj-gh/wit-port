@@ -1,7 +1,6 @@
 /**
- * スカイスクレイパーパズルエンジン（サーバー専用）
- * クライアントには一切エクスポートしない
- * ScopedPRNG により Math.random を一切使用せず、100% 決定論的
+ * スカイスクレイパーパズルエンジン。
+ * ScopedPRNG により Math.random を一切使用せず、100% 決定論的。
  */
 
 import { ScopedPRNG, generateRandomSeed } from "@/lib/prng";
@@ -310,7 +309,7 @@ export function validateProgress(
   return { ok: true, msg: "ルールに矛盾は見つかりません。続けましょう。" };
 }
 
-/** 回答が正解と一致するか検証（サーバー専用） */
+/** 回答が正解と一致するか検証 */
 export function validateAgainstSolution(
   grid: number[][],
   solution: number[][]

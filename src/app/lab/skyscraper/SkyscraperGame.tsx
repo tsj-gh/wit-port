@@ -14,12 +14,10 @@ import {
   GAME_TOP_AD_RESERVED_PX,
 } from "@/lib/gameLayout";
 import {
-  generatePuzzleAction,
-  validateAnswerAction,
-  hintAction,
-  solveAction,
-  checkProgressAction,
-} from "./actions";
+  generateUniquePuzzle,
+  validateAgainstSolution,
+  validateProgress,
+} from "@/lib/puzzle-engine/skyscrapers";
 import { useUserSyncContext } from "@/components/UserSyncProvider";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
 import { recordPuzzleClear } from "@/lib/wispo-user-data";
@@ -74,6 +72,8 @@ export default function SkyscraperGame() {
   const userSync = useUserSyncContext();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeSecondsRef = useRef(0);
+  /** 静的書き出し対応: 解はクライアント内のみ保持（旧 httpOnly Cookie 相当） */
+  const solutionRef = useRef<number[][] | null>(null);
   const selectedCellRef = useRef<{ r: number; c: number } | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const swipeHandledRef = useRef(false);
@@ -92,19 +92,22 @@ export default function SkyscraperGame() {
       setMaybeGridSnapshot(null);
       setSinceMaybeHistory([]);
       setFirstDeterminedCell(null);
-      const result = await generatePuzzleAction(size, diff, seed);
-      if (result.error) {
-        setStatus(result.error);
+      try {
+        const result = generateUniquePuzzle(size, diff, 40, seed);
+        solutionRef.current = result.solution;
+        setClues(result.clues);
+        setN(result.solution.length);
+        setGrid(emptyGrid(result.solution.length));
+        setStatus("");
+        setCurrentSeed(result.seed ?? null);
+        setRandomSequenceId(result.randomSequenceId ?? null);
+        setCoreGridHash(result.coreGridHash ?? null);
+      } catch (err) {
+        solutionRef.current = null;
+        setStatus(err instanceof Error ? err.message : "パズルの生成に失敗しました。");
         setLoading(false);
         return;
       }
-      setClues(result.clues);
-      setN(result.n);
-      setGrid(emptyGrid(result.n));
-      setStatus("");
-      setCurrentSeed(result.seed ?? null);
-      setRandomSequenceId(result.randomSequenceId ?? null);
-      setCoreGridHash(result.coreGridHash ?? null);
       setLoading(false);
       setTimerActive(true);
       refreshAds();
@@ -164,7 +167,11 @@ export default function SkyscraperGame() {
     const filled = grid.every((row) => row.every((v) => v > 0));
     if (!filled) return;
     setTimerActive(false);
-    const result = await validateAnswerAction(grid, n);
+    const sol = solutionRef.current;
+    const result =
+      !sol || sol.length !== n
+        ? { ok: false, msg: "パズルの有効期限が切れています。新規生成してください。" }
+        : validateAgainstSolution(grid, sol);
     if (result.ok) {
       setSolved(true);
       setShowClearOverlay(true);
@@ -251,21 +258,33 @@ export default function SkyscraperGame() {
     [grid, setCellValue]
   );
 
-  const handleHint = async () => {
+  const handleHint = () => {
     if (solved || !clues) return;
-    const result = await hintAction(grid, n);
-    if ("error" in result) {
-      setStatus(result.error ?? "");
+    const decoded = solutionRef.current;
+    if (!decoded || decoded.length !== n) {
+      setStatus("パズルの有効期限が切れています。");
       return;
     }
-    setCellValue(result.r, result.c, result.val);
-    setStatus(`ヒント: (${result.r + 1}, ${result.c + 1}) = ${result.val}`);
-    selectedCellRef.current = { r: result.r, c: result.c };
+    const empties: [number, number][] = [];
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (!grid[r]?.[c] || grid[r][c] === 0) empties.push([r, c]);
+      }
+    }
+    if (empties.length === 0) {
+      setStatus("すべて埋まっています。");
+      return;
+    }
+    const [r, c] = empties[Math.floor(Math.random() * empties.length)];
+    const val = decoded[r][c];
+    setCellValue(r, c, val);
+    setStatus(`ヒント: (${r + 1}, ${c + 1}) = ${val}`);
+    selectedCellRef.current = { r, c };
   };
 
-  const handleCheck = async () => {
+  const handleCheck = () => {
     if (!clues) return;
-    const result = await checkProgressAction(grid, clues, n);
+    const result = validateProgress(grid, clues, n);
     setStatus(result.msg);
   };
 
@@ -279,13 +298,13 @@ export default function SkyscraperGame() {
     setFirstDeterminedCell(null);
   };
 
-  const handleSolve = async () => {
-    const result = await solveAction(n);
-    if (result.error) {
-      setStatus(result.error);
+  const handleSolve = () => {
+    const decoded = solutionRef.current;
+    if (!decoded || decoded.length !== n) {
+      setStatus("パズルの有効期限が切れています。");
       return;
     }
-    setGrid(result.solution.map((r) => [...r]));
+    setGrid(decoded.map((r) => [...r]));
     setSolved(true);
     setTimerActive(false);
     setShowClearOverlay(true);
@@ -294,12 +313,12 @@ export default function SkyscraperGame() {
 
   const triggerDebugSolve = useCallback(async () => {
     if (solved || !clues) return;
-    const result = await solveAction(n);
-    if (result.error) {
-      setStatus(result.error);
+    const decoded = solutionRef.current;
+    if (!decoded || decoded.length !== n) {
+      setStatus("パズルの有効期限が切れています。");
       return;
     }
-    setGrid(result.solution.map((r) => [...r]));
+    setGrid(decoded.map((r) => [...r]));
     setSolved(true);
     setTimerActive(false);
     setShowClearOverlay(true);

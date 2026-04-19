@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import { DevLink } from "@/components/DevLink";
 import confetti from "canvas-confetti";
-import { validatePathsAction, solvePathsAction } from "./actions";
+import { validatePaths, solvePathsForPairs } from "@/lib/puzzle-engine/pair-link";
 import { usePuzzleStock } from "@/hooks/usePuzzleStock";
 import {
   useBoardWorker,
@@ -1075,7 +1075,7 @@ export default function PairLinkGame() {
     hasTriggeredClearRef.current = true;
     isCheckingClearRef.current = true;
     try {
-      const result = await validatePathsAction(paths, pairs, gridSize);
+      const result = validatePaths(paths, pairs, gridSize);
       if (result.ok) {
         setSolved(true);
         setTimerActive(false);
@@ -1115,12 +1115,12 @@ export default function PairLinkGame() {
       const onSuccess = async (result: GenerateResult) => {
         let solvedPaths = result.solutionPaths ?? null;
         if (!solvedPaths || Object.keys(solvedPaths).length === 0) {
-          const solveResult = await solvePathsAction(result.pairs, result.gridSize);
-          if (solveResult.error || !solveResult.paths || Object.keys(solveResult.paths).length === 0) {
-            setStatus(solveResult.error ?? "解の取得に失敗しました");
+          const rawPaths = solvePathsForPairs(result.pairs, result.gridSize);
+          if (!rawPaths || Object.keys(rawPaths).length === 0) {
+            setStatus("解が見つかりませんでした。");
             return;
           }
-          solvedPaths = solveResult.paths;
+          solvedPaths = rawPaths;
         }
         setPaths(solvedPaths);
         setSolved(true);
@@ -1152,19 +1152,19 @@ export default function PairLinkGame() {
       }
       if (!solvedPaths || Object.keys(solvedPaths).length === 0) {
         if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
-          console.log("[強制クリア] solvePathsAction を呼び出し");
+          console.log("[強制クリア] solvePathsForPairs を呼び出し");
         }
-        const result = await solvePathsAction(pairs, gridSize);
-        if (result.error || !result.paths || Object.keys(result.paths).length === 0) {
-          const msg = result.error ?? "解の取得に失敗しました";
+        const raw = solvePathsForPairs(pairs, gridSize);
+        if (!raw || Object.keys(raw).length === 0) {
+          const msg = "解が見つかりませんでした。";
           setStatus(msg);
           if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
-            console.warn("[強制クリア] solvePathsAction 失敗:", msg);
+            console.warn("[強制クリア] solvePathsForPairs 失敗:", msg);
           }
           hasTriggeredClearRef.current = false;
           return;
         }
-        solvedPaths = result.paths;
+        solvedPaths = raw;
       }
       if (typeof window !== "undefined" && window.location.search.includes("devtj=true")) {
         console.log("[強制クリア] setPaths 実行, keys:", Object.keys(solvedPaths).length);
