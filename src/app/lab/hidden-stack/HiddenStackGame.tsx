@@ -1,11 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
-import { GAME_COLUMN_CLASS, GAME_NO_TOP_AD_LAYOUT_OFFSET_PX } from "@/lib/gameLayout";
+import { GAME_COLUMN_CLASS } from "@/lib/gameLayout";
 import { generateHiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { useI18n } from "@/lib/i18n-context";
 import type { BlockMaterialVariant, CollapsePatternId } from "./HiddenStackCanvas";
@@ -34,9 +34,13 @@ export default function HiddenStackGame() {
   const [feedbackKey, setFeedbackKey] = useState(0);
   const [resultLine, setResultLine] = useState<string | null>(null);
 
-  const canvasWrapRef = useRef<HTMLDivElement>(null);
   const dragTwistRef = useRef<{ active: boolean; lastX: number }>({ active: false, lastX: 0 });
-  const swipeNRef = useRef<{ active: boolean; lastX: number }>({ active: false, lastX: 0 });
+  const stripRef = useRef<HTMLDivElement>(null);
+  const stripPointerDownRef = useRef(false);
+
+  useEffect(() => {
+    stripPointerDownRef.current = false;
+  }, [phase]);
 
   const newRound = useCallback(() => {
     setPuzzle(generateHiddenStackPuzzle(`${Date.now()}:${Math.random().toString(36).slice(2)}`));
@@ -82,32 +86,48 @@ export default function HiddenStackGame() {
     }
   };
 
-  const answerPointerDown = (e: React.PointerEvent) => {
-    swipeNRef.current = { active: true, lastX: e.clientX };
-  };
-
-  const answerPointerMove = (e: React.PointerEvent) => {
-    if (!swipeNRef.current.active) return;
-    const dx = e.clientX - swipeNRef.current.lastX;
-    if (Math.abs(dx) < 8) return;
-    swipeNRef.current.lastX = e.clientX;
-    const step = dx > 0 ? 1 : -1;
-    setSelectedN((n) => Math.min(ICON_SLOTS, Math.max(1, n + step)));
-  };
-
-  const answerPointerUp = () => {
-    swipeNRef.current.active = false;
-  };
-
-  const canvasHeightStyle = useMemo(
-    () => ({
-      minHeight: `max(220px, calc(100dvh - ${GAME_NO_TOP_AD_LAYOUT_OFFSET_PX + 168}px))`,
-    }),
-    []
+  const pickNFromClientX = useCallback(
+    (clientX: number) => {
+      const el = stripRef.current;
+      if (!el || phase !== "think") return;
+      const r = el.getBoundingClientRect();
+      if (r.width <= 1) return;
+      const x = clientX - r.left;
+      const slotW = r.width / ICON_SLOTS;
+      let i = Math.floor(x / slotW);
+      i = Math.max(0, Math.min(ICON_SLOTS - 1, i));
+      setSelectedN(i + 1);
+    },
+    [phase]
   );
 
+  const onStripPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (phase !== "think") return;
+    stripPointerDownRef.current = true;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    pickNFromClientX(e.clientX);
+  };
+
+  const onStripPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!stripPointerDownRef.current || phase !== "think") return;
+    pickNFromClientX(e.clientX);
+  };
+
+  const onStripPointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    stripPointerDownRef.current = false;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
-    <div className={`relative isolate flex min-h-[100dvh] w-full flex-col ${GAME_COLUMN_CLASS}`}>
+    <div className={`relative isolate flex min-h-0 w-full flex-1 flex-col ${GAME_COLUMN_CLASS}`}>
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-24 z-50">
           <button
@@ -199,67 +219,77 @@ export default function HiddenStackGame() {
 
       <GamePageHeader titleEn="Hidden Stack" titleJa={t("games.hiddenStack.titleJa")} />
 
-      <div
-        ref={canvasWrapRef}
-        className="relative w-full flex-1 touch-none overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[var(--color-surface)] shadow-inner"
-        style={canvasHeightStyle}
-        onPointerDown={onCanvasPointerDown}
-        onPointerMove={onCanvasPointerMove}
-        onPointerUp={onCanvasPointerUp}
-        onPointerCancel={onCanvasPointerUp}
-        onPointerLeave={onCanvasPointerUp}
-      >
-        <HiddenStackCanvas
-          phase={phase}
-          puzzle={puzzle}
-          twistDeg={twistDeg}
-          materialVariant={materialVariant}
-          collapsePattern={collapsePattern}
-          onIntroComplete={onIntroComplete}
-          feedbackKey={feedbackKey}
-        />
-        {phase === "feedback" && resultLine && (
-          <div className="pointer-events-none absolute inset-x-0 top-6 z-10 flex justify-center px-3">
-            <p className="max-w-[min(100%,420px)] rounded-2xl border border-[color-mix(in_srgb,var(--color-primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] px-5 py-4 text-center text-xl font-black leading-snug text-[var(--color-text)] shadow-lg sm:text-2xl">
-              {resultLine}
-            </p>
-          </div>
-        )}
+      <div className="relative min-h-0 w-full flex-1">
+        <div
+          className="absolute inset-0 overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[var(--color-surface)] shadow-inner"
+          onPointerDown={onCanvasPointerDown}
+          onPointerMove={onCanvasPointerMove}
+          onPointerUp={onCanvasPointerUp}
+          onPointerCancel={onCanvasPointerUp}
+          onPointerLeave={onCanvasPointerUp}
+        >
+          <HiddenStackCanvas
+            phase={phase}
+            puzzle={puzzle}
+            twistDeg={twistDeg}
+            materialVariant={materialVariant}
+            collapsePattern={collapsePattern}
+            onIntroComplete={onIntroComplete}
+            feedbackKey={feedbackKey}
+          />
+          {phase === "feedback" && resultLine && (
+            <div className="pointer-events-none absolute inset-x-0 top-6 z-10 flex justify-center px-3">
+              <p className="max-w-[min(100%,420px)] rounded-2xl border border-[color-mix(in_srgb,var(--color-primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] px-5 py-4 text-center text-xl font-black leading-snug text-[var(--color-text)] shadow-lg sm:text-2xl">
+                {resultLine}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 backdrop-blur-md"
-        onPointerDown={answerPointerDown}
-        onPointerMove={answerPointerMove}
-        onPointerUp={answerPointerUp}
-        onPointerLeave={answerPointerUp}
-      >
+      <div className="z-40 mt-auto shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 backdrop-blur-md">
         <div className={`${GAME_COLUMN_CLASS} mx-auto flex max-w-[520px] flex-col gap-3`}>
-          <div className="relative flex min-h-[100px] items-center justify-center">
+          <div className="relative flex min-h-[88px] items-center justify-center sm:min-h-[100px]">
             <span className="pointer-events-none select-none text-6xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.22] sm:text-7xl">
               {selectedN}
             </span>
             <span className="absolute text-5xl font-black tabular-nums text-[var(--color-text)] drop-shadow-sm sm:text-6xl">{selectedN}</span>
           </div>
-          <div className="flex items-end justify-center gap-1.5 sm:gap-2">
+          <div
+            ref={stripRef}
+            role="slider"
+            aria-valuemin={1}
+            aria-valuemax={ICON_SLOTS}
+            aria-valuenow={selectedN}
+            aria-label={t("games.hiddenStack.sliderAria")}
+            className={`mx-auto grid w-full max-w-[min(100%,400px)] touch-none select-none grid-cols-10 gap-1 sm:gap-2 ${phase === "feedback" ? "pointer-events-none opacity-45" : ""}`}
+            style={{ touchAction: "none" }}
+            onPointerDown={onStripPointerDown}
+            onPointerMove={onStripPointerMove}
+            onPointerUp={onStripPointerEnd}
+            onPointerCancel={onStripPointerEnd}
+            onLostPointerCapture={() => {
+              stripPointerDownRef.current = false;
+            }}
+          >
             {Array.from({ length: ICON_SLOTS }, (_, i) => {
               const n = i + 1;
               const lit = n <= selectedN;
               return (
-                <button
+                <div
                   key={n}
-                  type="button"
-                  disabled={phase === "feedback"}
-                  onClick={() => phase === "think" && setSelectedN(n)}
-                  className={`flex h-12 w-8 flex-col items-center justify-end rounded-lg border-2 transition-colors sm:h-14 sm:w-9 ${
+                  className={`flex h-12 min-w-0 flex-col items-center justify-end rounded-lg border-2 transition-colors sm:h-14 ${
                     lit
                       ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_22%,var(--color-bg))] shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
                       : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] opacity-55"
-                  } disabled:opacity-40`}
-                  aria-label={t("games.hiddenStack.iconAria").replace("{n}", String(n))}
+                  }`}
                 >
-                  <span className="mb-1 block h-5 w-5 rounded-sm bg-[color-mix(in_srgb,var(--color-text)_25%,var(--color-bg))] sm:h-6 sm:w-6" style={{ clipPath: "polygon(15% 0,85% 0,100% 35%,50% 100%,0 35%)" }} />
-                </button>
+                  <span
+                    className="mb-1 block h-5 w-5 max-w-[90%] rounded-sm bg-[color-mix(in_srgb,var(--color-text)_25%,var(--color-bg))] sm:h-6 sm:w-6"
+                    style={{ clipPath: "polygon(15% 0,85% 0,100% 35%,50% 100%,0 35%)" }}
+                    aria-hidden
+                  />
+                </div>
               );
             })}
           </div>
@@ -283,10 +313,9 @@ export default function HiddenStackGame() {
               </button>
             )}
           </div>
+          <p className="pb-1 text-center text-[11px] leading-snug text-[var(--color-muted)]">{t("games.hiddenStack.hintSwipe")}</p>
         </div>
       </div>
-
-      <p className="mt-3 pb-40 text-center text-xs text-[var(--color-muted)]">{t("games.hiddenStack.hintSwipe")}</p>
     </div>
   );
 }

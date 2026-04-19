@@ -13,12 +13,25 @@ export function parseKey(k: string): GridCell {
   return { x, y, z };
 }
 
-/** 各マス (x,y,z) に立方体があるとき、(x,y,z-1) も存在する（z=0 は床で支え） */
+/**
+ * 重力方向（Three.js の +Y／パズル index の z）に沿った柱状支え:
+ * 各 (x,y,z) に立方体があるとき、真下 (x,y,z-1) にも立方体がある（z=0 は床が支える）。
+ */
 export function hasColumnSupport(occupied: Set<string>): boolean {
   for (const k of Array.from(occupied)) {
     const { x, y, z } = parseKey(k);
     if (z <= 0) continue;
     if (!occupied.has(`${x},${y},${z - 1}`)) return false;
+  }
+  return true;
+}
+
+/** 生成直後の検証用。柱状支え＋各列が床 z=0 に届いていること。 */
+export function validateGravityStack(occupied: Set<string>): boolean {
+  if (!hasColumnSupport(occupied)) return false;
+  for (const k of Array.from(occupied)) {
+    const { x, y } = parseKey(k);
+    if (!occupied.has(`${x},${y},0`)) return false;
   }
   return true;
 }
@@ -30,9 +43,12 @@ function shuffleInPlace<T>(arr: T[], rng: () => number): void {
   }
 }
 
-/** 立方体中心（Y 上向き・Three.js 慣例）。グリッドは 0..2 の整数セル。 */
+/**
+ * 立方体中心。グリッド 0..2。
+ * パズルの **z を鉛直（Three.js +Y）**、x を +X、パズルの y を +Z に写像し、重力と柱状支えを一致させる。
+ */
 export function cellCenter(c: GridCell): THREE.Vector3 {
-  return new THREE.Vector3(c.x + 0.5, c.y + 0.5, c.z + 0.5);
+  return new THREE.Vector3(c.x + 0.5, c.z + 0.5, c.y + 0.5);
 }
 
 const boxHalf = new THREE.Vector3(0.5, 0.5, 0.5);
@@ -125,8 +141,8 @@ const TWIST_SAMPLES_DEG = [-15, -10, -5, 0, 5, 10, 15];
 export function computeHiddenCells(
   occupied: Set<string>,
   lookAt = new THREE.Vector3(1.5, 1.5, 1.5),
-  camRadius = 8,
-  elevDeg = 38,
+  camRadius = 9.35,
+  elevDeg = 35,
   baseAzimDeg = 48
 ): { hidden: Set<string>; visible: Set<string> } {
   const hidden = new Set<string>();
@@ -197,6 +213,9 @@ function randomOccupied(rng: () => number): Set<string> {
     if (hasColumnSupport(next)) occupied = next;
   }
 
+  if (!validateGravityStack(occupied)) {
+    return new Set<string>(all.map(cellKey));
+  }
   return occupied;
 }
 
@@ -210,6 +229,7 @@ export function generateHiddenStackPuzzle(seedStr: string): HiddenStackPuzzle {
 
   for (let attempt = 0; attempt < 320; attempt++) {
     const occ = randomOccupied(rng);
+    if (!validateGravityStack(occ)) continue;
     const { hidden, visible } = computeHiddenCells(occ);
     if (hidden.size >= minH && hidden.size <= maxH) {
       const cells = Array.from(occ).map(parseKey);

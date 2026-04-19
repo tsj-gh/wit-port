@@ -26,7 +26,7 @@ const LOOK = new THREE.Vector3(1.5, 1.5, 1.5);
 function RigCamera({ twistDeg }: { twistDeg: number }) {
   const { camera } = useThree();
   useFrame(() => {
-    const p = cameraPositionForTwist(twistDeg, 8, 38, 48, LOOK);
+    const p = cameraPositionForTwist(twistDeg, 9.35, 35, 48, LOOK);
     camera.position.copy(p);
     camera.up.set(0, 1, 0);
     camera.lookAt(LOOK);
@@ -380,7 +380,13 @@ export default function HiddenStackCanvas({
   }, [onIntroComplete]);
 
   return (
-    <Canvas shadows dpr={[1, 2]} gl={{ antialias: true, alpha: false }} camera={{ fov: 42, near: 0.1, far: 80 }}>
+    <Canvas
+      className="h-full w-full min-h-0 touch-none"
+      shadows
+      dpr={[1, 2]}
+      gl={{ antialias: true, alpha: false }}
+      camera={{ fov: 39, near: 0.1, far: 80 }}
+    >
       <color attach="background" args={["#f1f5f9"]} />
       <Lights />
       <RigCamera twistDeg={twistDeg} />
