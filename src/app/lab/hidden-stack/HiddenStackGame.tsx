@@ -1,12 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PairLinkAdSlot } from "@/components/PairLinkAdSlots";
 import { GamePageHeader } from "@/components/GamePageHeader";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
-import { GAME_AD_GAP_AFTER_SLOT_1_PX, GAME_AD_GAP_BEFORE_SLOT_2_PX, GAME_COLUMN_CLASS } from "@/lib/gameLayout";
+import { GAME_AD_GAP_AFTER_SLOT_1_PX, GAME_AD_GAP_BEFORE_SLOT_2_PX } from "@/lib/gameLayout";
 import { generateHiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { useI18n } from "@/lib/i18n-context";
 import type { BlockMaterialVariant, CollapsePatternId, GoldLumpParams } from "./HiddenStackCanvas";
@@ -46,6 +46,7 @@ export default function HiddenStackGame() {
   const stripRef = useRef<HTMLDivElement>(null);
   const stripPointerDownRef = useRef(false);
   const topAdRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
   const didInitialAutoScrollRef = useRef(false);
 
   useEffect(() => {
@@ -89,19 +90,41 @@ export default function HiddenStackGame() {
     setSelectedN((n) => Math.max(1, Math.min(answerSlots, n)));
   }, [answerSlots]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (didInitialAutoScrollRef.current) return;
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
+        if (didInitialAutoScrollRef.current) return;
+        if (typeof window === "undefined") return;
         if (window.innerWidth < 1024) {
           window.scrollTo({ top: 0, left: 0, behavior: "auto" });
         } else {
-          const top = topAdRef.current?.getBoundingClientRect().top ?? 0;
-          window.scrollTo({ top: window.scrollY + top, left: 0, behavior: "auto" });
+          const h = headerRef.current?.getBoundingClientRect().height ?? 0;
+          window.scrollTo({ top: h, left: 0, behavior: "auto" });
         }
         didInitialAutoScrollRef.current = true;
       })
     );
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => {
+      if (mq.matches) {
+        document.documentElement.style.overscrollBehaviorY = "contain";
+        document.body.style.overscrollBehaviorY = "contain";
+      } else {
+        document.documentElement.style.removeProperty("overscroll-behavior-y");
+        document.body.style.removeProperty("overscroll-behavior-y");
+      }
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => {
+      mq.removeEventListener("change", apply);
+      document.documentElement.style.removeProperty("overscroll-behavior-y");
+      document.body.style.removeProperty("overscroll-behavior-y");
+    };
   }, []);
 
   const onIntroComplete = useCallback(() => {
@@ -180,9 +203,7 @@ export default function HiddenStackGame() {
   };
 
   return (
-    <div
-      className={`relative isolate flex h-full min-h-0 w-full flex-1 flex-col ${GAME_COLUMN_CLASS} lg:mx-auto lg:w-full lg:max-w-none`}
-    >
+    <div className="relative isolate flex h-full min-h-0 w-full flex-1 flex-col lg:min-h-0">
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-24 z-50">
           <button
@@ -365,26 +386,26 @@ export default function HiddenStackGame() {
         </div>
       )}
 
-      <div className="shrink-0">
-        <GamePageHeader titleEn="Hidden Stack" titleJa={t("games.hiddenStack.titleJa")} />
+      <div ref={headerRef} className="shrink-0 w-full px-4 pt-0 md:pt-1 lg:mx-auto lg:max-w-[min(100%,1080px)] lg:px-6 lg:pt-3">
+        <GamePageHeader titleEn="Hidden Stack" titleJa={t("games.hiddenStack.titleJa")} className="mb-3 md:mb-4 lg:mb-0" />
       </div>
 
-      <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 w-full flex-1 flex-col overflow-x-clip overflow-y-visible overscroll-y-contain lg:h-[100dvh] lg:max-h-[100dvh] lg:min-h-0 lg:flex-1 lg:overflow-hidden">
         <div
           ref={topAdRef}
-          className="order-3 mt-3 w-full shrink-0 lg:order-1 lg:mt-0"
+          className="relative left-1/2 w-screen max-w-[100vw] shrink-0 -translate-x-1/2 lg:left-0 lg:w-full lg:translate-x-0"
           style={{ marginBottom: GAME_AD_GAP_AFTER_SLOT_1_PX }}
         >
-          <div className="mx-auto w-full max-w-[980px]">
+          <div className="mx-auto w-full max-w-[min(100%,1200px)] px-2 sm:px-3 lg:max-w-none lg:px-4">
             <PairLinkAdSlot slotIndex={1} />
           </div>
         </div>
 
-        <div className="order-1 flex min-h-0 w-full flex-1 flex-col gap-3 lg:order-2 lg:min-h-0 lg:flex-row lg:items-stretch lg:gap-5">
-          <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:min-h-0 lg:max-w-[70%] lg:flex-[1_1_65%]">
+        <div className="flex min-h-0 w-full flex-1 flex-col gap-3 px-4 pb-3 pt-1 lg:min-h-0 lg:flex-1 lg:flex-row lg:items-stretch lg:gap-6 lg:px-6 lg:pb-4 lg:pt-0">
+          <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:min-h-0 lg:flex-[1_1_0%]">
             <section className="relative flex w-full min-h-[280px] flex-1 flex-col overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[var(--color-surface)] shadow-inner lg:min-h-0">
               <div
-                className="relative min-h-0 w-full flex-[1_1_0%] overflow-hidden rounded-2xl bg-[#f1f5f9]"
+                className="relative min-h-0 w-full flex-1 overflow-hidden rounded-2xl bg-[#f1f5f9] lg:flex-1"
                 onPointerDown={onCanvasPointerDown}
                 onPointerMove={onCanvasPointerMove}
                 onPointerUp={onCanvasPointerUp}
@@ -404,7 +425,7 @@ export default function HiddenStackGame() {
                   />
                 </div>
                 {phase === "feedback" && resultLine && (
-                  <div className="pointer-events-none absolute inset-x-0 top-1 z-10 flex justify-center px-2 sm:top-2 sm:px-3">
+                  <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center px-2 pt-2 sm:px-3 sm:pt-3">
                     <p className="max-w-[min(100%,420px)] rounded-lg border border-[color-mix(in_srgb,var(--color-primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] px-3 py-1.5 text-center text-base font-black leading-snug text-[var(--color-text)] shadow-lg sm:rounded-xl sm:px-4 sm:py-2 sm:text-lg">
                       {resultLine}
                     </p>
@@ -412,8 +433,8 @@ export default function HiddenStackGame() {
                 )}
               </div>
 
-              <div className="z-40 shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 backdrop-blur-md">
-                <div className={`${GAME_COLUMN_CLASS} mx-auto flex w-full max-w-[520px] flex-col gap-1.5 lg:max-w-none`}>
+              <div className="z-40 w-full shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 backdrop-blur-md">
+                <div className="mx-auto flex w-full max-w-[520px] flex-col gap-1.5 lg:mx-0 lg:max-w-none">
                   <div className="flex items-center justify-center gap-2">
                     <div className="relative flex min-h-[44px] min-w-[64px] -translate-x-2 items-center justify-center sm:min-h-[50px]">
                       <span className="pointer-events-none select-none text-4xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.2] sm:text-5xl">

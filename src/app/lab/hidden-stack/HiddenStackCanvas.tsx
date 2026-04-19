@@ -45,6 +45,39 @@ function cameraRadiusForGrid(gridSize: number): number {
   return gridSize * 2.75;
 }
 
+/** グリッド AABB をカメラローカル XY に射影し、ビューポート aspect に収まる ortho 半幅（積み木を最大化） */
+function orthoExtentsForGridBBox(
+  camera: THREE.OrthographicCamera,
+  gridSize: number,
+  aspect: number,
+  margin: number
+): { vExtent: number; hExtent: number } {
+  camera.updateMatrixWorld(true);
+  const inv = camera.matrixWorldInverse;
+  const tmp = new THREE.Vector3();
+  let maxAbsX = 0;
+  let maxAbsY = 0;
+  const g = gridSize;
+  for (let i = 0; i < 8; i++) {
+    tmp.set((i & 1) !== 0 ? g : 0, ((i >> 1) & 1) !== 0 ? g : 0, ((i >> 2) & 1) !== 0 ? g : 0).applyMatrix4(inv);
+    maxAbsX = Math.max(maxAbsX, Math.abs(tmp.x));
+    maxAbsY = Math.max(maxAbsY, Math.abs(tmp.y));
+  }
+  let halfW = maxAbsX * margin;
+  let halfH = maxAbsY * margin;
+  const floor = gridSize * 0.16;
+  halfW = Math.max(halfW, floor);
+  halfH = Math.max(halfH, floor);
+  let vExtent = halfH;
+  let hExtent = halfW;
+  if (hExtent / vExtent > aspect) {
+    vExtent = hExtent / aspect;
+  } else {
+    hExtent = vExtent * aspect;
+  }
+  return { vExtent, hExtent };
+}
+
 function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number }) {
   const { camera, size } = useThree();
   const look = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
@@ -55,7 +88,7 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
     const w = Math.max(1, size.width);
     const h = Math.max(1, size.height);
     const aspect = w / h;
-    /** 旧 Perspective 相当の縦方向視野角（横長ではやや広げる） */
+    /** 旧 Perspective 相当の縦方向視野角（横長ではやや広げる）— 取り込みの上限 */
     const fovDeg = THREE.MathUtils.clamp(36 + (aspect - 0.82) * 3.2, 30, 44);
     const fovRad = THREE.MathUtils.degToRad(fovDeg);
 
@@ -67,9 +100,11 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
     camera.lookAt(look);
 
     const dist = camera.position.distanceTo(look);
-    /** look 付近の平面で旧 fov に近い縦取り込み幅になるよう ortho の半高を決める */
-    const vExtent = dist * Math.tan(fovRad * 0.5) * 1.02;
-    const hExtent = vExtent * aspect;
+    const vLoose = dist * Math.tan(fovRad * 0.5) * 1.02;
+    const fit = orthoExtentsForGridBBox(camera, gridSize, aspect, 1.09);
+    const s = Math.min(1, vLoose / fit.vExtent);
+    const vExtent = fit.vExtent * s;
+    const hExtent = fit.hExtent * s;
     camera.left = -hExtent;
     camera.right = hExtent;
     camera.top = vExtent;
