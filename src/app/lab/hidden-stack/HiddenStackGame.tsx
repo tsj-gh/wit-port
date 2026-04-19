@@ -175,7 +175,7 @@ export default function HiddenStackGame() {
   };
 
   return (
-    <div className={`relative isolate flex min-h-0 w-full flex-1 flex-col ${GAME_COLUMN_CLASS}`}>
+    <div className={`relative isolate flex min-h-0 w-full flex-[1_1_0%] flex-col ${GAME_COLUMN_CLASS}`}>
       {isDevTj && !isDebugMode && (
         <div className="fixed right-4 top-24 z-50">
           <button
@@ -330,27 +330,29 @@ export default function HiddenStackGame() {
       </div>
 
       <div
-        className="flex min-h-0 w-full flex-1 flex-col"
+        className="flex min-h-0 w-full flex-[1_1_0%] flex-col"
         style={{ "--hs-top-ad-reserved": `${GAME_TOP_AD_RESERVED_PX}px` } as CSSProperties}
       >
-        <section className="relative flex min-h-[calc(100dvh-var(--hs-top-ad-reserved)-58px)] w-full flex-1 flex-col rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[var(--color-surface)] shadow-inner">
+        <section className="relative flex min-h-0 w-full flex-[1_1_0%] flex-col overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[var(--color-surface)] shadow-inner">
           <div
-            className="relative min-h-[300px] w-full flex-1 overflow-hidden rounded-2xl"
+            className="relative min-h-0 w-full flex-[1_1_0%] overflow-hidden rounded-2xl bg-[#f1f5f9]"
             onPointerDown={onCanvasPointerDown}
             onPointerMove={onCanvasPointerMove}
             onPointerUp={onCanvasPointerUp}
             onPointerCancel={onCanvasPointerUp}
             onPointerLeave={onCanvasPointerUp}
           >
-            <HiddenStackCanvas
-              phase={phase}
-              puzzle={puzzle}
-              twistDeg={twistDeg}
-              materialVariant={materialVariant}
-              collapsePattern={collapsePattern}
-              onIntroComplete={onIntroComplete}
-              feedbackKey={feedbackKey}
-            />
+            <div className="absolute inset-0 min-h-0">
+              <HiddenStackCanvas
+                phase={phase}
+                puzzle={puzzle}
+                twistDeg={twistDeg}
+                materialVariant={materialVariant}
+                collapsePattern={collapsePattern}
+                onIntroComplete={onIntroComplete}
+                feedbackKey={feedbackKey}
+              />
+            </div>
             {phase === "feedback" && resultLine && (
               <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center px-3">
                 <p className="max-w-[min(100%,420px)] rounded-xl border border-[color-mix(in_srgb,var(--color-primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] px-4 py-2 text-center text-lg font-black leading-snug text-[var(--color-text)] shadow-lg sm:text-xl">

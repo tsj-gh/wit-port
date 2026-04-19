@@ -31,7 +31,9 @@ export default function HiddenStackPage() {
             <div className="flex min-h-[40dvh] flex-1 items-center justify-center bg-[var(--color-bg)] text-[var(--color-muted)]">読み込み中…</div>
           }
         >
-          <HiddenStackGame />
+          <div className="flex min-h-0 flex-[1_1_0%] flex-col">
+            <HiddenStackGame />
+          </div>
         </Suspense>
       </main>
     </>

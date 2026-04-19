@@ -8,8 +8,8 @@ import { Line, RoundedBox } from "@react-three/drei";
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
 
-/** 物理ボディ（半辺 0.48）はそのままに、メッシュ同士の接線付近の背景露出だけを塞ぐ */
-const BLOCK_MESH_OVERLAP_SCALE = 1.002;
+/** 物理ボディ（半辺 0.48）はそのままに、メッシュ同士の接線付近の背景露出だけを塞ぐ（斜め視点ではわずかに厚めが有効） */
+const BLOCK_MESH_OVERLAP_SCALE = 1.0035;
 
 export type BlockMaterialVariant = "A" | "B" | "C";
 export type CollapsePatternId = 1 | 2 | 3;
@@ -123,14 +123,27 @@ function IntroBlocks({
     if (startRef.current === null) startRef.current = state.clock.elapsedTime;
     const t0 = startRef.current;
     const t = state.clock.elapsedTime - t0;
-    const dur = 1.65;
+    const dur = 1.45;
+    /** 等加速度に近い ease-in（従来の ease-out は着地手前で不自然に減速する） */
+    const fallPortion = 0.9;
     let all = true;
     for (const m of meta) {
       const u = THREE.MathUtils.clamp((t - m.stagger) / dur, 0, 1);
-      const e = 1 - Math.pow(1 - u, 3);
       const g = groupRefs.current.get(m.key);
       if (!g) continue;
-      g.position.lerpVectors(m.start, m.center, e);
+      const pos = m.start.clone();
+      if (u < fallPortion) {
+        const w = u / fallPortion;
+        const e = w * w;
+        pos.lerpVectors(m.start, m.center, e);
+      } else {
+        pos.copy(m.center);
+        const v = (u - fallPortion) / (1 - fallPortion);
+        const amp = 0.065 * (1 - v);
+        pos.y += Math.sin(v * Math.PI) * amp;
+      }
+      if (u >= 1) pos.copy(m.center);
+      g.position.copy(pos);
       if (u < 1) all = false;
     }
     if (all && t > dur + 0.2) {
@@ -432,10 +445,10 @@ export default function HiddenStackCanvas({
 
   return (
     <Canvas
-      className="h-full w-full min-h-0 touch-none"
+      className="!absolute inset-0 h-full w-full min-h-0 touch-none"
       shadows
       dpr={[1, 2]}
-      gl={{ antialias: true, alpha: false }}
+      gl={{ antialias: true, alpha: false, logarithmicDepthBuffer: true }}
       camera={{ fov: 37, near: 0.1, far: 120 }}
     >
       <color attach="background" args={["#f1f5f9"]} />
