@@ -22,6 +22,8 @@ const BLOCK_B_BEVEL_RADIUS = 0.012;
 const BLOCK_B_BEVEL_SMOOTHNESS = 2;
 
 const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.05;
+const BASE_ELEVATION_DEG = 31;
+const BASE_AZIMUTH_DEG = 44;
 
 export type BlockMaterialVariant = "A" | "B" | "C";
 export type CollapsePatternId = 1 | 2 | 3;
@@ -109,7 +111,13 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
 
     const radiusScale = THREE.MathUtils.clamp(1.02 - 0.06 * Math.min(aspect, 2.4), 0.84, 1.02);
     /** 従来と同じ軌道（仰角 31°・方位 44°＋twist）。平行投影で縦エッジは互いに平行のまま、パース由来の隙間は解消 */
-    const p = cameraPositionForTwist(twistDeg, cameraRadiusForGrid(gridSize) * radiusScale, 31, 44, look);
+    const p = cameraPositionForTwist(
+      twistDeg,
+      cameraRadiusForGrid(gridSize) * radiusScale,
+      BASE_ELEVATION_DEG,
+      BASE_AZIMUTH_DEG,
+      look
+    );
     camera.position.copy(p);
     camera.up.set(0, 1, 0);
     camera.lookAt(look);
@@ -665,17 +673,79 @@ function ReviewScene({
   );
 }
 
-function ReviewOrbitControls({ gridSize }: { gridSize: number }) {
+function ReviewOrbitControls({ gridSize, twistDeg }: { gridSize: number; twistDeg: number }) {
+  const { camera, size } = useThree();
+  const controlsRef = useRef<any>(null);
+  const initializedRef = useRef(false);
   const c = gridSize / 2;
+  const look = useMemo(() => new THREE.Vector3(c, c, c), [c]);
+  const fixedPolar = useMemo(() => Math.PI / 2 - (BASE_ELEVATION_DEG * Math.PI) / 180, []);
+
+  const applyRigProjection = useCallback(() => {
+    if (!(camera instanceof THREE.OrthographicCamera)) return;
+    const w = Math.max(1, size.width);
+    const h = Math.max(1, size.height);
+    const aspect = w / h;
+    const raw = gridViewSpaceBBoxHalfExtents(camera, gridSize);
+    const fit = orthoFrustumFromHalfExtents(raw.halfW * ORTHO_BBOX_MARGIN, raw.halfH * ORTHO_BBOX_MARGIN, aspect, gridSize);
+    camera.left = -fit.hExtent;
+    camera.right = fit.hExtent;
+    camera.top = fit.vExtent;
+    camera.bottom = -fit.vExtent;
+    const zoomV = (ORTHO_STACK_VERTICAL_FILL * fit.vExtent) / raw.halfH;
+    const zoomH = fit.hExtent / raw.halfW;
+    camera.zoom = THREE.MathUtils.clamp(Math.min(zoomV, zoomH), 0.12, 14);
+    camera.updateProjectionMatrix();
+  }, [camera, gridSize, size.width, size.height]);
+
+  useEffect(() => {
+    if (initializedRef.current) return;
+    if (!(camera instanceof THREE.OrthographicCamera)) return;
+    const radiusScale = THREE.MathUtils.clamp(1.02 - 0.06 * Math.min(Math.max(1, size.width) / Math.max(1, size.height), 2.4), 0.84, 1.02);
+    const p = cameraPositionForTwist(
+      twistDeg,
+      cameraRadiusForGrid(gridSize) * radiusScale,
+      BASE_ELEVATION_DEG,
+      BASE_AZIMUTH_DEG,
+      look
+    );
+    camera.position.copy(p);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(look);
+    applyRigProjection();
+    const ctrl = controlsRef.current;
+    if (ctrl) {
+      ctrl.target.copy(look);
+      ctrl.minPolarAngle = fixedPolar;
+      ctrl.maxPolarAngle = fixedPolar;
+      ctrl.minAzimuthAngle = -Infinity;
+      ctrl.maxAzimuthAngle = Infinity;
+      ctrl.update();
+    }
+    initializedRef.current = true;
+  }, [applyRigProjection, camera, fixedPolar, gridSize, look, size.height, size.width, twistDeg]);
+
+  useFrame(() => {
+    const ctrl = controlsRef.current;
+    if (!ctrl || !(camera instanceof THREE.OrthographicCamera)) return;
+    ctrl.target.copy(look);
+    camera.lookAt(look);
+    applyRigProjection();
+  });
+
   return (
     <OrbitControls
+      ref={controlsRef}
       makeDefault
       enablePan={false}
+      enableZoom={false}
       enableDamping
       dampingFactor={0.08}
       target={[c, c, c]}
-      minPolarAngle={0.2}
-      maxPolarAngle={Math.PI / 2 - 0.02}
+      minPolarAngle={fixedPolar}
+      maxPolarAngle={fixedPolar}
+      minAzimuthAngle={-Infinity}
+      maxAzimuthAngle={Infinity}
     />
   );
 }
@@ -730,7 +800,7 @@ export default function HiddenStackCanvas({
     >
       <color attach="background" args={["#f1f5f9"]} />
       <Lights />
-      {reviewMode ? <ReviewOrbitControls gridSize={gridSize} /> : <RigCamera twistDeg={twistDeg} gridSize={gridSize} />}
+      {reviewMode ? <ReviewOrbitControls gridSize={gridSize} twistDeg={twistDeg} /> : <RigCamera twistDeg={twistDeg} gridSize={gridSize} />}
       <FloorGrid gridSize={gridSize} />
       {phase === "intro" && (
         <IntroBlocks
