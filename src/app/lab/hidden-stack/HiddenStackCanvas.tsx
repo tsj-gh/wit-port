@@ -52,6 +52,9 @@ type HiddenStackCanvasProps = {
   blockMeshVisualScale?: number;
   /** ふりかえりモード中は崩落を止めて静止表示＋自由回転 */
   reviewMode?: boolean;
+  /** ふりかえり時の回転誘導：この角度（deg）を初期方位から超えたらコールバックを一度だけ呼ぶ */
+  reviewAzimuthHintLimitDeg?: number;
+  onReviewAzimuthHintThresholdExceeded?: () => void;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -673,11 +676,30 @@ function ReviewScene({
   );
 }
 
-function ReviewOrbitControls({ gridSize, twistDeg }: { gridSize: number; twistDeg: number }) {
+function shortestAngleDeltaRad(from: number, to: number): number {
+  let d = to - from;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+
+function ReviewOrbitControls({
+  gridSize,
+  twistDeg,
+  reviewAzimuthHintLimitDeg,
+  onReviewAzimuthHintThresholdExceeded,
+}: {
+  gridSize: number;
+  twistDeg: number;
+  reviewAzimuthHintLimitDeg?: number;
+  onReviewAzimuthHintThresholdExceeded?: () => void;
+}) {
   const { camera, size } = useThree();
   const controlsRef = useRef<any>(null);
   const initializedRef = useRef(false);
   const lockedZoomRef = useRef<number | null>(null);
+  const reviewHintInitialAzimuthRef = useRef<number | null>(null);
+  const reviewHintExceededRef = useRef(false);
   const c = gridSize / 2;
   const look = useMemo(() => new THREE.Vector3(c, c, c), [c]);
   const fixedPolar = useMemo(() => Math.PI / 2 - (BASE_ELEVATION_DEG * Math.PI) / 180, []);
@@ -736,6 +758,28 @@ function ReviewOrbitControls({ gridSize, twistDeg }: { gridSize: number; twistDe
     ctrl.target.copy(look);
     camera.lookAt(look);
     applyRigProjection();
+
+    if (
+      initializedRef.current &&
+      onReviewAzimuthHintThresholdExceeded &&
+      reviewAzimuthHintLimitDeg != null &&
+      reviewAzimuthHintLimitDeg > 0 &&
+      !reviewHintExceededRef.current
+    ) {
+      const getAz = ctrl.getAzimuthalAngle as (() => number) | undefined;
+      if (typeof getAz !== "function") return;
+      const cur = getAz.call(ctrl);
+      if (reviewHintInitialAzimuthRef.current == null) {
+        reviewHintInitialAzimuthRef.current = cur;
+      } else {
+        const limRad = (reviewAzimuthHintLimitDeg * Math.PI) / 180;
+        const delta = shortestAngleDeltaRad(reviewHintInitialAzimuthRef.current, cur);
+        if (Math.abs(delta) > limRad) {
+          reviewHintExceededRef.current = true;
+          onReviewAzimuthHintThresholdExceeded();
+        }
+      }
+    }
   });
 
   return (
@@ -782,6 +826,8 @@ export default function HiddenStackCanvas({
   goldLumpParams,
   blockMeshVisualScale = DEFAULT_BLOCK_MESH_VISUAL_SCALE,
   reviewMode = false,
+  reviewAzimuthHintLimitDeg,
+  onReviewAzimuthHintThresholdExceeded,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
@@ -805,7 +851,16 @@ export default function HiddenStackCanvas({
     >
       <color attach="background" args={["#f1f5f9"]} />
       <Lights />
-      {reviewMode ? <ReviewOrbitControls gridSize={gridSize} twistDeg={twistDeg} /> : <RigCamera twistDeg={twistDeg} gridSize={gridSize} />}
+      {reviewMode ? (
+        <ReviewOrbitControls
+          gridSize={gridSize}
+          twistDeg={twistDeg}
+          reviewAzimuthHintLimitDeg={reviewAzimuthHintLimitDeg}
+          onReviewAzimuthHintThresholdExceeded={onReviewAzimuthHintThresholdExceeded}
+        />
+      ) : (
+        <RigCamera twistDeg={twistDeg} gridSize={gridSize} />
+      )}
       <FloorGrid gridSize={gridSize} />
       {phase === "intro" && (
         <IntroBlocks

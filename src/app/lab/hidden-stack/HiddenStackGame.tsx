@@ -57,6 +57,8 @@ export default function HiddenStackGame() {
   const [resultLine, setResultLine] = useState<string | null>(null);
   const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
   const [reviewMode, setReviewMode] = useState(false);
+  /** ふりかえり時の左右スワイプ誘導（回転検知でフェードアウト、同一問題では再表示しない） */
+  const [reviewSwipeHintVisible, setReviewSwipeHintVisible] = useState(false);
   const [statusMessageStyle, setStatusMessageStyle] = useState<"card" | "plain">("card");
   const [statusOverlayPhase, setStatusOverlayPhase] = useState<StatusOverlayPhase>("hidden");
   const [resultMessageDelayMs, setResultMessageDelayMs] = useState(DEFAULT_RESULT_MESSAGE_DELAY_MS);
@@ -190,6 +192,15 @@ export default function HiddenStackGame() {
     if (phase !== "feedback") return;
     setReviewMode(true);
   }, [phase]);
+
+  useEffect(() => {
+    if (reviewMode) setReviewSwipeHintVisible(true);
+    else setReviewSwipeHintVisible(false);
+  }, [reviewMode]);
+
+  const dismissReviewSwipeHint = useCallback(() => {
+    setReviewSwipeHintVisible(false);
+  }, []);
 
   const onCanvasPointerDown = (e: React.PointerEvent) => {
     if (phase !== "think") return;
@@ -540,8 +551,44 @@ export default function HiddenStackGame() {
                     goldLumpParams={goldLumpParams}
                     blockMeshVisualScale={blockMeshVisualScale}
                     reviewMode={reviewMode}
+                    reviewAzimuthHintLimitDeg={TWIST_MAX}
+                    onReviewAzimuthHintThresholdExceeded={dismissReviewSwipeHint}
                   />
                 </div>
+                {phase === "feedback" && reviewMode && (
+                  <div
+                    className={`pointer-events-none absolute inset-x-0 bottom-5 z-[52] flex justify-center transition-opacity duration-500 ease-out ${
+                      reviewSwipeHintVisible ? "opacity-100" : "opacity-0"
+                    }`}
+                    aria-hidden
+                  >
+                    <div className="rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_94%,var(--color-bg))] px-3 py-2 shadow-sm backdrop-blur-sm">
+                      <svg
+                        className="hs-review-swipe-hint__svg text-[var(--color-text)]"
+                        width={120}
+                        height={40}
+                        viewBox="0 0 120 40"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <g className="hs-review-swipe-hint__motion">
+                          <path d="M6 20 L14 12 L14 28 Z" fill="currentColor" fillOpacity={0.32} />
+                          <path d="M114 20 L106 12 L106 28 Z" fill="currentColor" fillOpacity={0.32} />
+                          <rect x="50" y="10" width="20" height="22" rx="7" fill="currentColor" fillOpacity={0.88} />
+                          <circle cx="60" cy="16" r="4" fill="var(--color-bg)" fillOpacity={0.35} />
+                          <path
+                            d="M56 8 L60 4 L64 8"
+                            stroke="currentColor"
+                            strokeWidth={1.6}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeOpacity={0.45}
+                          />
+                        </g>
+                      </svg>
+                    </div>
+                  </div>
+                )}
                 {phase === "feedback" && resultLine && (statusOverlayPhase === "animating" || statusOverlayPhase === "docked") && (
                   <div
                     className={`result-message hs-status-overlay ${
@@ -722,6 +769,21 @@ export default function HiddenStackGame() {
           right: 20px;
           transform: scale(0.8);
           opacity: 1;
+        }
+        .hs-review-swipe-hint__svg {
+          display: block;
+        }
+        .hs-review-swipe-hint__motion {
+          animation: hs-review-swipe-x 1.35s ease-in-out infinite;
+        }
+        @keyframes hs-review-swipe-x {
+          0%,
+          100% {
+            transform: translateX(-6px);
+          }
+          50% {
+            transform: translateX(6px);
+          }
         }
         @keyframes hs-pop-and-slide {
           0% {
