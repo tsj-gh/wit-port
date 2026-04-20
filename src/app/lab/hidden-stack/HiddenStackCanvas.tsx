@@ -677,6 +677,7 @@ function ReviewOrbitControls({ gridSize, twistDeg }: { gridSize: number; twistDe
   const { camera, size } = useThree();
   const controlsRef = useRef<any>(null);
   const initializedRef = useRef(false);
+  const lockedZoomRef = useRef<number | null>(null);
   const c = gridSize / 2;
   const look = useMemo(() => new THREE.Vector3(c, c, c), [c]);
   const fixedPolar = useMemo(() => Math.PI / 2 - (BASE_ELEVATION_DEG * Math.PI) / 180, []);
@@ -694,11 +695,15 @@ function ReviewOrbitControls({ gridSize, twistDeg }: { gridSize: number; twistDe
     camera.bottom = -fit.vExtent;
     const zoomV = (ORTHO_STACK_VERTICAL_FILL * fit.vExtent) / raw.halfH;
     const zoomH = fit.hExtent / raw.halfW;
-    camera.zoom = THREE.MathUtils.clamp(Math.min(zoomV, zoomH), 0.12, 14);
+    if (lockedZoomRef.current == null) {
+      lockedZoomRef.current = THREE.MathUtils.clamp(Math.min(zoomV, zoomH), 0.12, 14);
+    }
+    camera.zoom = lockedZoomRef.current;
     camera.updateProjectionMatrix();
   }, [camera, gridSize, size.width, size.height]);
 
   useEffect(() => {
+    lockedZoomRef.current = null;
     if (initializedRef.current) return;
     if (!(camera instanceof THREE.OrthographicCamera)) return;
     const radiusScale = THREE.MathUtils.clamp(1.02 - 0.06 * Math.min(Math.max(1, size.width) / Math.max(1, size.height), 2.4), 0.84, 1.02);
