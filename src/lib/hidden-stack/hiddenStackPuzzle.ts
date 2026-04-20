@@ -74,20 +74,18 @@ function randomIntInclusive(rng: () => number, min: number, max: number): number
 }
 
 /**
- * 対角線スキャン順:
- * (0,0) → (1,0),(0,1) → ... → (G-1,G-1)
+ * 対角線行の座標群:
+ * s = x+y ごとに [(x,y)...] を返す。
  */
-function diagonalScanOrder(gridSize: number): HeightPoint[] {
-  const order: HeightPoint[] = [];
-  for (let s = 0; s <= 2 * (gridSize - 1); s++) {
-    const xMax = Math.min(s, gridSize - 1);
-    const xMin = Math.max(0, s - (gridSize - 1));
-    for (let x = xMax; x >= xMin; x--) {
-      const y = s - x;
-      order.push({ x, y });
-    }
+function diagonalRowPoints(gridSize: number, s: number): HeightPoint[] {
+  const xMax = Math.min(s, gridSize - 1);
+  const xMin = Math.max(0, s - (gridSize - 1));
+  const row: HeightPoint[] = [];
+  for (let x = xMax; x >= xMin; x--) {
+    const y = s - x;
+    row.push({ x, y });
   }
-  return order;
+  return row;
 }
 
 /**
@@ -103,29 +101,75 @@ function satisfiesOcclusionRule(heights: number[][], x0: number, y0: number, z0:
 }
 
 /**
+ * 挟壁遮蔽禁止（同一対角行の直前セルとの組）:
+ * 2セルの低い方 z_m に対し、共通手前セル (xM,yM)= (max(x0,x1), max(y0,y1)) から
+ * 奥側対角へ n だけ戻った既存柱 Zn が Zn > z_m - n をすべて満たすこと。
+ *
+ * 注意:
+ * - 行の先頭セル（直前セルなし）は適用しない。
+ * - 条件の n は xM>=n かつ yM>=n（= n <= min(xM,yM)）で評価。
+ */
+function satisfiesWedgeOcclusionRule(
+  heights: number[][],
+  x0: number,
+  y0: number,
+  z0: number,
+  prev: { x: number; y: number; z: number } | null
+): boolean {
+  if (!prev) return true;
+  const xM = Math.max(x0, prev.x);
+  const yM = Math.max(y0, prev.y);
+  const zM = Math.min(z0, prev.z);
+  for (let n = 1; xM >= n && yM >= n; n++) {
+    const zn = heights[xM - n][yM - n];
+    if (!(zn > zM - n)) return false;
+  }
+  return true;
+}
+
+/**
  * 高さ z0（積み数）をランダム抽選し、条件を満たすまで再抽選する。
  */
-function drawHeightWithRetry(rng: () => number, heights: number[][], x: number, y: number, gridSize: number): number {
+function drawHeightWithRetry(
+  rng: () => number,
+  heights: number[][],
+  x: number,
+  y: number,
+  gridSize: number,
+  prevInDiagonalRow: { x: number; y: number; z: number } | null
+): number {
   for (let attempt = 0; attempt < 80; attempt++) {
     const z0 = randomIntInclusive(rng, 0, gridSize);
-    if (satisfiesOcclusionRule(heights, x, y, z0)) return z0;
+    if (!satisfiesOcclusionRule(heights, x, y, z0)) continue;
+    if (!satisfiesWedgeOcclusionRule(heights, x, y, z0, prevInDiagonalRow)) continue;
+    return z0;
   }
 
-  // リトライ上限に達した場合、条件を満たす上限を解析してそこから再抽選。
+  // リトライ上限に達した場合、既存の奥側遮蔽ルール由来の上限を優先して安全側にフォールバック。
   let maxAllowed = gridSize;
   for (let n = 1; x >= n && y >= n; n++) {
     const zn = heights[x - n][y - n];
     maxAllowed = Math.min(maxAllowed, zn + n - 1);
   }
   const capped = Math.max(0, maxAllowed);
-  return randomIntInclusive(rng, 0, capped);
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const z0 = randomIntInclusive(rng, 0, capped);
+    if (satisfiesWedgeOcclusionRule(heights, x, y, z0, prevInDiagonalRow)) return z0;
+  }
+  return 0;
 }
 
 function buildColumnHeights(rng: () => number, gridSize: number): number[][] {
   const heights = Array.from({ length: gridSize }, () => Array<number>(gridSize).fill(0));
-  const order = diagonalScanOrder(gridSize);
-  for (const p of order) {
-    heights[p.x][p.y] = drawHeightWithRetry(rng, heights, p.x, p.y, gridSize);
+  for (let s = 0; s <= 2 * (gridSize - 1); s++) {
+    const row = diagonalRowPoints(gridSize, s);
+    if (row.length > 1 && rng() < 0.5) row.reverse();
+    let prev: { x: number; y: number; z: number } | null = null;
+    for (const p of row) {
+      const z = drawHeightWithRetry(rng, heights, p.x, p.y, gridSize, prev);
+      heights[p.x][p.y] = z;
+      prev = { x: p.x, y: p.y, z };
+    }
   }
   return heights;
 }
