@@ -57,10 +57,10 @@ export default function HiddenStackGame() {
   const stripPointerDownRef = useRef(false);
   const topAdRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
-  const answerBandRef = useRef<HTMLDivElement>(null);
+  const controlsOverlayRef = useRef<HTMLDivElement>(null);
   const didInitialAutoScrollRef = useRef(false);
   const [isLgViewport, setIsLgViewport] = useState(false);
-  const [answerBandHeightPx, setAnswerBandHeightPx] = useState(HIDDEN_STACK_PC_ANSWER_BAND_FALLBACK_PX);
+  const [reservedControlsHeightPx, setReservedControlsHeightPx] = useState(HIDDEN_STACK_PC_ANSWER_BAND_FALLBACK_PX);
 
   useEffect(() => {
     stripPointerDownRef.current = false;
@@ -131,23 +131,30 @@ export default function HiddenStackGame() {
 
   useEffect(() => {
     if (!isLgViewport) return;
-    const el = answerBandRef.current;
+    const el = controlsOverlayRef.current;
     if (!el) return;
+    let rafId = 0;
     const apply = () => {
       const h = Math.ceil(el.getBoundingClientRect().height);
-      if (h > 0) setAnswerBandHeightPx(h);
+      if (h > 0) setReservedControlsHeightPx(h);
+    };
+    const onResize = () => {
+      window.cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(apply);
     };
     apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [isLgViewport, answerSlots, phase, puzzle]);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [isLgViewport]);
 
   const pcCanvasShellStyle = useMemo((): CSSProperties | undefined => {
     if (!isLgViewport) return undefined;
-    const h = `calc(100vh - ${HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX}px - ${answerBandHeightPx}px - ${HIDDEN_STACK_PC_CANVAS_VERTICAL_FUDGE_PX}px)`;
+    const h = `calc(100vh - ${HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX}px - ${reservedControlsHeightPx}px - ${HIDDEN_STACK_PC_CANVAS_VERTICAL_FUDGE_PX}px)`;
     return { height: h, minHeight: h };
-  }, [isLgViewport, answerBandHeightPx]);
+  }, [isLgViewport, reservedControlsHeightPx]);
 
   const onIntroComplete = useCallback(() => {
     setPhase("think");
@@ -493,97 +500,90 @@ export default function HiddenStackGame() {
                 </div>
               </div>
 
-              <div
-                ref={answerBandRef}
-                className="z-40 w-full shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 backdrop-blur-md lg:mt-auto"
-              >
-                <div className="mx-auto flex w-full max-w-[520px] flex-col gap-1.5 lg:mx-0 lg:max-w-none">
-                  {phase === "feedback" && reviewMode ? (
-                    <div className="flex items-center justify-center">
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40">
+                <div
+                  ref={controlsOverlayRef}
+                  className="w-full border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5"
+                >
+                  <div className="mx-auto flex w-full max-w-[520px] flex-col gap-2 lg:mx-0 lg:max-w-none">
+                    <div className={`flex min-h-[30px] items-center justify-center ${phase === "feedback" && !reviewMode && resultLine ? "" : "invisible"}`}>
+                      {statusMessageStyle === "card" ? (
+                        <p
+                          className={`rounded-[8px] px-3 py-1.5 text-sm font-bold sm:px-4 ${
+                            isAnswerCorrect
+                              ? "bg-[color-mix(in_srgb,#16a34a_12%,var(--color-bg))] text-[#166534]"
+                              : "bg-[color-mix(in_srgb,#1d4ed8_10%,var(--color-bg))] text-[#1e3a8a]"
+                          }`}
+                        >
+                          {isAnswerCorrect ? (
+                            resultLine
+                          ) : (
+                            <>
+                              {t("games.hiddenStack.resultWrongLead")}
+                              <span className="ml-1 font-black">{t("games.hiddenStack.resultWrong").replace("{n}", String(puzzle.hiddenCount))}</span>
+                            </>
+                          )}
+                        </p>
+                      ) : (
+                        <p className={`text-sm font-bold sm:text-base ${isAnswerCorrect ? "text-[#166534]" : "text-[#1e3a8a]"}`}>
+                          <span aria-hidden className="mr-1">
+                            {isAnswerCorrect ? "✓" : "!"}
+                          </span>
+                          {isAnswerCorrect ? (
+                            resultLine
+                          ) : (
+                            <>
+                              {t("games.hiddenStack.resultWrongLead")}
+                              <span className="ml-1 font-black">{t("games.hiddenStack.resultWrong").replace("{n}", String(puzzle.hiddenCount))}</span>
+                            </>
+                          )}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid w-full grid-cols-[auto_auto_auto] items-center justify-center gap-x-4">
                       <button
                         type="button"
-                        onClick={() => newRound()}
-                        className="rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] sm:px-6 sm:text-base"
+                        onClick={startReview}
+                        disabled={!(phase === "feedback" && !reviewMode)}
+                        className={`pointer-events-auto rounded-full border border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] bg-transparent px-4 py-2 text-sm font-bold text-[var(--color-text)] sm:px-5 ${
+                          phase === "feedback" && !reviewMode ? "" : "invisible"
+                        }`}
                       >
-                        {t("games.hiddenStack.nextRound")}
+                        {t("games.hiddenStack.review")}
                       </button>
-                    </div>
-                  ) : (
-                    <div className="flex w-full flex-col items-center gap-2">
-                      {phase === "feedback" && resultLine && (
-                        <div className="flex w-full items-center justify-center">
-                          {statusMessageStyle === "card" ? (
-                            <p
-                              className={`rounded-[8px] px-3 py-1.5 text-sm font-bold sm:px-4 ${
-                                isAnswerCorrect
-                                  ? "bg-[color-mix(in_srgb,#16a34a_12%,var(--color-bg))] text-[#166534]"
-                                  : "bg-[color-mix(in_srgb,#1d4ed8_10%,var(--color-bg))] text-[#1e3a8a]"
-                              }`}
-                            >
-                              {isAnswerCorrect ? (
-                                resultLine
-                              ) : (
-                                <>
-                                  {t("games.hiddenStack.resultWrongLead")}
-                                  <span className="ml-1 font-black">{t("games.hiddenStack.resultWrong").replace("{n}", String(puzzle.hiddenCount))}</span>
-                                </>
-                              )}
-                            </p>
-                          ) : (
-                            <p className={`text-sm font-bold sm:text-base ${isAnswerCorrect ? "text-[#166534]" : "text-[#1e3a8a]"}`}>
-                              <span aria-hidden className="mr-1">
-                                {isAnswerCorrect ? "✓" : "!"}
-                              </span>
-                              {isAnswerCorrect ? (
-                                resultLine
-                              ) : (
-                                <>
-                                  {t("games.hiddenStack.resultWrongLead")}
-                                  <span className="ml-1 font-black">{t("games.hiddenStack.resultWrong").replace("{n}", String(puzzle.hiddenCount))}</span>
-                                </>
-                              )}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                      <div className="flex w-full flex-wrap items-center justify-center gap-x-4 gap-y-2">
-                        {phase === "feedback" && (
-                          <button
-                            type="button"
-                            onClick={startReview}
-                            className="rounded-full border border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] bg-transparent px-4 py-2 text-sm font-bold text-[var(--color-text)] sm:px-5"
-                          >
-                            {t("games.hiddenStack.review")}
-                          </button>
-                        )}
-                        <div className="relative flex min-h-[44px] min-w-[64px] items-center justify-center sm:min-h-[50px]">
-                          <span className="pointer-events-none select-none text-4xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.2] sm:text-5xl">
-                            {selectedN}
-                          </span>
-                          <span className="absolute text-3xl font-black tabular-nums text-[var(--color-text)] sm:text-4xl">{selectedN}</span>
-                        </div>
-                        {phase === "feedback" ? (
-                          <button
-                            type="button"
-                            onClick={() => newRound()}
-                            className="rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] sm:px-6 sm:text-base"
-                          >
-                            {t("games.hiddenStack.nextRound")}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={submitAnswer}
-                            disabled={phase !== "think"}
-                            className="rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-black text-[var(--color-on-primary)] disabled:opacity-40 sm:px-6 sm:text-base"
-                          >
-                            {t("games.hiddenStack.submit")}
-                          </button>
-                        )}
+
+                      <div className={`relative flex min-h-[44px] min-w-[64px] items-center justify-center sm:min-h-[50px] ${reviewMode ? "invisible" : ""}`}>
+                        <span className="pointer-events-none select-none text-4xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.2] sm:text-5xl">
+                          {selectedN}
+                        </span>
+                        <span className="absolute text-3xl font-black tabular-nums text-[var(--color-text)] sm:text-4xl">{selectedN}</span>
+                      </div>
+
+                      <div className="grid [grid-template-areas:'stack']">
+                        <button
+                          type="button"
+                          onClick={() => newRound()}
+                          disabled={phase !== "feedback"}
+                          className={`pointer-events-auto [grid-area:stack] rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] sm:px-6 sm:text-base ${
+                            phase === "feedback" ? "" : "invisible"
+                          }`}
+                        >
+                          {t("games.hiddenStack.nextRound")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={submitAnswer}
+                          disabled={phase !== "think"}
+                          className={`pointer-events-auto [grid-area:stack] rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-black text-[var(--color-on-primary)] disabled:opacity-40 sm:px-6 sm:text-base ${
+                            phase === "think" ? "" : "invisible"
+                          }`}
+                        >
+                          {t("games.hiddenStack.submit")}
+                        </button>
                       </div>
                     </div>
-                  )}
-                  {!reviewMode && (
+
                     <div
                       ref={stripRef}
                       role="slider"
@@ -591,7 +591,9 @@ export default function HiddenStackGame() {
                       aria-valuemax={answerSlots}
                       aria-valuenow={selectedN}
                       aria-label={t("games.hiddenStack.sliderAria").replace("{max}", String(answerSlots))}
-                      className={`mx-auto grid w-full max-w-[min(100%,420px)] touch-none select-none gap-1 sm:gap-1.5 lg:max-w-full ${phase === "feedback" ? "pointer-events-none opacity-45" : ""}`}
+                      className={`mx-auto grid w-full max-w-[min(100%,420px)] touch-none select-none gap-1 sm:gap-1.5 lg:max-w-full ${
+                        reviewMode ? "invisible pointer-events-none" : phase === "feedback" ? "pointer-events-none opacity-45" : ""
+                      }`}
                       style={{ touchAction: "none", gridTemplateColumns: `repeat(${answerSlots}, minmax(0,1fr))` }}
                       onPointerDown={onStripPointerDown}
                       onPointerMove={onStripPointerMove}
@@ -609,7 +611,7 @@ export default function HiddenStackGame() {
                             key={n}
                             className={`flex h-9 min-w-0 flex-col items-center justify-end rounded-lg border-2 transition-colors sm:h-10 ${
                               lit
-                                ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_22%,var(--color-bg))] shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
+                                ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_22%,var(--color-bg))]"
                                 : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] opacity-55"
                             }`}
                           >
@@ -622,7 +624,7 @@ export default function HiddenStackGame() {
                         );
                       })}
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </section>
