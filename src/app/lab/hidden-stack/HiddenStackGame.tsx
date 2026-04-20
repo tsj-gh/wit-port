@@ -49,6 +49,7 @@ export default function HiddenStackGame() {
   const [resultLine, setResultLine] = useState<string | null>(null);
   const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
   const [reviewMode, setReviewMode] = useState(false);
+  const [statusMessageStyle, setStatusMessageStyle] = useState<"card" | "plain">("card");
   const [seedInput, setSeedInput] = useState("");
 
   const dragTwistRef = useRef<{ active: boolean; lastX: number }>({ active: false, lastX: 0 });
@@ -155,9 +156,7 @@ export default function HiddenStackGame() {
   const submitAnswer = useCallback(() => {
     if (phase !== "think") return;
     const ok = selectedN === puzzle.hiddenCount;
-    const line = ok
-      ? t("games.hiddenStack.resultCorrect").replace("{n}", String(puzzle.hiddenCount))
-      : t("games.hiddenStack.resultWrongLead") + t("games.hiddenStack.resultWrong").replace("{n}", String(puzzle.hiddenCount));
+    const line = t(ok ? "games.hiddenStack.resultCorrect" : "games.hiddenStack.resultWrong").replace("{n}", String(puzzle.hiddenCount));
     setResultLine(line);
     setIsAnswerCorrect(ok);
     setReviewMode(false);
@@ -303,6 +302,25 @@ export default function HiddenStackGame() {
                   />
                   <span className="tabular-nums text-[var(--color-text)]">{blockMeshVisualScale.toFixed(3)}×</span>
                 </label>
+              </div>
+              <div>
+                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugStatusStyle")}</div>
+                <div className="flex flex-wrap gap-1">
+                  {(["card", "plain"] as const).map((style) => (
+                    <button
+                      key={style}
+                      type="button"
+                      onClick={() => setStatusMessageStyle(style)}
+                      className={`rounded px-2 py-0.5 text-[10px] border ${
+                        statusMessageStyle === style
+                          ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_18%,var(--color-bg))] text-[var(--color-primary)]"
+                          : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)]"
+                      }`}
+                    >
+                      {style === "card" ? t("games.hiddenStack.statusStyleCard") : t("games.hiddenStack.statusStylePlain")}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugGoldLump")}</div>
@@ -485,57 +503,84 @@ export default function HiddenStackGame() {
                       <button
                         type="button"
                         onClick={() => newRound()}
-                        className="rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] shadow-md sm:px-6 sm:text-base"
+                        className="rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] sm:px-6 sm:text-base"
                       >
                         {t("games.hiddenStack.nextRound")}
                       </button>
                     </div>
                   ) : (
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                      {phase === "feedback" && (
-                        <button
-                          type="button"
-                          onClick={startReview}
-                          className="rounded-full border border-[color-mix(in_srgb,var(--color-text)_22%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_9%,var(--color-bg))] px-4 py-2 text-sm font-bold text-[var(--color-text)] shadow-sm sm:px-5"
-                        >
-                          {t("games.hiddenStack.review")}
-                        </button>
-                      )}
-                      <div className="relative flex min-h-[44px] min-w-[64px] items-center justify-center sm:min-h-[50px]">
-                        <span className="pointer-events-none select-none text-4xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.2] sm:text-5xl">
-                          {selectedN}
-                        </span>
-                        <span className="absolute text-3xl font-black tabular-nums text-[var(--color-text)] drop-shadow-sm sm:text-4xl">{selectedN}</span>
-                      </div>
+                    <div className="flex w-full flex-col items-center gap-2">
                       {phase === "feedback" && resultLine && (
-                        <p
-                          className={`rounded-full px-4 py-1.5 text-sm font-black shadow-sm sm:px-5 sm:text-base ${
-                            isAnswerCorrect
-                              ? "bg-[color-mix(in_srgb,#16a34a_18%,var(--color-bg))] text-[#166534] ring-1 ring-[color-mix(in_srgb,#16a34a_45%,transparent)]"
-                              : "bg-[color-mix(in_srgb,#1d4ed8_16%,var(--color-bg))] text-[#1e3a8a] ring-1 ring-[color-mix(in_srgb,#1d4ed8_45%,transparent)]"
-                          }`}
-                        >
-                          {resultLine}
-                        </p>
+                        <div className="flex w-full items-center justify-center">
+                          {statusMessageStyle === "card" ? (
+                            <p
+                              className={`rounded-[8px] px-3 py-1.5 text-sm font-bold sm:px-4 ${
+                                isAnswerCorrect
+                                  ? "bg-[color-mix(in_srgb,#16a34a_12%,var(--color-bg))] text-[#166534]"
+                                  : "bg-[color-mix(in_srgb,#1d4ed8_10%,var(--color-bg))] text-[#1e3a8a]"
+                              }`}
+                            >
+                              {isAnswerCorrect ? (
+                                resultLine
+                              ) : (
+                                <>
+                                  {t("games.hiddenStack.resultWrongLead")}
+                                  <span className="ml-1 font-black">{t("games.hiddenStack.resultWrong").replace("{n}", String(puzzle.hiddenCount))}</span>
+                                </>
+                              )}
+                            </p>
+                          ) : (
+                            <p className={`text-sm font-bold sm:text-base ${isAnswerCorrect ? "text-[#166534]" : "text-[#1e3a8a]"}`}>
+                              <span aria-hidden className="mr-1">
+                                {isAnswerCorrect ? "✓" : "!"}
+                              </span>
+                              {isAnswerCorrect ? (
+                                resultLine
+                              ) : (
+                                <>
+                                  {t("games.hiddenStack.resultWrongLead")}
+                                  <span className="ml-1 font-black">{t("games.hiddenStack.resultWrong").replace("{n}", String(puzzle.hiddenCount))}</span>
+                                </>
+                              )}
+                            </p>
+                          )}
+                        </div>
                       )}
-                      {phase === "feedback" ? (
-                        <button
-                          type="button"
-                          onClick={() => newRound()}
-                          className="rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] shadow-md sm:px-6 sm:text-base"
-                        >
-                          {t("games.hiddenStack.nextRound")}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={submitAnswer}
-                          disabled={phase !== "think"}
-                          className="rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-black text-[var(--color-on-primary)] shadow-md disabled:opacity-40 sm:px-6 sm:text-base"
-                        >
-                          {t("games.hiddenStack.submit")}
-                        </button>
-                      )}
+                      <div className="flex w-full flex-wrap items-center justify-center gap-x-4 gap-y-2">
+                        {phase === "feedback" && (
+                          <button
+                            type="button"
+                            onClick={startReview}
+                            className="rounded-full border border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] bg-transparent px-4 py-2 text-sm font-bold text-[var(--color-text)] sm:px-5"
+                          >
+                            {t("games.hiddenStack.review")}
+                          </button>
+                        )}
+                        <div className="relative flex min-h-[44px] min-w-[64px] items-center justify-center sm:min-h-[50px]">
+                          <span className="pointer-events-none select-none text-4xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.2] sm:text-5xl">
+                            {selectedN}
+                          </span>
+                          <span className="absolute text-3xl font-black tabular-nums text-[var(--color-text)] sm:text-4xl">{selectedN}</span>
+                        </div>
+                        {phase === "feedback" ? (
+                          <button
+                            type="button"
+                            onClick={() => newRound()}
+                            className="rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] sm:px-6 sm:text-base"
+                          >
+                            {t("games.hiddenStack.nextRound")}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={submitAnswer}
+                            disabled={phase !== "think"}
+                            className="rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-black text-[var(--color-on-primary)] disabled:opacity-40 sm:px-6 sm:text-base"
+                          >
+                            {t("games.hiddenStack.submit")}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                   {!reviewMode && (
