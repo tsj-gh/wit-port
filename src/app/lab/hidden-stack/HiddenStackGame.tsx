@@ -34,12 +34,12 @@ export default function HiddenStackGame() {
   const [materialVariant, setMaterialVariant] = useState<BlockMaterialVariant>("A");
   const [collapsePattern, setCollapsePattern] = useState<CollapsePatternId>(1);
   const [goldLumpParams, setGoldLumpParams] = useState<GoldLumpParams>({
-    color: "#e7b008",
+    color: "#FFC700",
     metalness: 1,
-    roughness: 0.3,
+    roughness: 0.2,
   });
   /** メッシュ見た目のみ（隙間対策）。物理コライダは HiddenStackCanvas 側で変更しない */
-  const [blockMeshVisualScale, setBlockMeshVisualScale] = useState(1.015);
+  const [blockMeshVisualScale, setBlockMeshVisualScale] = useState(1.05);
 
   const [puzzle, setPuzzle] = useState(() => generateHiddenStackPuzzle(`${Date.now()}`, { gridSize: 3 }));
   const [phase, setPhase] = useState<Phase>("intro");
@@ -282,7 +282,7 @@ export default function HiddenStackGame() {
                   <input
                     type="range"
                     min={1}
-                    max={1.03}
+                    max={1.2}
                     step={0.001}
                     value={blockMeshVisualScale}
                     onChange={(e) => setBlockMeshVisualScale(Number(e.target.value))}

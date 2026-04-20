@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, useBox, usePlane } from "@react-three/cannon";
 import * as THREE from "three";
-import { Line, RoundedBox } from "@react-three/drei";
+import { Environment, Line, RoundedBox } from "@react-three/drei";
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
 
@@ -21,7 +21,7 @@ const ORTHO_BBOX_MARGIN = 1.06;
 const BLOCK_B_BEVEL_RADIUS = 0.012;
 const BLOCK_B_BEVEL_SMOOTHNESS = 2;
 
-const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.015;
+const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.05;
 
 export type BlockMaterialVariant = "A" | "B" | "C";
 export type CollapsePatternId = 1 | 2 | 3;
@@ -46,7 +46,7 @@ type HiddenStackCanvasProps = {
   onIntroComplete: () => void;
   feedbackKey: number;
   goldLumpParams: GoldLumpParams;
-  /** メッシュ見た目のみ（1.01〜1.02 付近推奨）。物理コライダは変更しない */
+  /** メッシュ見た目のみ（既定 1.05）。物理コライダは変更しない */
   blockMeshVisualScale?: number;
 };
 
@@ -130,19 +130,28 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
 }
 
 function GoldLumpMaterial({ params }: { params: GoldLumpParams }) {
+  const matRef = useRef<THREE.MeshStandardMaterial>(null);
   const color = useMemo(() => {
     try {
       return new THREE.Color(params.color).getStyle();
     } catch {
-      return "#e7b008";
+      return "#FFC700";
     }
   }, [params.color]);
+
+  useEffect(() => {
+    const m = matRef.current;
+    if (!m) return;
+    m.needsUpdate = true;
+  }, [params.color, params.metalness, params.roughness, color]);
+
   return (
     <meshStandardMaterial
+      ref={matRef}
       color={color}
       metalness={params.metalness}
       roughness={params.roughness}
-      envMapIntensity={1.35}
+      envMapIntensity={2.25}
     />
   );
 }
@@ -578,14 +587,27 @@ function FeedbackScene({
   );
 }
 
-function Lights() {
+function Lights({ gridSize }: { gridSize: number }) {
+  const c = gridSize / 2;
   return (
     <>
-      <ambientLight intensity={0.55} />
-      <directionalLight position={[6, 10, 4]} intensity={1.05} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
-      <hemisphereLight args={["#f8fafc", "#44403c", 0.35]} />
+      <ambientLight intensity={0.82} />
+      <directionalLight
+        position={[c + 5, c + 12, c + 4]}
+        intensity={2.1}
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
+      <pointLight position={[c + 3, c * 2.8 + 6, c + 2.5]} intensity={1.35} decay={2} distance={0} color="#fff4dc" />
+      <hemisphereLight args={["#f4f4f5", "#3f3a36", 0.48]} />
     </>
   );
+}
+
+/** 金属マテリアル用 IBL（PMREM）。背景色は `<color>` のまま */
+function HiddenStackEnvironment() {
+  return <Environment preset="studio" background={false} />;
 }
 
 export default function HiddenStackCanvas({
@@ -620,7 +642,8 @@ export default function HiddenStackCanvas({
       camera={{ position: [0, 0, 1], near: 0.1, far: 320, zoom: 1 }}
     >
       <color attach="background" args={["#f1f5f9"]} />
-      <Lights />
+      <HiddenStackEnvironment />
+      <Lights gridSize={gridSize} />
       <RigCamera twistDeg={twistDeg} gridSize={gridSize} />
       <FloorGrid gridSize={gridSize} />
       {phase === "intro" && (
