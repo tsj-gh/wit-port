@@ -222,14 +222,38 @@ function BlockMaterial({ variant }: { variant: BlockMaterialVariant }) {
 }
 
 function FloorGrid({ gridSize }: { gridSize: number }) {
-  const pts: THREE.Vector3[] = [];
-  for (let i = 0; i <= gridSize; i++) {
-    pts.push(new THREE.Vector3(i, 0.002, 0), new THREE.Vector3(i, 0.002, gridSize));
-    pts.push(new THREE.Vector3(0, 0.002, i), new THREE.Vector3(gridSize, 0.002, i));
-  }
+  /** 各 `<Line>` は2点のみ＝独立線分。drei の Line は points 全体が一本の折れ線になるため結合しない */
+  const verticalSegments = useMemo(
+    () =>
+      Array.from({ length: gridSize + 1 }, (_, i) => [
+        new THREE.Vector3(i, 0.002, 0),
+        new THREE.Vector3(i, 0.002, gridSize),
+      ]),
+    [gridSize]
+  );
+  const horizontalSegments = useMemo(
+    () =>
+      Array.from({ length: gridSize + 1 }, (_, i) => [
+        new THREE.Vector3(0, 0.002, i),
+        new THREE.Vector3(gridSize, 0.002, i),
+      ]),
+    [gridSize]
+  );
+  const lineProps = {
+    color: "#9ca3af" as const,
+    lineWidth: 1,
+    dashed: false,
+    transparent: true,
+    opacity: 0.45,
+  };
   return (
     <group>
-      <Line points={pts} color="#9ca3af" lineWidth={1} dashed={false} transparent opacity={0.45} />
+      {verticalSegments.map((points, i) => (
+        <Line key={`floor-v-${i}`} points={points} {...lineProps} />
+      ))}
+      {horizontalSegments.map((points, i) => (
+        <Line key={`floor-h-${i}`} points={points} {...lineProps} />
+      ))}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[gridSize / 2, 0, gridSize / 2]}>
         <planeGeometry args={[gridSize + 0.24, gridSize + 0.24]} />
         <meshStandardMaterial color="#e8e4dc" roughness={0.95} metalness={0} transparent opacity={0.92} />
