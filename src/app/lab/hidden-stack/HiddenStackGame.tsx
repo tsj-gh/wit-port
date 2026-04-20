@@ -22,6 +22,7 @@ const ICON_SLOTS = 10;
 const TWIST_MAX = 15;
 
 type Phase = "intro" | "think" | "feedback";
+type StatusOverlayPhase = "hidden" | "animating" | "docked";
 
 export default function HiddenStackGame() {
   const { t } = useI18n();
@@ -50,6 +51,7 @@ export default function HiddenStackGame() {
   const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
   const [reviewMode, setReviewMode] = useState(false);
   const [statusMessageStyle, setStatusMessageStyle] = useState<"card" | "plain">("card");
+  const [statusOverlayPhase, setStatusOverlayPhase] = useState<StatusOverlayPhase>("hidden");
   const [seedInput, setSeedInput] = useState("");
 
   const dragTwistRef = useRef<{ active: boolean; lastX: number }>({ active: false, lastX: 0 });
@@ -80,6 +82,7 @@ export default function HiddenStackGame() {
     setResultLine(null);
     setIsAnswerCorrect(null);
     setReviewMode(false);
+    setStatusOverlayPhase("hidden");
     setFeedbackKey((k) => k + 1);
   }, []);
 
@@ -160,6 +163,7 @@ export default function HiddenStackGame() {
     setResultLine(line);
     setIsAnswerCorrect(ok);
     setReviewMode(false);
+    setStatusOverlayPhase("animating");
     setPhase("feedback");
     setFeedbackKey((k) => k + 1);
   }, [phase, selectedN, puzzle.hiddenCount, t]);
@@ -492,39 +496,29 @@ export default function HiddenStackGame() {
                   />
                 </div>
                 {phase === "feedback" && resultLine && (
-                  <div className="pointer-events-none absolute right-2 top-2 z-20 sm:right-3 sm:top-3">
-                    {statusMessageStyle === "card" ? (
-                      <p
-                        className={`rounded-[8px] px-3 py-1.5 text-sm font-bold sm:px-4 ${
-                          isAnswerCorrect
-                            ? "bg-[color-mix(in_srgb,#16a34a_12%,var(--color-bg))] text-[#166534]"
-                            : "bg-[color-mix(in_srgb,#1d4ed8_10%,var(--color-bg))] text-[#1e3a8a]"
-                        }`}
-                      >
-                        {isAnswerCorrect ? (
-                          resultLine
-                        ) : (
-                          <>
-                            {t("games.hiddenStack.resultWrongLead")}
-                            <span className="ml-1 font-black">{t("games.hiddenStack.resultWrong").replace("{n}", String(puzzle.hiddenCount))}</span>
-                          </>
-                        )}
-                      </p>
-                    ) : (
-                      <p className={`text-sm font-bold sm:text-base ${isAnswerCorrect ? "text-[#166534]" : "text-[#1e3a8a]"}`}>
-                        <span aria-hidden className="mr-1">
-                          {isAnswerCorrect ? "✓" : "!"}
-                        </span>
-                        {isAnswerCorrect ? (
-                          resultLine
-                        ) : (
-                          <>
-                            {t("games.hiddenStack.resultWrongLead")}
-                            <span className="ml-1 font-black">{t("games.hiddenStack.resultWrong").replace("{n}", String(puzzle.hiddenCount))}</span>
-                          </>
-                        )}
-                      </p>
-                    )}
+                  <div
+                    className={`hs-status-overlay ${
+                      statusOverlayPhase === "animating" ? "hs-status-overlay--animating" : "hs-status-overlay--docked"
+                    } ${isAnswerCorrect ? "hs-status-overlay--ok" : "hs-status-overlay--ng"} ${
+                      statusMessageStyle === "plain" ? "hs-status-overlay--plain" : ""
+                    }`}
+                    onAnimationEnd={() => {
+                      if (statusOverlayPhase === "animating") setStatusOverlayPhase("docked");
+                    }}
+                  >
+                    <p className="m-0 text-sm font-bold sm:text-base">
+                      <span aria-hidden className="mr-1">
+                        {isAnswerCorrect ? "✓" : "!"}
+                      </span>
+                      {isAnswerCorrect ? (
+                        resultLine
+                      ) : (
+                        <>
+                          {t("games.hiddenStack.resultWrongLead")}
+                          <span className="ml-1 font-black">{t("games.hiddenStack.resultWrong").replace("{n}", String(puzzle.hiddenCount))}</span>
+                        </>
+                      )}
+                    </p>
                   </div>
                 )}
               </div>
@@ -641,6 +635,72 @@ export default function HiddenStackGame() {
             </div>
           </aside>
         </div>
+      <style jsx>{`
+        .hs-status-overlay {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          z-index: 60;
+          pointer-events: none;
+          border-radius: 9999px;
+          border: 1px solid color-mix(in srgb, var(--color-text) 16%, transparent);
+          background: rgba(255, 255, 255, 0.95);
+          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.2);
+          padding: 8px 14px;
+          white-space: nowrap;
+          transform: translate(-50%, -50%) scale(0);
+          opacity: 0;
+        }
+        .hs-status-overlay--ok {
+          color: #166534;
+          border-color: rgba(34, 197, 94, 0.45);
+          background: rgba(240, 253, 244, 0.95);
+        }
+        .hs-status-overlay--ng {
+          color: #b91c1c;
+          border-color: rgba(239, 68, 68, 0.5);
+          background: rgba(254, 242, 242, 0.95);
+        }
+        .hs-status-overlay--plain {
+          border-radius: 12px;
+        }
+        .hs-status-overlay--animating {
+          animation: hs-pop-and-slide 1450ms cubic-bezier(0.22, 0.9, 0.31, 1) forwards;
+        }
+        .hs-status-overlay--docked {
+          left: auto;
+          top: 20px;
+          right: 20px;
+          transform: scale(0.8);
+          opacity: 1;
+        }
+        @keyframes hs-pop-and-slide {
+          0% {
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            opacity: 0;
+          }
+          20% {
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%) scale(1.2);
+            opacity: 1;
+          }
+          60% {
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+          }
+          100% {
+            left: 100%;
+            top: 0;
+            transform: translate(calc(-100% - 20px), 20px) scale(0.8);
+            opacity: 1;
+          }
+        }
+      `}</style>
     </div>
   );
 }
