@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, useBox, usePlane } from "@react-three/cannon";
 import * as THREE from "three";
 import { Line, RoundedBox } from "@react-three/drei";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
 
@@ -34,47 +33,6 @@ export type GoldLumpParams = {
   roughness: number;
 };
 
-/** デバッグパネル用：通常／正解／不正解フィードバックのライト・金の env 強度 */
-export type HiddenStackLightingDebug = {
-  normalAmbient: number;
-  normalDirectional: number;
-  normalDirOffsetX: number;
-  normalDirOffsetY: number;
-  normalDirOffsetZ: number;
-  normalHemisphereIntensity: number;
-  normalPointIntensity: number;
-  wrongFeedbackAmbient: number;
-  wrongFeedbackDirectional: number;
-  correctFeedbackAmbient: number;
-  correctFeedbackDirectional: number;
-  correctSpotIntensity: number;
-  correctSpotAngleDeg: number;
-  correctSpotPenumbra: number;
-  correctSpotHeight: number;
-  goldEnvMapIntensityCorrect: number;
-  goldEnvMapIntensityWrong: number;
-};
-
-export const DEFAULT_HIDDEN_STACK_LIGHTING_DEBUG: HiddenStackLightingDebug = {
-  normalAmbient: 0.4,
-  normalDirectional: 1.05,
-  normalDirOffsetX: 5,
-  normalDirOffsetY: 12,
-  normalDirOffsetZ: 4,
-  normalHemisphereIntensity: 0.28,
-  normalPointIntensity: 0.2,
-  wrongFeedbackAmbient: 0.44,
-  wrongFeedbackDirectional: 1.12,
-  correctFeedbackAmbient: 0.3,
-  correctFeedbackDirectional: 1.72,
-  correctSpotIntensity: 6,
-  correctSpotAngleDeg: 38,
-  correctSpotPenumbra: 0.42,
-  correctSpotHeight: 16,
-  goldEnvMapIntensityCorrect: 3.4,
-  goldEnvMapIntensityWrong: 0.55,
-};
-
 /** 崩落ブロックを消すまでの待ち＋フェード（秒） */
 const FEEDBACK_FALL_FADE_START_SEC = 1.0;
 const FEEDBACK_FALL_FADE_DURATION_SEC = 1.0;
@@ -90,9 +48,6 @@ type HiddenStackCanvasProps = {
   goldLumpParams: GoldLumpParams;
   /** メッシュ見た目のみ（既定 1.05）。物理コライダは変更しない */
   blockMeshVisualScale?: number;
-  /** 直近の解答判定（正解時のみ Room IBL ＋スポット） */
-  feedbackOutcome: "idle" | "correct" | "wrong";
-  lightingDebug: HiddenStackLightingDebug;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -174,13 +129,13 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
   return null;
 }
 
-function GoldLumpMaterial({ params, envMapIntensity }: { params: GoldLumpParams; envMapIntensity: number }) {
+function GoldLumpMaterial({ params }: { params: GoldLumpParams }) {
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
   const color = useMemo(() => {
     try {
       return new THREE.Color(params.color).getStyle();
     } catch {
-      return "#FFD700";
+      return "#e7b008";
     }
   }, [params.color]);
 
@@ -188,7 +143,7 @@ function GoldLumpMaterial({ params, envMapIntensity }: { params: GoldLumpParams;
     const m = matRef.current;
     if (!m) return;
     m.needsUpdate = true;
-  }, [params.color, params.metalness, params.roughness, color, envMapIntensity]);
+  }, [params.color, params.metalness, params.roughness, color]);
 
   return (
     <meshStandardMaterial
@@ -196,14 +151,14 @@ function GoldLumpMaterial({ params, envMapIntensity }: { params: GoldLumpParams;
       color={color}
       metalness={params.metalness}
       roughness={params.roughness}
-      envMapIntensity={envMapIntensity}
+      envMapIntensity={1.35}
     />
   );
 }
 
 function BlockMaterial({ variant }: { variant: BlockMaterialVariant }) {
   if (variant === "A") {
-    return <meshStandardMaterial color="#c9a06c" roughness={0.8} metalness={0} />;
+    return <meshStandardMaterial color="#c9a06c" roughness={0.88} metalness={0.06} />;
   }
   if (variant === "B") {
     return <meshPhysicalMaterial color="#f6b8c6" roughness={0.32} metalness={0} clearcoat={0.35} clearcoatRoughness={0.4} />;
@@ -425,12 +380,10 @@ function StaticBlock({
   position,
   goldParams,
   visualMeshScale,
-  goldEnvMapIntensity,
 }: {
   position: [number, number, number];
   goldParams: GoldLumpParams;
   visualMeshScale: number;
-  goldEnvMapIntensity: number;
 }) {
   const [ref] = useBox(() => ({
     type: "Static",
@@ -444,7 +397,7 @@ function StaticBlock({
     <group ref={ref as unknown as RefObject<THREE.Group>}>
       <mesh castShadow receiveShadow scale={visualMeshScale}>
         <boxGeometry args={[0.96, 0.96, 0.96]} />
-        <GoldLumpMaterial params={goldParams} envMapIntensity={goldEnvMapIntensity} />
+        <GoldLumpMaterial params={goldParams} />
       </mesh>
     </group>
   );
@@ -579,8 +532,6 @@ function FeedbackScene({
   gridSize,
   goldLumpParams,
   visualMeshScale,
-  feedbackOutcome,
-  lightingDebug,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
@@ -588,8 +539,6 @@ function FeedbackScene({
   gridSize: number;
   goldLumpParams: GoldLumpParams;
   visualMeshScale: number;
-  feedbackOutcome: "idle" | "correct" | "wrong";
-  lightingDebug: HiddenStackLightingDebug;
 }) {
   const center = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
   const [showFalling, setShowFalling] = useState(true);
@@ -604,9 +553,6 @@ function FeedbackScene({
       window.clearTimeout(id);
     };
   }, [puzzle.sourceSeed, pattern]);
-
-  const goldEnvMapIntensity =
-    feedbackOutcome === "correct" ? lightingDebug.goldEnvMapIntensityCorrect : lightingDebug.goldEnvMapIntensityWrong;
 
   const impulses = useMemo(() => {
     const out: { key: string; impulse: [number, number, number]; torque: [number, number, number]; pos: [number, number, number] }[] = [];
@@ -647,15 +593,7 @@ function FeedbackScene({
       ))}
       {Array.from(puzzle.hiddenKeys).map((k) => {
         const p = cellCenter(parseKey(k));
-        return (
-          <StaticBlock
-            key={`h-${k}`}
-            position={[p.x, p.y, p.z]}
-            goldParams={goldLumpParams}
-            visualMeshScale={visualMeshScale}
-            goldEnvMapIntensity={goldEnvMapIntensity}
-          />
-        );
+        return <StaticBlock key={`h-${k}`} position={[p.x, p.y, p.z]} goldParams={goldLumpParams} visualMeshScale={visualMeshScale} />;
       })}
       {showFalling &&
         impulses.map(({ key, impulse, torque, pos }) => (
@@ -673,119 +611,18 @@ function FeedbackScene({
   );
 }
 
-/** 正解フィードバック時のみ：RoomEnvironment を PMREM 化して scene.environment に適用 */
-function CorrectAnswerRoomEnvironment({ active }: { active: boolean }) {
-  const { gl, scene } = useThree();
-
-  useEffect(() => {
-    if (!active) {
-      scene.environment = null;
-      return;
-    }
-    const pmrem = new THREE.PMREMGenerator(gl);
-    const room = new RoomEnvironment();
-    const rt = pmrem.fromScene(room, 0.039);
-    scene.environment = rt.texture;
-    room.dispose();
-    return () => {
-      scene.environment = null;
-      rt.dispose();
-      pmrem.dispose();
-    };
-  }, [active, gl, scene]);
-
-  return null;
-}
-
-function GoldSpotAboveBoard({ gridSize, lighting }: { gridSize: number; lighting: HiddenStackLightingDebug }) {
-  const lightRef = useRef<THREE.SpotLight>(null);
-  const targetRef = useRef<THREE.Object3D>(null);
-  const c = gridSize / 2;
-  const angle = THREE.MathUtils.degToRad(lighting.correctSpotAngleDeg);
-
-  useLayoutEffect(() => {
-    const L = lightRef.current;
-    const T = targetRef.current;
-    if (L && T) {
-      L.target = T;
-      L.target.updateMatrixWorld();
-    }
-  }, [gridSize]);
-
+function Lights() {
   return (
     <>
-      <object3D ref={targetRef} position={[c, c, c]} />
-      <spotLight
-        ref={lightRef}
-        position={[c, c + lighting.correctSpotHeight, c]}
-        angle={angle}
-        penumbra={lighting.correctSpotPenumbra}
-        intensity={lighting.correctSpotIntensity}
-        color="#fffdfb"
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        distance={0}
-        decay={1.85}
-      />
-    </>
-  );
-}
-
-function SceneLights({
-  phase,
-  feedbackOutcome,
-  gridSize,
-  lightingDebug,
-}: {
-  phase: "intro" | "think" | "feedback";
-  feedbackOutcome: "idle" | "correct" | "wrong";
-  gridSize: number;
-  lightingDebug: HiddenStackLightingDebug;
-}) {
-  const c = gridSize / 2;
-  const isIntroOrThink = phase === "intro" || phase === "think";
-  const isCorrectFeedback = phase === "feedback" && feedbackOutcome === "correct";
-  /** 正解演出以外のフィードバック（不正解・未確定の安全側） */
-  const isNonCorrectFeedback = phase === "feedback" && feedbackOutcome !== "correct";
-
-  const ambientIntensity = isIntroOrThink
-    ? lightingDebug.normalAmbient
-    : isNonCorrectFeedback
-      ? lightingDebug.wrongFeedbackAmbient
-      : lightingDebug.correctFeedbackAmbient;
-
-  const directionalIntensity = isIntroOrThink
-    ? lightingDebug.normalDirectional
-    : isNonCorrectFeedback
-      ? lightingDebug.wrongFeedbackDirectional
-      : lightingDebug.correctFeedbackDirectional;
-
-  const ox = lightingDebug.normalDirOffsetX;
-  const oy = lightingDebug.normalDirOffsetY;
-  const oz = lightingDebug.normalDirOffsetZ;
-
-  return (
-    <>
-      <ambientLight intensity={ambientIntensity} />
+      <ambientLight intensity={0.55} />
       <directionalLight
-        position={[c + ox, c + oy, c + oz]}
-        intensity={directionalIntensity}
+        position={[6, 10, 4]}
+        intensity={1.05}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
-      {!isCorrectFeedback && (
-        <pointLight
-          position={[c + 2.5, c * 2.2 + 4, c + 2]}
-          intensity={lightingDebug.normalPointIntensity}
-          decay={2}
-          distance={0}
-          color="#f5ebe0"
-        />
-      )}
-      <hemisphereLight args={["#eef2f6", "#3a3530", lightingDebug.normalHemisphereIntensity]} />
-      {isCorrectFeedback && <GoldSpotAboveBoard gridSize={gridSize} lighting={lightingDebug} />}
+      <hemisphereLight args={["#f8fafc", "#44403c", 0.35]} />
     </>
   );
 }
@@ -800,12 +637,9 @@ export default function HiddenStackCanvas({
   feedbackKey,
   goldLumpParams,
   blockMeshVisualScale = DEFAULT_BLOCK_MESH_VISUAL_SCALE,
-  feedbackOutcome,
-  lightingDebug,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
-  const dramaticCorrect = phase === "feedback" && feedbackOutcome === "correct";
   const cells = useMemo(
     () => puzzle.cells.map((c) => ({ key: cellKey(c), center: cellCenter(c) })),
     [puzzle.cells]
@@ -825,8 +659,7 @@ export default function HiddenStackCanvas({
       camera={{ position: [0, 0, 1], near: 0.1, far: 320, zoom: 1 }}
     >
       <color attach="background" args={["#f1f5f9"]} />
-      <CorrectAnswerRoomEnvironment active={dramaticCorrect} />
-      <SceneLights phase={phase} feedbackOutcome={feedbackOutcome} gridSize={gridSize} lightingDebug={lightingDebug} />
+      <Lights />
       <RigCamera twistDeg={twistDeg} gridSize={gridSize} />
       <FloorGrid gridSize={gridSize} />
       {phase === "intro" && (
@@ -848,8 +681,6 @@ export default function HiddenStackCanvas({
             gridSize={gridSize}
             goldLumpParams={goldLumpParams}
             visualMeshScale={visualMeshScale}
-            feedbackOutcome={feedbackOutcome}
-            lightingDebug={lightingDebug}
           />
         </Physics>
       )}
