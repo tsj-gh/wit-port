@@ -8,6 +8,7 @@ import { GamePageHeader } from "@/components/GamePageHeader";
 import { DevDebugUserStats } from "@/components/DevDebugUserStats";
 import {
   GAME_AD_GAP_BEFORE_SLOT_2_PX,
+  HIDDEN_STACK_INITIAL_SCROLL_TOP_FUDGE_PX,
   HIDDEN_STACK_PC_ANSWER_BAND_FALLBACK_PX,
   HIDDEN_STACK_PC_CANVAS_VERTICAL_FUDGE_PX,
   HIDDEN_STACK_PC_TOP_AD_SASH_HEIGHT_PX,
@@ -71,7 +72,6 @@ export default function HiddenStackGame() {
   const topAdRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const answerBandRef = useRef<HTMLDivElement>(null);
-  const didInitialAutoScrollRef = useRef(false);
   const [isLgViewport, setIsLgViewport] = useState(false);
   const [answerBandHeightPx, setAnswerBandHeightPx] = useState(HIDDEN_STACK_PC_ANSWER_BAND_FALLBACK_PX);
 
@@ -137,20 +137,48 @@ export default function HiddenStackGame() {
     return () => mq.removeEventListener("change", sync);
   }, []);
 
-  useEffect(() => {
-    if (didInitialAutoScrollRef.current) return;
-    const t = window.setTimeout(() => {
-      if (didInitialAutoScrollRef.current) return;
-      if (typeof window === "undefined") return;
-      if (window.innerWidth >= 1024) {
-        topAdRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
-      } else {
-        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-      }
-      didInitialAutoScrollRef.current = true;
-    }, 0);
-    return () => window.clearTimeout(t);
+  const scrollToTopAdSlot1 = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const el = topAdRef.current;
+    if (!el) return;
+    const y = el.getBoundingClientRect().top + window.scrollY - HIDDEN_STACK_INITIAL_SCROLL_TOP_FUDGE_PX;
+    window.scrollTo({ top: Math.max(0, y), left: 0, behavior: "auto" });
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let previousRestoration: ScrollRestoration | undefined;
+    if ("scrollRestoration" in history) {
+      previousRestoration = history.scrollRestoration;
+      history.scrollRestoration = "manual";
+    }
+
+    const applyAfterPaint = () => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          scrollToTopAdSlot1();
+        });
+      });
+    };
+
+    const onWindowLoad = () => {
+      applyAfterPaint();
+    };
+
+    if (document.readyState === "complete") {
+      onWindowLoad();
+    } else {
+      window.addEventListener("load", onWindowLoad);
+    }
+
+    return () => {
+      window.removeEventListener("load", onWindowLoad);
+      if (previousRestoration != null && "scrollRestoration" in history) {
+        history.scrollRestoration = previousRestoration;
+      }
+    };
+  }, [scrollToTopAdSlot1]);
 
   useEffect(() => {
     if (!isLgViewport) return;
