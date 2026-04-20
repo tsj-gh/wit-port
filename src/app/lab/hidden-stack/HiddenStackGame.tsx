@@ -14,9 +14,30 @@ import {
 } from "@/lib/gameLayout";
 import { generateHiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { useI18n } from "@/lib/i18n-context";
-import type { BlockMaterialVariant, CollapsePatternId, GoldLumpParams } from "./HiddenStackCanvas";
+import type { BlockMaterialVariant, CollapsePatternId, GoldLumpParams, HiddenStackLightingDebug } from "./HiddenStackCanvas";
+import { DEFAULT_HIDDEN_STACK_LIGHTING_DEBUG } from "./HiddenStackCanvas";
 
 const HiddenStackCanvas = dynamic(() => import("./HiddenStackCanvas"), { ssr: false });
+
+const LIGHTING_DEBUG_LABEL_KEY: Record<keyof HiddenStackLightingDebug, `games.hiddenStack.${string}`> = {
+  normalAmbient: "games.hiddenStack.debugLight_normalAmbient",
+  normalDirectional: "games.hiddenStack.debugLight_normalDirectional",
+  normalDirOffsetX: "games.hiddenStack.debugLight_normalDirOffsetX",
+  normalDirOffsetY: "games.hiddenStack.debugLight_normalDirOffsetY",
+  normalDirOffsetZ: "games.hiddenStack.debugLight_normalDirOffsetZ",
+  normalHemisphereIntensity: "games.hiddenStack.debugLight_normalHemisphereIntensity",
+  normalPointIntensity: "games.hiddenStack.debugLight_normalPointIntensity",
+  wrongFeedbackAmbient: "games.hiddenStack.debugLight_wrongFeedbackAmbient",
+  wrongFeedbackDirectional: "games.hiddenStack.debugLight_wrongFeedbackDirectional",
+  correctFeedbackAmbient: "games.hiddenStack.debugLight_correctFeedbackAmbient",
+  correctFeedbackDirectional: "games.hiddenStack.debugLight_correctFeedbackDirectional",
+  correctSpotIntensity: "games.hiddenStack.debugLight_correctSpotIntensity",
+  correctSpotAngleDeg: "games.hiddenStack.debugLight_correctSpotAngleDeg",
+  correctSpotPenumbra: "games.hiddenStack.debugLight_correctSpotPenumbra",
+  correctSpotHeight: "games.hiddenStack.debugLight_correctSpotHeight",
+  goldEnvMapIntensityCorrect: "games.hiddenStack.debugLight_goldEnvMapIntensityCorrect",
+  goldEnvMapIntensityWrong: "games.hiddenStack.debugLight_goldEnvMapIntensityWrong",
+};
 
 const ICON_SLOTS = 10;
 const TWIST_MAX = 15;
@@ -34,12 +55,14 @@ export default function HiddenStackGame() {
   const [materialVariant, setMaterialVariant] = useState<BlockMaterialVariant>("A");
   const [collapsePattern, setCollapsePattern] = useState<CollapsePatternId>(1);
   const [goldLumpParams, setGoldLumpParams] = useState<GoldLumpParams>({
-    color: "#FFC700",
+    color: "#FFD700",
     metalness: 1,
-    roughness: 0.2,
+    roughness: 0.1,
   });
   /** メッシュ見た目のみ（隙間対策）。物理コライダは HiddenStackCanvas 側で変更しない */
   const [blockMeshVisualScale, setBlockMeshVisualScale] = useState(1.05);
+  const [feedbackOutcome, setFeedbackOutcome] = useState<"idle" | "correct" | "wrong">("idle");
+  const [lightingDebug, setLightingDebug] = useState<HiddenStackLightingDebug>(() => ({ ...DEFAULT_HIDDEN_STACK_LIGHTING_DEBUG }));
 
   const [puzzle, setPuzzle] = useState(() => generateHiddenStackPuzzle(`${Date.now()}`, { gridSize: 3 }));
   const [phase, setPhase] = useState<Phase>("intro");
@@ -76,6 +99,7 @@ export default function HiddenStackGame() {
     setSelectedN(Math.max(1, Math.min(Math.max(ICON_SLOTS, Math.min(24, nextHiddenCount + 4)), Math.floor((nextHiddenCount + 1) / 2))));
     setResultLine(null);
     setFeedbackKey((k) => k + 1);
+    setFeedbackOutcome("idle");
   }, []);
 
   const newRound = useCallback((nextGridSize?: number) => {
@@ -153,6 +177,7 @@ export default function HiddenStackGame() {
     const ok = selectedN === puzzle.hiddenCount;
     const key = ok ? "games.hiddenStack.resultCorrect" : "games.hiddenStack.resultWrong";
     setResultLine(t(key).replace("{n}", String(puzzle.hiddenCount)));
+    setFeedbackOutcome(ok ? "correct" : "wrong");
     setPhase("feedback");
     setFeedbackKey((k) => k + 1);
   }, [phase, selectedN, puzzle.hiddenCount, t]);
@@ -291,6 +316,55 @@ export default function HiddenStackGame() {
                   <span className="tabular-nums text-[var(--color-text)]">{blockMeshVisualScale.toFixed(3)}×</span>
                 </label>
               </div>
+              <details className="rounded border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_4%,transparent)] px-2 py-1.5 text-[var(--color-text)]">
+                <summary className="cursor-pointer select-none text-[11px] font-semibold text-[var(--color-text)]">
+                  {t("games.hiddenStack.debugLightingAccordion")}
+                </summary>
+                <div className="mt-2 space-y-2 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pt-2">
+                  {(
+                    [
+                      ["normalAmbient", 0, 1.2, 0.01],
+                      ["normalDirectional", 0, 3.5, 0.02],
+                      ["normalDirOffsetX", -8, 16, 0.25],
+                      ["normalDirOffsetY", 4, 28, 0.25],
+                      ["normalDirOffsetZ", -8, 16, 0.25],
+                      ["normalHemisphereIntensity", 0, 1.2, 0.01],
+                      ["normalPointIntensity", 0, 2.5, 0.02],
+                      ["wrongFeedbackAmbient", 0, 1.2, 0.01],
+                      ["wrongFeedbackDirectional", 0, 3.5, 0.02],
+                      ["correctFeedbackAmbient", 0, 1.2, 0.01],
+                      ["correctFeedbackDirectional", 0, 4, 0.02],
+                      ["correctSpotIntensity", 0, 18, 0.1],
+                      ["correctSpotAngleDeg", 8, 70, 0.5],
+                      ["correctSpotPenumbra", 0, 1, 0.01],
+                      ["correctSpotHeight", 4, 36, 0.25],
+                      ["goldEnvMapIntensityCorrect", 0, 8, 0.05],
+                      ["goldEnvMapIntensityWrong", 0, 4, 0.05],
+                    ] as const
+                  ).map(([key, min, max, step]) => (
+                    <label key={key} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span className="w-[min(100%,11rem)] shrink-0 text-[9px] leading-tight text-[var(--color-muted)]">
+                        {t(LIGHTING_DEBUG_LABEL_KEY[key])}
+                      </span>
+                      <input
+                        type="range"
+                        min={min}
+                        max={max}
+                        step={step}
+                        value={lightingDebug[key]}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setLightingDebug((d) => ({ ...d, [key]: v }));
+                        }}
+                        className="min-w-[80px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="w-10 shrink-0 text-right tabular-nums text-[var(--color-text)]">
+                        {lightingDebug[key].toFixed(2)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </details>
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugGoldLump")}</div>
                 <div className="space-y-2">
@@ -457,6 +531,8 @@ export default function HiddenStackGame() {
                     feedbackKey={feedbackKey}
                     goldLumpParams={goldLumpParams}
                     blockMeshVisualScale={blockMeshVisualScale}
+                    feedbackOutcome={feedbackOutcome}
+                    lightingDebug={lightingDebug}
                   />
                 </div>
                 {phase === "feedback" && resultLine && (
