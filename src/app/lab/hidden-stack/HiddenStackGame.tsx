@@ -22,7 +22,7 @@ const ICON_SLOTS = 10;
 const TWIST_MAX = 15;
 
 const DEFAULT_RESULT_MESSAGE_DELAY_MS = 500;
-const DEFAULT_RESULT_MESSAGE_ORIGIN_Y_PCT = 35;
+const DEFAULT_RESULT_MESSAGE_ORIGIN_Y_PCT = 20;
 const RESULT_MESSAGE_DELAY_MS_MIN = 0;
 const RESULT_MESSAGE_DELAY_MS_MAX = 2500;
 const RESULT_MESSAGE_ORIGIN_Y_MIN = 15;
@@ -602,9 +602,6 @@ export default function HiddenStackGame() {
                     }}
                   >
                     <p className="m-0 text-sm font-bold sm:text-base">
-                      <span aria-hidden className="mr-1">
-                        {isAnswerCorrect ? "✓" : "!"}
-                      </span>
                       {isAnswerCorrect ? (
                         resultLine
                       ) : (
@@ -734,7 +731,7 @@ export default function HiddenStackGame() {
         .hs-status-overlay {
           position: absolute;
           left: 50%;
-          top: var(--hs-result-origin-y, 35%);
+          top: var(--hs-result-origin-y, 20%);
           z-index: 60;
           pointer-events: none;
           border-radius: 12px;
@@ -788,19 +785,19 @@ export default function HiddenStackGame() {
         @keyframes hs-pop-and-slide {
           0% {
             left: 50%;
-            top: var(--hs-result-origin-y, 35%);
+            top: var(--hs-result-origin-y, 20%);
             transform: translate(-50%, -50%) scale(0);
             opacity: 0;
           }
           20% {
             left: 50%;
-            top: var(--hs-result-origin-y, 35%);
+            top: var(--hs-result-origin-y, 20%);
             transform: translate(-50%, -50%) scale(1.2);
             opacity: 1;
           }
           60% {
             left: 50%;
-            top: var(--hs-result-origin-y, 35%);
+            top: var(--hs-result-origin-y, 20%);
             transform: translate(-50%, -50%) scale(1);
             opacity: 1;
           }
