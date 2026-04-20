@@ -264,6 +264,7 @@
     "hiddenStack": {
       "titleJa": "かくれつみき",
       "debugPanel": "かくれつみき DEBUG",
+      "debugMeshCrevice": "見た目メッシュ拡大（隙間対策・物理は不変）",
       "debugMaterial": "積み木の質感",
       "matA": "A 木目調",
       "matB": "B セミグロス",

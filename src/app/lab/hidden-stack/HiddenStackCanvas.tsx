@@ -8,8 +8,20 @@ import { Line, RoundedBox } from "@react-three/drei";
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
 
-/** 物理ボディ（半辺 0.48）はそのままに、AA・浮動小数の丸めで見える隙間だけをごくわずかに塞ぐ */
-const BLOCK_MESH_OVERLAP_SCALE = 1.002;
+/** 物理ボディ（半辺 0.48）はそのまま。レンダリング丸め用の最小オーバーラップ（メッシュのみ） */
+const BLOCK_MESH_BASE_OVERLAP = 1.002;
+
+/** 積み木塊の縦方向が Canvas 高さに占める目標比率（0.80〜0.85 の中間） */
+const ORTHO_STACK_VERTICAL_FILL = 0.825;
+
+/** バウンディングボックスに対する ortho 余白（わずかに広げてクリップを避ける） */
+const ORTHO_BBOX_MARGIN = 1.06;
+
+/** 材質 B の RoundedBox：大きなベベルは谷間から背景が見えやすいため弱める */
+const BLOCK_B_BEVEL_RADIUS = 0.012;
+const BLOCK_B_BEVEL_SMOOTHNESS = 2;
+
+const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.015;
 
 export type BlockMaterialVariant = "A" | "B" | "C";
 export type CollapsePatternId = 1 | 2 | 3;
@@ -34,6 +46,8 @@ type HiddenStackCanvasProps = {
   onIntroComplete: () => void;
   feedbackKey: number;
   goldLumpParams: GoldLumpParams;
+  /** メッシュ見た目のみ（1.01〜1.02 付近推奨）。物理コライダは変更しない */
+  blockMeshVisualScale?: number;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -45,31 +59,33 @@ function cameraRadiusForGrid(gridSize: number): number {
   return gridSize * 2.75;
 }
 
-/** グリッド AABB をカメラローカル XY に射影し、ビューポート aspect に収まる ortho 半幅（積み木を最大化） */
-function orthoExtentsForGridBBox(
-  camera: THREE.OrthographicCamera,
-  gridSize: number,
-  aspect: number,
-  margin: number
-): { vExtent: number; hExtent: number } {
+/** グリッド立方体の 8 頂点をビュー空間 XY に射影した軸平行バウンディングの半幅・半高 */
+function gridViewSpaceBBoxHalfExtents(camera: THREE.OrthographicCamera, gridSize: number): { halfW: number; halfH: number } {
   camera.updateMatrixWorld(true);
   const inv = camera.matrixWorldInverse;
   const tmp = new THREE.Vector3();
-  let maxAbsX = 0;
-  let maxAbsY = 0;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
   const g = gridSize;
   for (let i = 0; i < 8; i++) {
     tmp.set((i & 1) !== 0 ? g : 0, ((i >> 1) & 1) !== 0 ? g : 0, ((i >> 2) & 1) !== 0 ? g : 0).applyMatrix4(inv);
-    maxAbsX = Math.max(maxAbsX, Math.abs(tmp.x));
-    maxAbsY = Math.max(maxAbsY, Math.abs(tmp.y));
+    minX = Math.min(minX, tmp.x);
+    maxX = Math.max(maxX, tmp.x);
+    minY = Math.min(minY, tmp.y);
+    maxY = Math.max(maxY, tmp.y);
   }
-  let halfW = maxAbsX * margin;
-  let halfH = maxAbsY * margin;
+  return { halfW: Math.max((maxX - minX) / 2, 1e-4), halfH: Math.max((maxY - minY) / 2, 1e-4) };
+}
+
+/** ビュー空間の半幅・半高から、ピクセル縦横比に合わせた ortho frustum 半幅 */
+function orthoFrustumFromHalfExtents(halfW: number, halfH: number, aspect: number, gridSize: number): { vExtent: number; hExtent: number } {
   const floor = gridSize * 0.16;
-  halfW = Math.max(halfW, floor);
-  halfH = Math.max(halfH, floor);
-  let vExtent = halfH;
-  let hExtent = halfW;
+  let w = Math.max(halfW, floor);
+  let h = Math.max(halfH, floor);
+  let vExtent = h;
+  let hExtent = w;
   if (hExtent / vExtent > aspect) {
     vExtent = hExtent / aspect;
   } else {
@@ -96,13 +112,17 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
     camera.up.set(0, 1, 0);
     camera.lookAt(look);
 
-    /** bbox に合わせた frustum を `zoom` で拡大し、Canvas 内の積み木を大きく表示 */
-    const fit = orthoExtentsForGridBBox(camera, gridSize, aspect, 1.08);
-    const zoom = THREE.MathUtils.clamp(1.12 * (h / 200) * (gridSize / 4.2 + 0.72), 1.65, 7.5);
+    const raw = gridViewSpaceBBoxHalfExtents(camera, gridSize);
+    const fit = orthoFrustumFromHalfExtents(raw.halfW * ORTHO_BBOX_MARGIN, raw.halfH * ORTHO_BBOX_MARGIN, aspect, gridSize);
     camera.left = -fit.hExtent;
     camera.right = fit.hExtent;
     camera.top = fit.vExtent;
     camera.bottom = -fit.vExtent;
+
+    /** 積み木塊の縦が Canvas 高さの ORTHO_STACK_VERTICAL_FILL になるよう zoom を決定（横ははみ出さないよう cap） */
+    const zoomV = (ORTHO_STACK_VERTICAL_FILL * fit.vExtent) / raw.halfH;
+    const zoomH = fit.hExtent / raw.halfW;
+    const zoom = THREE.MathUtils.clamp(Math.min(zoomV, zoomH), 0.12, 14);
     camera.zoom = zoom;
     camera.updateProjectionMatrix();
   });
@@ -175,11 +195,13 @@ function IntroBlocks({
   materialVariant,
   onDone,
   gridSize,
+  visualMeshScale,
 }: {
   cells: { key: string; center: THREE.Vector3 }[];
   materialVariant: BlockMaterialVariant;
   onDone: () => void;
   gridSize: number;
+  visualMeshScale: number;
 }) {
   const doneRef = useRef(false);
   const startRef = useRef<number | null>(null);
@@ -241,16 +263,16 @@ function IntroBlocks({
           {materialVariant === "B" ? (
             <RoundedBox
               args={[0.96, 0.96, 0.96]}
-              radius={0.07}
-              smoothness={3}
+              radius={BLOCK_B_BEVEL_RADIUS}
+              smoothness={BLOCK_B_BEVEL_SMOOTHNESS}
               castShadow
               receiveShadow
-              scale={BLOCK_MESH_OVERLAP_SCALE}
+              scale={visualMeshScale}
             >
               <BlockMaterial variant={materialVariant} />
             </RoundedBox>
           ) : (
-            <mesh castShadow receiveShadow scale={BLOCK_MESH_OVERLAP_SCALE}>
+            <mesh castShadow receiveShadow scale={visualMeshScale}>
               <boxGeometry args={[0.96, 0.96, 0.96]} />
               <BlockMaterial variant={materialVariant} />
             </mesh>
@@ -264,9 +286,11 @@ function IntroBlocks({
 function ThinkBlocks({
   cells,
   materialVariant,
+  visualMeshScale,
 }: {
   cells: { key: string; center: THREE.Vector3 }[];
   materialVariant: BlockMaterialVariant;
+  visualMeshScale: number;
 }) {
   return (
     <>
@@ -275,16 +299,16 @@ function ThinkBlocks({
           {materialVariant === "B" ? (
             <RoundedBox
               args={[0.96, 0.96, 0.96]}
-              radius={0.07}
-              smoothness={3}
+              radius={BLOCK_B_BEVEL_RADIUS}
+              smoothness={BLOCK_B_BEVEL_SMOOTHNESS}
               castShadow
               receiveShadow
-              scale={BLOCK_MESH_OVERLAP_SCALE}
+              scale={visualMeshScale}
             >
               <BlockMaterial variant={materialVariant} />
             </RoundedBox>
           ) : (
-            <mesh castShadow receiveShadow scale={BLOCK_MESH_OVERLAP_SCALE}>
+            <mesh castShadow receiveShadow scale={visualMeshScale}>
               <boxGeometry args={[0.96, 0.96, 0.96]} />
               <BlockMaterial variant={materialVariant} />
             </mesh>
@@ -295,10 +319,10 @@ function ThinkBlocks({
   );
 }
 
-function GhostBox({ center }: { center: THREE.Vector3 }) {
+function GhostBox({ center, visualMeshScale }: { center: THREE.Vector3; visualMeshScale: number }) {
   const edges = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(0.96, 0.96, 0.96)), []);
   return (
-    <lineSegments position={center} geometry={edges} scale={BLOCK_MESH_OVERLAP_SCALE}>
+    <lineSegments position={center} geometry={edges} scale={visualMeshScale}>
       <lineBasicMaterial color="#94a3b8" transparent opacity={0.35} />
     </lineSegments>
   );
@@ -319,7 +343,15 @@ function PhysFloor() {
   );
 }
 
-function StaticBlock({ position, goldParams }: { position: [number, number, number]; goldParams: GoldLumpParams }) {
+function StaticBlock({
+  position,
+  goldParams,
+  visualMeshScale,
+}: {
+  position: [number, number, number];
+  goldParams: GoldLumpParams;
+  visualMeshScale: number;
+}) {
   const [ref] = useBox(() => ({
     type: "Static",
     args: [0.48, 0.48, 0.48],
@@ -330,7 +362,7 @@ function StaticBlock({ position, goldParams }: { position: [number, number, numb
   }));
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
-      <mesh castShadow receiveShadow scale={BLOCK_MESH_OVERLAP_SCALE}>
+      <mesh castShadow receiveShadow scale={visualMeshScale}>
         <boxGeometry args={[0.96, 0.96, 0.96]} />
         <GoldLumpMaterial params={goldParams} />
       </mesh>
@@ -344,12 +376,14 @@ function DynamicFallBlock({
   torque,
   materialVariant,
   pattern,
+  visualMeshScale,
 }: {
   position: [number, number, number];
   impulse: [number, number, number];
   torque: [number, number, number];
   materialVariant: BlockMaterialVariant;
   pattern: CollapsePatternId;
+  visualMeshScale: number;
 }) {
   const [ref, api] = useBox(() => ({
     mass: pattern === 3 ? 0.4 : 1.2,
@@ -372,6 +406,8 @@ function DynamicFallBlock({
 
   const matRef = useRef<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial>(null);
   const t0Ref = useRef<number | null>(null);
+  const visualMeshScaleRef = useRef(visualMeshScale);
+  visualMeshScaleRef.current = visualMeshScale;
   useFrame((state, dt) => {
     if (t0Ref.current === null) t0Ref.current = state.clock.elapsedTime;
     const t = state.clock.elapsedTime - t0Ref.current;
@@ -379,7 +415,7 @@ function DynamicFallBlock({
     const m = matRef.current;
     if (pattern === 3 && mesh && t < FEEDBACK_FALL_FADE_START_SEC) {
       const s = mesh.scale.x * (1 - dt * 0.9);
-      mesh.scale.setScalar(Math.max(0.05, s));
+      mesh.scale.setScalar(Math.max(0.05 * visualMeshScaleRef.current, s));
     }
     if (m) {
       if (t >= FEEDBACK_FALL_FADE_START_SEC) {
@@ -403,7 +439,7 @@ function DynamicFallBlock({
 
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
-      <mesh ref={visualRef} castShadow receiveShadow scale={BLOCK_MESH_OVERLAP_SCALE}>
+      <mesh ref={visualRef} castShadow receiveShadow scale={visualMeshScale}>
         <boxGeometry args={[0.96, 0.96, 0.96]} />
         {pattern === 3 && materialVariant === "C" ? (
           <meshPhysicalMaterial
@@ -462,12 +498,14 @@ function FeedbackScene({
   pattern,
   gridSize,
   goldLumpParams,
+  visualMeshScale,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
   pattern: CollapsePatternId;
   gridSize: number;
   goldLumpParams: GoldLumpParams;
+  visualMeshScale: number;
 }) {
   const center = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
   const [showFalling, setShowFalling] = useState(true);
@@ -518,15 +556,23 @@ function FeedbackScene({
     <>
       <PhysFloor />
       {Array.from(puzzle.visibleKeys).map((k) => (
-        <GhostBox key={`g-${k}`} center={cellCenter(parseKey(k))} />
+        <GhostBox key={`g-${k}`} center={cellCenter(parseKey(k))} visualMeshScale={visualMeshScale} />
       ))}
       {Array.from(puzzle.hiddenKeys).map((k) => {
         const p = cellCenter(parseKey(k));
-        return <StaticBlock key={`h-${k}`} position={[p.x, p.y, p.z]} goldParams={goldLumpParams} />;
+        return <StaticBlock key={`h-${k}`} position={[p.x, p.y, p.z]} goldParams={goldLumpParams} visualMeshScale={visualMeshScale} />;
       })}
       {showFalling &&
         impulses.map(({ key, impulse, torque, pos }) => (
-          <DynamicFallBlock key={`d-${key}`} position={pos} impulse={impulse} torque={torque} materialVariant={materialVariant} pattern={pattern} />
+          <DynamicFallBlock
+            key={`d-${key}`}
+            position={pos}
+            impulse={impulse}
+            torque={torque}
+            materialVariant={materialVariant}
+            pattern={pattern}
+            visualMeshScale={visualMeshScale}
+          />
         ))}
     </>
   );
@@ -551,8 +597,10 @@ export default function HiddenStackCanvas({
   onIntroComplete,
   feedbackKey,
   goldLumpParams,
+  blockMeshVisualScale = DEFAULT_BLOCK_MESH_VISUAL_SCALE,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
+  const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
   const cells = useMemo(
     () => puzzle.cells.map((c) => ({ key: cellKey(c), center: cellCenter(c) })),
     [puzzle.cells]
@@ -575,8 +623,16 @@ export default function HiddenStackCanvas({
       <Lights />
       <RigCamera twistDeg={twistDeg} gridSize={gridSize} />
       <FloorGrid gridSize={gridSize} />
-      {phase === "intro" && <IntroBlocks cells={cells} materialVariant={materialVariant} onDone={onIntroDone} gridSize={gridSize} />}
-      {phase === "think" && <ThinkBlocks cells={cells} materialVariant={materialVariant} />}
+      {phase === "intro" && (
+        <IntroBlocks
+          cells={cells}
+          materialVariant={materialVariant}
+          onDone={onIntroDone}
+          gridSize={gridSize}
+          visualMeshScale={visualMeshScale}
+        />
+      )}
+      {phase === "think" && <ThinkBlocks cells={cells} materialVariant={materialVariant} visualMeshScale={visualMeshScale} />}
       {phase === "feedback" && (
         <Physics key={feedbackKey} gravity={[0, -16, 0]} defaultContactMaterial={{ friction: 0.6, restitution: 0.12 }}>
           <FeedbackScene
@@ -585,6 +641,7 @@ export default function HiddenStackCanvas({
             pattern={collapsePattern}
             gridSize={gridSize}
             goldLumpParams={goldLumpParams}
+            visualMeshScale={visualMeshScale}
           />
         </Physics>
       )}

@@ -38,6 +38,8 @@ export default function HiddenStackGame() {
     metalness: 1,
     roughness: 0.3,
   });
+  /** メッシュ見た目のみ（隙間対策）。物理コライダは HiddenStackCanvas 側で変更しない */
+  const [blockMeshVisualScale, setBlockMeshVisualScale] = useState(1.015);
 
   const [puzzle, setPuzzle] = useState(() => generateHiddenStackPuzzle(`${Date.now()}`, { gridSize: 3 }));
   const [phase, setPhase] = useState<Phase>("intro");
@@ -275,6 +277,21 @@ export default function HiddenStackGame() {
                 </div>
               </div>
               <div>
+                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugMeshCrevice")}</div>
+                <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <input
+                    type="range"
+                    min={1}
+                    max={1.03}
+                    step={0.001}
+                    value={blockMeshVisualScale}
+                    onChange={(e) => setBlockMeshVisualScale(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{blockMeshVisualScale.toFixed(3)}×</span>
+                </label>
+              </div>
+              <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugGoldLump")}</div>
                 <div className="space-y-2">
                   <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -439,6 +456,7 @@ export default function HiddenStackGame() {
                     onIntroComplete={onIntroComplete}
                     feedbackKey={feedbackKey}
                     goldLumpParams={goldLumpParams}
+                    blockMeshVisualScale={blockMeshVisualScale}
                   />
                 </div>
                 {phase === "feedback" && resultLine && (

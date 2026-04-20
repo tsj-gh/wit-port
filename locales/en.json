@@ -264,6 +264,7 @@
     "hiddenStack": {
       "titleJa": "かくれつみき",
       "debugPanel": "Hidden Stack DEBUG",
+      "debugMeshCrevice": "Visual mesh scale (crease fill; physics unchanged)",
       "debugMaterial": "Block material",
       "matA": "A Wood tone",
       "matB": "B Semi-gloss plastic",
