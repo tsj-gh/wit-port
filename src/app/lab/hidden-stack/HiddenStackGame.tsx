@@ -21,8 +21,15 @@ const HiddenStackCanvas = dynamic(() => import("./HiddenStackCanvas"), { ssr: fa
 const ICON_SLOTS = 10;
 const TWIST_MAX = 15;
 
+const DEFAULT_RESULT_MESSAGE_DELAY_MS = 500;
+const DEFAULT_RESULT_MESSAGE_ORIGIN_Y_PCT = 35;
+const RESULT_MESSAGE_DELAY_MS_MIN = 0;
+const RESULT_MESSAGE_DELAY_MS_MAX = 2500;
+const RESULT_MESSAGE_ORIGIN_Y_MIN = 15;
+const RESULT_MESSAGE_ORIGIN_Y_MAX = 48;
+
 type Phase = "intro" | "think" | "feedback";
-type StatusOverlayPhase = "hidden" | "animating" | "docked";
+type StatusOverlayPhase = "hidden" | "pending" | "animating" | "docked";
 
 export default function HiddenStackGame() {
   const { t } = useI18n();
@@ -52,6 +59,8 @@ export default function HiddenStackGame() {
   const [reviewMode, setReviewMode] = useState(false);
   const [statusMessageStyle, setStatusMessageStyle] = useState<"card" | "plain">("card");
   const [statusOverlayPhase, setStatusOverlayPhase] = useState<StatusOverlayPhase>("hidden");
+  const [resultMessageDelayMs, setResultMessageDelayMs] = useState(DEFAULT_RESULT_MESSAGE_DELAY_MS);
+  const [resultMessageOriginYPercent, setResultMessageOriginYPercent] = useState(DEFAULT_RESULT_MESSAGE_ORIGIN_Y_PCT);
   const [seedInput, setSeedInput] = useState("");
 
   const dragTwistRef = useRef<{ active: boolean; lastX: number }>({ active: false, lastX: 0 });
@@ -109,6 +118,15 @@ export default function HiddenStackGame() {
   }, [answerSlots]);
 
   useEffect(() => {
+    if (phase !== "feedback" || !resultLine) return;
+    if (statusOverlayPhase !== "pending") return;
+    const id = window.setTimeout(() => {
+      setStatusOverlayPhase("animating");
+    }, resultMessageDelayMs);
+    return () => window.clearTimeout(id);
+  }, [phase, resultLine, resultMessageDelayMs, statusOverlayPhase]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const mq = window.matchMedia("(min-width: 1024px)");
     const sync = () => setIsLgViewport(mq.matches);
@@ -163,7 +181,7 @@ export default function HiddenStackGame() {
     setResultLine(line);
     setIsAnswerCorrect(ok);
     setReviewMode(false);
-    setStatusOverlayPhase("animating");
+    setStatusOverlayPhase("pending");
     setPhase("feedback");
     setFeedbackKey((k) => k + 1);
   }, [phase, selectedN, puzzle.hiddenCount, t]);
@@ -305,6 +323,35 @@ export default function HiddenStackGame() {
                     className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
                   />
                   <span className="tabular-nums text-[var(--color-text)]">{blockMeshVisualScale.toFixed(3)}×</span>
+                </label>
+              </div>
+              <div>
+                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugResultMessageTiming")}</div>
+                <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugResultMessageDelay")}</span>
+                  <input
+                    type="range"
+                    min={RESULT_MESSAGE_DELAY_MS_MIN}
+                    max={RESULT_MESSAGE_DELAY_MS_MAX}
+                    step={50}
+                    value={resultMessageDelayMs}
+                    onChange={(e) => setResultMessageDelayMs(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{resultMessageDelayMs}ms</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugResultMessageOriginY")}</span>
+                  <input
+                    type="range"
+                    min={RESULT_MESSAGE_ORIGIN_Y_MIN}
+                    max={RESULT_MESSAGE_ORIGIN_Y_MAX}
+                    step={1}
+                    value={resultMessageOriginYPercent}
+                    onChange={(e) => setResultMessageOriginYPercent(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{resultMessageOriginYPercent}%</span>
                 </label>
               </div>
               <div>
@@ -495,13 +542,14 @@ export default function HiddenStackGame() {
                     reviewMode={reviewMode}
                   />
                 </div>
-                {phase === "feedback" && resultLine && (
+                {phase === "feedback" && resultLine && (statusOverlayPhase === "animating" || statusOverlayPhase === "docked") && (
                   <div
-                    className={`hs-status-overlay ${
+                    className={`result-message hs-status-overlay ${
                       statusOverlayPhase === "animating" ? "hs-status-overlay--animating" : "hs-status-overlay--docked"
                     } ${isAnswerCorrect ? "hs-status-overlay--ok" : "hs-status-overlay--ng"} ${
                       statusMessageStyle === "plain" ? "hs-status-overlay--plain" : ""
                     }`}
+                    style={{ ["--hs-result-origin-y" as string]: `${resultMessageOriginYPercent}%` }}
                     onAnimationEnd={() => {
                       if (statusOverlayPhase === "animating") setStatusOverlayPhase("docked");
                     }}
@@ -639,10 +687,10 @@ export default function HiddenStackGame() {
         .hs-status-overlay {
           position: absolute;
           left: 50%;
-          top: 50%;
+          top: var(--hs-result-origin-y, 35%);
           z-index: 60;
           pointer-events: none;
-          border-radius: 9999px;
+          border-radius: 12px;
           border: 1px solid color-mix(in srgb, var(--color-text) 16%, transparent);
           background: rgba(255, 255, 255, 0.95);
           box-shadow: 0 10px 28px rgba(15, 23, 42, 0.2);
@@ -650,6 +698,10 @@ export default function HiddenStackGame() {
           white-space: nowrap;
           transform: translate(-50%, -50%) scale(0);
           opacity: 0;
+        }
+        .hs-status-overlay--plain {
+          box-shadow: none;
+          background: rgba(255, 255, 255, 0.88);
         }
         .hs-status-overlay--ok {
           color: #166534;
@@ -660,9 +712,6 @@ export default function HiddenStackGame() {
           color: #b91c1c;
           border-color: rgba(239, 68, 68, 0.5);
           background: rgba(254, 242, 242, 0.95);
-        }
-        .hs-status-overlay--plain {
-          border-radius: 12px;
         }
         .hs-status-overlay--animating {
           animation: hs-pop-and-slide 1450ms cubic-bezier(0.22, 0.9, 0.31, 1) forwards;
@@ -677,19 +726,19 @@ export default function HiddenStackGame() {
         @keyframes hs-pop-and-slide {
           0% {
             left: 50%;
-            top: 50%;
+            top: var(--hs-result-origin-y, 35%);
             transform: translate(-50%, -50%) scale(0);
             opacity: 0;
           }
           20% {
             left: 50%;
-            top: 50%;
+            top: var(--hs-result-origin-y, 35%);
             transform: translate(-50%, -50%) scale(1.2);
             opacity: 1;
           }
           60% {
             left: 50%;
-            top: 50%;
+            top: var(--hs-result-origin-y, 35%);
             transform: translate(-50%, -50%) scale(1);
             opacity: 1;
           }
