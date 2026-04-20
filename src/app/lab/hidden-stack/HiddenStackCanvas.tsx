@@ -673,70 +673,31 @@ function ReviewScene({
   );
 }
 
-function ReviewOrbitControls({ gridSize, twistDeg }: { gridSize: number; twistDeg: number }) {
-  const { camera, size } = useThree();
+function ReviewOrbitControls({ gridSize }: { gridSize: number }) {
+  const { camera } = useThree();
   const controlsRef = useRef<any>(null);
   const initializedRef = useRef(false);
-  const lockedZoomRef = useRef<number | null>(null);
   const c = gridSize / 2;
   const look = useMemo(() => new THREE.Vector3(c, c, c), [c]);
-  const fixedPolar = useMemo(() => Math.PI / 2 - (BASE_ELEVATION_DEG * Math.PI) / 180, []);
-
-  const applyRigProjection = useCallback(() => {
-    if (!(camera instanceof THREE.OrthographicCamera)) return;
-    const w = Math.max(1, size.width);
-    const h = Math.max(1, size.height);
-    const aspect = w / h;
-    const raw = gridViewSpaceBBoxHalfExtents(camera, gridSize);
-    const fit = orthoFrustumFromHalfExtents(raw.halfW * ORTHO_BBOX_MARGIN, raw.halfH * ORTHO_BBOX_MARGIN, aspect, gridSize);
-    camera.left = -fit.hExtent;
-    camera.right = fit.hExtent;
-    camera.top = fit.vExtent;
-    camera.bottom = -fit.vExtent;
-    const zoomV = (ORTHO_STACK_VERTICAL_FILL * fit.vExtent) / raw.halfH;
-    const zoomH = fit.hExtent / raw.halfW;
-    if (lockedZoomRef.current == null) {
-      lockedZoomRef.current = THREE.MathUtils.clamp(Math.min(zoomV, zoomH), 0.12, 14);
-    }
-    camera.zoom = lockedZoomRef.current;
-    camera.updateProjectionMatrix();
-  }, [camera, gridSize, size.width, size.height]);
+  const [fixedPolar, setFixedPolar] = useState(Math.PI / 2 - (BASE_ELEVATION_DEG * Math.PI) / 180);
 
   useEffect(() => {
-    lockedZoomRef.current = null;
     if (initializedRef.current) return;
     if (!(camera instanceof THREE.OrthographicCamera)) return;
-    const radiusScale = THREE.MathUtils.clamp(1.02 - 0.06 * Math.min(Math.max(1, size.width) / Math.max(1, size.height), 2.4), 0.84, 1.02);
-    const p = cameraPositionForTwist(
-      twistDeg,
-      cameraRadiusForGrid(gridSize) * radiusScale,
-      BASE_ELEVATION_DEG,
-      BASE_AZIMUTH_DEG,
-      look
-    );
-    camera.position.copy(p);
-    camera.up.set(0, 1, 0);
-    camera.lookAt(look);
-    applyRigProjection();
+    const spherical = new THREE.Spherical().setFromVector3(camera.position.clone().sub(look));
+    const polar = THREE.MathUtils.clamp(spherical.phi, 0.2, Math.PI / 2 - 0.02);
+    setFixedPolar(polar);
     const ctrl = controlsRef.current;
     if (ctrl) {
       ctrl.target.copy(look);
-      ctrl.minPolarAngle = fixedPolar;
-      ctrl.maxPolarAngle = fixedPolar;
+      ctrl.minPolarAngle = polar;
+      ctrl.maxPolarAngle = polar;
       ctrl.minAzimuthAngle = -Infinity;
       ctrl.maxAzimuthAngle = Infinity;
       ctrl.update();
     }
     initializedRef.current = true;
-  }, [applyRigProjection, camera, fixedPolar, gridSize, look, size.height, size.width, twistDeg]);
-
-  useFrame(() => {
-    const ctrl = controlsRef.current;
-    if (!ctrl || !(camera instanceof THREE.OrthographicCamera)) return;
-    ctrl.target.copy(look);
-    camera.lookAt(look);
-    applyRigProjection();
-  });
+  }, [camera, look]);
 
   return (
     <OrbitControls
@@ -805,7 +766,7 @@ export default function HiddenStackCanvas({
     >
       <color attach="background" args={["#f1f5f9"]} />
       <Lights />
-      {reviewMode ? <ReviewOrbitControls gridSize={gridSize} twistDeg={twistDeg} /> : <RigCamera twistDeg={twistDeg} gridSize={gridSize} />}
+      {reviewMode ? <ReviewOrbitControls gridSize={gridSize} /> : <RigCamera twistDeg={twistDeg} gridSize={gridSize} />}
       <FloorGrid gridSize={gridSize} />
       {phase === "intro" && (
         <IntroBlocks
