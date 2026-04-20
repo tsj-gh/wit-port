@@ -47,6 +47,8 @@ export default function HiddenStackGame() {
   const [selectedN, setSelectedN] = useState(4);
   const [feedbackKey, setFeedbackKey] = useState(0);
   const [resultLine, setResultLine] = useState<string | null>(null);
+  const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
+  const [reviewMode, setReviewMode] = useState(false);
   const [seedInput, setSeedInput] = useState("");
 
   const dragTwistRef = useRef<{ active: boolean; lastX: number }>({ active: false, lastX: 0 });
@@ -75,6 +77,8 @@ export default function HiddenStackGame() {
     setTwistDeg(0);
     setSelectedN(Math.max(1, Math.min(Math.max(ICON_SLOTS, Math.min(24, nextHiddenCount + 4)), Math.floor((nextHiddenCount + 1) / 2))));
     setResultLine(null);
+    setIsAnswerCorrect(null);
+    setReviewMode(false);
     setFeedbackKey((k) => k + 1);
   }, []);
 
@@ -151,11 +155,20 @@ export default function HiddenStackGame() {
   const submitAnswer = useCallback(() => {
     if (phase !== "think") return;
     const ok = selectedN === puzzle.hiddenCount;
-    const key = ok ? "games.hiddenStack.resultCorrect" : "games.hiddenStack.resultWrong";
-    setResultLine(t(key).replace("{n}", String(puzzle.hiddenCount)));
+    const line = ok
+      ? t("games.hiddenStack.resultCorrect").replace("{n}", String(puzzle.hiddenCount))
+      : t("games.hiddenStack.resultWrongLead") + t("games.hiddenStack.resultWrong").replace("{n}", String(puzzle.hiddenCount));
+    setResultLine(line);
+    setIsAnswerCorrect(ok);
+    setReviewMode(false);
     setPhase("feedback");
     setFeedbackKey((k) => k + 1);
   }, [phase, selectedN, puzzle.hiddenCount, t]);
+
+  const startReview = useCallback(() => {
+    if (phase !== "feedback") return;
+    setReviewMode(true);
+  }, [phase]);
 
   const onCanvasPointerDown = (e: React.PointerEvent) => {
     if (phase !== "think") return;
@@ -457,15 +470,9 @@ export default function HiddenStackGame() {
                     feedbackKey={feedbackKey}
                     goldLumpParams={goldLumpParams}
                     blockMeshVisualScale={blockMeshVisualScale}
+                    reviewMode={reviewMode}
                   />
                 </div>
-                {phase === "feedback" && resultLine && (
-                  <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center px-2 pt-2 sm:px-3 sm:pt-3">
-                    <p className="max-w-[min(100%,420px)] rounded-lg border border-[color-mix(in_srgb,var(--color-primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_92%,transparent)] px-3 py-1.5 text-center text-base font-black leading-snug text-[var(--color-text)] shadow-lg sm:rounded-xl sm:px-4 sm:py-2 sm:text-lg">
-                      {resultLine}
-                    </p>
-                  </div>
-                )}
               </div>
 
               <div
@@ -473,14 +480,8 @@ export default function HiddenStackGame() {
                 className="z-40 w-full shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 backdrop-blur-md lg:mt-auto"
               >
                 <div className="mx-auto flex w-full max-w-[520px] flex-col gap-1.5 lg:mx-0 lg:max-w-none">
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="relative flex min-h-[44px] min-w-[64px] -translate-x-2 items-center justify-center sm:min-h-[50px]">
-                      <span className="pointer-events-none select-none text-4xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.2] sm:text-5xl">
-                        {selectedN}
-                      </span>
-                      <span className="absolute text-3xl font-black tabular-nums text-[var(--color-text)] drop-shadow-sm sm:text-4xl">{selectedN}</span>
-                    </div>
-                    {phase === "feedback" ? (
+                  {phase === "feedback" && reviewMode ? (
+                    <div className="flex items-center justify-center">
                       <button
                         type="button"
                         onClick={() => newRound()}
@@ -488,55 +489,95 @@ export default function HiddenStackGame() {
                       >
                         {t("games.hiddenStack.nextRound")}
                       </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={submitAnswer}
-                        disabled={phase !== "think"}
-                        className="rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-black text-[var(--color-on-primary)] shadow-md disabled:opacity-40 sm:px-6 sm:text-base"
-                      >
-                        {t("games.hiddenStack.submit")}
-                      </button>
-                    )}
-                  </div>
-                  <div
-                    ref={stripRef}
-                    role="slider"
-                    aria-valuemin={1}
-                    aria-valuemax={answerSlots}
-                    aria-valuenow={selectedN}
-                    aria-label={t("games.hiddenStack.sliderAria").replace("{max}", String(answerSlots))}
-                    className={`mx-auto grid w-full max-w-[min(100%,420px)] touch-none select-none gap-1 sm:gap-1.5 lg:max-w-full ${phase === "feedback" ? "pointer-events-none opacity-45" : ""}`}
-                    style={{ touchAction: "none", gridTemplateColumns: `repeat(${answerSlots}, minmax(0,1fr))` }}
-                    onPointerDown={onStripPointerDown}
-                    onPointerMove={onStripPointerMove}
-                    onPointerUp={onStripPointerEnd}
-                    onPointerCancel={onStripPointerEnd}
-                    onLostPointerCapture={() => {
-                      stripPointerDownRef.current = false;
-                    }}
-                  >
-                    {Array.from({ length: answerSlots }, (_, i) => {
-                      const n = i + 1;
-                      const lit = n <= selectedN;
-                      return (
-                        <div
-                          key={n}
-                          className={`flex h-9 min-w-0 flex-col items-center justify-end rounded-lg border-2 transition-colors sm:h-10 ${
-                            lit
-                              ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_22%,var(--color-bg))] shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
-                              : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] opacity-55"
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      {phase === "feedback" && (
+                        <button
+                          type="button"
+                          onClick={startReview}
+                          className="rounded-full border border-[color-mix(in_srgb,var(--color-text)_22%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_9%,var(--color-bg))] px-4 py-2 text-sm font-bold text-[var(--color-text)] shadow-sm sm:px-5"
+                        >
+                          {t("games.hiddenStack.review")}
+                        </button>
+                      )}
+                      <div className="relative flex min-h-[44px] min-w-[64px] items-center justify-center sm:min-h-[50px]">
+                        <span className="pointer-events-none select-none text-4xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.2] sm:text-5xl">
+                          {selectedN}
+                        </span>
+                        <span className="absolute text-3xl font-black tabular-nums text-[var(--color-text)] drop-shadow-sm sm:text-4xl">{selectedN}</span>
+                      </div>
+                      {phase === "feedback" && resultLine && (
+                        <p
+                          className={`rounded-full px-4 py-1.5 text-sm font-black shadow-sm sm:px-5 sm:text-base ${
+                            isAnswerCorrect
+                              ? "bg-[color-mix(in_srgb,#16a34a_18%,var(--color-bg))] text-[#166534] ring-1 ring-[color-mix(in_srgb,#16a34a_45%,transparent)]"
+                              : "bg-[color-mix(in_srgb,#1d4ed8_16%,var(--color-bg))] text-[#1e3a8a] ring-1 ring-[color-mix(in_srgb,#1d4ed8_45%,transparent)]"
                           }`}
                         >
-                          <span
-                            className="mb-0.5 block h-4 w-4 max-w-[88%] rounded-sm bg-[color-mix(in_srgb,var(--color-text)_25%,var(--color-bg))] sm:h-5 sm:w-5"
-                            style={{ clipPath: "polygon(15% 0,85% 0,100% 35%,50% 100%,0 35%)" }}
-                            aria-hidden
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
+                          {resultLine}
+                        </p>
+                      )}
+                      {phase === "feedback" ? (
+                        <button
+                          type="button"
+                          onClick={() => newRound()}
+                          className="rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] shadow-md sm:px-6 sm:text-base"
+                        >
+                          {t("games.hiddenStack.nextRound")}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={submitAnswer}
+                          disabled={phase !== "think"}
+                          className="rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-black text-[var(--color-on-primary)] shadow-md disabled:opacity-40 sm:px-6 sm:text-base"
+                        >
+                          {t("games.hiddenStack.submit")}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {!reviewMode && (
+                    <div
+                      ref={stripRef}
+                      role="slider"
+                      aria-valuemin={1}
+                      aria-valuemax={answerSlots}
+                      aria-valuenow={selectedN}
+                      aria-label={t("games.hiddenStack.sliderAria").replace("{max}", String(answerSlots))}
+                      className={`mx-auto grid w-full max-w-[min(100%,420px)] touch-none select-none gap-1 sm:gap-1.5 lg:max-w-full ${phase === "feedback" ? "pointer-events-none opacity-45" : ""}`}
+                      style={{ touchAction: "none", gridTemplateColumns: `repeat(${answerSlots}, minmax(0,1fr))` }}
+                      onPointerDown={onStripPointerDown}
+                      onPointerMove={onStripPointerMove}
+                      onPointerUp={onStripPointerEnd}
+                      onPointerCancel={onStripPointerEnd}
+                      onLostPointerCapture={() => {
+                        stripPointerDownRef.current = false;
+                      }}
+                    >
+                      {Array.from({ length: answerSlots }, (_, i) => {
+                        const n = i + 1;
+                        const lit = n <= selectedN;
+                        return (
+                          <div
+                            key={n}
+                            className={`flex h-9 min-w-0 flex-col items-center justify-end rounded-lg border-2 transition-colors sm:h-10 ${
+                              lit
+                                ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_22%,var(--color-bg))] shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
+                                : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] opacity-55"
+                            }`}
+                          >
+                            <span
+                              className="mb-0.5 block h-4 w-4 max-w-[88%] rounded-sm bg-[color-mix(in_srgb,var(--color-text)_25%,var(--color-bg))] sm:h-5 sm:w-5"
+                              style={{ clipPath: "polygon(15% 0,85% 0,100% 35%,50% 100%,0 35%)" }}
+                              aria-hidden
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </section>

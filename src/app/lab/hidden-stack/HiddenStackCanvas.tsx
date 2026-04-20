@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, useBox, usePlane } from "@react-three/cannon";
 import * as THREE from "three";
-import { Line, RoundedBox } from "@react-three/drei";
+import { Line, OrbitControls, RoundedBox } from "@react-three/drei";
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
 
@@ -48,6 +48,8 @@ type HiddenStackCanvasProps = {
   goldLumpParams: GoldLumpParams;
   /** メッシュ見た目のみ（既定 1.05）。物理コライダは変更しない */
   blockMeshVisualScale?: number;
+  /** ふりかえりモード中は崩落を止めて静止表示＋自由回転 */
+  reviewMode?: boolean;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -611,6 +613,73 @@ function FeedbackScene({
   );
 }
 
+function ReviewScene({
+  puzzle,
+  materialVariant,
+  goldLumpParams,
+}: {
+  puzzle: HiddenStackPuzzle;
+  materialVariant: BlockMaterialVariant;
+  goldLumpParams: GoldLumpParams;
+}) {
+  const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95;
+  const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE;
+  return (
+    <>
+      {Array.from(puzzle.visibleKeys).map((k) => {
+        const p = cellCenter(parseKey(k));
+        return (
+          <group key={`rv-${k}`} position={[p.x, p.y, p.z]}>
+            {materialVariant === "B" ? (
+              <RoundedBox
+                args={[0.96, 0.96, 0.96]}
+                radius={BLOCK_B_BEVEL_RADIUS}
+                smoothness={BLOCK_B_BEVEL_SMOOTHNESS}
+                castShadow
+                receiveShadow
+                scale={reviewVisibleScale}
+              >
+                <BlockMaterial variant={materialVariant} />
+              </RoundedBox>
+            ) : (
+              <mesh castShadow receiveShadow scale={reviewVisibleScale}>
+                <boxGeometry args={[0.96, 0.96, 0.96]} />
+                <BlockMaterial variant={materialVariant} />
+              </mesh>
+            )}
+          </group>
+        );
+      })}
+      {Array.from(puzzle.hiddenKeys).map((k) => {
+        const p = cellCenter(parseKey(k));
+        return (
+          <group key={`rh-${k}`} position={[p.x, p.y, p.z]}>
+            <mesh castShadow receiveShadow scale={reviewHiddenScale}>
+              <boxGeometry args={[0.96, 0.96, 0.96]} />
+              <GoldLumpMaterial params={goldLumpParams} />
+            </mesh>
+          </group>
+        );
+      })}
+    </>
+  );
+}
+
+function ReviewOrbitControls({ gridSize }: { gridSize: number }) {
+  const c = gridSize / 2;
+  return (
+    <OrbitControls
+      makeDefault
+      enablePan={false}
+      enableDamping
+      dampingFactor={0.08}
+      target={[c, c, c]}
+      minPolarAngle={0.2}
+      maxPolarAngle={Math.PI / 2 - 0.02}
+    />
+  );
+}
+
 function Lights() {
   return (
     <>
@@ -637,6 +706,7 @@ export default function HiddenStackCanvas({
   feedbackKey,
   goldLumpParams,
   blockMeshVisualScale = DEFAULT_BLOCK_MESH_VISUAL_SCALE,
+  reviewMode = false,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
@@ -660,7 +730,7 @@ export default function HiddenStackCanvas({
     >
       <color attach="background" args={["#f1f5f9"]} />
       <Lights />
-      <RigCamera twistDeg={twistDeg} gridSize={gridSize} />
+      {reviewMode ? <ReviewOrbitControls gridSize={gridSize} /> : <RigCamera twistDeg={twistDeg} gridSize={gridSize} />}
       <FloorGrid gridSize={gridSize} />
       {phase === "intro" && (
         <IntroBlocks
@@ -672,7 +742,7 @@ export default function HiddenStackCanvas({
         />
       )}
       {phase === "think" && <ThinkBlocks cells={cells} materialVariant={materialVariant} visualMeshScale={visualMeshScale} />}
-      {phase === "feedback" && (
+      {phase === "feedback" && !reviewMode && (
         <Physics key={feedbackKey} gravity={[0, -16, 0]} defaultContactMaterial={{ friction: 0.6, restitution: 0.12 }}>
           <FeedbackScene
             puzzle={puzzle}
@@ -683,6 +753,9 @@ export default function HiddenStackCanvas({
             visualMeshScale={visualMeshScale}
           />
         </Physics>
+      )}
+      {phase === "feedback" && reviewMode && (
+        <ReviewScene puzzle={puzzle} materialVariant={materialVariant} goldLumpParams={goldLumpParams} />
       )}
     </Canvas>
   );
