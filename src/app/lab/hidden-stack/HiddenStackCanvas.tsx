@@ -236,10 +236,26 @@ function GoldLumpMaterial({ params, envMapIntensity = 1.35 }: { params: GoldLump
   );
 }
 
-function BlockWoodMatcapMaterial() {
+/**
+ * Matcap テクスチャは共有。MeshMatcapMaterial は `clone()` でブロック専用インスタンスにする。
+ */
+function BlockWoodMatcapMaterial({ surfaceKey }: { surfaceKey: string }) {
   const m = useContext(MatcapTexturesContext);
-  if (!m) return null;
-  return <meshMatcapMaterial matcap={m.wood} color="#ffffff" toneMapped={false} flatShading />;
+  const tintHex = useMemo(() => woodMatcapTintHex(surfaceKey), [surfaceKey]);
+  const material = useMemo(() => {
+    if (!m) return null;
+    const template = new THREE.MeshMatcapMaterial({
+      matcap: m.wood,
+      flatShading: true,
+      toneMapped: false,
+    });
+    const mat = template.clone();
+    template.dispose();
+    mat.color.set(tintHex);
+    return mat;
+  }, [m, tintHex]);
+  if (!material) return null;
+  return <primitive object={material} attach="material" />;
 }
 
 function GoldHiddenMatcapMaterial() {
@@ -248,10 +264,19 @@ function GoldHiddenMatcapMaterial() {
   return <meshMatcapMaterial matcap={m.gold} color="#fff8e7" flatShading toneMapped={false} />;
 }
 
-function BlockMaterial({ variant, debugNormalMaterial = false }: { variant: BlockMaterialVariant; debugNormalMaterial?: boolean }) {
+function BlockMaterial({
+  variant,
+  debugNormalMaterial = false,
+  woodSurfaceKey,
+}: {
+  variant: BlockMaterialVariant;
+  debugNormalMaterial?: boolean;
+  /** Wood01 のときセルキー等（Matcap の個体差・材質インスタンス分離用） */
+  woodSurfaceKey?: string;
+}) {
   if (debugNormalMaterial) return <meshNormalMaterial flatShading />;
   if (variant === "Wood01") {
-    return <BlockWoodMatcapMaterial />;
+    return <BlockWoodMatcapMaterial surfaceKey={woodSurfaceKey ?? "wood-default"} />;
   }
   if (variant === "A") {
     return <meshStandardMaterial color="#c9a06c" roughness={0.88} metalness={0.06} />;
@@ -317,6 +342,24 @@ function hash01(k: string): number {
   let h = 0;
   for (let i = 0; i < k.length; i++) h = (Math.imul(31, h) + k.charCodeAt(i)) | 0;
   return (h >>> 0) / 4294967296;
+}
+
+/** Wood01: Matcap に乗算する色をブロックごとに 0.95〜1.05 でわずかに変える */
+function woodMatcapTintHex(surfaceKey: string): string {
+  const r = THREE.MathUtils.mapLinear(hash01(`${surfaceKey}:wcR`), 0, 1, 0.95, 1.05);
+  const g = THREE.MathUtils.mapLinear(hash01(`${surfaceKey}:wcG`), 0, 1, 0.95, 1.05);
+  const b = THREE.MathUtils.mapLinear(hash01(`${surfaceKey}:wcB`), 0, 1, 0.95, 1.05);
+  return `#${new THREE.Color(r, g, b).getHexString()}`;
+}
+
+/** Wood01: Matcap サンプルをずらすための微小回転（ラジアン） */
+const WOOD_MATCAP_MICRO_ROT_MAX = 0.048;
+
+function woodSurfaceMicroEuler(surfaceKey: string): [number, number, number] {
+  const rx = (hash01(`${surfaceKey}:wrx`) - 0.5) * 2 * WOOD_MATCAP_MICRO_ROT_MAX;
+  const ry = (hash01(`${surfaceKey}:wry`) - 0.5) * 2 * WOOD_MATCAP_MICRO_ROT_MAX;
+  const rz = (hash01(`${surfaceKey}:wrz`) - 0.5) * 2 * WOOD_MATCAP_MICRO_ROT_MAX;
+  return [rx, ry, rz];
 }
 
 function IntroBlocks({
@@ -403,6 +446,13 @@ function IntroBlocks({
             >
               <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
             </RoundedBox>
+          ) : materialVariant === "Wood01" ? (
+            <group rotation={woodSurfaceMicroEuler(key)}>
+              <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
+                <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
+                <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} woodSurfaceKey={key} />
+              </mesh>
+            </group>
           ) : (
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
               <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
@@ -442,6 +492,13 @@ function ThinkBlocks({
             >
               <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
             </RoundedBox>
+          ) : materialVariant === "Wood01" ? (
+            <group rotation={woodSurfaceMicroEuler(key)}>
+              <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
+                <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
+                <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} woodSurfaceKey={key} />
+              </mesh>
+            </group>
           ) : (
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
               <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
@@ -546,6 +603,7 @@ function DynamicFallBlock({
   pattern,
   visualMeshScale,
   debugNormalMaterial,
+  surfaceKey,
 }: {
   position: [number, number, number];
   impulse: [number, number, number];
@@ -554,6 +612,8 @@ function DynamicFallBlock({
   pattern: CollapsePatternId;
   visualMeshScale: number;
   debugNormalMaterial?: boolean;
+  /** 表示ブロックのセルキー（Wood01 の Matcap 個体差用） */
+  surfaceKey: string;
 }) {
   const [ref, api] = useBox(() => ({
     mass: pattern === 3 ? 0.4 : 1.2,
@@ -576,6 +636,25 @@ function DynamicFallBlock({
 
   const matcapTextures = useContext(MatcapTexturesContext);
   const woodMatcapTex = matcapTextures?.wood ?? null;
+  const woodTintHex = useMemo(() => woodMatcapTintHex(surfaceKey), [surfaceKey]);
+  const woodMicroRot = useMemo(
+    () => (materialVariant === "Wood01" ? woodSurfaceMicroEuler(surfaceKey) : ([0, 0, 0] as [number, number, number])),
+    [materialVariant, surfaceKey]
+  );
+  const woodMatcapClone = useMemo(() => {
+    if (!woodMatcapTex || materialVariant !== "Wood01") return null;
+    const template = new THREE.MeshMatcapMaterial({
+      matcap: woodMatcapTex,
+      flatShading: true,
+      toneMapped: false,
+    });
+    const mat = template.clone();
+    template.dispose();
+    mat.color.set(woodTintHex);
+    mat.transparent = pattern === 3;
+    mat.opacity = pattern === 3 ? 0.95 : 1;
+    return mat;
+  }, [woodMatcapTex, materialVariant, woodTintHex, pattern]);
   const matRef = useRef<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial | THREE.MeshMatcapMaterial>(null);
   const t0Ref = useRef<number | null>(null);
   const visualMeshScaleRef = useRef(visualMeshScale);
@@ -612,69 +691,61 @@ function DynamicFallBlock({
   const blockShadows = materialVariant !== "Wood01";
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
-      <mesh ref={visualRef} castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-        <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
-        {debugNormalMaterial ? (
-          <meshNormalMaterial ref={matRef as never} flatShading transparent={pattern === 3} opacity={pattern === 3 ? 0.95 : 1} />
-        ) : pattern === 3 && materialVariant === "C" ? (
-          <meshPhysicalMaterial
-            ref={matRef as never}
-            color="#bcd4e6"
-            roughness={0.5}
-            metalness={0}
-            transmission={0.38}
-            thickness={0.75}
-            transparent
-            opacity={0.9}
-          />
-        ) : pattern === 3 && materialVariant === "B" ? (
-          <meshPhysicalMaterial
-            ref={matRef as never}
-            color="#f6b8c6"
-            roughness={0.32}
-            metalness={0}
-            clearcoat={0.35}
-            transparent
-            opacity={0.95}
-          />
-        ) : pattern === 3 && materialVariant === "Wood01" && woodMatcapTex ? (
-          <meshMatcapMaterial
-            ref={matRef as never}
-            matcap={woodMatcapTex}
-            color="#ffffff"
-            transparent
-            opacity={0.95}
-            toneMapped={false}
-            flatShading
-          />
-        ) : pattern === 3 ? (
-          <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} transparent opacity={0.95} />
-        ) : materialVariant === "Wood01" && woodMatcapTex ? (
-          <meshMatcapMaterial ref={matRef as never} matcap={woodMatcapTex} color="#ffffff" toneMapped={false} flatShading />
-        ) : materialVariant === "A" ? (
-          <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} metalness={0.06} />
-        ) : materialVariant === "B" ? (
-          <meshPhysicalMaterial
-            ref={matRef as never}
-            color="#f6b8c6"
-            roughness={0.32}
-            metalness={0}
-            clearcoat={0.35}
-            clearcoatRoughness={0.4}
-          />
-        ) : (
-          <meshPhysicalMaterial
-            ref={matRef as never}
-            color="#bcd4e6"
-            roughness={0.5}
-            metalness={0}
-            transmission={0.38}
-            thickness={0.75}
-            transparent
-            opacity={0.9}
-          />
-        )}
-      </mesh>
+      <group rotation={woodMicroRot}>
+        <mesh ref={visualRef} castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
+          <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
+          {debugNormalMaterial ? (
+            <meshNormalMaterial ref={matRef as never} flatShading transparent={pattern === 3} opacity={pattern === 3 ? 0.95 : 1} />
+          ) : pattern === 3 && materialVariant === "C" ? (
+            <meshPhysicalMaterial
+              ref={matRef as never}
+              color="#bcd4e6"
+              roughness={0.5}
+              metalness={0}
+              transmission={0.38}
+              thickness={0.75}
+              transparent
+              opacity={0.9}
+            />
+          ) : pattern === 3 && materialVariant === "B" ? (
+            <meshPhysicalMaterial
+              ref={matRef as never}
+              color="#f6b8c6"
+              roughness={0.32}
+              metalness={0}
+              clearcoat={0.35}
+              transparent
+              opacity={0.95}
+            />
+          ) : materialVariant === "Wood01" && woodMatcapClone ? (
+            <primitive ref={matRef as never} object={woodMatcapClone} attach="material" />
+          ) : pattern === 3 ? (
+            <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} transparent opacity={0.95} />
+          ) : materialVariant === "A" ? (
+            <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} metalness={0.06} />
+          ) : materialVariant === "B" ? (
+            <meshPhysicalMaterial
+              ref={matRef as never}
+              color="#f6b8c6"
+              roughness={0.32}
+              metalness={0}
+              clearcoat={0.35}
+              clearcoatRoughness={0.4}
+            />
+          ) : (
+            <meshPhysicalMaterial
+              ref={matRef as never}
+              color="#bcd4e6"
+              roughness={0.5}
+              metalness={0}
+              transmission={0.38}
+              thickness={0.75}
+              transparent
+              opacity={0.9}
+            />
+          )}
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -773,6 +844,7 @@ function FeedbackScene({
         impulses.map(({ key, impulse, torque, pos }) => (
           <DynamicFallBlock
             key={`d-${key}`}
+            surfaceKey={key}
             position={pos}
             impulse={impulse}
             torque={torque}
@@ -819,6 +891,13 @@ function ReviewScene({
               >
                 <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
               </RoundedBox>
+            ) : materialVariant === "Wood01" ? (
+              <group rotation={woodSurfaceMicroEuler(k)}>
+                <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewVisibleScale}>
+                  <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
+                  <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} woodSurfaceKey={k} />
+                </mesh>
+              </group>
             ) : (
               <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewVisibleScale}>
                 <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
