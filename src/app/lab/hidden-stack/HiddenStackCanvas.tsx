@@ -41,10 +41,30 @@ export type BlockMaterialVariant = "A" | "B" | "C" | "Wood01";
 const WOOD_MATCAP_TEXTURE_URL = "/textures/wood_matcap_02.png";
 const GOLD_MATCAP_TEXTURE_URL = "/textures/gold_matcap_01.png";
 
-/** 積み木 BoxGeometry の法線を各面に垂直に揃える（Matcap の鏡面状の伸びを抑える） */
-function ensureBoxGeometryNormals(geometry: THREE.BufferGeometry) {
+/**
+ * インデックス付き BoxGeometry を非インデックス化した上で法線を再計算し、
+ * 立方体の稜で法線が平均化されないよう面ごとに独立した法線にする（Matcap の激しいハイライト移動を抑える）。
+ * Three.js の MeshMatcapMaterial はビュー空間法線（normalMatrix * normal）で Matcap を参照する想定で、
+ * ワールド固定ではない（カメラから見て「上を向く面」が Matcap 上側に対応する）。
+ */
+function ensureFlatBoxVertexNormals(geometry: THREE.BufferGeometry) {
+  if (geometry.userData.hiddenStackFlatNormals) return;
+  geometry.userData.hiddenStackFlatNormals = true;
+  if (!geometry.index) {
+    geometry.deleteAttribute("normal");
+    geometry.computeVertexNormals();
+    return;
+  }
+  const src = geometry.toNonIndexed();
+  geometry.setIndex(null);
+  for (const name in src.attributes) {
+    if (name === "normal") continue;
+    const attr = src.getAttribute(name);
+    if (attr) geometry.setAttribute(name, attr.clone());
+  }
   geometry.deleteAttribute("normal");
   geometry.computeVertexNormals();
+  src.dispose();
 }
 
 type MatcapTextures = { wood: THREE.Texture; gold: THREE.Texture };
@@ -57,6 +77,7 @@ function MatcapTexturesProvider({ children }: { children: ReactNode }) {
     gold.colorSpace = THREE.SRGBColorSpace;
     wood.wrapS = wood.wrapT = THREE.ClampToEdgeWrapping;
     gold.wrapS = gold.wrapT = THREE.ClampToEdgeWrapping;
+    /** Matcap: 最近傍サンプルによるギザつき・ハイライトのチラつきを抑える */
     wood.minFilter = THREE.LinearFilter;
     wood.magFilter = THREE.LinearFilter;
     gold.minFilter = THREE.LinearFilter;
@@ -218,7 +239,7 @@ function GoldLumpMaterial({ params, envMapIntensity = 1.35 }: { params: GoldLump
 function BlockWoodMatcapMaterial() {
   const m = useContext(MatcapTexturesContext);
   if (!m) return null;
-  return <meshMatcapMaterial matcap={m.wood} color="#ffffff" toneMapped={false} />;
+  return <meshMatcapMaterial matcap={m.wood} color="#ffffff" toneMapped={false} flatShading />;
 }
 
 function GoldHiddenMatcapMaterial() {
@@ -384,7 +405,7 @@ function IntroBlocks({
             </RoundedBox>
           ) : (
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureBoxGeometryNormals(g)} />
+              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
               <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
             </mesh>
           )}
@@ -423,7 +444,7 @@ function ThinkBlocks({
             </RoundedBox>
           ) : (
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureBoxGeometryNormals(g)} />
+              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
               <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
             </mesh>
           )}
@@ -504,7 +525,7 @@ function StaticBlock({
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
       <mesh castShadow receiveShadow scale={visualMeshScale}>
-        <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureBoxGeometryNormals(g)} />
+        <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
         {debugNormalMaterial ? (
           <meshNormalMaterial flatShading />
         ) : useGoldMatcap ? (
@@ -592,7 +613,7 @@ function DynamicFallBlock({
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
       <mesh ref={visualRef} castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-        <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureBoxGeometryNormals(g)} />
+        <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
         {debugNormalMaterial ? (
           <meshNormalMaterial ref={matRef as never} flatShading transparent={pattern === 3} opacity={pattern === 3 ? 0.95 : 1} />
         ) : pattern === 3 && materialVariant === "C" ? (
@@ -617,11 +638,19 @@ function DynamicFallBlock({
             opacity={0.95}
           />
         ) : pattern === 3 && materialVariant === "Wood01" && woodMatcapTex ? (
-          <meshMatcapMaterial ref={matRef as never} matcap={woodMatcapTex} color="#ffffff" transparent opacity={0.95} />
+          <meshMatcapMaterial
+            ref={matRef as never}
+            matcap={woodMatcapTex}
+            color="#ffffff"
+            transparent
+            opacity={0.95}
+            toneMapped={false}
+            flatShading
+          />
         ) : pattern === 3 ? (
           <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} transparent opacity={0.95} />
         ) : materialVariant === "Wood01" && woodMatcapTex ? (
-          <meshMatcapMaterial ref={matRef as never} matcap={woodMatcapTex} color="#ffffff" />
+          <meshMatcapMaterial ref={matRef as never} matcap={woodMatcapTex} color="#ffffff" toneMapped={false} flatShading />
         ) : materialVariant === "A" ? (
           <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} metalness={0.06} />
         ) : materialVariant === "B" ? (
@@ -792,7 +821,7 @@ function ReviewScene({
               </RoundedBox>
             ) : (
               <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewVisibleScale}>
-                <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureBoxGeometryNormals(g)} />
+                <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
                 <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
               </mesh>
             )}
@@ -804,7 +833,7 @@ function ReviewScene({
         return (
           <group key={`rh-${k}`} position={[p.x, p.y, p.z]}>
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewHiddenScale}>
-              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureBoxGeometryNormals(g)} />
+              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
               {debugNormalMaterial ? (
                 <meshNormalMaterial flatShading />
               ) : feedbackAnswerCorrect === true ? (
