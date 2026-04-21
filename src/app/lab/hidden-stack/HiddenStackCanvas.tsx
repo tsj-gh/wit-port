@@ -49,6 +49,14 @@ function MatcapTexturesProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     wood.colorSpace = THREE.SRGBColorSpace;
     gold.colorSpace = THREE.SRGBColorSpace;
+    wood.wrapS = wood.wrapT = THREE.ClampToEdgeWrapping;
+    gold.wrapS = gold.wrapT = THREE.ClampToEdgeWrapping;
+    wood.minFilter = THREE.LinearFilter;
+    wood.magFilter = THREE.LinearFilter;
+    gold.minFilter = THREE.LinearFilter;
+    gold.magFilter = THREE.LinearFilter;
+    wood.generateMipmaps = false;
+    gold.generateMipmaps = false;
     wood.needsUpdate = true;
     gold.needsUpdate = true;
   }, [wood, gold]);
@@ -85,6 +93,8 @@ type HiddenStackCanvasProps = {
   onReviewAzimuthHintThresholdExceeded?: () => void;
   /** 直近の解答が正解のとき、死角の「金塊」を Matcap に切り替え（feedback / review 共通） */
   feedbackAnswerCorrect?: boolean | null;
+  /** 法線確認デバッグ用: 全ブロックを MeshNormalMaterial で描画 */
+  debugNormalMaterial?: boolean;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -202,16 +212,17 @@ function GoldLumpMaterial({ params, envMapIntensity = 1.35 }: { params: GoldLump
 function BlockWoodMatcapMaterial() {
   const m = useContext(MatcapTexturesContext);
   if (!m) return null;
-  return <meshMatcapMaterial matcap={m.wood} color="#ffffff" />;
+  return <meshMatcapMaterial matcap={m.wood} color="#ffffff" flatShading toneMapped={false} />;
 }
 
 function GoldHiddenMatcapMaterial() {
   const m = useContext(MatcapTexturesContext);
   if (!m) return null;
-  return <meshMatcapMaterial matcap={m.gold} color="#fff8e7" />;
+  return <meshMatcapMaterial matcap={m.gold} color="#fff8e7" flatShading toneMapped={false} />;
 }
 
-function BlockMaterial({ variant }: { variant: BlockMaterialVariant }) {
+function BlockMaterial({ variant, debugNormalMaterial = false }: { variant: BlockMaterialVariant; debugNormalMaterial?: boolean }) {
+  if (debugNormalMaterial) return <meshNormalMaterial flatShading />;
   if (variant === "Wood01") {
     return <BlockWoodMatcapMaterial />;
   }
@@ -287,12 +298,14 @@ function IntroBlocks({
   onDone,
   gridSize,
   visualMeshScale,
+  debugNormalMaterial,
 }: {
   cells: { key: string; center: THREE.Vector3 }[];
   materialVariant: BlockMaterialVariant;
   onDone: () => void;
   gridSize: number;
   visualMeshScale: number;
+  debugNormalMaterial?: boolean;
 }) {
   const doneRef = useRef(false);
   const startRef = useRef<number | null>(null);
@@ -361,12 +374,12 @@ function IntroBlocks({
               receiveShadow={blockShadows}
               scale={visualMeshScale}
             >
-              <BlockMaterial variant={materialVariant} />
+              <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
             </RoundedBox>
           ) : (
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-              <boxGeometry args={[0.96, 0.96, 0.96]} />
-              <BlockMaterial variant={materialVariant} />
+              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => g.computeVertexNormals()} />
+              <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
             </mesh>
           )}
         </group>
@@ -379,10 +392,12 @@ function ThinkBlocks({
   cells,
   materialVariant,
   visualMeshScale,
+  debugNormalMaterial,
 }: {
   cells: { key: string; center: THREE.Vector3 }[];
   materialVariant: BlockMaterialVariant;
   visualMeshScale: number;
+  debugNormalMaterial?: boolean;
 }) {
   const blockShadows = materialVariant !== "Wood01";
   return (
@@ -398,12 +413,12 @@ function ThinkBlocks({
               receiveShadow={blockShadows}
               scale={visualMeshScale}
             >
-              <BlockMaterial variant={materialVariant} />
+              <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
             </RoundedBox>
           ) : (
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-              <boxGeometry args={[0.96, 0.96, 0.96]} />
-              <BlockMaterial variant={materialVariant} />
+              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => g.computeVertexNormals()} />
+              <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
             </mesh>
           )}
         </group>
@@ -458,6 +473,7 @@ function StaticBlock({
   visualMeshScale,
   goldEnvMapIntensity,
   useGoldMatcap,
+  debugNormalMaterial,
 }: {
   position: [number, number, number];
   goldParams: GoldLumpParams;
@@ -465,6 +481,7 @@ function StaticBlock({
   goldEnvMapIntensity?: number;
   /** 正解時：死角ブロックを金 Matcap に */
   useGoldMatcap?: boolean;
+  debugNormalMaterial?: boolean;
 }) {
   const [ref] = useBox(() => ({
     type: "Static",
@@ -477,8 +494,14 @@ function StaticBlock({
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
       <mesh castShadow receiveShadow scale={visualMeshScale}>
-        <boxGeometry args={[0.96, 0.96, 0.96]} />
-        {useGoldMatcap ? <GoldHiddenMatcapMaterial /> : <GoldLumpMaterial params={goldParams} envMapIntensity={goldEnvMapIntensity} />}
+        <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => g.computeVertexNormals()} />
+        {debugNormalMaterial ? (
+          <meshNormalMaterial flatShading />
+        ) : useGoldMatcap ? (
+          <GoldHiddenMatcapMaterial />
+        ) : (
+          <GoldLumpMaterial params={goldParams} envMapIntensity={goldEnvMapIntensity} />
+        )}
       </mesh>
     </group>
   );
@@ -491,6 +514,7 @@ function DynamicFallBlock({
   materialVariant,
   pattern,
   visualMeshScale,
+  debugNormalMaterial,
 }: {
   position: [number, number, number];
   impulse: [number, number, number];
@@ -498,6 +522,7 @@ function DynamicFallBlock({
   materialVariant: BlockMaterialVariant;
   pattern: CollapsePatternId;
   visualMeshScale: number;
+  debugNormalMaterial?: boolean;
 }) {
   const [ref, api] = useBox(() => ({
     mass: pattern === 3 ? 0.4 : 1.2,
@@ -557,8 +582,10 @@ function DynamicFallBlock({
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
       <mesh ref={visualRef} castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-        <boxGeometry args={[0.96, 0.96, 0.96]} />
-        {pattern === 3 && materialVariant === "C" ? (
+        <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => g.computeVertexNormals()} />
+        {debugNormalMaterial ? (
+          <meshNormalMaterial ref={matRef as never} flatShading transparent={pattern === 3} opacity={pattern === 3 ? 0.95 : 1} />
+        ) : pattern === 3 && materialVariant === "C" ? (
           <meshPhysicalMaterial
             ref={matRef as never}
             color="#bcd4e6"
@@ -621,6 +648,7 @@ function FeedbackScene({
   goldLumpParams,
   visualMeshScale,
   feedbackAnswerCorrect,
+  debugNormalMaterial,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
@@ -629,6 +657,7 @@ function FeedbackScene({
   goldLumpParams: GoldLumpParams;
   visualMeshScale: number;
   feedbackAnswerCorrect: boolean | null;
+  debugNormalMaterial?: boolean;
 }) {
   const center = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
   const [showFalling, setShowFalling] = useState(true);
@@ -697,6 +726,7 @@ function FeedbackScene({
             visualMeshScale={visualMeshScale}
             goldEnvMapIntensity={materialVariant === "Wood01" ? 1.78 : 1.35}
             useGoldMatcap={feedbackAnswerCorrect === true}
+            debugNormalMaterial={debugNormalMaterial}
           />
         );
       })}
@@ -710,6 +740,7 @@ function FeedbackScene({
             materialVariant={materialVariant}
             pattern={pattern}
             visualMeshScale={visualMeshScale}
+            debugNormalMaterial={debugNormalMaterial}
           />
         ))}
     </>
@@ -721,11 +752,13 @@ function ReviewScene({
   materialVariant,
   goldLumpParams,
   feedbackAnswerCorrect,
+  debugNormalMaterial,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
   goldLumpParams: GoldLumpParams;
   feedbackAnswerCorrect: boolean | null;
+  debugNormalMaterial?: boolean;
 }) {
   const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95;
   const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE;
@@ -745,12 +778,12 @@ function ReviewScene({
                 receiveShadow={blockShadows}
                 scale={reviewVisibleScale}
               >
-                <BlockMaterial variant={materialVariant} />
+                <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
               </RoundedBox>
             ) : (
               <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewVisibleScale}>
-                <boxGeometry args={[0.96, 0.96, 0.96]} />
-                <BlockMaterial variant={materialVariant} />
+                <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => g.computeVertexNormals()} />
+                <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
               </mesh>
             )}
           </group>
@@ -761,8 +794,10 @@ function ReviewScene({
         return (
           <group key={`rh-${k}`} position={[p.x, p.y, p.z]}>
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewHiddenScale}>
-              <boxGeometry args={[0.96, 0.96, 0.96]} />
-              {feedbackAnswerCorrect === true ? (
+              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => g.computeVertexNormals()} />
+              {debugNormalMaterial ? (
+                <meshNormalMaterial flatShading />
+              ) : feedbackAnswerCorrect === true ? (
                 <GoldHiddenMatcapMaterial />
               ) : (
                 <GoldLumpMaterial params={goldLumpParams} envMapIntensity={materialVariant === "Wood01" ? 1.78 : 1.35} />
@@ -937,6 +972,7 @@ export default function HiddenStackCanvas({
   reviewAzimuthHintLimitDeg,
   onReviewAzimuthHintThresholdExceeded,
   feedbackAnswerCorrect = null,
+  debugNormalMaterial = false,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
@@ -982,9 +1018,17 @@ export default function HiddenStackCanvas({
           onDone={onIntroDone}
           gridSize={gridSize}
           visualMeshScale={visualMeshScale}
+            debugNormalMaterial={debugNormalMaterial}
         />
       )}
-      {phase === "think" && <ThinkBlocks cells={cells} materialVariant={materialVariant} visualMeshScale={visualMeshScale} />}
+        {phase === "think" && (
+          <ThinkBlocks
+            cells={cells}
+            materialVariant={materialVariant}
+            visualMeshScale={visualMeshScale}
+            debugNormalMaterial={debugNormalMaterial}
+          />
+        )}
       {phase === "feedback" && !reviewMode && (
         <Physics key={feedbackKey} gravity={[0, -16, 0]} defaultContactMaterial={{ friction: 0.6, restitution: 0.12 }}>
           <FeedbackScene
@@ -995,6 +1039,7 @@ export default function HiddenStackCanvas({
             goldLumpParams={goldLumpParams}
             visualMeshScale={visualMeshScale}
             feedbackAnswerCorrect={feedbackAnswerCorrect}
+            debugNormalMaterial={debugNormalMaterial}
           />
         </Physics>
       )}
@@ -1004,6 +1049,7 @@ export default function HiddenStackCanvas({
           materialVariant={materialVariant}
           goldLumpParams={goldLumpParams}
           feedbackAnswerCorrect={feedbackAnswerCorrect}
+          debugNormalMaterial={debugNormalMaterial}
         />
       )}
       </MatcapTexturesProvider>

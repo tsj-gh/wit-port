@@ -61,6 +61,7 @@ export default function HiddenStackGame() {
   /** ふりかえり時の左右スワイプ誘導（回転検知でフェードアウト、同一問題では再表示しない） */
   const [reviewSwipeHintVisible, setReviewSwipeHintVisible] = useState(false);
   const [statusMessageStyle, setStatusMessageStyle] = useState<"card" | "plain">("card");
+  const [debugNormalMaterial, setDebugNormalMaterial] = useState(false);
   const [statusOverlayPhase, setStatusOverlayPhase] = useState<StatusOverlayPhase>("hidden");
   const [resultMessageDelayMs, setResultMessageDelayMs] = useState(DEFAULT_RESULT_MESSAGE_DELAY_MS);
   const [resultMessageOriginYPercent, setResultMessageOriginYPercent] = useState(DEFAULT_RESULT_MESSAGE_ORIGIN_Y_PCT);
@@ -356,6 +357,20 @@ export default function HiddenStackGame() {
                 </div>
               </div>
               <div>
+                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugNormalProbe")}</div>
+                <button
+                  type="button"
+                  onClick={() => setDebugNormalMaterial((v) => !v)}
+                  className={`rounded px-2 py-0.5 text-[10px] border ${
+                    debugNormalMaterial
+                      ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_18%,var(--color-bg))] text-[var(--color-primary)]"
+                      : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] text-[var(--color-muted)]"
+                  }`}
+                >
+                  {debugNormalMaterial ? t("games.hiddenStack.debugNormalProbeOn") : t("games.hiddenStack.debugNormalProbeOff")}
+                </button>
+              </div>
+              <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugMeshCrevice")}</div>
                 <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <input
@@ -588,6 +603,7 @@ export default function HiddenStackGame() {
                     reviewAzimuthHintLimitDeg={TWIST_MAX}
                     onReviewAzimuthHintThresholdExceeded={dismissReviewSwipeHint}
                     feedbackAnswerCorrect={isAnswerCorrect}
+                    debugNormalMaterial={debugNormalMaterial}
                   />
                 </div>
                 {phase === "feedback" && reviewMode && (
