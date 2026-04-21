@@ -587,6 +587,7 @@ export default function HiddenStackGame() {
                     reviewMode={reviewMode}
                     reviewAzimuthHintLimitDeg={TWIST_MAX}
                     onReviewAzimuthHintThresholdExceeded={dismissReviewSwipeHint}
+                    feedbackAnswerCorrect={isAnswerCorrect}
                   />
                 </div>
                 {phase === "feedback" && reviewMode && (

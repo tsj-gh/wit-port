@@ -39,21 +39,20 @@ const BASE_AZIMUTH_DEG = 44;
 export type BlockMaterialVariant = "A" | "B" | "C" | "Wood01";
 
 const WOOD_MATCAP_TEXTURE_URL = "/textures/wood_matcap_01.png";
+const GOLD_MATCAP_TEXTURE_URL = "/textures/gold_matcap_01.png";
 
-const WoodMatcapTextureContext = createContext<THREE.Texture | null>(null);
+type MatcapTextures = { wood: THREE.Texture; gold: THREE.Texture };
+const MatcapTexturesContext = createContext<MatcapTextures | null>(null);
 
-function useWoodMatcapTexture() {
-  const tex = useLoader(THREE.TextureLoader, WOOD_MATCAP_TEXTURE_URL);
+function MatcapTexturesProvider({ children }: { children: ReactNode }) {
+  const [wood, gold] = useLoader(THREE.TextureLoader, [WOOD_MATCAP_TEXTURE_URL, GOLD_MATCAP_TEXTURE_URL]);
   useLayoutEffect(() => {
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.needsUpdate = true;
-  }, [tex]);
-  return tex;
-}
-
-function WoodMatcapTextureProvider({ children }: { children: ReactNode }) {
-  const tex = useWoodMatcapTexture();
-  return <WoodMatcapTextureContext.Provider value={tex}>{children}</WoodMatcapTextureContext.Provider>;
+    wood.colorSpace = THREE.SRGBColorSpace;
+    gold.colorSpace = THREE.SRGBColorSpace;
+    wood.needsUpdate = true;
+    gold.needsUpdate = true;
+  }, [wood, gold]);
+  return <MatcapTexturesContext.Provider value={{ wood, gold }}>{children}</MatcapTexturesContext.Provider>;
 }
 export type CollapsePatternId = 1 | 2 | 3;
 
@@ -84,6 +83,8 @@ type HiddenStackCanvasProps = {
   /** ふりかえり時の回転誘導：この角度（deg）を初期方位から超えたらコールバックを一度だけ呼ぶ */
   reviewAzimuthHintLimitDeg?: number;
   onReviewAzimuthHintThresholdExceeded?: () => void;
+  /** 直近の解答が正解のとき、死角の「金塊」を Matcap に切り替え（feedback / review 共通） */
+  feedbackAnswerCorrect?: boolean | null;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -199,9 +200,15 @@ function GoldLumpMaterial({ params, envMapIntensity = 1.35 }: { params: GoldLump
 }
 
 function BlockWoodMatcapMaterial() {
-  const matcap = useContext(WoodMatcapTextureContext);
-  if (!matcap) return null;
-  return <meshMatcapMaterial matcap={matcap} color="#ffffff" />;
+  const m = useContext(MatcapTexturesContext);
+  if (!m) return null;
+  return <meshMatcapMaterial matcap={m.wood} color="#ffffff" />;
+}
+
+function GoldHiddenMatcapMaterial() {
+  const m = useContext(MatcapTexturesContext);
+  if (!m) return null;
+  return <meshMatcapMaterial matcap={m.gold} color="#fff8e7" />;
 }
 
 function BlockMaterial({ variant }: { variant: BlockMaterialVariant }) {
@@ -409,14 +416,18 @@ function GhostBox({
   center,
   visualMeshScale,
   materialVariant,
+  correctGoldFeedback,
 }: {
   center: THREE.Vector3;
   visualMeshScale: number;
   materialVariant: BlockMaterialVariant;
+  /** 正解時の金塊演出中はエッジを細いゴールドブラウンに（Matcapの輝きを邪魔しない） */
+  correctGoldFeedback?: boolean;
 }) {
   const edges = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(0.96, 0.96, 0.96)), []);
-  const edge =
-    materialVariant === "Wood01"
+  const edge = correctGoldFeedback
+    ? ({ color: "#7a5e38" as const, opacity: 0.2 } as const)
+    : materialVariant === "Wood01"
       ? ({ color: "#0a0a0b" as const, opacity: 0.58 } as const)
       : ({ color: "#0f172a" as const, opacity: 0.48 } as const);
   return (
@@ -446,11 +457,14 @@ function StaticBlock({
   goldParams,
   visualMeshScale,
   goldEnvMapIntensity,
+  useGoldMatcap,
 }: {
   position: [number, number, number];
   goldParams: GoldLumpParams;
   visualMeshScale: number;
   goldEnvMapIntensity?: number;
+  /** 正解時：死角ブロックを金 Matcap に */
+  useGoldMatcap?: boolean;
 }) {
   const [ref] = useBox(() => ({
     type: "Static",
@@ -464,7 +478,7 @@ function StaticBlock({
     <group ref={ref as unknown as RefObject<THREE.Group>}>
       <mesh castShadow receiveShadow scale={visualMeshScale}>
         <boxGeometry args={[0.96, 0.96, 0.96]} />
-        <GoldLumpMaterial params={goldParams} envMapIntensity={goldEnvMapIntensity} />
+        {useGoldMatcap ? <GoldHiddenMatcapMaterial /> : <GoldLumpMaterial params={goldParams} envMapIntensity={goldEnvMapIntensity} />}
       </mesh>
     </group>
   );
@@ -504,7 +518,8 @@ function DynamicFallBlock({
     av.angularVelocity?.set(torque[0], torque[1], torque[2]);
   }, [api, impulse, torque]);
 
-  const woodMatcapTex = useContext(WoodMatcapTextureContext);
+  const matcapTextures = useContext(MatcapTexturesContext);
+  const woodMatcapTex = matcapTextures?.wood ?? null;
   const matRef = useRef<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial | THREE.MeshMatcapMaterial>(null);
   const t0Ref = useRef<number | null>(null);
   const visualMeshScaleRef = useRef(visualMeshScale);
@@ -605,6 +620,7 @@ function FeedbackScene({
   gridSize,
   goldLumpParams,
   visualMeshScale,
+  feedbackAnswerCorrect,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
@@ -612,6 +628,7 @@ function FeedbackScene({
   gridSize: number;
   goldLumpParams: GoldLumpParams;
   visualMeshScale: number;
+  feedbackAnswerCorrect: boolean | null;
 }) {
   const center = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
   const [showFalling, setShowFalling] = useState(true);
@@ -662,7 +679,13 @@ function FeedbackScene({
     <>
       <PhysFloor />
       {Array.from(puzzle.visibleKeys).map((k) => (
-        <GhostBox key={`g-${k}`} center={cellCenter(parseKey(k))} visualMeshScale={visualMeshScale} materialVariant={materialVariant} />
+        <GhostBox
+          key={`g-${k}`}
+          center={cellCenter(parseKey(k))}
+          visualMeshScale={visualMeshScale}
+          materialVariant={materialVariant}
+          correctGoldFeedback={feedbackAnswerCorrect === true}
+        />
       ))}
       {Array.from(puzzle.hiddenKeys).map((k) => {
         const p = cellCenter(parseKey(k));
@@ -673,6 +696,7 @@ function FeedbackScene({
             goldParams={goldLumpParams}
             visualMeshScale={visualMeshScale}
             goldEnvMapIntensity={materialVariant === "Wood01" ? 1.78 : 1.35}
+            useGoldMatcap={feedbackAnswerCorrect === true}
           />
         );
       })}
@@ -696,10 +720,12 @@ function ReviewScene({
   puzzle,
   materialVariant,
   goldLumpParams,
+  feedbackAnswerCorrect,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
   goldLumpParams: GoldLumpParams;
+  feedbackAnswerCorrect: boolean | null;
 }) {
   const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95;
   const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE;
@@ -736,7 +762,11 @@ function ReviewScene({
           <group key={`rh-${k}`} position={[p.x, p.y, p.z]}>
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewHiddenScale}>
               <boxGeometry args={[0.96, 0.96, 0.96]} />
-              <GoldLumpMaterial params={goldLumpParams} envMapIntensity={materialVariant === "Wood01" ? 1.78 : 1.35} />
+              {feedbackAnswerCorrect === true ? (
+                <GoldHiddenMatcapMaterial />
+              ) : (
+                <GoldLumpMaterial params={goldLumpParams} envMapIntensity={materialVariant === "Wood01" ? 1.78 : 1.35} />
+              )}
             </mesh>
           </group>
         );
@@ -906,6 +936,7 @@ export default function HiddenStackCanvas({
   reviewMode = false,
   reviewAzimuthHintLimitDeg,
   onReviewAzimuthHintThresholdExceeded,
+  feedbackAnswerCorrect = null,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
@@ -931,7 +962,7 @@ export default function HiddenStackCanvas({
       camera={{ position: [0, 0, 1], near: 0.1, far: 320, zoom: 1 }}
     >
       <color attach="background" args={["#f1f5f9"]} />
-      <WoodMatcapTextureProvider>
+      <MatcapTexturesProvider>
         <Lights matcapWood={matcapWood} />
       {reviewMode ? (
         <ReviewOrbitControls
@@ -963,13 +994,19 @@ export default function HiddenStackCanvas({
             gridSize={gridSize}
             goldLumpParams={goldLumpParams}
             visualMeshScale={visualMeshScale}
+            feedbackAnswerCorrect={feedbackAnswerCorrect}
           />
         </Physics>
       )}
       {phase === "feedback" && reviewMode && (
-        <ReviewScene puzzle={puzzle} materialVariant={materialVariant} goldLumpParams={goldLumpParams} />
+        <ReviewScene
+          puzzle={puzzle}
+          materialVariant={materialVariant}
+          goldLumpParams={goldLumpParams}
+          feedbackAnswerCorrect={feedbackAnswerCorrect}
+        />
       )}
-      </WoodMatcapTextureProvider>
+      </MatcapTexturesProvider>
     </Canvas>
   );
 }
