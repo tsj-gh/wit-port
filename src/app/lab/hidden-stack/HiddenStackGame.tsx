@@ -333,7 +333,7 @@ export default function HiddenStackGame() {
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugMaterial")}</div>
                 <div className="flex flex-wrap gap-1">
-                  {(["A", "B", "C"] as const).map((v) => (
+                  {(["A", "B", "C", "Wood01"] as const).map((v) => (
                     <button
                       key={v}
                       type="button"
@@ -344,7 +344,13 @@ export default function HiddenStackGame() {
                           : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)]"
                       }`}
                     >
-                      {v === "A" ? t("games.hiddenStack.matA") : v === "B" ? t("games.hiddenStack.matB") : t("games.hiddenStack.matC")}
+                      {v === "A"
+                        ? t("games.hiddenStack.matA")
+                        : v === "B"
+                          ? t("games.hiddenStack.matB")
+                          : v === "C"
+                            ? t("games.hiddenStack.matC")
+                            : t("games.hiddenStack.matWood01")}
                     </button>
                   ))}
                 </div>

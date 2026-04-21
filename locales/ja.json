@@ -275,6 +275,7 @@
       "matA": "A 木目調",
       "matB": "B セミグロス",
       "matC": "C 曇りガラス風",
+      "matWood01": "木01 Matcap",
       "debugGoldLump": "正解「金塊」マテリアル（デバッグ）",
       "debugGoldMetalness": "metalness",
       "debugGoldRoughness": "roughness",

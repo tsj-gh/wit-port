@@ -1,7 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Physics, useBox, usePlane } from "@react-three/cannon";
 import * as THREE from "three";
 import { Line, OrbitControls, RoundedBox } from "@react-three/drei";
@@ -25,7 +36,25 @@ const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.05;
 const BASE_ELEVATION_DEG = 31;
 const BASE_AZIMUTH_DEG = 44;
 
-export type BlockMaterialVariant = "A" | "B" | "C";
+export type BlockMaterialVariant = "A" | "B" | "C" | "Wood01";
+
+const WOOD_MATCAP_TEXTURE_URL = "/textures/wood_matcap_01.png";
+
+const WoodMatcapTextureContext = createContext<THREE.Texture | null>(null);
+
+function useWoodMatcapTexture() {
+  const tex = useLoader(THREE.TextureLoader, WOOD_MATCAP_TEXTURE_URL);
+  useLayoutEffect(() => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+  }, [tex]);
+  return tex;
+}
+
+function WoodMatcapTextureProvider({ children }: { children: ReactNode }) {
+  const tex = useWoodMatcapTexture();
+  return <WoodMatcapTextureContext.Provider value={tex}>{children}</WoodMatcapTextureContext.Provider>;
+}
 export type CollapsePatternId = 1 | 2 | 3;
 
 /** 正解ブロックの「金塊」表示用（デバッグパネルから調整可） */
@@ -142,7 +171,7 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
   return null;
 }
 
-function GoldLumpMaterial({ params }: { params: GoldLumpParams }) {
+function GoldLumpMaterial({ params, envMapIntensity = 1.35 }: { params: GoldLumpParams; envMapIntensity?: number }) {
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
   const color = useMemo(() => {
     try {
@@ -156,7 +185,7 @@ function GoldLumpMaterial({ params }: { params: GoldLumpParams }) {
     const m = matRef.current;
     if (!m) return;
     m.needsUpdate = true;
-  }, [params.color, params.metalness, params.roughness, color]);
+  }, [params.color, params.metalness, params.roughness, color, envMapIntensity]);
 
   return (
     <meshStandardMaterial
@@ -164,12 +193,21 @@ function GoldLumpMaterial({ params }: { params: GoldLumpParams }) {
       color={color}
       metalness={params.metalness}
       roughness={params.roughness}
-      envMapIntensity={1.35}
+      envMapIntensity={envMapIntensity}
     />
   );
 }
 
+function BlockWoodMatcapMaterial() {
+  const matcap = useContext(WoodMatcapTextureContext);
+  if (!matcap) return null;
+  return <meshMatcapMaterial matcap={matcap} color="#ffffff" />;
+}
+
 function BlockMaterial({ variant }: { variant: BlockMaterialVariant }) {
+  if (variant === "Wood01") {
+    return <BlockWoodMatcapMaterial />;
+  }
   if (variant === "A") {
     return <meshStandardMaterial color="#c9a06c" roughness={0.88} metalness={0.06} />;
   }
@@ -252,6 +290,7 @@ function IntroBlocks({
   const doneRef = useRef(false);
   const startRef = useRef<number | null>(null);
 
+  const blockShadows = materialVariant !== "Wood01";
   const meta = useMemo(
     () =>
       cells.map(({ key, center }) => {
@@ -311,14 +350,14 @@ function IntroBlocks({
               args={[0.96, 0.96, 0.96]}
               radius={BLOCK_B_BEVEL_RADIUS}
               smoothness={BLOCK_B_BEVEL_SMOOTHNESS}
-              castShadow
-              receiveShadow
+              castShadow={blockShadows}
+              receiveShadow={blockShadows}
               scale={visualMeshScale}
             >
               <BlockMaterial variant={materialVariant} />
             </RoundedBox>
           ) : (
-            <mesh castShadow receiveShadow scale={visualMeshScale}>
+            <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
               <boxGeometry args={[0.96, 0.96, 0.96]} />
               <BlockMaterial variant={materialVariant} />
             </mesh>
@@ -338,6 +377,7 @@ function ThinkBlocks({
   materialVariant: BlockMaterialVariant;
   visualMeshScale: number;
 }) {
+  const blockShadows = materialVariant !== "Wood01";
   return (
     <>
       {cells.map(({ key, center }) => (
@@ -347,14 +387,14 @@ function ThinkBlocks({
               args={[0.96, 0.96, 0.96]}
               radius={BLOCK_B_BEVEL_RADIUS}
               smoothness={BLOCK_B_BEVEL_SMOOTHNESS}
-              castShadow
-              receiveShadow
+              castShadow={blockShadows}
+              receiveShadow={blockShadows}
               scale={visualMeshScale}
             >
               <BlockMaterial variant={materialVariant} />
             </RoundedBox>
           ) : (
-            <mesh castShadow receiveShadow scale={visualMeshScale}>
+            <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
               <boxGeometry args={[0.96, 0.96, 0.96]} />
               <BlockMaterial variant={materialVariant} />
             </mesh>
@@ -365,11 +405,23 @@ function ThinkBlocks({
   );
 }
 
-function GhostBox({ center, visualMeshScale }: { center: THREE.Vector3; visualMeshScale: number }) {
+function GhostBox({
+  center,
+  visualMeshScale,
+  materialVariant,
+}: {
+  center: THREE.Vector3;
+  visualMeshScale: number;
+  materialVariant: BlockMaterialVariant;
+}) {
   const edges = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(0.96, 0.96, 0.96)), []);
+  const edge =
+    materialVariant === "Wood01"
+      ? ({ color: "#0a0a0b" as const, opacity: 0.58 } as const)
+      : ({ color: "#0f172a" as const, opacity: 0.48 } as const);
   return (
-    <lineSegments position={center} geometry={edges} scale={visualMeshScale}>
-      <lineBasicMaterial color="#94a3b8" transparent opacity={0.35} />
+    <lineSegments position={center} geometry={edges} scale={visualMeshScale} renderOrder={1}>
+      <lineBasicMaterial color={edge.color} transparent opacity={edge.opacity} depthTest depthWrite={false} />
     </lineSegments>
   );
 }
@@ -393,10 +445,12 @@ function StaticBlock({
   position,
   goldParams,
   visualMeshScale,
+  goldEnvMapIntensity,
 }: {
   position: [number, number, number];
   goldParams: GoldLumpParams;
   visualMeshScale: number;
+  goldEnvMapIntensity?: number;
 }) {
   const [ref] = useBox(() => ({
     type: "Static",
@@ -410,7 +464,7 @@ function StaticBlock({
     <group ref={ref as unknown as RefObject<THREE.Group>}>
       <mesh castShadow receiveShadow scale={visualMeshScale}>
         <boxGeometry args={[0.96, 0.96, 0.96]} />
-        <GoldLumpMaterial params={goldParams} />
+        <GoldLumpMaterial params={goldParams} envMapIntensity={goldEnvMapIntensity} />
       </mesh>
     </group>
   );
@@ -450,7 +504,8 @@ function DynamicFallBlock({
     av.angularVelocity?.set(torque[0], torque[1], torque[2]);
   }, [api, impulse, torque]);
 
-  const matRef = useRef<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial>(null);
+  const woodMatcapTex = useContext(WoodMatcapTextureContext);
+  const matRef = useRef<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial | THREE.MeshMatcapMaterial>(null);
   const t0Ref = useRef<number | null>(null);
   const visualMeshScaleRef = useRef(visualMeshScale);
   visualMeshScaleRef.current = visualMeshScale;
@@ -483,9 +538,10 @@ function DynamicFallBlock({
     }
   });
 
+  const blockShadows = materialVariant !== "Wood01";
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
-      <mesh ref={visualRef} castShadow receiveShadow scale={visualMeshScale}>
+      <mesh ref={visualRef} castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
         <boxGeometry args={[0.96, 0.96, 0.96]} />
         {pattern === 3 && materialVariant === "C" ? (
           <meshPhysicalMaterial
@@ -508,8 +564,12 @@ function DynamicFallBlock({
             transparent
             opacity={0.95}
           />
+        ) : pattern === 3 && materialVariant === "Wood01" && woodMatcapTex ? (
+          <meshMatcapMaterial ref={matRef as never} matcap={woodMatcapTex} color="#ffffff" transparent opacity={0.95} />
         ) : pattern === 3 ? (
           <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} transparent opacity={0.95} />
+        ) : materialVariant === "Wood01" && woodMatcapTex ? (
+          <meshMatcapMaterial ref={matRef as never} matcap={woodMatcapTex} color="#ffffff" />
         ) : materialVariant === "A" ? (
           <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} metalness={0.06} />
         ) : materialVariant === "B" ? (
@@ -602,11 +662,19 @@ function FeedbackScene({
     <>
       <PhysFloor />
       {Array.from(puzzle.visibleKeys).map((k) => (
-        <GhostBox key={`g-${k}`} center={cellCenter(parseKey(k))} visualMeshScale={visualMeshScale} />
+        <GhostBox key={`g-${k}`} center={cellCenter(parseKey(k))} visualMeshScale={visualMeshScale} materialVariant={materialVariant} />
       ))}
       {Array.from(puzzle.hiddenKeys).map((k) => {
         const p = cellCenter(parseKey(k));
-        return <StaticBlock key={`h-${k}`} position={[p.x, p.y, p.z]} goldParams={goldLumpParams} visualMeshScale={visualMeshScale} />;
+        return (
+          <StaticBlock
+            key={`h-${k}`}
+            position={[p.x, p.y, p.z]}
+            goldParams={goldLumpParams}
+            visualMeshScale={visualMeshScale}
+            goldEnvMapIntensity={materialVariant === "Wood01" ? 1.78 : 1.35}
+          />
+        );
       })}
       {showFalling &&
         impulses.map(({ key, impulse, torque, pos }) => (
@@ -635,6 +703,7 @@ function ReviewScene({
 }) {
   const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95;
   const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE;
+  const blockShadows = materialVariant !== "Wood01";
   return (
     <>
       {Array.from(puzzle.visibleKeys).map((k) => {
@@ -646,14 +715,14 @@ function ReviewScene({
                 args={[0.96, 0.96, 0.96]}
                 radius={BLOCK_B_BEVEL_RADIUS}
                 smoothness={BLOCK_B_BEVEL_SMOOTHNESS}
-                castShadow
-                receiveShadow
+                castShadow={blockShadows}
+                receiveShadow={blockShadows}
                 scale={reviewVisibleScale}
               >
                 <BlockMaterial variant={materialVariant} />
               </RoundedBox>
             ) : (
-              <mesh castShadow receiveShadow scale={reviewVisibleScale}>
+              <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewVisibleScale}>
                 <boxGeometry args={[0.96, 0.96, 0.96]} />
                 <BlockMaterial variant={materialVariant} />
               </mesh>
@@ -665,9 +734,9 @@ function ReviewScene({
         const p = cellCenter(parseKey(k));
         return (
           <group key={`rh-${k}`} position={[p.x, p.y, p.z]}>
-            <mesh castShadow receiveShadow scale={reviewHiddenScale}>
+            <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewHiddenScale}>
               <boxGeometry args={[0.96, 0.96, 0.96]} />
-              <GoldLumpMaterial params={goldLumpParams} />
+              <GoldLumpMaterial params={goldLumpParams} envMapIntensity={materialVariant === "Wood01" ? 1.78 : 1.35} />
             </mesh>
           </group>
         );
@@ -799,7 +868,16 @@ function ReviewOrbitControls({
   );
 }
 
-function Lights() {
+function Lights({ matcapWood }: { matcapWood: boolean }) {
+  if (matcapWood) {
+    return (
+      <>
+        <ambientLight intensity={0.16} />
+        <directionalLight position={[6, 10, 4]} intensity={0.26} castShadow={false} />
+        <hemisphereLight args={["#f8fafc", "#64748b", 0.1]} />
+      </>
+    );
+  }
   return (
     <>
       <ambientLight intensity={0.55} />
@@ -840,17 +918,21 @@ export default function HiddenStackCanvas({
     onIntroComplete();
   }, [onIntroComplete]);
 
+  const matcapWood = materialVariant === "Wood01";
+  const blockShadows = !matcapWood;
+
   return (
     <Canvas
       className="!absolute inset-0 h-full w-full min-h-0 touch-none"
       orthographic
-      shadows
+      shadows={blockShadows}
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: false, logarithmicDepthBuffer: true }}
       camera={{ position: [0, 0, 1], near: 0.1, far: 320, zoom: 1 }}
     >
       <color attach="background" args={["#f1f5f9"]} />
-      <Lights />
+      <WoodMatcapTextureProvider>
+        <Lights matcapWood={matcapWood} />
       {reviewMode ? (
         <ReviewOrbitControls
           gridSize={gridSize}
@@ -887,6 +969,7 @@ export default function HiddenStackCanvas({
       {phase === "feedback" && reviewMode && (
         <ReviewScene puzzle={puzzle} materialVariant={materialVariant} goldLumpParams={goldLumpParams} />
       )}
+      </WoodMatcapTextureProvider>
     </Canvas>
   );
 }
