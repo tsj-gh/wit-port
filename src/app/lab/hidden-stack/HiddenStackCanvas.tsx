@@ -1,18 +1,7 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
-import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, useBox, usePlane } from "@react-three/cannon";
 import * as THREE from "three";
 import { Line, OrbitControls, RoundedBox } from "@react-three/drei";
@@ -38,14 +27,12 @@ const BASE_AZIMUTH_DEG = 44;
 
 export type BlockMaterialVariant = "A" | "B" | "C" | "Wood01";
 
-const WOOD_MATCAP_TEXTURE_URL = "/textures/wood_matcap_02.png";
-const GOLD_MATCAP_TEXTURE_URL = "/textures/gold_matcap_01.png";
+/** Wood01 用 PBR ベース色（木目テクスチャ未設定時の代用） */
+const WOOD_PBR_BASE_HEX = "#d2b48c";
 
 /**
  * インデックス付き BoxGeometry を非インデックス化した上で法線を再計算し、
- * 立方体の稜で法線が平均化されないよう面ごとに独立した法線にする（Matcap の激しいハイライト移動を抑える）。
- * Three.js の MeshMatcapMaterial はビュー空間法線（normalMatrix * normal）で Matcap を参照する想定で、
- * ワールド固定ではない（カメラから見て「上を向く面」が Matcap 上側に対応する）。
+ * 立方体の稜で法線が平均化されないよう面ごとに独立した法線にする。
  */
 function ensureFlatBoxVertexNormals(geometry: THREE.BufferGeometry) {
   if (geometry.userData.hiddenStackFlatNormals) return;
@@ -67,66 +54,6 @@ function ensureFlatBoxVertexNormals(geometry: THREE.BufferGeometry) {
   src.dispose();
 }
 
-/** three r169 `ShaderLib/meshmatcap` のフラグメント main 内インライン（`#include <matcap_fragment>` は存在しない） */
-const MESHMATCAP_DEFAULT_UV_AND_OUTGOING =
-  "\n\tvec3 viewDir = normalize( vViewPosition );\n\tvec3 x = normalize( vec3( viewDir.z, 0.0, - viewDir.x ) );\n\tvec3 y = cross( viewDir, x );\n\tvec2 uv = vec2( dot( x, normal ), dot( y, normal ) ) * 0.495 + 0.5; // 0.495 to remove artifacts caused by undersized matcap disks\n\n\t#ifdef USE_MATCAP\n\n\t\tvec4 matcapColor = texture2D( matcap, uv );\n\n\t#else\n\n\t\tvec4 matcapColor = vec4( vec3( mix( 0.2, 0.8, uv.y ) ), 1.0 ); // default if matcap is missing\n\n\t#endif\n\n\tvec3 outgoingLight = diffuseColor.rgb * matcapColor.rgb;";
-
-const MESHMATCAP_WORLD_JITTER_UV_AND_OUTGOING =
-  "\n\tvec3 posOffset = sin( vWorldPos * 20.0 ) * 0.1;\n\tvec3 customNormal = normalize( normal + posOffset );\n\n\tvec3 viewDir = normalize( vViewPosition );\n\tvec3 x = normalize( vec3( viewDir.z, 0.0, - viewDir.x ) );\n\tvec3 y = cross( viewDir, x );\n\tvec2 uv = vec2( dot( x, customNormal ), dot( y, customNormal ) ) * 0.495 + 0.5;\n\n\t#ifdef USE_MATCAP\n\n\t\tvec4 matcapColor = texture2D( matcap, uv );\n\n\t#else\n\n\t\tvec4 matcapColor = vec4( vec3( mix( 0.2, 0.8, uv.y ) ), 1.0 ); // default if matcap is missing\n\n\t#endif\n\n\tvec3 outgoingLight = diffuseColor.rgb * matcapColor.rgb;";
-
-function patchMeshMatcapWorldPositionJitter(material: THREE.MeshMatcapMaterial) {
-  material.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader.replace(
-      "#include <common>",
-      `#include <common>
-varying vec3 vWorldPos;`
-    );
-    shader.vertexShader = shader.vertexShader.replace(
-      "#include <project_vertex>",
-      `#include <project_vertex>
-vWorldPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;`
-    );
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <common>",
-      `#include <common>
-varying vec3 vWorldPos;`
-    );
-    if (shader.fragmentShader.includes(MESHMATCAP_DEFAULT_UV_AND_OUTGOING)) {
-      shader.fragmentShader = shader.fragmentShader.replace(MESHMATCAP_DEFAULT_UV_AND_OUTGOING, MESHMATCAP_WORLD_JITTER_UV_AND_OUTGOING);
-    } else {
-      // three の空白差に備えたフォールバック
-      shader.fragmentShader = shader.fragmentShader.replace(
-        /\n\tvec3 viewDir = normalize\( vViewPosition \);[\s\S]*?\tvec3 outgoingLight = diffuseColor\.rgb \* matcapColor\.rgb;/,
-        MESHMATCAP_WORLD_JITTER_UV_AND_OUTGOING
-      );
-    }
-  };
-  material.customProgramCacheKey = () => "hiddenStack_matcap_world_jitter_v1";
-  material.needsUpdate = true;
-}
-
-type MatcapTextures = { wood: THREE.Texture; gold: THREE.Texture };
-const MatcapTexturesContext = createContext<MatcapTextures | null>(null);
-
-function MatcapTexturesProvider({ children }: { children: ReactNode }) {
-  const [wood, gold] = useLoader(THREE.TextureLoader, [WOOD_MATCAP_TEXTURE_URL, GOLD_MATCAP_TEXTURE_URL]);
-  useLayoutEffect(() => {
-    wood.colorSpace = THREE.SRGBColorSpace;
-    gold.colorSpace = THREE.SRGBColorSpace;
-    wood.wrapS = wood.wrapT = THREE.ClampToEdgeWrapping;
-    gold.wrapS = gold.wrapT = THREE.ClampToEdgeWrapping;
-    /** Matcap: 最近傍サンプルによるギザつき・ハイライトのチラつきを抑える */
-    wood.minFilter = THREE.LinearFilter;
-    wood.magFilter = THREE.LinearFilter;
-    gold.minFilter = THREE.LinearFilter;
-    gold.magFilter = THREE.LinearFilter;
-    wood.generateMipmaps = false;
-    gold.generateMipmaps = false;
-    wood.needsUpdate = true;
-    gold.needsUpdate = true;
-  }, [wood, gold]);
-  return <MatcapTexturesContext.Provider value={{ wood, gold }}>{children}</MatcapTexturesContext.Provider>;
-}
 export type CollapsePatternId = 1 | 2 | 3;
 
 /** 正解ブロックの「金塊」表示用（デバッグパネルから調整可） */
@@ -156,7 +83,7 @@ type HiddenStackCanvasProps = {
   /** ふりかえり時の回転誘導：この角度（deg）を初期方位から超えたらコールバックを一度だけ呼ぶ */
   reviewAzimuthHintLimitDeg?: number;
   onReviewAzimuthHintThresholdExceeded?: () => void;
-  /** 直近の解答が正解のとき、死角の「金塊」を Matcap に切り替え（feedback / review 共通） */
+  /** 直近の解答が正解のとき、死角の「金塊」をマットな金系 PBR に切り替え（feedback / review 共通） */
   feedbackAnswerCorrect?: boolean | null;
   /** 法線確認デバッグ用: 全ブロックを MeshNormalMaterial で描画 */
   debugNormalMaterial?: boolean;
@@ -274,46 +201,23 @@ function GoldLumpMaterial({ params, envMapIntensity = 1.35 }: { params: GoldLump
   );
 }
 
-/**
- * Matcap テクスチャは共有。MeshMatcapMaterial は `clone()` でブロック専用インスタンスにする。
- */
-function BlockWoodMatcapMaterial({ surfaceKey }: { surfaceKey: string }) {
-  const m = useContext(MatcapTexturesContext);
-  const tintHex = useMemo(() => woodMatcapTintHex(surfaceKey), [surfaceKey]);
-  const material = useMemo(() => {
-    if (!m) return null;
-    const template = new THREE.MeshMatcapMaterial({
-      matcap: m.wood,
-      flatShading: true,
-      toneMapped: false,
-    });
-    const mat = template.clone();
-    template.dispose();
-    mat.color.set(tintHex);
-    patchMeshMatcapWorldPositionJitter(mat);
-    return mat;
-  }, [m, tintHex]);
-  if (!material) return null;
-  return <primitive object={material} attach="material" />;
+function BlockWoodPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
+  const colorHex = useMemo(() => {
+    const c = new THREE.Color(WOOD_PBR_BASE_HEX);
+    c.offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
+    return `#${c.getHexString()}`;
+  }, [surfaceKey]);
+  // TODO: Load wood texture map here
+  return <meshStandardMaterial color={colorHex} roughness={0.8} metalness={0} />;
 }
 
-function GoldHiddenMatcapMaterial() {
-  const m = useContext(MatcapTexturesContext);
-  const material = useMemo(() => {
-    if (!m) return null;
-    const template = new THREE.MeshMatcapMaterial({
-      matcap: m.gold,
-      color: "#fff8e7",
-      flatShading: true,
-      toneMapped: false,
-    });
-    const mat = template.clone();
-    template.dispose();
-    patchMeshMatcapWorldPositionJitter(mat);
-    return mat;
-  }, [m]);
-  if (!material) return null;
-  return <primitive object={material} attach="material" />;
+function GoldHiddenPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
+  const colorHex = useMemo(() => {
+    const c = new THREE.Color("#fff8e7");
+    c.offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
+    return `#${c.getHexString()}`;
+  }, [surfaceKey]);
+  return <meshStandardMaterial color={colorHex} roughness={0.8} metalness={0} />;
 }
 
 function BlockMaterial({
@@ -323,12 +227,12 @@ function BlockMaterial({
 }: {
   variant: BlockMaterialVariant;
   debugNormalMaterial?: boolean;
-  /** Wood01 のときセルキー等（Matcap の個体差・材質インスタンス分離用） */
+  /** Wood01 のときセルキー等（色の個体差用） */
   woodSurfaceKey?: string;
 }) {
   if (debugNormalMaterial) return <meshNormalMaterial flatShading />;
   if (variant === "Wood01") {
-    return <BlockWoodMatcapMaterial surfaceKey={woodSurfaceKey ?? "wood-default"} />;
+    return <BlockWoodPBRMaterial surfaceKey={woodSurfaceKey ?? "wood-default"} />;
   }
   if (variant === "A") {
     return <meshStandardMaterial color="#c9a06c" roughness={0.88} metalness={0.06} />;
@@ -396,14 +300,6 @@ function hash01(k: string): number {
   return (h >>> 0) / 4294967296;
 }
 
-/** Wood01: Matcap に乗算する色をブロックごとに 0.95〜1.05 でわずかに変える */
-function woodMatcapTintHex(surfaceKey: string): string {
-  const r = THREE.MathUtils.mapLinear(hash01(`${surfaceKey}:wcR`), 0, 1, 0.95, 1.05);
-  const g = THREE.MathUtils.mapLinear(hash01(`${surfaceKey}:wcG`), 0, 1, 0.95, 1.05);
-  const b = THREE.MathUtils.mapLinear(hash01(`${surfaceKey}:wcB`), 0, 1, 0.95, 1.05);
-  return `#${new THREE.Color(r, g, b).getHexString()}`;
-}
-
 function IntroBlocks({
   cells,
   materialVariant,
@@ -422,7 +318,7 @@ function IntroBlocks({
   const doneRef = useRef(false);
   const startRef = useRef<number | null>(null);
 
-  const blockShadows = materialVariant !== "Wood01";
+  const blockShadows = true;
   const meta = useMemo(
     () =>
       cells.map(({ key, center }) => {
@@ -515,7 +411,7 @@ function ThinkBlocks({
   visualMeshScale: number;
   debugNormalMaterial?: boolean;
 }) {
-  const blockShadows = materialVariant !== "Wood01";
+  const blockShadows = true;
   return (
     <>
       {cells.map(({ key, center }) => (
@@ -556,14 +452,10 @@ function GhostBox({
   center: THREE.Vector3;
   visualMeshScale: number;
   materialVariant: BlockMaterialVariant;
-  /** 正解時の金塊演出中はエッジを細いゴールドブラウンに（Matcapの輝きを邪魔しない） */
+  /** 正解時の金塊演出中はエッジを細いゴールドブラウンに */
   correctGoldFeedback?: boolean;
 }) {
   const edges = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(0.96, 0.96, 0.96)), []);
-  /** Wood01 はエッジが暗く Matcap の木目を潰すため非表示（面の質感確認用） */
-  if (materialVariant === "Wood01" && !correctGoldFeedback) {
-    return null;
-  }
   const edge = correctGoldFeedback
     ? ({ color: "#7a5e38" as const, opacity: 0.2 } as const)
     : materialVariant === "Wood01"
@@ -597,14 +489,17 @@ function StaticBlock({
   visualMeshScale,
   goldEnvMapIntensity,
   useGoldMatcap,
+  goldSurfaceKey,
   debugNormalMaterial,
 }: {
   position: [number, number, number];
   goldParams: GoldLumpParams;
   visualMeshScale: number;
   goldEnvMapIntensity?: number;
-  /** 正解時：死角ブロックを金 Matcap に */
+  /** 正解時：死角ブロックをマットな金系 PBR に */
   useGoldMatcap?: boolean;
+  /** useGoldMatcap 時の明度ジッター用キー（セルキー） */
+  goldSurfaceKey?: string;
   debugNormalMaterial?: boolean;
 }) {
   const [ref] = useBox(() => ({
@@ -621,8 +516,8 @@ function StaticBlock({
         <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
         {debugNormalMaterial ? (
           <meshNormalMaterial flatShading />
-        ) : useGoldMatcap ? (
-          <GoldHiddenMatcapMaterial />
+        ) : useGoldMatcap && goldSurfaceKey ? (
+          <GoldHiddenPBRMaterial surfaceKey={goldSurfaceKey} />
         ) : (
           <GoldLumpMaterial params={goldParams} envMapIntensity={goldEnvMapIntensity} />
         )}
@@ -648,7 +543,7 @@ function DynamicFallBlock({
   pattern: CollapsePatternId;
   visualMeshScale: number;
   debugNormalMaterial?: boolean;
-  /** 表示ブロックのセルキー（Wood01 の Matcap 個体差用） */
+  /** 表示ブロックのセルキー（Wood01 の色ジッター用） */
   surfaceKey: string;
 }) {
   const [ref, api] = useBox(() => ({
@@ -670,25 +565,13 @@ function DynamicFallBlock({
     av.angularVelocity?.set(torque[0], torque[1], torque[2]);
   }, [api, impulse, torque]);
 
-  const matcapTextures = useContext(MatcapTexturesContext);
-  const woodMatcapTex = matcapTextures?.wood ?? null;
-  const woodTintHex = useMemo(() => woodMatcapTintHex(surfaceKey), [surfaceKey]);
-  const woodMatcapClone = useMemo(() => {
-    if (!woodMatcapTex || materialVariant !== "Wood01") return null;
-    const template = new THREE.MeshMatcapMaterial({
-      matcap: woodMatcapTex,
-      flatShading: true,
-      toneMapped: false,
-    });
-    const mat = template.clone();
-    template.dispose();
-    mat.color.set(woodTintHex);
-    mat.transparent = pattern === 3;
-    mat.opacity = pattern === 3 ? 0.95 : 1;
-    patchMeshMatcapWorldPositionJitter(mat);
-    return mat;
-  }, [woodMatcapTex, materialVariant, woodTintHex, pattern]);
-  const matRef = useRef<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial | THREE.MeshMatcapMaterial>(null);
+  // TODO: Load wood texture map here
+  const woodPbrColorHex = useMemo(() => {
+    const c = new THREE.Color(WOOD_PBR_BASE_HEX);
+    c.offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
+    return `#${c.getHexString()}`;
+  }, [surfaceKey]);
+  const matRef = useRef<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial>(null);
   const t0Ref = useRef<number | null>(null);
   const visualMeshScaleRef = useRef(visualMeshScale);
   visualMeshScaleRef.current = visualMeshScale;
@@ -721,7 +604,7 @@ function DynamicFallBlock({
     }
   });
 
-  const blockShadows = materialVariant !== "Wood01";
+  const blockShadows = true;
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
       <mesh ref={visualRef} castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
@@ -749,8 +632,15 @@ function DynamicFallBlock({
             transparent
             opacity={0.95}
           />
-        ) : materialVariant === "Wood01" && woodMatcapClone ? (
-          <primitive ref={matRef as never} object={woodMatcapClone} attach="material" />
+        ) : materialVariant === "Wood01" ? (
+          <meshStandardMaterial
+            ref={matRef as never}
+            color={woodPbrColorHex}
+            roughness={0.8}
+            metalness={0}
+            transparent={pattern === 3}
+            opacity={pattern === 3 ? 0.95 : 1}
+          />
         ) : pattern === 3 ? (
           <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} transparent opacity={0.95} />
         ) : materialVariant === "A" ? (
@@ -867,6 +757,7 @@ function FeedbackScene({
             visualMeshScale={visualMeshScale}
             goldEnvMapIntensity={materialVariant === "Wood01" ? 1.78 : 1.35}
             useGoldMatcap={feedbackAnswerCorrect === true}
+            goldSurfaceKey={k}
             debugNormalMaterial={debugNormalMaterial}
           />
         );
@@ -904,7 +795,7 @@ function ReviewScene({
 }) {
   const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95;
   const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE;
-  const blockShadows = materialVariant !== "Wood01";
+  const blockShadows = true;
   return (
     <>
       {Array.from(puzzle.visibleKeys).map((k) => {
@@ -944,7 +835,7 @@ function ReviewScene({
               {debugNormalMaterial ? (
                 <meshNormalMaterial flatShading />
               ) : feedbackAnswerCorrect === true ? (
-                <GoldHiddenMatcapMaterial />
+                <GoldHiddenPBRMaterial surfaceKey={k} />
               ) : (
                 <GoldLumpMaterial params={goldLumpParams} envMapIntensity={materialVariant === "Wood01" ? 1.78 : 1.35} />
               )}
@@ -1079,27 +970,17 @@ function ReviewOrbitControls({
   );
 }
 
-function Lights({ matcapWood }: { matcapWood: boolean }) {
-  if (matcapWood) {
-    return (
-      <>
-        <ambientLight intensity={0.16} />
-        <directionalLight position={[6, 10, 4]} intensity={0.26} castShadow={false} />
-        <hemisphereLight args={["#f8fafc", "#64748b", 0.1]} />
-      </>
-    );
-  }
+function Lights() {
   return (
     <>
-      <ambientLight intensity={0.55} />
+      <ambientLight intensity={0.6} />
       <directionalLight
-        position={[6, 10, 4]}
-        intensity={1.05}
+        position={[7, 12, 5]}
+        intensity={0.8}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
-      <hemisphereLight args={["#f8fafc", "#44403c", 0.35]} />
     </>
   );
 }
@@ -1131,21 +1012,17 @@ export default function HiddenStackCanvas({
     onIntroComplete();
   }, [onIntroComplete]);
 
-  const matcapWood = materialVariant === "Wood01";
-  const blockShadows = !matcapWood;
-
   return (
     <Canvas
       className="!absolute inset-0 h-full w-full min-h-0 touch-none"
       orthographic
-      shadows={blockShadows}
+      shadows
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: false, logarithmicDepthBuffer: true }}
       camera={{ position: [0, 0, 1], near: 0.1, far: 320, zoom: 1 }}
     >
       <color attach="background" args={["#f1f5f9"]} />
-      <MatcapTexturesProvider>
-        <Lights matcapWood={matcapWood} />
+      <Lights />
       {reviewMode ? (
         <ReviewOrbitControls
           gridSize={gridSize}
@@ -1198,7 +1075,6 @@ export default function HiddenStackCanvas({
           debugNormalMaterial={debugNormalMaterial}
         />
       )}
-      </MatcapTexturesProvider>
     </Canvas>
   );
 }
