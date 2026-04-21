@@ -67,6 +67,44 @@ function ensureFlatBoxVertexNormals(geometry: THREE.BufferGeometry) {
   src.dispose();
 }
 
+/** three r169 `ShaderLib/meshmatcap` のフラグメント main 内インライン（`#include <matcap_fragment>` は存在しない） */
+const MESHMATCAP_DEFAULT_UV_AND_OUTGOING =
+  "\n\tvec3 viewDir = normalize( vViewPosition );\n\tvec3 x = normalize( vec3( viewDir.z, 0.0, - viewDir.x ) );\n\tvec3 y = cross( viewDir, x );\n\tvec2 uv = vec2( dot( x, normal ), dot( y, normal ) ) * 0.495 + 0.5; // 0.495 to remove artifacts caused by undersized matcap disks\n\n\t#ifdef USE_MATCAP\n\n\t\tvec4 matcapColor = texture2D( matcap, uv );\n\n\t#else\n\n\t\tvec4 matcapColor = vec4( vec3( mix( 0.2, 0.8, uv.y ) ), 1.0 ); // default if matcap is missing\n\n\t#endif\n\n\tvec3 outgoingLight = diffuseColor.rgb * matcapColor.rgb;";
+
+const MESHMATCAP_WORLD_JITTER_UV_AND_OUTGOING =
+  "\n\tvec3 posOffset = sin( vWorldPos * 20.0 ) * 0.1;\n\tvec3 customNormal = normalize( normal + posOffset );\n\n\tvec3 viewDir = normalize( vViewPosition );\n\tvec3 x = normalize( vec3( viewDir.z, 0.0, - viewDir.x ) );\n\tvec3 y = cross( viewDir, x );\n\tvec2 uv = vec2( dot( x, customNormal ), dot( y, customNormal ) ) * 0.495 + 0.5;\n\n\t#ifdef USE_MATCAP\n\n\t\tvec4 matcapColor = texture2D( matcap, uv );\n\n\t#else\n\n\t\tvec4 matcapColor = vec4( vec3( mix( 0.2, 0.8, uv.y ) ), 1.0 ); // default if matcap is missing\n\n\t#endif\n\n\tvec3 outgoingLight = diffuseColor.rgb * matcapColor.rgb;";
+
+function patchMeshMatcapWorldPositionJitter(material: THREE.MeshMatcapMaterial) {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <common>",
+      `#include <common>
+varying vec3 vWorldPos;`
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <project_vertex>",
+      `#include <project_vertex>
+vWorldPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <common>",
+      `#include <common>
+varying vec3 vWorldPos;`
+    );
+    if (shader.fragmentShader.includes(MESHMATCAP_DEFAULT_UV_AND_OUTGOING)) {
+      shader.fragmentShader = shader.fragmentShader.replace(MESHMATCAP_DEFAULT_UV_AND_OUTGOING, MESHMATCAP_WORLD_JITTER_UV_AND_OUTGOING);
+    } else {
+      // three の空白差に備えたフォールバック
+      shader.fragmentShader = shader.fragmentShader.replace(
+        /\n\tvec3 viewDir = normalize\( vViewPosition \);[\s\S]*?\tvec3 outgoingLight = diffuseColor\.rgb \* matcapColor\.rgb;/,
+        MESHMATCAP_WORLD_JITTER_UV_AND_OUTGOING
+      );
+    }
+  };
+  material.customProgramCacheKey = () => "hiddenStack_matcap_world_jitter_v1";
+  material.needsUpdate = true;
+}
+
 type MatcapTextures = { wood: THREE.Texture; gold: THREE.Texture };
 const MatcapTexturesContext = createContext<MatcapTextures | null>(null);
 
@@ -252,6 +290,7 @@ function BlockWoodMatcapMaterial({ surfaceKey }: { surfaceKey: string }) {
     const mat = template.clone();
     template.dispose();
     mat.color.set(tintHex);
+    patchMeshMatcapWorldPositionJitter(mat);
     return mat;
   }, [m, tintHex]);
   if (!material) return null;
@@ -260,8 +299,21 @@ function BlockWoodMatcapMaterial({ surfaceKey }: { surfaceKey: string }) {
 
 function GoldHiddenMatcapMaterial() {
   const m = useContext(MatcapTexturesContext);
-  if (!m) return null;
-  return <meshMatcapMaterial matcap={m.gold} color="#fff8e7" flatShading toneMapped={false} />;
+  const material = useMemo(() => {
+    if (!m) return null;
+    const template = new THREE.MeshMatcapMaterial({
+      matcap: m.gold,
+      color: "#fff8e7",
+      flatShading: true,
+      toneMapped: false,
+    });
+    const mat = template.clone();
+    template.dispose();
+    patchMeshMatcapWorldPositionJitter(mat);
+    return mat;
+  }, [m]);
+  if (!material) return null;
+  return <primitive object={material} attach="material" />;
 }
 
 function BlockMaterial({
@@ -352,16 +404,6 @@ function woodMatcapTintHex(surfaceKey: string): string {
   return `#${new THREE.Color(r, g, b).getHexString()}`;
 }
 
-/** Wood01: Matcap サンプルをずらすための微小回転（ラジアン） */
-const WOOD_MATCAP_MICRO_ROT_MAX = 0.048;
-
-function woodSurfaceMicroEuler(surfaceKey: string): [number, number, number] {
-  const rx = (hash01(`${surfaceKey}:wrx`) - 0.5) * 2 * WOOD_MATCAP_MICRO_ROT_MAX;
-  const ry = (hash01(`${surfaceKey}:wry`) - 0.5) * 2 * WOOD_MATCAP_MICRO_ROT_MAX;
-  const rz = (hash01(`${surfaceKey}:wrz`) - 0.5) * 2 * WOOD_MATCAP_MICRO_ROT_MAX;
-  return [rx, ry, rz];
-}
-
 function IntroBlocks({
   cells,
   materialVariant,
@@ -446,17 +488,14 @@ function IntroBlocks({
             >
               <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
             </RoundedBox>
-          ) : materialVariant === "Wood01" ? (
-            <group rotation={woodSurfaceMicroEuler(key)}>
-              <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-                <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
-                <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} woodSurfaceKey={key} />
-              </mesh>
-            </group>
           ) : (
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
               <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
-              <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
+              <BlockMaterial
+                variant={materialVariant}
+                debugNormalMaterial={debugNormalMaterial}
+                woodSurfaceKey={materialVariant === "Wood01" ? key : undefined}
+              />
             </mesh>
           )}
         </group>
@@ -492,17 +531,14 @@ function ThinkBlocks({
             >
               <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
             </RoundedBox>
-          ) : materialVariant === "Wood01" ? (
-            <group rotation={woodSurfaceMicroEuler(key)}>
-              <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-                <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
-                <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} woodSurfaceKey={key} />
-              </mesh>
-            </group>
           ) : (
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
               <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
-              <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
+              <BlockMaterial
+                variant={materialVariant}
+                debugNormalMaterial={debugNormalMaterial}
+                woodSurfaceKey={materialVariant === "Wood01" ? key : undefined}
+              />
             </mesh>
           )}
         </group>
@@ -637,10 +673,6 @@ function DynamicFallBlock({
   const matcapTextures = useContext(MatcapTexturesContext);
   const woodMatcapTex = matcapTextures?.wood ?? null;
   const woodTintHex = useMemo(() => woodMatcapTintHex(surfaceKey), [surfaceKey]);
-  const woodMicroRot = useMemo(
-    () => (materialVariant === "Wood01" ? woodSurfaceMicroEuler(surfaceKey) : ([0, 0, 0] as [number, number, number])),
-    [materialVariant, surfaceKey]
-  );
   const woodMatcapClone = useMemo(() => {
     if (!woodMatcapTex || materialVariant !== "Wood01") return null;
     const template = new THREE.MeshMatcapMaterial({
@@ -653,6 +685,7 @@ function DynamicFallBlock({
     mat.color.set(woodTintHex);
     mat.transparent = pattern === 3;
     mat.opacity = pattern === 3 ? 0.95 : 1;
+    patchMeshMatcapWorldPositionJitter(mat);
     return mat;
   }, [woodMatcapTex, materialVariant, woodTintHex, pattern]);
   const matRef = useRef<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial | THREE.MeshMatcapMaterial>(null);
@@ -691,61 +724,59 @@ function DynamicFallBlock({
   const blockShadows = materialVariant !== "Wood01";
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
-      <group rotation={woodMicroRot}>
-        <mesh ref={visualRef} castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-          <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
-          {debugNormalMaterial ? (
-            <meshNormalMaterial ref={matRef as never} flatShading transparent={pattern === 3} opacity={pattern === 3 ? 0.95 : 1} />
-          ) : pattern === 3 && materialVariant === "C" ? (
-            <meshPhysicalMaterial
-              ref={matRef as never}
-              color="#bcd4e6"
-              roughness={0.5}
-              metalness={0}
-              transmission={0.38}
-              thickness={0.75}
-              transparent
-              opacity={0.9}
-            />
-          ) : pattern === 3 && materialVariant === "B" ? (
-            <meshPhysicalMaterial
-              ref={matRef as never}
-              color="#f6b8c6"
-              roughness={0.32}
-              metalness={0}
-              clearcoat={0.35}
-              transparent
-              opacity={0.95}
-            />
-          ) : materialVariant === "Wood01" && woodMatcapClone ? (
-            <primitive ref={matRef as never} object={woodMatcapClone} attach="material" />
-          ) : pattern === 3 ? (
-            <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} transparent opacity={0.95} />
-          ) : materialVariant === "A" ? (
-            <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} metalness={0.06} />
-          ) : materialVariant === "B" ? (
-            <meshPhysicalMaterial
-              ref={matRef as never}
-              color="#f6b8c6"
-              roughness={0.32}
-              metalness={0}
-              clearcoat={0.35}
-              clearcoatRoughness={0.4}
-            />
-          ) : (
-            <meshPhysicalMaterial
-              ref={matRef as never}
-              color="#bcd4e6"
-              roughness={0.5}
-              metalness={0}
-              transmission={0.38}
-              thickness={0.75}
-              transparent
-              opacity={0.9}
-            />
-          )}
-        </mesh>
-      </group>
+      <mesh ref={visualRef} castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
+        <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
+        {debugNormalMaterial ? (
+          <meshNormalMaterial ref={matRef as never} flatShading transparent={pattern === 3} opacity={pattern === 3 ? 0.95 : 1} />
+        ) : pattern === 3 && materialVariant === "C" ? (
+          <meshPhysicalMaterial
+            ref={matRef as never}
+            color="#bcd4e6"
+            roughness={0.5}
+            metalness={0}
+            transmission={0.38}
+            thickness={0.75}
+            transparent
+            opacity={0.9}
+          />
+        ) : pattern === 3 && materialVariant === "B" ? (
+          <meshPhysicalMaterial
+            ref={matRef as never}
+            color="#f6b8c6"
+            roughness={0.32}
+            metalness={0}
+            clearcoat={0.35}
+            transparent
+            opacity={0.95}
+          />
+        ) : materialVariant === "Wood01" && woodMatcapClone ? (
+          <primitive ref={matRef as never} object={woodMatcapClone} attach="material" />
+        ) : pattern === 3 ? (
+          <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} transparent opacity={0.95} />
+        ) : materialVariant === "A" ? (
+          <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} metalness={0.06} />
+        ) : materialVariant === "B" ? (
+          <meshPhysicalMaterial
+            ref={matRef as never}
+            color="#f6b8c6"
+            roughness={0.32}
+            metalness={0}
+            clearcoat={0.35}
+            clearcoatRoughness={0.4}
+          />
+        ) : (
+          <meshPhysicalMaterial
+            ref={matRef as never}
+            color="#bcd4e6"
+            roughness={0.5}
+            metalness={0}
+            transmission={0.38}
+            thickness={0.75}
+            transparent
+            opacity={0.9}
+          />
+        )}
+      </mesh>
     </group>
   );
 }
@@ -891,17 +922,14 @@ function ReviewScene({
               >
                 <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
               </RoundedBox>
-            ) : materialVariant === "Wood01" ? (
-              <group rotation={woodSurfaceMicroEuler(k)}>
-                <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewVisibleScale}>
-                  <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
-                  <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} woodSurfaceKey={k} />
-                </mesh>
-              </group>
             ) : (
               <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewVisibleScale}>
                 <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
-                <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
+                <BlockMaterial
+                  variant={materialVariant}
+                  debugNormalMaterial={debugNormalMaterial}
+                  woodSurfaceKey={materialVariant === "Wood01" ? k : undefined}
+                />
               </mesh>
             )}
           </group>
