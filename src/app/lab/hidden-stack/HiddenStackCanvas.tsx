@@ -38,8 +38,14 @@ const BASE_AZIMUTH_DEG = 44;
 
 export type BlockMaterialVariant = "A" | "B" | "C" | "Wood01";
 
-const WOOD_MATCAP_TEXTURE_URL = "/textures/wood_matcap_01.png";
+const WOOD_MATCAP_TEXTURE_URL = "/textures/wood_matcap_02.png";
 const GOLD_MATCAP_TEXTURE_URL = "/textures/gold_matcap_01.png";
+
+/** 積み木 BoxGeometry の法線を各面に垂直に揃える（Matcap の鏡面状の伸びを抑える） */
+function ensureBoxGeometryNormals(geometry: THREE.BufferGeometry) {
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+}
 
 type MatcapTextures = { wood: THREE.Texture; gold: THREE.Texture };
 const MatcapTexturesContext = createContext<MatcapTextures | null>(null);
@@ -212,7 +218,7 @@ function GoldLumpMaterial({ params, envMapIntensity = 1.35 }: { params: GoldLump
 function BlockWoodMatcapMaterial() {
   const m = useContext(MatcapTexturesContext);
   if (!m) return null;
-  return <meshMatcapMaterial matcap={m.wood} color="#ffffff" flatShading toneMapped={false} />;
+  return <meshMatcapMaterial matcap={m.wood} color="#ffffff" toneMapped={false} />;
 }
 
 function GoldHiddenMatcapMaterial() {
@@ -378,7 +384,7 @@ function IntroBlocks({
             </RoundedBox>
           ) : (
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => g.computeVertexNormals()} />
+              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureBoxGeometryNormals(g)} />
               <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
             </mesh>
           )}
@@ -417,7 +423,7 @@ function ThinkBlocks({
             </RoundedBox>
           ) : (
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => g.computeVertexNormals()} />
+              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureBoxGeometryNormals(g)} />
               <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
             </mesh>
           )}
@@ -440,6 +446,10 @@ function GhostBox({
   correctGoldFeedback?: boolean;
 }) {
   const edges = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(0.96, 0.96, 0.96)), []);
+  /** Wood01 はエッジが暗く Matcap の木目を潰すため非表示（面の質感確認用） */
+  if (materialVariant === "Wood01" && !correctGoldFeedback) {
+    return null;
+  }
   const edge = correctGoldFeedback
     ? ({ color: "#7a5e38" as const, opacity: 0.2 } as const)
     : materialVariant === "Wood01"
@@ -494,7 +504,7 @@ function StaticBlock({
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
       <mesh castShadow receiveShadow scale={visualMeshScale}>
-        <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => g.computeVertexNormals()} />
+        <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureBoxGeometryNormals(g)} />
         {debugNormalMaterial ? (
           <meshNormalMaterial flatShading />
         ) : useGoldMatcap ? (
@@ -582,7 +592,7 @@ function DynamicFallBlock({
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
       <mesh ref={visualRef} castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
-        <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => g.computeVertexNormals()} />
+        <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureBoxGeometryNormals(g)} />
         {debugNormalMaterial ? (
           <meshNormalMaterial ref={matRef as never} flatShading transparent={pattern === 3} opacity={pattern === 3 ? 0.95 : 1} />
         ) : pattern === 3 && materialVariant === "C" ? (
@@ -782,7 +792,7 @@ function ReviewScene({
               </RoundedBox>
             ) : (
               <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewVisibleScale}>
-                <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => g.computeVertexNormals()} />
+                <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureBoxGeometryNormals(g)} />
                 <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
               </mesh>
             )}
@@ -794,7 +804,7 @@ function ReviewScene({
         return (
           <group key={`rh-${k}`} position={[p.x, p.y, p.z]}>
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewHiddenScale}>
-              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => g.computeVertexNormals()} />
+              <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureBoxGeometryNormals(g)} />
               {debugNormalMaterial ? (
                 <meshNormalMaterial flatShading />
               ) : feedbackAnswerCorrect === true ? (
