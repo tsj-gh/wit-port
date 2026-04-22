@@ -40,10 +40,26 @@ const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.05;
 const BASE_ELEVATION_DEG = 31;
 const BASE_AZIMUTH_DEG = 44;
 
-export type BlockMaterialVariant = "A" | "B" | "C" | "Wood01" | "WoodTex";
+/** A=手続き木目（旧 Wood01）、B=外部木目テクスチャ、C=くすみセミグロス（色は semiGlossColorId） */
+export type BlockMaterialVariant = "A" | "B" | "C";
+
+export type SemiGlossColorId = "pink" | "turquoise" | "beige" | "green" | "mauve";
+
+export const SEMI_GLOSS_COLOR_HEX: Record<SemiGlossColorId, string> = {
+  pink: "#f6b8c6",
+  turquoise: "#6fa1a1",
+  beige: "#dfcdb7",
+  green: "#8ca18c",
+  mauve: "#9e8a9c",
+};
 
 function isWoodLikeMaterial(v: BlockMaterialVariant): boolean {
-  return v === "Wood01" || v === "WoodTex";
+  return v === "A" || v === "B";
+}
+
+/** 旧 B セミグロス相当：半光沢の meshStandard（roughness 0.3〜0.5 帯）。色のみ差し替え */
+function SemiGlossDustyMaterial({ color }: { color: string }) {
+  return <meshStandardMaterial color={color} roughness={0.38} metalness={0.06} />;
 }
 
 type ExternalWoodTexturesContextValue = {
@@ -285,8 +301,10 @@ type HiddenStackCanvasProps = {
   feedbackAnswerCorrect?: boolean | null;
   /** 法線確認デバッグ用: 全ブロックを MeshNormalMaterial で描画 */
   debugNormalMaterial?: boolean;
-  /** 外部木目テクスチャ（0=Walnut01 … 5=Oak03）。WoodTex のみ描画に使用 */
+  /** 外部木目テクスチャ（0=Walnut01 … 5=Oak03）。質感 B のとき描画に使用 */
   externalWoodTextureIndex?: number;
+  /** 質感 C（セミグロス）の面色 */
+  semiGlossColorId?: SemiGlossColorId;
   /** デバッグ用の全体アンビエントライト強度 */
   ambientLightIntensity?: number;
   /** WoodTex 専用: 影持ち上げ強度（暗部視認性） */
@@ -492,36 +510,23 @@ function BlockMaterial({
   variant,
   debugNormalMaterial = false,
   woodSurfaceKey,
+  semiGlossColor = SEMI_GLOSS_COLOR_HEX.pink,
 }: {
   variant: BlockMaterialVariant;
   debugNormalMaterial?: boolean;
-  /** Wood01 のときセルキー等（手続き木目テクスチャの個体用） */
+  /** 手続き木目・外部木目のセルごとのジッター用キー */
   woodSurfaceKey?: string;
+  /** 質感 C 用の面色（ヘックス） */
+  semiGlossColor?: string;
 }) {
   if (debugNormalMaterial) return <meshNormalMaterial flatShading />;
-  if (variant === "WoodTex") {
+  if (variant === "B") {
     return <BlockExternalWoodPBRMaterial surfaceKey={woodSurfaceKey ?? "wood-tex"} />;
   }
-  if (variant === "Wood01") {
+  if (variant === "A") {
     return <BlockWoodPBRMaterial surfaceKey={woodSurfaceKey ?? "wood-default"} />;
   }
-  if (variant === "A") {
-    return <meshStandardMaterial color="#c9a06c" roughness={0.88} metalness={0.06} />;
-  }
-  if (variant === "B") {
-    return <meshPhysicalMaterial color="#f6b8c6" roughness={0.32} metalness={0} clearcoat={0.35} clearcoatRoughness={0.4} />;
-  }
-  return (
-    <meshPhysicalMaterial
-      color="#bcd4e6"
-      roughness={0.5}
-      metalness={0}
-      transmission={0.38}
-      thickness={0.75}
-      transparent
-      opacity={0.9}
-    />
-  );
+  return <SemiGlossDustyMaterial color={semiGlossColor} />;
 }
 
 function FloorGrid({
@@ -610,6 +615,7 @@ function IntroBlocks({
   gridSize,
   visualMeshScale,
   debugNormalMaterial,
+  semiGlossColor,
 }: {
   cells: { key: string; center: THREE.Vector3 }[];
   materialVariant: BlockMaterialVariant;
@@ -617,6 +623,7 @@ function IntroBlocks({
   gridSize: number;
   visualMeshScale: number;
   debugNormalMaterial?: boolean;
+  semiGlossColor: string;
 }) {
   const doneRef = useRef(false);
   const startRef = useRef<number | null>(null);
@@ -676,7 +683,7 @@ function IntroBlocks({
     <>
       {meta.map(({ key, start }) => (
         <group key={key} ref={(r) => void (r ? groupRefs.current.set(key, r) : groupRefs.current.delete(key))} position={start.clone()}>
-          {materialVariant === "B" ? (
+          {materialVariant === "C" ? (
             <RoundedBox
               args={[0.96, 0.96, 0.96]}
               radius={BLOCK_B_BEVEL_RADIUS}
@@ -685,7 +692,11 @@ function IntroBlocks({
               receiveShadow={blockShadows}
               scale={visualMeshScale}
             >
-              <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
+              <BlockMaterial
+                variant={materialVariant}
+                debugNormalMaterial={debugNormalMaterial}
+                semiGlossColor={semiGlossColor}
+              />
             </RoundedBox>
           ) : (
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
@@ -694,6 +705,7 @@ function IntroBlocks({
                 variant={materialVariant}
                 debugNormalMaterial={debugNormalMaterial}
                 woodSurfaceKey={isWoodLikeMaterial(materialVariant) ? key : undefined}
+                semiGlossColor={semiGlossColor}
               />
             </mesh>
           )}
@@ -708,18 +720,20 @@ function ThinkBlocks({
   materialVariant,
   visualMeshScale,
   debugNormalMaterial,
+  semiGlossColor,
 }: {
   cells: { key: string; center: THREE.Vector3 }[];
   materialVariant: BlockMaterialVariant;
   visualMeshScale: number;
   debugNormalMaterial?: boolean;
+  semiGlossColor: string;
 }) {
   const blockShadows = true;
   return (
     <>
       {cells.map(({ key, center }) => (
         <group key={key} position={center}>
-          {materialVariant === "B" ? (
+          {materialVariant === "C" ? (
             <RoundedBox
               args={[0.96, 0.96, 0.96]}
               radius={BLOCK_B_BEVEL_RADIUS}
@@ -728,7 +742,11 @@ function ThinkBlocks({
               receiveShadow={blockShadows}
               scale={visualMeshScale}
             >
-              <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
+              <BlockMaterial
+                variant={materialVariant}
+                debugNormalMaterial={debugNormalMaterial}
+                semiGlossColor={semiGlossColor}
+              />
             </RoundedBox>
           ) : (
             <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={visualMeshScale}>
@@ -737,6 +755,7 @@ function ThinkBlocks({
                 variant={materialVariant}
                 debugNormalMaterial={debugNormalMaterial}
                 woodSurfaceKey={isWoodLikeMaterial(materialVariant) ? key : undefined}
+                semiGlossColor={semiGlossColor}
               />
             </mesh>
           )}
@@ -850,6 +869,7 @@ function DynamicFallBlock({
   visualMeshScale,
   debugNormalMaterial,
   surfaceKey,
+  semiGlossColor,
 }: {
   position: [number, number, number];
   impulse: [number, number, number];
@@ -858,8 +878,9 @@ function DynamicFallBlock({
   pattern: CollapsePatternId;
   visualMeshScale: number;
   debugNormalMaterial?: boolean;
-  /** 表示ブロックのセルキー（Wood01 の色ジッター用） */
+  /** 表示ブロックのセルキー（手続き木目のジッター用） */
   surfaceKey: string;
+  semiGlossColor: string;
 }) {
   const [ref, api] = useBox(() => ({
     mass: pattern === 3 ? 0.4 : 1.2,
@@ -880,7 +901,7 @@ function DynamicFallBlock({
     av.angularVelocity?.set(torque[0], torque[1], torque[2]);
   }, [api, impulse, torque]);
 
-  const woodMap = useMemo(() => (materialVariant === "Wood01" ? createWoodTexture(256) : null), [materialVariant, surfaceKey]);
+  const woodMap = useMemo(() => (materialVariant === "A" ? createWoodTexture(256) : null), [materialVariant, surfaceKey]);
   const { gl } = useThree();
   useLayoutEffect(() => {
     if (woodMap) setWoodTextureMaxAnisotropy(woodMap, gl);
@@ -903,14 +924,7 @@ function DynamicFallBlock({
       if (t >= FEEDBACK_FALL_FADE_START_SEC) {
         m.transparent = true;
         const u = THREE.MathUtils.clamp((t - FEEDBACK_FALL_FADE_START_SEC) / FEEDBACK_FALL_FADE_DURATION_SEC, 0, 1);
-        const base =
-          pattern === 3 && materialVariant === "C"
-            ? 0.9
-            : pattern === 3 && materialVariant === "B"
-              ? 0.95
-              : pattern === 3
-                ? 0.95
-                : 1;
+        const base = pattern === 3 ? 0.95 : 1;
         m.opacity = base * (1 - u);
       }
     }
@@ -927,62 +941,47 @@ function DynamicFallBlock({
         {debugNormalMaterial ? (
           <meshNormalMaterial ref={matRef as never} flatShading transparent={pattern === 3} opacity={pattern === 3 ? 0.95 : 1} />
         ) : pattern === 3 && materialVariant === "C" ? (
-          <meshPhysicalMaterial
+          <meshStandardMaterial
             ref={matRef as never}
-            color="#bcd4e6"
-            roughness={0.5}
-            metalness={0}
-            transmission={0.38}
-            thickness={0.75}
-            transparent
-            opacity={0.9}
-          />
-        ) : pattern === 3 && materialVariant === "B" ? (
-          <meshPhysicalMaterial
-            ref={matRef as never}
-            color="#f6b8c6"
-            roughness={0.32}
-            metalness={0}
-            clearcoat={0.35}
+            color={semiGlossColor}
+            roughness={0.38}
+            metalness={0.06}
             transparent
             opacity={0.95}
           />
-        ) : materialVariant === "Wood01" && woodMap ? (
+        ) : pattern === 3 && materialVariant === "B" ? (
+          <DynamicExternalWoodMaterial surfaceKey={surfaceKey} pattern={pattern} matRef={matRef} />
+        ) : pattern === 3 && materialVariant === "A" && woodMap ? (
           <meshStandardMaterial
             ref={matRef as never}
             map={woodMap}
             color="#ffffff"
             roughness={0.8}
             metalness={0}
-            transparent={pattern === 3}
-            opacity={pattern === 3 ? 0.95 : 1}
+            transparent
+            opacity={0.95}
           />
-        ) : materialVariant === "WoodTex" ? (
-          <DynamicExternalWoodMaterial surfaceKey={surfaceKey} pattern={pattern} matRef={matRef} />
         ) : pattern === 3 ? (
           <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} transparent opacity={0.95} />
-        ) : materialVariant === "A" ? (
-          <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} metalness={0.06} />
         ) : materialVariant === "B" ? (
-          <meshPhysicalMaterial
+          <DynamicExternalWoodMaterial surfaceKey={surfaceKey} pattern={pattern} matRef={matRef} />
+        ) : materialVariant === "A" && woodMap ? (
+          <meshStandardMaterial
             ref={matRef as never}
-            color="#f6b8c6"
-            roughness={0.32}
+            map={woodMap}
+            color="#ffffff"
+            roughness={0.8}
             metalness={0}
-            clearcoat={0.35}
-            clearcoatRoughness={0.4}
+          />
+        ) : materialVariant === "C" ? (
+          <meshStandardMaterial
+            ref={matRef as never}
+            color={semiGlossColor}
+            roughness={0.38}
+            metalness={0.06}
           />
         ) : (
-          <meshPhysicalMaterial
-            ref={matRef as never}
-            color="#bcd4e6"
-            roughness={0.5}
-            metalness={0}
-            transmission={0.38}
-            thickness={0.75}
-            transparent
-            opacity={0.9}
-          />
+          <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} metalness={0.06} />
         )}
       </mesh>
     </group>
@@ -1000,6 +999,7 @@ function FeedbackScene({
   highlightGoldSpecular,
   goldEnvMapBoost = 0,
   debugNormalMaterial,
+  semiGlossColor,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
@@ -1011,6 +1011,7 @@ function FeedbackScene({
   highlightGoldSpecular?: boolean;
   goldEnvMapBoost?: number;
   debugNormalMaterial?: boolean;
+  semiGlossColor: string;
 }) {
   const center = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
   const [showFalling, setShowFalling] = useState(true);
@@ -1097,6 +1098,7 @@ function FeedbackScene({
             pattern={pattern}
             visualMeshScale={visualMeshScale}
             debugNormalMaterial={debugNormalMaterial}
+            semiGlossColor={semiGlossColor}
           />
         ))}
     </>
@@ -1111,6 +1113,7 @@ function ReviewScene({
   highlightGoldSpecular,
   reviewMeshVisualScale = 1,
   debugNormalMaterial,
+  semiGlossColor,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
@@ -1119,6 +1122,7 @@ function ReviewScene({
   highlightGoldSpecular?: boolean;
   reviewMeshVisualScale?: number;
   debugNormalMaterial?: boolean;
+  semiGlossColor: string;
 }) {
   const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95 * reviewMeshVisualScale;
   /** 死角（金塊）はふりかえり用メッシュ倍率の対象外（反射・サイズを安定させる） */
@@ -1130,7 +1134,7 @@ function ReviewScene({
         const p = cellCenter(parseKey(k));
         return (
           <group key={`rv-${k}`} position={[p.x, p.y, p.z]}>
-            {materialVariant === "B" ? (
+            {materialVariant === "C" ? (
               <RoundedBox
                 args={[0.96, 0.96, 0.96]}
                 radius={BLOCK_B_BEVEL_RADIUS}
@@ -1139,7 +1143,11 @@ function ReviewScene({
                 receiveShadow={blockShadows}
                 scale={reviewVisibleScale}
               >
-                <BlockMaterial variant={materialVariant} debugNormalMaterial={debugNormalMaterial} />
+                <BlockMaterial
+                  variant={materialVariant}
+                  debugNormalMaterial={debugNormalMaterial}
+                  semiGlossColor={semiGlossColor}
+                />
               </RoundedBox>
             ) : (
               <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewVisibleScale}>
@@ -1148,6 +1156,7 @@ function ReviewScene({
                   variant={materialVariant}
                   debugNormalMaterial={debugNormalMaterial}
                   woodSurfaceKey={isWoodLikeMaterial(materialVariant) ? k : undefined}
+                  semiGlossColor={semiGlossColor}
                 />
               </mesh>
             )}
@@ -1449,6 +1458,7 @@ export default function HiddenStackCanvas({
   feedbackAnswerCorrect = null,
   debugNormalMaterial = false,
   externalWoodTextureIndex = 0,
+  semiGlossColorId = "pink",
   ambientLightIntensity = 0.7,
   woodTexShadowLift = 0.7,
   woodTexRoughness = 0.9,
@@ -1490,6 +1500,7 @@ export default function HiddenStackCanvas({
   const effectiveWoodTexFillLight = isWalnutTexture ? woodTexFillLightIntensity : 1.2;
   const effectiveWoodTexFillLight2 = isWalnutTexture ? woodTexFillLightSecondaryIntensity : 0.38;
   const effectiveWoodTexRimLight = isWalnutTexture ? woodTexRimLightIntensity : 0.26;
+  const semiGlossColor = SEMI_GLOSS_COLOR_HEX[semiGlossColorId];
 
   return (
     <Canvas
@@ -1510,7 +1521,7 @@ export default function HiddenStackCanvas({
         woodTexFillLightIntensity={effectiveWoodTexFillLight}
         woodTexFillLightSecondaryIntensity={effectiveWoodTexFillLight2}
         woodTexRimLightIntensity={effectiveWoodTexRimLight}
-        enableWoodTexFill={materialVariant === "WoodTex"}
+        enableWoodTexFill={materialVariant === "B"}
         spotlightParams={feedbackSpotlightParams}
       />
       {reviewMode ? (
@@ -1545,6 +1556,7 @@ export default function HiddenStackCanvas({
                 gridSize={gridSize}
                 visualMeshScale={visualMeshScale}
                 debugNormalMaterial={debugNormalMaterial}
+                semiGlossColor={semiGlossColor}
               />
             )}
             {phase === "think" && (
@@ -1553,6 +1565,7 @@ export default function HiddenStackCanvas({
                 materialVariant={materialVariant}
                 visualMeshScale={visualMeshScale}
                 debugNormalMaterial={debugNormalMaterial}
+                semiGlossColor={semiGlossColor}
               />
             )}
             {phase === "feedback" && !reviewMode && (
@@ -1568,6 +1581,7 @@ export default function HiddenStackCanvas({
                   highlightGoldSpecular
                   goldEnvMapBoost={feedbackSpotlightParams.goldEnvMapBoost}
                   debugNormalMaterial={debugNormalMaterial}
+                  semiGlossColor={semiGlossColor}
                 />
               </Physics>
             )}
@@ -1579,6 +1593,7 @@ export default function HiddenStackCanvas({
                 feedbackAnswerCorrect={feedbackAnswerCorrect}
                 reviewMeshVisualScale={reviewBlockMeshVisualScale}
                 debugNormalMaterial={debugNormalMaterial}
+                semiGlossColor={semiGlossColor}
               />
             )}
           </ExternalWoodTexturesBridge>

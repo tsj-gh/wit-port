@@ -25,7 +25,15 @@ const EXTERNAL_WOOD_DEBUG_LABEL_KEYS = [
   "games.hiddenStack.woodTexOak02",
   "games.hiddenStack.woodTexOak03",
 ] as const;
-import type { BlockMaterialVariant, CollapsePatternId, FeedbackSpotlightParams, GoldLumpParams } from "./HiddenStackCanvas";
+import type {
+  BlockMaterialVariant,
+  CollapsePatternId,
+  FeedbackSpotlightParams,
+  GoldLumpParams,
+  SemiGlossColorId,
+} from "./HiddenStackCanvas";
+
+const SEMI_GLOSS_COLOR_IDS = ["pink", "turquoise", "beige", "green", "mauve"] as const satisfies readonly SemiGlossColorId[];
 
 const HiddenStackCanvas = dynamic(() => import("./HiddenStackCanvas"), { ssr: false });
 
@@ -100,8 +108,9 @@ export default function HiddenStackGame() {
   const [gridSize, setGridSize] = useState(3);
 
   const [materialVariant, setMaterialVariant] = useState<BlockMaterialVariant>("A");
-  /** 外部木目（Walnut/Oak 各3）。WoodTex 表示および WoodTex 時の即時切替に使用 */
+  /** 外部木目（Walnut/Oak 各3）。質感 B で使用。プレビュー用に常に保持 */
   const [externalWoodTextureIndex, setExternalWoodTextureIndex] = useState(0);
+  const [semiGlossColorId, setSemiGlossColorId] = useState<SemiGlossColorId>("pink");
   const [collapsePattern, setCollapsePattern] = useState<CollapsePatternId>(1);
   const [goldLumpParams, setGoldLumpParams] = useState<GoldLumpParams>({
     metalness: 1,
@@ -420,7 +429,7 @@ export default function HiddenStackGame() {
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugMaterial")}</div>
                 <div className="flex flex-wrap gap-1">
-                  {(["A", "B", "C", "Wood01", "WoodTex"] as const).map((v) => (
+                  {(["A", "B", "C"] as const).map((v) => (
                     <button
                       key={v}
                       type="button"
@@ -431,15 +440,7 @@ export default function HiddenStackGame() {
                           : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)]"
                       }`}
                     >
-                      {v === "A"
-                        ? t("games.hiddenStack.matA")
-                        : v === "B"
-                          ? t("games.hiddenStack.matB")
-                          : v === "C"
-                            ? t("games.hiddenStack.matC")
-                            : v === "Wood01"
-                              ? t("games.hiddenStack.matWood01")
-                              : t("games.hiddenStack.matWoodTex")}
+                      {v === "A" ? t("games.hiddenStack.matA") : v === "B" ? t("games.hiddenStack.matB") : t("games.hiddenStack.matC")}
                     </button>
                   ))}
                 </div>
@@ -458,6 +459,33 @@ export default function HiddenStackGame() {
                         }`}
                       >
                         {t(EXTERNAL_WOOD_DEBUG_LABEL_KEYS[idx])}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugSemiGlossColors")}</div>
+                  <div className="flex flex-wrap gap-1">
+                    {SEMI_GLOSS_COLOR_IDS.map((id) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setSemiGlossColorId(id)}
+                        className={`rounded px-2 py-0.5 text-[10px] border ${
+                          semiGlossColorId === id
+                            ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_18%,var(--color-bg))] text-[var(--color-primary)]"
+                            : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)]"
+                        }`}
+                      >
+                        {id === "pink"
+                          ? t("games.hiddenStack.semiGlossPink")
+                          : id === "turquoise"
+                            ? t("games.hiddenStack.semiGlossTurquoise")
+                            : id === "beige"
+                              ? t("games.hiddenStack.semiGlossBeige")
+                              : id === "green"
+                                ? t("games.hiddenStack.semiGlossGreen")
+                                : t("games.hiddenStack.semiGlossMauve")}
                       </button>
                     ))}
                   </div>
@@ -1002,6 +1030,7 @@ export default function HiddenStackGame() {
                     feedbackAnswerCorrect={isAnswerCorrect}
                     debugNormalMaterial={debugNormalMaterial}
                     externalWoodTextureIndex={externalWoodTextureIndex}
+                    semiGlossColorId={semiGlossColorId}
                     ambientLightIntensity={ambientLightIntensity}
                     woodTexShadowLift={woodTexShadowLift}
                     woodTexRoughness={woodTexRoughness}
