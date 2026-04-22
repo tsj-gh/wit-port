@@ -17,6 +17,7 @@ import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Physics, useBox, usePlane } from "@react-three/cannon";
 import * as THREE from "three";
 import { Line, OrbitControls, RoundedBox } from "@react-three/drei";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { createWoodTexture, setWoodTextureMaxAnisotropy } from "@/lib/hidden-stack/createWoodTexture";
 import { EXTERNAL_WOOD_TEXTURE_PATHS, cloneExternalWoodTextureForMesh } from "@/lib/hidden-stack/externalWoodTextures";
@@ -223,9 +224,10 @@ export type CollapsePatternId = 1 | 2 | 3;
 
 /** 正解ブロックの「金塊」表示用（デバッグパネルから調整可） */
 export type GoldLumpParams = {
-  color: string;
   metalness: number;
   roughness: number;
+  envMapIntensity: number;
+  texRepeatScale: number;
 };
 
 /** 崩落ブロックを消すまでの待ち＋フェード（秒） */
@@ -357,29 +359,46 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
   return null;
 }
 
-function GoldLumpMaterial({ params, envMapIntensity = 1.35 }: { params: GoldLumpParams; envMapIntensity?: number }) {
+function GoldLumpMaterial({ params, surfaceKey }: { params: GoldLumpParams; surfaceKey: string }) {
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
-  const color = useMemo(() => {
-    try {
-      return new THREE.Color(params.color).getStyle();
-    } catch {
-      return "#e7b008";
-    }
-  }, [params.color]);
+  const { gl } = useThree();
+  const baseMap = useLoader(THREE.TextureLoader, "/textures/texture_gold_albedo_01.jpg");
+  const uv = useMemo(
+    () => ({
+      offsetU: hash01(`${surfaceKey}|gold-u`),
+      offsetV: hash01(`${surfaceKey}|gold-v`),
+      rotationQuarters: Math.floor(hash01(`${surfaceKey}|gold-r`) * 4),
+    }),
+    [surfaceKey]
+  );
+  const map = useMemo(() => {
+    const tex = baseMap.clone();
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(params.texRepeatScale, params.texRepeatScale);
+    tex.center.set(0.5, 0.5);
+    tex.rotation = (Math.PI / 2) * uv.rotationQuarters;
+    tex.offset.set(uv.offsetU, uv.offsetV);
+    setWoodTextureMaxAnisotropy(tex, gl);
+    tex.needsUpdate = true;
+    return tex;
+  }, [baseMap, params.texRepeatScale, uv, gl]);
+  useEffect(() => () => map.dispose(), [map]);
 
   useEffect(() => {
     const m = matRef.current;
     if (!m) return;
     m.needsUpdate = true;
-  }, [params.color, params.metalness, params.roughness, color, envMapIntensity]);
+  }, [params.metalness, params.roughness, params.envMapIntensity, params.texRepeatScale, map]);
 
   return (
     <meshStandardMaterial
       ref={matRef}
-      color={color}
+      map={map}
+      color="#ffffff"
       metalness={params.metalness}
       roughness={params.roughness}
-      envMapIntensity={envMapIntensity}
+      envMapIntensity={params.envMapIntensity}
     />
   );
 }
@@ -394,13 +413,8 @@ function BlockWoodPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
   return <meshStandardMaterial map={woodMap} color="#ffffff" roughness={0.8} metalness={0} />;
 }
 
-function GoldHiddenPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
-  const colorHex = useMemo(() => {
-    const c = new THREE.Color("#fff8e7");
-    c.offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
-    return `#${c.getHexString()}`;
-  }, [surfaceKey]);
-  return <meshStandardMaterial color={colorHex} roughness={0.8} metalness={0} />;
+function GoldHiddenPBRMaterial({ surfaceKey, params }: { surfaceKey: string; params: GoldLumpParams }) {
+  return <GoldLumpMaterial params={params} surfaceKey={surfaceKey} />;
 }
 
 function BlockMaterial({
@@ -673,7 +687,6 @@ function StaticBlock({
   position,
   goldParams,
   visualMeshScale,
-  goldEnvMapIntensity,
   useGoldMatcap,
   goldSurfaceKey,
   debugNormalMaterial,
@@ -681,7 +694,6 @@ function StaticBlock({
   position: [number, number, number];
   goldParams: GoldLumpParams;
   visualMeshScale: number;
-  goldEnvMapIntensity?: number;
   /** 正解時：死角ブロックをマットな金系 PBR に */
   useGoldMatcap?: boolean;
   /** useGoldMatcap 時の明度ジッター用キー（セルキー） */
@@ -703,9 +715,9 @@ function StaticBlock({
         {debugNormalMaterial ? (
           <meshNormalMaterial flatShading />
         ) : useGoldMatcap && goldSurfaceKey ? (
-          <GoldHiddenPBRMaterial surfaceKey={goldSurfaceKey} />
+          <GoldHiddenPBRMaterial surfaceKey={goldSurfaceKey} params={goldParams} />
         ) : (
-          <GoldLumpMaterial params={goldParams} envMapIntensity={goldEnvMapIntensity} />
+          <GoldLumpMaterial params={goldParams} surfaceKey={goldSurfaceKey ?? `${position.join("|")}|gold`} />
         )}
       </mesh>
     </group>
@@ -944,7 +956,6 @@ function FeedbackScene({
             position={[p.x, p.y, p.z]}
             goldParams={goldLumpParams}
             visualMeshScale={visualMeshScale}
-            goldEnvMapIntensity={isWoodLikeMaterial(materialVariant) ? 1.78 : 1.35}
             useGoldMatcap={feedbackAnswerCorrect === true}
             goldSurfaceKey={k}
             debugNormalMaterial={debugNormalMaterial}
@@ -1024,9 +1035,9 @@ function ReviewScene({
               {debugNormalMaterial ? (
                 <meshNormalMaterial flatShading />
               ) : feedbackAnswerCorrect === true ? (
-                <GoldHiddenPBRMaterial surfaceKey={k} />
+                <GoldHiddenPBRMaterial surfaceKey={k} params={goldLumpParams} />
               ) : (
-                <GoldLumpMaterial params={goldLumpParams} envMapIntensity={isWoodLikeMaterial(materialVariant) ? 1.78 : 1.35} />
+                <GoldLumpMaterial params={goldLumpParams} surfaceKey={k} />
               )}
             </mesh>
           </group>
@@ -1195,6 +1206,22 @@ function Lights({
   );
 }
 
+function SceneEnvironment() {
+  const { gl, scene } = useThree();
+  useEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const envRT = pmrem.fromScene(new RoomEnvironment(), 0.035);
+    const prevEnv = scene.environment;
+    scene.environment = envRT.texture;
+    return () => {
+      scene.environment = prevEnv;
+      envRT.dispose();
+      pmrem.dispose();
+    };
+  }, [gl, scene]);
+  return null;
+}
+
 export default function HiddenStackCanvas({
   phase,
   puzzle,
@@ -1247,6 +1274,7 @@ export default function HiddenStackCanvas({
       camera={{ position: [0, 0, 1], near: 0.1, far: 320, zoom: 1 }}
     >
       <color attach="background" args={["#f1f5f9"]} />
+      <SceneEnvironment />
       <Lights
         ambientIntensity={ambientLightIntensity}
         woodTexFillLightIntensity={effectiveWoodTexFillLight}

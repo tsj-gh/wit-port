@@ -62,6 +62,10 @@ const DEFAULT_WOOD_TEX_FILL_LIGHT_SECONDARY = 0.9;
 const WOOD_TEX_RIM_LIGHT_MIN = 0;
 const WOOD_TEX_RIM_LIGHT_MAX = 1.2;
 const DEFAULT_WOOD_TEX_RIM_LIGHT = 0.5;
+const GOLD_ENV_INTENSITY_MIN = 0;
+const GOLD_ENV_INTENSITY_MAX = 4;
+const GOLD_TEX_REPEAT_MIN = 0.1;
+const GOLD_TEX_REPEAT_MAX = 1.0;
 
 type Phase = "intro" | "think" | "feedback";
 type StatusOverlayPhase = "hidden" | "pending" | "animating" | "docked";
@@ -79,9 +83,10 @@ export default function HiddenStackGame() {
   const [externalWoodTextureIndex, setExternalWoodTextureIndex] = useState(0);
   const [collapsePattern, setCollapsePattern] = useState<CollapsePatternId>(1);
   const [goldLumpParams, setGoldLumpParams] = useState<GoldLumpParams>({
-    color: "#e7b008",
     metalness: 1,
-    roughness: 0.3,
+    roughness: 0.25,
+    envMapIntensity: 2.0,
+    texRepeatScale: 0.25,
   });
   /** メッシュ見た目のみ（隙間対策）。物理コライダは HiddenStackCanvas 側で変更しない */
   const [blockMeshVisualScale, setBlockMeshVisualScale] = useState(1.05);
@@ -637,15 +642,31 @@ export default function HiddenStackGame() {
                     />
                     <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.roughness.toFixed(2)}</span>
                   </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldColor")}</span>
+                  <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldEnvMapIntensity")}</span>
                     <input
-                      type="text"
-                      value={goldLumpParams.color}
-                      onChange={(e) => setGoldLumpParams((p) => ({ ...p, color: e.target.value }))}
-                      spellCheck={false}
-                      className="w-full rounded border border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] bg-[color-mix(in_srgb,var(--color-bg)_82%,transparent)] px-2 py-1 font-mono text-[10px] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                      type="range"
+                      min={GOLD_ENV_INTENSITY_MIN}
+                      max={GOLD_ENV_INTENSITY_MAX}
+                      step={0.05}
+                      value={goldLumpParams.envMapIntensity}
+                      onChange={(e) => setGoldLumpParams((p) => ({ ...p, envMapIntensity: Number(e.target.value) }))}
+                      className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
                     />
+                    <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.envMapIntensity.toFixed(2)}</span>
+                  </label>
+                  <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldTexScale")}</span>
+                    <input
+                      type="range"
+                      min={GOLD_TEX_REPEAT_MIN}
+                      max={GOLD_TEX_REPEAT_MAX}
+                      step={0.05}
+                      value={goldLumpParams.texRepeatScale}
+                      onChange={(e) => setGoldLumpParams((p) => ({ ...p, texRepeatScale: Number(e.target.value) }))}
+                      className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                    />
+                    <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.texRepeatScale.toFixed(2)}</span>
                   </label>
                 </div>
               </div>

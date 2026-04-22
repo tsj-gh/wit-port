@@ -298,6 +298,8 @@
       "debugGoldLump": "Correct “gold” material (debug)",
       "debugGoldMetalness": "metalness",
       "debugGoldRoughness": "roughness",
+      "debugGoldEnvMapIntensity": "envMapIntensity",
+      "debugGoldTexScale": "gold texture scale",
       "debugGoldColor": "Color (#RRGGBB)",
       "debugCollapse": "Collapse pattern",
       "pat1": "Pattern 1 Burst",

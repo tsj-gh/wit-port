@@ -298,6 +298,8 @@
       "debugGoldLump": "正解「金塊」マテリアル（デバッグ）",
       "debugGoldMetalness": "metalness",
       "debugGoldRoughness": "roughness",
+      "debugGoldEnvMapIntensity": "envMapIntensity",
+      "debugGoldTexScale": "金テクスチャスケール",
       "debugGoldColor": "色（#RRGGBB）",
       "debugCollapse": "崩壊パターン",
       "pat1": "パターン1 爆発",
