@@ -15,6 +15,16 @@ import {
 } from "@/lib/gameLayout";
 import { generateHiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { useI18n } from "@/lib/i18n-context";
+import { EXTERNAL_WOOD_TEXTURE_COUNT } from "@/lib/hidden-stack/externalWoodTextures";
+
+const EXTERNAL_WOOD_DEBUG_LABEL_KEYS = [
+  "games.hiddenStack.woodTexWalnut01",
+  "games.hiddenStack.woodTexWalnut02",
+  "games.hiddenStack.woodTexWalnut03",
+  "games.hiddenStack.woodTexOak01",
+  "games.hiddenStack.woodTexOak02",
+  "games.hiddenStack.woodTexOak03",
+] as const;
 import type { BlockMaterialVariant, CollapsePatternId, GoldLumpParams } from "./HiddenStackCanvas";
 
 const HiddenStackCanvas = dynamic(() => import("./HiddenStackCanvas"), { ssr: false });
@@ -41,6 +51,8 @@ export default function HiddenStackGame() {
   const [gridSize, setGridSize] = useState(3);
 
   const [materialVariant, setMaterialVariant] = useState<BlockMaterialVariant>("A");
+  /** 外部木目（Walnut/Oak 各3）。WoodTex 表示および WoodTex 時の即時切替に使用 */
+  const [externalWoodTextureIndex, setExternalWoodTextureIndex] = useState(0);
   const [collapsePattern, setCollapsePattern] = useState<CollapsePatternId>(1);
   const [goldLumpParams, setGoldLumpParams] = useState<GoldLumpParams>({
     color: "#e7b008",
@@ -334,7 +346,7 @@ export default function HiddenStackGame() {
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugMaterial")}</div>
                 <div className="flex flex-wrap gap-1">
-                  {(["A", "B", "C", "Wood01"] as const).map((v) => (
+                  {(["A", "B", "C", "Wood01", "WoodTex"] as const).map((v) => (
                     <button
                       key={v}
                       type="button"
@@ -351,9 +363,30 @@ export default function HiddenStackGame() {
                           ? t("games.hiddenStack.matB")
                           : v === "C"
                             ? t("games.hiddenStack.matC")
-                            : t("games.hiddenStack.matWood01")}
+                            : v === "Wood01"
+                              ? t("games.hiddenStack.matWood01")
+                              : t("games.hiddenStack.matWoodTex")}
                     </button>
                   ))}
+                </div>
+                <div className="mt-2">
+                  <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugExternalWoodTextures")}</div>
+                  <div className="flex flex-wrap gap-1">
+                    {Array.from({ length: EXTERNAL_WOOD_TEXTURE_COUNT }, (_, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setExternalWoodTextureIndex(idx)}
+                        className={`rounded px-2 py-0.5 text-[10px] border ${
+                          externalWoodTextureIndex === idx
+                            ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_18%,var(--color-bg))] text-[var(--color-primary)]"
+                            : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)]"
+                        }`}
+                      >
+                        {t(EXTERNAL_WOOD_DEBUG_LABEL_KEYS[idx])}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
               <div>
@@ -604,6 +637,7 @@ export default function HiddenStackGame() {
                     onReviewAzimuthHintThresholdExceeded={dismissReviewSwipeHint}
                     feedbackAnswerCorrect={isAnswerCorrect}
                     debugNormalMaterial={debugNormalMaterial}
+                    externalWoodTextureIndex={externalWoodTextureIndex}
                   />
                 </div>
                 {phase === "feedback" && reviewMode && (

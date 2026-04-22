@@ -1,12 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import {
+  Suspense,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Physics, useBox, usePlane } from "@react-three/cannon";
 import * as THREE from "three";
 import { Line, OrbitControls, RoundedBox } from "@react-three/drei";
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { createWoodTexture, setWoodTextureMaxAnisotropy } from "@/lib/hidden-stack/createWoodTexture";
+import { EXTERNAL_WOOD_TEXTURE_PATHS, cloneExternalWoodTextureForMesh } from "@/lib/hidden-stack/externalWoodTextures";
 import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
 
 /** 物理ボディ（半辺 0.48）はそのまま。レンダリング丸め用の最小オーバーラップ（メッシュのみ） */
@@ -26,7 +39,111 @@ const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.05;
 const BASE_ELEVATION_DEG = 31;
 const BASE_AZIMUTH_DEG = 44;
 
-export type BlockMaterialVariant = "A" | "B" | "C" | "Wood01";
+export type BlockMaterialVariant = "A" | "B" | "C" | "Wood01" | "WoodTex";
+
+function isWoodLikeMaterial(v: BlockMaterialVariant): boolean {
+  return v === "Wood01" || v === "WoodTex";
+}
+
+type ExternalWoodTexturesContextValue = {
+  bases: THREE.Texture[];
+  activeIndex: number;
+};
+
+const ExternalWoodTexturesContext = createContext<ExternalWoodTexturesContextValue | null>(null);
+
+function ExternalWoodTexturesBridge({ activeIndex, children }: { activeIndex: number; children: ReactNode }) {
+  const bases = useLoader(THREE.TextureLoader, [...EXTERNAL_WOOD_TEXTURE_PATHS]);
+  const { gl } = useThree();
+  useLayoutEffect(() => {
+    bases.forEach((t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      setWoodTextureMaxAnisotropy(t, gl);
+      t.needsUpdate = true;
+    });
+  }, [bases, gl]);
+  const value = useMemo(() => ({ bases, activeIndex }), [bases, activeIndex]);
+  return <ExternalWoodTexturesContext.Provider value={value}>{children}</ExternalWoodTexturesContext.Provider>;
+}
+
+function BlockExternalWoodPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
+  const ctx = useContext(ExternalWoodTexturesContext);
+  const { gl } = useThree();
+  const uvJitter = useMemo(
+    () => ({
+      offsetU: Math.random(),
+      offsetV: Math.random(),
+      rotationQuarters: Math.floor(Math.random() * 4),
+    }),
+    [surfaceKey]
+  );
+  const map = useMemo(() => {
+    if (!ctx?.bases.length) return null;
+    const idx = THREE.MathUtils.clamp(ctx.activeIndex, 0, ctx.bases.length - 1);
+    const base = ctx.bases[idx];
+    return cloneExternalWoodTextureForMesh(base, uvJitter.offsetU, uvJitter.offsetV, uvJitter.rotationQuarters, gl);
+  }, [ctx, gl, uvJitter]);
+  useEffect(() => () => map?.dispose(), [map]);
+  if (!map) {
+    return <meshStandardMaterial color="#c9a06c" roughness={0.7} metalness={0} envMapIntensity={1} />;
+  }
+  return (
+    <meshStandardMaterial map={map} color="#ffffff" roughness={0.7} metalness={0} envMapIntensity={1} />
+  );
+}
+
+function DynamicExternalWoodMaterial({
+  surfaceKey,
+  pattern,
+  matRef,
+}: {
+  surfaceKey: string;
+  pattern: CollapsePatternId;
+  matRef: RefObject<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial | null>;
+}) {
+  const ctx = useContext(ExternalWoodTexturesContext);
+  const { gl } = useThree();
+  const uvJitter = useMemo(
+    () => ({
+      offsetU: Math.random(),
+      offsetV: Math.random(),
+      rotationQuarters: Math.floor(Math.random() * 4),
+    }),
+    [surfaceKey]
+  );
+  const map = useMemo(() => {
+    if (!ctx?.bases.length) return null;
+    const idx = THREE.MathUtils.clamp(ctx.activeIndex, 0, ctx.bases.length - 1);
+    return cloneExternalWoodTextureForMesh(ctx.bases[idx], uvJitter.offsetU, uvJitter.offsetV, uvJitter.rotationQuarters, gl);
+  }, [ctx, gl, uvJitter]);
+  useEffect(() => () => map?.dispose(), [map]);
+  if (!map) {
+    return (
+      <meshStandardMaterial
+        ref={matRef as never}
+        color="#c9a06c"
+        roughness={0.7}
+        metalness={0}
+        envMapIntensity={1}
+        transparent={pattern === 3}
+        opacity={pattern === 3 ? 0.95 : 1}
+      />
+    );
+  }
+  return (
+    <meshStandardMaterial
+      ref={matRef as never}
+      map={map}
+      color="#ffffff"
+      roughness={0.7}
+      metalness={0}
+      envMapIntensity={1}
+      transparent={pattern === 3}
+      opacity={pattern === 3 ? 0.95 : 1}
+    />
+  );
+}
 
 /**
  * インデックス付き BoxGeometry を非インデックス化した上で法線を再計算し、
@@ -85,6 +202,8 @@ type HiddenStackCanvasProps = {
   feedbackAnswerCorrect?: boolean | null;
   /** 法線確認デバッグ用: 全ブロックを MeshNormalMaterial で描画 */
   debugNormalMaterial?: boolean;
+  /** 外部木目テクスチャ（0=Walnut01 … 5=Oak03）。WoodTex のみ描画に使用 */
+  externalWoodTextureIndex?: number;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -229,6 +348,9 @@ function BlockMaterial({
   woodSurfaceKey?: string;
 }) {
   if (debugNormalMaterial) return <meshNormalMaterial flatShading />;
+  if (variant === "WoodTex") {
+    return <BlockExternalWoodPBRMaterial surfaceKey={woodSurfaceKey ?? "wood-tex"} />;
+  }
   if (variant === "Wood01") {
     return <BlockWoodPBRMaterial surfaceKey={woodSurfaceKey ?? "wood-default"} />;
   }
@@ -388,7 +510,7 @@ function IntroBlocks({
               <BlockMaterial
                 variant={materialVariant}
                 debugNormalMaterial={debugNormalMaterial}
-                woodSurfaceKey={materialVariant === "Wood01" ? key : undefined}
+                woodSurfaceKey={isWoodLikeMaterial(materialVariant) ? key : undefined}
               />
             </mesh>
           )}
@@ -431,7 +553,7 @@ function ThinkBlocks({
               <BlockMaterial
                 variant={materialVariant}
                 debugNormalMaterial={debugNormalMaterial}
-                woodSurfaceKey={materialVariant === "Wood01" ? key : undefined}
+                woodSurfaceKey={isWoodLikeMaterial(materialVariant) ? key : undefined}
               />
             </mesh>
           )}
@@ -456,7 +578,7 @@ function GhostBox({
   const edges = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(0.96, 0.96, 0.96)), []);
   const edge = correctGoldFeedback
     ? ({ color: "#7a5e38" as const, opacity: 0.2 } as const)
-    : materialVariant === "Wood01"
+    : isWoodLikeMaterial(materialVariant)
       ? ({ color: "#0a0a0b" as const, opacity: 0.58 } as const)
       : ({ color: "#0f172a" as const, opacity: 0.48 } as const);
   return (
@@ -640,6 +762,8 @@ function DynamicFallBlock({
             transparent={pattern === 3}
             opacity={pattern === 3 ? 0.95 : 1}
           />
+        ) : materialVariant === "WoodTex" ? (
+          <DynamicExternalWoodMaterial surfaceKey={surfaceKey} pattern={pattern} matRef={matRef} />
         ) : pattern === 3 ? (
           <meshStandardMaterial ref={matRef as never} color="#c9a06c" roughness={0.88} transparent opacity={0.95} />
         ) : materialVariant === "A" ? (
@@ -754,7 +878,7 @@ function FeedbackScene({
             position={[p.x, p.y, p.z]}
             goldParams={goldLumpParams}
             visualMeshScale={visualMeshScale}
-            goldEnvMapIntensity={materialVariant === "Wood01" ? 1.78 : 1.35}
+            goldEnvMapIntensity={isWoodLikeMaterial(materialVariant) ? 1.78 : 1.35}
             useGoldMatcap={feedbackAnswerCorrect === true}
             goldSurfaceKey={k}
             debugNormalMaterial={debugNormalMaterial}
@@ -818,7 +942,7 @@ function ReviewScene({
                 <BlockMaterial
                   variant={materialVariant}
                   debugNormalMaterial={debugNormalMaterial}
-                  woodSurfaceKey={materialVariant === "Wood01" ? k : undefined}
+                  woodSurfaceKey={isWoodLikeMaterial(materialVariant) ? k : undefined}
                 />
               </mesh>
             )}
@@ -836,7 +960,7 @@ function ReviewScene({
               ) : feedbackAnswerCorrect === true ? (
                 <GoldHiddenPBRMaterial surfaceKey={k} />
               ) : (
-                <GoldLumpMaterial params={goldLumpParams} envMapIntensity={materialVariant === "Wood01" ? 1.78 : 1.35} />
+                <GoldLumpMaterial params={goldLumpParams} envMapIntensity={isWoodLikeMaterial(materialVariant) ? 1.78 : 1.35} />
               )}
             </mesh>
           </group>
@@ -999,6 +1123,7 @@ export default function HiddenStackCanvas({
   onReviewAzimuthHintThresholdExceeded,
   feedbackAnswerCorrect = null,
   debugNormalMaterial = false,
+  externalWoodTextureIndex = 0,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
@@ -1032,48 +1157,52 @@ export default function HiddenStackCanvas({
       ) : (
         <RigCamera twistDeg={twistDeg} gridSize={gridSize} />
       )}
-      <FloorGrid gridSize={gridSize} />
-      {phase === "intro" && (
-        <IntroBlocks
-          cells={cells}
-          materialVariant={materialVariant}
-          onDone={onIntroDone}
-          gridSize={gridSize}
-          visualMeshScale={visualMeshScale}
-            debugNormalMaterial={debugNormalMaterial}
-        />
-      )}
-        {phase === "think" && (
-          <ThinkBlocks
-            cells={cells}
-            materialVariant={materialVariant}
-            visualMeshScale={visualMeshScale}
-            debugNormalMaterial={debugNormalMaterial}
-          />
-        )}
-      {phase === "feedback" && !reviewMode && (
-        <Physics key={feedbackKey} gravity={[0, -16, 0]} defaultContactMaterial={{ friction: 0.6, restitution: 0.12 }}>
-          <FeedbackScene
-            puzzle={puzzle}
-            materialVariant={materialVariant}
-            pattern={collapsePattern}
-            gridSize={gridSize}
-            goldLumpParams={goldLumpParams}
-            visualMeshScale={visualMeshScale}
-            feedbackAnswerCorrect={feedbackAnswerCorrect}
-            debugNormalMaterial={debugNormalMaterial}
-          />
-        </Physics>
-      )}
-      {phase === "feedback" && reviewMode && (
-        <ReviewScene
-          puzzle={puzzle}
-          materialVariant={materialVariant}
-          goldLumpParams={goldLumpParams}
-          feedbackAnswerCorrect={feedbackAnswerCorrect}
-          debugNormalMaterial={debugNormalMaterial}
-        />
-      )}
+      <Suspense fallback={null}>
+        <ExternalWoodTexturesBridge activeIndex={THREE.MathUtils.clamp(externalWoodTextureIndex, 0, EXTERNAL_WOOD_TEXTURE_PATHS.length - 1)}>
+          <FloorGrid gridSize={gridSize} />
+          {phase === "intro" && (
+            <IntroBlocks
+              cells={cells}
+              materialVariant={materialVariant}
+              onDone={onIntroDone}
+              gridSize={gridSize}
+              visualMeshScale={visualMeshScale}
+              debugNormalMaterial={debugNormalMaterial}
+            />
+          )}
+          {phase === "think" && (
+            <ThinkBlocks
+              cells={cells}
+              materialVariant={materialVariant}
+              visualMeshScale={visualMeshScale}
+              debugNormalMaterial={debugNormalMaterial}
+            />
+          )}
+          {phase === "feedback" && !reviewMode && (
+            <Physics key={feedbackKey} gravity={[0, -16, 0]} defaultContactMaterial={{ friction: 0.6, restitution: 0.12 }}>
+              <FeedbackScene
+                puzzle={puzzle}
+                materialVariant={materialVariant}
+                pattern={collapsePattern}
+                gridSize={gridSize}
+                goldLumpParams={goldLumpParams}
+                visualMeshScale={visualMeshScale}
+                feedbackAnswerCorrect={feedbackAnswerCorrect}
+                debugNormalMaterial={debugNormalMaterial}
+              />
+            </Physics>
+          )}
+          {phase === "feedback" && reviewMode && (
+            <ReviewScene
+              puzzle={puzzle}
+              materialVariant={materialVariant}
+              goldLumpParams={goldLumpParams}
+              feedbackAnswerCorrect={feedbackAnswerCorrect}
+              debugNormalMaterial={debugNormalMaterial}
+            />
+          )}
+        </ExternalWoodTexturesBridge>
+      </Suspense>
     </Canvas>
   );
 }
