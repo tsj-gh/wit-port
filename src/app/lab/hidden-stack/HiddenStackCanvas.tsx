@@ -6,6 +6,7 @@ import { Physics, useBox, usePlane } from "@react-three/cannon";
 import * as THREE from "three";
 import { Line, OrbitControls, RoundedBox } from "@react-three/drei";
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
+import { createWoodTexture } from "@/lib/hidden-stack/createWoodTexture";
 import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
 
 /** 物理ボディ（半辺 0.48）はそのまま。レンダリング丸め用の最小オーバーラップ（メッシュのみ） */
@@ -26,9 +27,6 @@ const BASE_ELEVATION_DEG = 31;
 const BASE_AZIMUTH_DEG = 44;
 
 export type BlockMaterialVariant = "A" | "B" | "C" | "Wood01";
-
-/** Wood01 用 PBR ベース色（木目テクスチャ未設定時の代用） */
-const WOOD_PBR_BASE_HEX = "#d2b48c";
 
 /**
  * インデックス付き BoxGeometry を非インデックス化した上で法線を再計算し、
@@ -202,13 +200,9 @@ function GoldLumpMaterial({ params, envMapIntensity = 1.35 }: { params: GoldLump
 }
 
 function BlockWoodPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
-  const colorHex = useMemo(() => {
-    const c = new THREE.Color(WOOD_PBR_BASE_HEX);
-    c.offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
-    return `#${c.getHexString()}`;
-  }, [surfaceKey]);
-  // TODO: Load wood texture map here
-  return <meshStandardMaterial color={colorHex} roughness={0.8} metalness={0} />;
+  const woodMap = useMemo(() => createWoodTexture(256), [surfaceKey]);
+  useEffect(() => () => woodMap.dispose(), [woodMap]);
+  return <meshStandardMaterial map={woodMap} color="#ffffff" roughness={0.8} metalness={0} />;
 }
 
 function GoldHiddenPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
@@ -227,7 +221,7 @@ function BlockMaterial({
 }: {
   variant: BlockMaterialVariant;
   debugNormalMaterial?: boolean;
-  /** Wood01 のときセルキー等（色の個体差用） */
+  /** Wood01 のときセルキー等（手続き木目テクスチャの個体用） */
   woodSurfaceKey?: string;
 }) {
   if (debugNormalMaterial) return <meshNormalMaterial flatShading />;
@@ -565,12 +559,8 @@ function DynamicFallBlock({
     av.angularVelocity?.set(torque[0], torque[1], torque[2]);
   }, [api, impulse, torque]);
 
-  // TODO: Load wood texture map here
-  const woodPbrColorHex = useMemo(() => {
-    const c = new THREE.Color(WOOD_PBR_BASE_HEX);
-    c.offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
-    return `#${c.getHexString()}`;
-  }, [surfaceKey]);
+  const woodMap = useMemo(() => (materialVariant === "Wood01" ? createWoodTexture(256) : null), [materialVariant, surfaceKey]);
+  useEffect(() => () => woodMap?.dispose(), [woodMap]);
   const matRef = useRef<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial>(null);
   const t0Ref = useRef<number | null>(null);
   const visualMeshScaleRef = useRef(visualMeshScale);
@@ -632,10 +622,11 @@ function DynamicFallBlock({
             transparent
             opacity={0.95}
           />
-        ) : materialVariant === "Wood01" ? (
+        ) : materialVariant === "Wood01" && woodMap ? (
           <meshStandardMaterial
             ref={matRef as never}
-            color={woodPbrColorHex}
+            map={woodMap}
+            color="#ffffff"
             roughness={0.8}
             metalness={0}
             transparent={pattern === 3}
