@@ -1087,7 +1087,8 @@ function ReviewScene({
   debugNormalMaterial?: boolean;
 }) {
   const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95 * reviewMeshVisualScale;
-  const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE * reviewMeshVisualScale;
+  /** 死角（金塊）はふりかえり用メッシュ倍率の対象外（反射・サイズを安定させる） */
+  const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE;
   const blockShadows = true;
   return (
     <>
@@ -1339,7 +1340,10 @@ function SceneLightingRig({
     spot.visible = true;
     const maxRange = Math.max(0, (spotlightParams.movementRangeDeg * Math.PI) / 180);
     const rawAngle = elapsed * spotlightParams.angularVelocity;
-    const angle = Math.min(rawAngle, maxRange);
+    const fullTurn = Math.PI * 2;
+    /** 360° 以上なら連続1周（反射が周期的に通る）。未満なら従来どおり最大角で止まる */
+    const angle =
+      maxRange >= fullTurn - 1e-6 ? THREE.MathUtils.euclideanModulo(rawAngle, fullTurn) : Math.min(rawAngle, maxRange);
     const radius = gridSize * 2.1;
     /** 低めのスポット（従来 gridSize * 2.2 より下げて金塊へ当てやすく） */
     const height = gridSize * 1.32;
@@ -1423,8 +1427,8 @@ export default function HiddenStackCanvas({
     overallLightRatio: 0.32,
     spotIntensity: 32,
     spotAngle: 0.28,
-    angularVelocity: 0.45,
-    movementRangeDeg: 300,
+    angularVelocity: Math.PI,
+    movementRangeDeg: 360,
     goldEnvMapBoost: 1.25,
     followPointIntensity: 16,
   },

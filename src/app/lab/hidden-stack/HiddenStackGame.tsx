@@ -76,9 +76,13 @@ const SPOT_INTENSITY_MAX = 50;
 const SPOT_ANGLE_MIN = 0.1;
 const SPOT_ANGLE_MAX = 1.1;
 const SPOT_ANGULAR_VEL_MIN = 0.1;
-const SPOT_ANGULAR_VEL_MAX = 4;
+/** 大きいほど1周が短い（2π/ω 秒）。既定 π rad/s ≒ 2秒で1周 */
+const SPOT_ANGULAR_VEL_MAX = 10;
 const SPOT_MOVEMENT_RANGE_MIN = 30;
 const SPOT_MOVEMENT_RANGE_MAX = 1080;
+/** 正誤判定スポットの位置が1周する周期（秒）。角速度の目安 = 2π / この値（rad/s） */
+const FEEDBACK_SPOTLIGHT_ORBIT_PERIOD_SEC = 2;
+const DEFAULT_FEEDBACK_SPOTLIGHT_ANGULAR_VEL = (Math.PI * 2) / FEEDBACK_SPOTLIGHT_ORBIT_PERIOD_SEC;
 const SPOT_GOLD_ENV_BOOST_MIN = 0;
 const SPOT_GOLD_ENV_BOOST_MAX = 5;
 const SPOT_FOLLOW_POINT_MIN = 0;
@@ -136,8 +140,8 @@ export default function HiddenStackGame() {
     overallLightRatio: 0.32,
     spotIntensity: 32,
     spotAngle: 0.28,
-    angularVelocity: 0.45,
-    movementRangeDeg: 300,
+    angularVelocity: DEFAULT_FEEDBACK_SPOTLIGHT_ANGULAR_VEL,
+    movementRangeDeg: 360,
     goldEnvMapBoost: 1.25,
     followPointIntensity: 16,
   });
