@@ -305,6 +305,8 @@ type HiddenStackCanvasProps = {
   woodTexRimLightIntensity?: number;
   /** 正誤判定中スポットライト演出パラメータ */
   feedbackSpotlightParams?: FeedbackSpotlightParams;
+  /** 正誤判定フェーズ中の床格子・プレートの不透明度（大きいほど濃い） */
+  feedbackFloorGridOpacity?: number;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -522,7 +524,16 @@ function BlockMaterial({
   );
 }
 
-function FloorGrid({ gridSize }: { gridSize: number }) {
+function FloorGrid({
+  gridSize,
+  feedbackPhase = false,
+  feedbackGridOpacity = 0.2,
+}: {
+  gridSize: number;
+  feedbackPhase?: boolean;
+  /** 正誤判定中：線・床プレートの不透明度（大きいほど濃く見える） */
+  feedbackGridOpacity?: number;
+}) {
   /** 各 `<Line>` は2点のみ＝独立線分。drei の Line は points 全体が一本の折れ線になるため結合しない */
   const verticalSegments = useMemo(
     () =>
@@ -540,13 +551,30 @@ function FloorGrid({ gridSize }: { gridSize: number }) {
       ]),
     [gridSize]
   );
-  const lineProps = {
-    color: "#9ca3af" as const,
-    lineWidth: 1,
-    dashed: false,
-    transparent: true,
-    opacity: 0.45,
-  };
+  const lineOpacity = feedbackPhase ? THREE.MathUtils.clamp(feedbackGridOpacity, 0.04, 0.55) : 0.45;
+  const lineProps = useMemo(
+    () =>
+      feedbackPhase
+        ? ({
+            color: "#dce3ed" as const,
+            lineWidth: 1,
+            dashed: false,
+            transparent: true,
+            opacity: lineOpacity,
+          } as const)
+        : ({
+            color: "#9ca3af" as const,
+            lineWidth: 1,
+            dashed: false,
+            transparent: true,
+            opacity: 0.45,
+          } as const),
+    [feedbackPhase, lineOpacity]
+  );
+  const planeOpacity = feedbackPhase
+    ? THREE.MathUtils.clamp(lineOpacity * 1.15 + 0.04, 0.08, 0.48)
+    : 0.92;
+  const planeColor = feedbackPhase ? "#f0f3f8" : "#e8e4dc";
   return (
     <group>
       {verticalSegments.map((points, i) => (
@@ -557,7 +585,13 @@ function FloorGrid({ gridSize }: { gridSize: number }) {
       ))}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[gridSize / 2, 0, gridSize / 2]}>
         <planeGeometry args={[gridSize + 0.24, gridSize + 0.24]} />
-        <meshStandardMaterial color="#e8e4dc" roughness={0.95} metalness={0} transparent opacity={0.92} />
+        <meshStandardMaterial
+          color={planeColor}
+          roughness={0.95}
+          metalness={0}
+          transparent
+          opacity={planeOpacity}
+        />
       </mesh>
     </group>
   );
@@ -1425,13 +1459,14 @@ export default function HiddenStackCanvas({
   woodTexRimLightIntensity = 0.5,
   feedbackSpotlightParams = {
     overallLightRatio: 0.32,
-    spotIntensity: 32,
-    spotAngle: 0.28,
-    angularVelocity: Math.PI,
+    spotIntensity: 40,
+    spotAngle: 0.5,
+    angularVelocity: 2.85,
     movementRangeDeg: 360,
     goldEnvMapBoost: 1.25,
-    followPointIntensity: 16,
+    followPointIntensity: 18.5,
   },
+  feedbackFloorGridOpacity = 0.2,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
@@ -1497,7 +1532,11 @@ export default function HiddenStackCanvas({
             envMapIntensity={woodTexEnvMapIntensity}
             repeatScale={woodTexRepeatScale}
           >
-            <FloorGrid gridSize={gridSize} />
+            <FloorGrid
+              gridSize={gridSize}
+              feedbackPhase={phase === "feedback"}
+              feedbackGridOpacity={feedbackFloorGridOpacity}
+            />
             {phase === "intro" && (
               <IntroBlocks
                 cells={cells}

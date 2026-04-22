@@ -64,7 +64,10 @@ const WOOD_TEX_RIM_LIGHT_MAX = 1.2;
 const DEFAULT_WOOD_TEX_RIM_LIGHT = 0.5;
 const REVIEW_MESH_VISUAL_SCALE_MIN = 0.8;
 const REVIEW_MESH_VISUAL_SCALE_MAX = 1.2;
-const DEFAULT_REVIEW_MESH_VISUAL_SCALE = 1.0;
+const DEFAULT_REVIEW_MESH_VISUAL_SCALE = 1.06;
+const FEEDBACK_FLOOR_GRID_OPACITY_MIN = 0.06;
+const FEEDBACK_FLOOR_GRID_OPACITY_MAX = 0.52;
+const DEFAULT_FEEDBACK_FLOOR_GRID_OPACITY = 0.2;
 const GOLD_ENV_INTENSITY_MIN = 0;
 const GOLD_ENV_INTENSITY_MAX = 4;
 const GOLD_TEX_REPEAT_MIN = 0.1;
@@ -76,13 +79,10 @@ const SPOT_INTENSITY_MAX = 50;
 const SPOT_ANGLE_MIN = 0.1;
 const SPOT_ANGLE_MAX = 1.1;
 const SPOT_ANGULAR_VEL_MIN = 0.1;
-/** 大きいほど1周が短い（2π/ω 秒）。既定 π rad/s ≒ 2秒で1周 */
+/** 大きいほど1周が短い（角速度 rad/s、2π/ω で周期秒） */
 const SPOT_ANGULAR_VEL_MAX = 10;
 const SPOT_MOVEMENT_RANGE_MIN = 30;
 const SPOT_MOVEMENT_RANGE_MAX = 1080;
-/** 正誤判定スポットの位置が1周する周期（秒）。角速度の目安 = 2π / この値（rad/s） */
-const FEEDBACK_SPOTLIGHT_ORBIT_PERIOD_SEC = 2;
-const DEFAULT_FEEDBACK_SPOTLIGHT_ANGULAR_VEL = (Math.PI * 2) / FEEDBACK_SPOTLIGHT_ORBIT_PERIOD_SEC;
 const SPOT_GOLD_ENV_BOOST_MIN = 0;
 const SPOT_GOLD_ENV_BOOST_MAX = 5;
 const SPOT_FOLLOW_POINT_MIN = 0;
@@ -113,6 +113,9 @@ export default function HiddenStackGame() {
   const [blockMeshVisualScale, setBlockMeshVisualScale] = useState(1.05);
   const [reviewBlockMeshVisualScale, setReviewBlockMeshVisualScale] = useState(DEFAULT_REVIEW_MESH_VISUAL_SCALE);
   const [isWoodTexDebugExpanded, setIsWoodTexDebugExpanded] = useState(false);
+  const [isSpotlightDebugExpanded, setIsSpotlightDebugExpanded] = useState(false);
+  const [isGoldLumpDebugExpanded, setIsGoldLumpDebugExpanded] = useState(false);
+  const [feedbackFloorGridOpacity, setFeedbackFloorGridOpacity] = useState(DEFAULT_FEEDBACK_FLOOR_GRID_OPACITY);
 
   const [puzzle, setPuzzle] = useState(() => generateHiddenStackPuzzle(`${Date.now()}`, { gridSize: 3 }));
   const [phase, setPhase] = useState<Phase>("intro");
@@ -138,12 +141,12 @@ export default function HiddenStackGame() {
   const [woodTexRimLightIntensity, setWoodTexRimLightIntensity] = useState(DEFAULT_WOOD_TEX_RIM_LIGHT);
   const [feedbackSpotlightParams, setFeedbackSpotlightParams] = useState<FeedbackSpotlightParams>({
     overallLightRatio: 0.32,
-    spotIntensity: 32,
-    spotAngle: 0.28,
-    angularVelocity: DEFAULT_FEEDBACK_SPOTLIGHT_ANGULAR_VEL,
+    spotIntensity: 40,
+    spotAngle: 0.5,
+    angularVelocity: 2.85,
     movementRangeDeg: 360,
     goldEnvMapBoost: 1.25,
-    followPointIntensity: 16,
+    followPointIntensity: 18.5,
   });
   const [statusOverlayPhase, setStatusOverlayPhase] = useState<StatusOverlayPhase>("hidden");
   const [resultMessageDelayMs, setResultMessageDelayMs] = useState(DEFAULT_RESULT_MESSAGE_DELAY_MS);
@@ -517,109 +520,134 @@ export default function HiddenStackGame() {
                   <span className="tabular-nums text-[var(--color-text)]">{ambientLightIntensity.toFixed(2)}</span>
                 </label>
               </div>
-              <div>
-                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugSpotlight")}</div>
-                <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugOverallLightRatio")}</span>
-                  <input
-                    type="range"
-                    min={SPOT_OVERALL_LIGHT_RATIO_MIN}
-                    max={SPOT_OVERALL_LIGHT_RATIO_MAX}
-                    step={0.01}
-                    value={feedbackSpotlightParams.overallLightRatio}
-                    onChange={(e) =>
-                      setFeedbackSpotlightParams((p) => ({ ...p, overallLightRatio: Number(e.target.value) }))
-                    }
-                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                  />
-                  <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.overallLightRatio.toFixed(2)}</span>
-                </label>
-                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugSpotlightIntensity")}</span>
-                  <input
-                    type="range"
-                    min={SPOT_INTENSITY_MIN}
-                    max={SPOT_INTENSITY_MAX}
-                    step={0.1}
-                    value={feedbackSpotlightParams.spotIntensity}
-                    onChange={(e) => setFeedbackSpotlightParams((p) => ({ ...p, spotIntensity: Number(e.target.value) }))}
-                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                  />
-                  <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.spotIntensity.toFixed(1)}</span>
-                </label>
-                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugSpotlightAngle")}</span>
-                  <input
-                    type="range"
-                    min={SPOT_ANGLE_MIN}
-                    max={SPOT_ANGLE_MAX}
-                    step={0.01}
-                    value={feedbackSpotlightParams.spotAngle}
-                    onChange={(e) => setFeedbackSpotlightParams((p) => ({ ...p, spotAngle: Number(e.target.value) }))}
-                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                  />
-                  <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.spotAngle.toFixed(2)}</span>
-                </label>
-                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugAngularVelocity")}</span>
-                  <input
-                    type="range"
-                    min={SPOT_ANGULAR_VEL_MIN}
-                    max={SPOT_ANGULAR_VEL_MAX}
-                    step={0.05}
-                    value={feedbackSpotlightParams.angularVelocity}
-                    onChange={(e) =>
-                      setFeedbackSpotlightParams((p) => ({ ...p, angularVelocity: Number(e.target.value) }))
-                    }
-                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                  />
-                  <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.angularVelocity.toFixed(2)}</span>
-                </label>
-                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugMovementRange")}</span>
-                  <input
-                    type="range"
-                    min={SPOT_MOVEMENT_RANGE_MIN}
-                    max={SPOT_MOVEMENT_RANGE_MAX}
-                    step={10}
-                    value={feedbackSpotlightParams.movementRangeDeg}
-                    onChange={(e) =>
-                      setFeedbackSpotlightParams((p) => ({ ...p, movementRangeDeg: Number(e.target.value) }))
-                    }
-                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                  />
-                  <span className="tabular-nums text-[var(--color-text)]">{Math.round(feedbackSpotlightParams.movementRangeDeg)}deg</span>
-                </label>
-                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldEnvMapBoostFeedback")}</span>
-                  <input
-                    type="range"
-                    min={SPOT_GOLD_ENV_BOOST_MIN}
-                    max={SPOT_GOLD_ENV_BOOST_MAX}
-                    step={0.05}
-                    value={feedbackSpotlightParams.goldEnvMapBoost}
-                    onChange={(e) =>
-                      setFeedbackSpotlightParams((p) => ({ ...p, goldEnvMapBoost: Number(e.target.value) }))
-                    }
-                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                  />
-                  <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.goldEnvMapBoost.toFixed(2)}</span>
-                </label>
-                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugFollowPointIntensity")}</span>
-                  <input
-                    type="range"
-                    min={SPOT_FOLLOW_POINT_MIN}
-                    max={SPOT_FOLLOW_POINT_MAX}
-                    step={0.5}
-                    value={feedbackSpotlightParams.followPointIntensity}
-                    onChange={(e) =>
-                      setFeedbackSpotlightParams((p) => ({ ...p, followPointIntensity: Number(e.target.value) }))
-                    }
-                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                  />
-                  <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.followPointIntensity.toFixed(1)}</span>
-                </label>
+              <div className="rounded border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] px-2 py-1">
+                <button
+                  type="button"
+                  onClick={() => setIsSpotlightDebugExpanded((v) => !v)}
+                  className="flex w-full items-center justify-between text-left"
+                  aria-expanded={isSpotlightDebugExpanded}
+                >
+                  <span className="font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugSpotlight")}</span>
+                  <span className="text-[var(--color-muted)]">{isSpotlightDebugExpanded ? "▲" : "▼"}</span>
+                </button>
+                {isSpotlightDebugExpanded && (
+                  <div className="mt-2">
+                    <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugFeedbackFloorGridOpacity")}</span>
+                      <input
+                        type="range"
+                        min={FEEDBACK_FLOOR_GRID_OPACITY_MIN}
+                        max={FEEDBACK_FLOOR_GRID_OPACITY_MAX}
+                        step={0.02}
+                        value={feedbackFloorGridOpacity}
+                        onChange={(e) => setFeedbackFloorGridOpacity(Number(e.target.value))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{feedbackFloorGridOpacity.toFixed(2)}</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugOverallLightRatio")}</span>
+                      <input
+                        type="range"
+                        min={SPOT_OVERALL_LIGHT_RATIO_MIN}
+                        max={SPOT_OVERALL_LIGHT_RATIO_MAX}
+                        step={0.01}
+                        value={feedbackSpotlightParams.overallLightRatio}
+                        onChange={(e) =>
+                          setFeedbackSpotlightParams((p) => ({ ...p, overallLightRatio: Number(e.target.value) }))
+                        }
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.overallLightRatio.toFixed(2)}</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugSpotlightIntensity")}</span>
+                      <input
+                        type="range"
+                        min={SPOT_INTENSITY_MIN}
+                        max={SPOT_INTENSITY_MAX}
+                        step={0.1}
+                        value={feedbackSpotlightParams.spotIntensity}
+                        onChange={(e) => setFeedbackSpotlightParams((p) => ({ ...p, spotIntensity: Number(e.target.value) }))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.spotIntensity.toFixed(1)}</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugSpotlightAngle")}</span>
+                      <input
+                        type="range"
+                        min={SPOT_ANGLE_MIN}
+                        max={SPOT_ANGLE_MAX}
+                        step={0.01}
+                        value={feedbackSpotlightParams.spotAngle}
+                        onChange={(e) => setFeedbackSpotlightParams((p) => ({ ...p, spotAngle: Number(e.target.value) }))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.spotAngle.toFixed(2)}</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugAngularVelocity")}</span>
+                      <input
+                        type="range"
+                        min={SPOT_ANGULAR_VEL_MIN}
+                        max={SPOT_ANGULAR_VEL_MAX}
+                        step={0.05}
+                        value={feedbackSpotlightParams.angularVelocity}
+                        onChange={(e) =>
+                          setFeedbackSpotlightParams((p) => ({ ...p, angularVelocity: Number(e.target.value) }))
+                        }
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.angularVelocity.toFixed(2)}</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugMovementRange")}</span>
+                      <input
+                        type="range"
+                        min={SPOT_MOVEMENT_RANGE_MIN}
+                        max={SPOT_MOVEMENT_RANGE_MAX}
+                        step={10}
+                        value={feedbackSpotlightParams.movementRangeDeg}
+                        onChange={(e) =>
+                          setFeedbackSpotlightParams((p) => ({ ...p, movementRangeDeg: Number(e.target.value) }))
+                        }
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{Math.round(feedbackSpotlightParams.movementRangeDeg)}deg</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldEnvMapBoostFeedback")}</span>
+                      <input
+                        type="range"
+                        min={SPOT_GOLD_ENV_BOOST_MIN}
+                        max={SPOT_GOLD_ENV_BOOST_MAX}
+                        step={0.05}
+                        value={feedbackSpotlightParams.goldEnvMapBoost}
+                        onChange={(e) =>
+                          setFeedbackSpotlightParams((p) => ({ ...p, goldEnvMapBoost: Number(e.target.value) }))
+                        }
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.goldEnvMapBoost.toFixed(2)}</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugFollowPointIntensity")}</span>
+                      <input
+                        type="range"
+                        min={SPOT_FOLLOW_POINT_MIN}
+                        max={SPOT_FOLLOW_POINT_MAX}
+                        step={0.5}
+                        value={feedbackSpotlightParams.followPointIntensity}
+                        onChange={(e) =>
+                          setFeedbackSpotlightParams((p) => ({ ...p, followPointIntensity: Number(e.target.value) }))
+                        }
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.followPointIntensity.toFixed(1)}</span>
+                    </label>
+                  </div>
+                )}
               </div>
               <div className="rounded border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] px-2 py-1">
                 <button
@@ -775,62 +803,72 @@ export default function HiddenStackGame() {
                   ))}
                 </div>
               </div>
-              <div>
-                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugGoldLump")}</div>
-                <div className="space-y-2">
-                  <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldMetalness")}</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={goldLumpParams.metalness}
-                      onChange={(e) => setGoldLumpParams((p) => ({ ...p, metalness: Number(e.target.value) }))}
-                      className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                    />
-                    <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.metalness.toFixed(2)}</span>
-                  </label>
-                  <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldRoughness")}</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={goldLumpParams.roughness}
-                      onChange={(e) => setGoldLumpParams((p) => ({ ...p, roughness: Number(e.target.value) }))}
-                      className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                    />
-                    <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.roughness.toFixed(2)}</span>
-                  </label>
-                  <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldEnvMapIntensity")}</span>
-                    <input
-                      type="range"
-                      min={GOLD_ENV_INTENSITY_MIN}
-                      max={GOLD_ENV_INTENSITY_MAX}
-                      step={0.05}
-                      value={goldLumpParams.envMapIntensity}
-                      onChange={(e) => setGoldLumpParams((p) => ({ ...p, envMapIntensity: Number(e.target.value) }))}
-                      className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                    />
-                    <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.envMapIntensity.toFixed(2)}</span>
-                  </label>
-                  <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldTexScale")}</span>
-                    <input
-                      type="range"
-                      min={GOLD_TEX_REPEAT_MIN}
-                      max={GOLD_TEX_REPEAT_MAX}
-                      step={0.05}
-                      value={goldLumpParams.texRepeatScale}
-                      onChange={(e) => setGoldLumpParams((p) => ({ ...p, texRepeatScale: Number(e.target.value) }))}
-                      className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                    />
-                    <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.texRepeatScale.toFixed(2)}</span>
-                  </label>
-                </div>
+              <div className="rounded border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] px-2 py-1">
+                <button
+                  type="button"
+                  onClick={() => setIsGoldLumpDebugExpanded((v) => !v)}
+                  className="flex w-full items-center justify-between text-left"
+                  aria-expanded={isGoldLumpDebugExpanded}
+                >
+                  <span className="font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugGoldLump")}</span>
+                  <span className="text-[var(--color-muted)]">{isGoldLumpDebugExpanded ? "▲" : "▼"}</span>
+                </button>
+                {isGoldLumpDebugExpanded && (
+                  <div className="mt-2 space-y-2">
+                    <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldMetalness")}</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={goldLumpParams.metalness}
+                        onChange={(e) => setGoldLumpParams((p) => ({ ...p, metalness: Number(e.target.value) }))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.metalness.toFixed(2)}</span>
+                    </label>
+                    <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldRoughness")}</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={goldLumpParams.roughness}
+                        onChange={(e) => setGoldLumpParams((p) => ({ ...p, roughness: Number(e.target.value) }))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.roughness.toFixed(2)}</span>
+                    </label>
+                    <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldEnvMapIntensity")}</span>
+                      <input
+                        type="range"
+                        min={GOLD_ENV_INTENSITY_MIN}
+                        max={GOLD_ENV_INTENSITY_MAX}
+                        step={0.05}
+                        value={goldLumpParams.envMapIntensity}
+                        onChange={(e) => setGoldLumpParams((p) => ({ ...p, envMapIntensity: Number(e.target.value) }))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.envMapIntensity.toFixed(2)}</span>
+                    </label>
+                    <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldTexScale")}</span>
+                      <input
+                        type="range"
+                        min={GOLD_TEX_REPEAT_MIN}
+                        max={GOLD_TEX_REPEAT_MAX}
+                        step={0.05}
+                        value={goldLumpParams.texRepeatScale}
+                        onChange={(e) => setGoldLumpParams((p) => ({ ...p, texRepeatScale: Number(e.target.value) }))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{goldLumpParams.texRepeatScale.toFixed(2)}</span>
+                    </label>
+                  </div>
+                )}
               </div>
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugCollapse")}</div>
@@ -973,6 +1011,7 @@ export default function HiddenStackGame() {
                     woodTexFillLightSecondaryIntensity={woodTexFillLightSecondaryIntensity}
                     woodTexRimLightIntensity={woodTexRimLightIntensity}
                     feedbackSpotlightParams={feedbackSpotlightParams}
+                    feedbackFloorGridOpacity={feedbackFloorGridOpacity}
                   />
                 </div>
                 {phase === "feedback" && reviewMode && (
