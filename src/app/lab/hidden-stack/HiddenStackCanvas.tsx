@@ -98,9 +98,9 @@ function BlockExternalWoodPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
   const emissiveIntensity = useMemo(() => shadowLift * 0.24, [shadowLift]);
   const uvJitter = useMemo(
     () => ({
-      offsetU: Math.random(),
-      offsetV: Math.random(),
-      rotationQuarters: Math.floor(Math.random() * 4),
+      offsetU: hash01(`${surfaceKey}|u`),
+      offsetV: hash01(`${surfaceKey}|v`),
+      rotationQuarters: Math.floor(hash01(`${surfaceKey}|r`) * 4),
     }),
     [surfaceKey]
   );
@@ -146,9 +146,9 @@ function DynamicExternalWoodMaterial({
   const emissiveIntensity = useMemo(() => shadowLift * 0.24, [shadowLift]);
   const uvJitter = useMemo(
     () => ({
-      offsetU: Math.random(),
-      offsetV: Math.random(),
-      rotationQuarters: Math.floor(Math.random() * 4),
+      offsetU: hash01(`${surfaceKey}|u`),
+      offsetV: hash01(`${surfaceKey}|v`),
+      rotationQuarters: Math.floor(hash01(`${surfaceKey}|r`) * 4),
     }),
     [surfaceKey]
   );
