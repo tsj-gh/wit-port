@@ -72,13 +72,17 @@ const GOLD_TEX_REPEAT_MAX = 1.0;
 const SPOT_OVERALL_LIGHT_RATIO_MIN = 0.3;
 const SPOT_OVERALL_LIGHT_RATIO_MAX = 0.8;
 const SPOT_INTENSITY_MIN = 0;
-const SPOT_INTENSITY_MAX = 12;
+const SPOT_INTENSITY_MAX = 50;
 const SPOT_ANGLE_MIN = 0.1;
 const SPOT_ANGLE_MAX = 1.1;
 const SPOT_ANGULAR_VEL_MIN = 0.1;
 const SPOT_ANGULAR_VEL_MAX = 4;
 const SPOT_MOVEMENT_RANGE_MIN = 30;
 const SPOT_MOVEMENT_RANGE_MAX = 1080;
+const SPOT_GOLD_ENV_BOOST_MIN = 0;
+const SPOT_GOLD_ENV_BOOST_MAX = 5;
+const SPOT_FOLLOW_POINT_MIN = 0;
+const SPOT_FOLLOW_POINT_MAX = 50;
 
 type Phase = "intro" | "think" | "feedback";
 type StatusOverlayPhase = "hidden" | "pending" | "animating" | "docked";
@@ -129,11 +133,13 @@ export default function HiddenStackGame() {
   );
   const [woodTexRimLightIntensity, setWoodTexRimLightIntensity] = useState(DEFAULT_WOOD_TEX_RIM_LIGHT);
   const [feedbackSpotlightParams, setFeedbackSpotlightParams] = useState<FeedbackSpotlightParams>({
-    overallLightRatio: 0.4,
-    spotIntensity: 4.2,
-    spotAngle: 0.42,
-    angularVelocity: 0.9,
-    movementRangeDeg: 320,
+    overallLightRatio: 0.32,
+    spotIntensity: 32,
+    spotAngle: 0.28,
+    angularVelocity: 0.45,
+    movementRangeDeg: 300,
+    goldEnvMapBoost: 1.25,
+    followPointIntensity: 16,
   });
   const [statusOverlayPhase, setStatusOverlayPhase] = useState<StatusOverlayPhase>("hidden");
   const [resultMessageDelayMs, setResultMessageDelayMs] = useState(DEFAULT_RESULT_MESSAGE_DELAY_MS);
@@ -579,6 +585,36 @@ export default function HiddenStackGame() {
                     className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
                   />
                   <span className="tabular-nums text-[var(--color-text)]">{Math.round(feedbackSpotlightParams.movementRangeDeg)}deg</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugGoldEnvMapBoostFeedback")}</span>
+                  <input
+                    type="range"
+                    min={SPOT_GOLD_ENV_BOOST_MIN}
+                    max={SPOT_GOLD_ENV_BOOST_MAX}
+                    step={0.05}
+                    value={feedbackSpotlightParams.goldEnvMapBoost}
+                    onChange={(e) =>
+                      setFeedbackSpotlightParams((p) => ({ ...p, goldEnvMapBoost: Number(e.target.value) }))
+                    }
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.goldEnvMapBoost.toFixed(2)}</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugFollowPointIntensity")}</span>
+                  <input
+                    type="range"
+                    min={SPOT_FOLLOW_POINT_MIN}
+                    max={SPOT_FOLLOW_POINT_MAX}
+                    step={0.5}
+                    value={feedbackSpotlightParams.followPointIntensity}
+                    onChange={(e) =>
+                      setFeedbackSpotlightParams((p) => ({ ...p, followPointIntensity: Number(e.target.value) }))
+                    }
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.followPointIntensity.toFixed(1)}</span>
                 </label>
               </div>
               <div className="rounded border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] px-2 py-1">

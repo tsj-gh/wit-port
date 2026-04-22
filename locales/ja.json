@@ -291,6 +291,8 @@
       "debugSpotlightAngle": "Spotlight Angle",
       "debugAngularVelocity": "Angular Velocity",
       "debugMovementRange": "Movement Range",
+      "debugGoldEnvMapBoostFeedback": "金 envMap 加算（正誤判定中のみ）",
+      "debugFollowPointIntensity": "追従 PointLight 強度",
       "matA": "A 木目調",
       "matB": "B セミグロス",
       "matC": "C 曇りガラス風",

@@ -291,6 +291,8 @@
       "debugSpotlightAngle": "Spotlight Angle",
       "debugAngularVelocity": "Angular Velocity",
       "debugMovementRange": "Movement Range",
+      "debugGoldEnvMapBoostFeedback": "Gold envMap add (feedback only)",
+      "debugFollowPointIntensity": "Follow point light intensity",
       "matA": "A Wood tone",
       "matB": "B Semi-gloss plastic",
       "matC": "C Frosted glass",

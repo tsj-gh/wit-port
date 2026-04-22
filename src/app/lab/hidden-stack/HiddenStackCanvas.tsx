@@ -253,6 +253,10 @@ export type FeedbackSpotlightParams = {
   spotAngle: number;
   angularVelocity: number;
   movementRangeDeg: number;
+  /** 正誤判定演出中のみ、金塊の envMapIntensity に加算 */
+  goldEnvMapBoost: number;
+  /** スポットと同軌道で追従する狭い PointLight の強度 */
+  followPointIntensity: number;
 };
 
 /** 崩落ブロックを消すまでの待ち＋フェード（秒） */
@@ -392,10 +396,13 @@ function GoldLumpMaterial({
   params,
   surfaceKey,
   highlightSpecular = false,
+  feedbackEnvMapBoost = 0,
 }: {
   params: GoldLumpParams;
   surfaceKey: string;
   highlightSpecular?: boolean;
+  /** 正誤判定ハイライト中のみ envMapIntensity に加算 */
+  feedbackEnvMapBoost?: number;
 }) {
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
   const { gl } = useThree();
@@ -430,7 +437,10 @@ function GoldLumpMaterial({
     const m = matRef.current;
     if (!m) return;
     m.needsUpdate = true;
-  }, [params.metalness, params.roughness, params.envMapIntensity, params.texRepeatScale, map]);
+  }, [params.metalness, params.roughness, params.envMapIntensity, params.texRepeatScale, map, highlightSpecular, feedbackEnvMapBoost]);
+
+  const envMapIntensity =
+    highlightSpecular && feedbackEnvMapBoost > 0 ? params.envMapIntensity + feedbackEnvMapBoost : params.envMapIntensity;
 
   return (
     <meshStandardMaterial
@@ -440,7 +450,7 @@ function GoldLumpMaterial({
       metalness={params.metalness}
       roughness={highlightSpecular ? Math.min(params.roughness, 0.1) : params.roughness}
       envMap={goldEnvMap ?? undefined}
-      envMapIntensity={params.envMapIntensity}
+      envMapIntensity={envMapIntensity}
     />
   );
 }
@@ -459,12 +469,21 @@ function GoldHiddenPBRMaterial({
   surfaceKey,
   params,
   highlightSpecular = false,
+  feedbackEnvMapBoost = 0,
 }: {
   surfaceKey: string;
   params: GoldLumpParams;
   highlightSpecular?: boolean;
+  feedbackEnvMapBoost?: number;
 }) {
-  return <GoldLumpMaterial params={params} surfaceKey={surfaceKey} highlightSpecular={highlightSpecular} />;
+  return (
+    <GoldLumpMaterial
+      params={params}
+      surfaceKey={surfaceKey}
+      highlightSpecular={highlightSpecular}
+      feedbackEnvMapBoost={feedbackEnvMapBoost}
+    />
+  );
 }
 
 function BlockMaterial({
@@ -740,6 +759,7 @@ function StaticBlock({
   useGoldMatcap,
   goldSurfaceKey,
   highlightGoldSpecular,
+  feedbackGoldEnvMapBoost = 0,
   debugNormalMaterial,
 }: {
   position: [number, number, number];
@@ -750,6 +770,7 @@ function StaticBlock({
   /** useGoldMatcap 時の明度ジッター用キー（セルキー） */
   goldSurfaceKey?: string;
   highlightGoldSpecular?: boolean;
+  feedbackGoldEnvMapBoost?: number;
   debugNormalMaterial?: boolean;
 }) {
   const [ref] = useBox(() => ({
@@ -767,12 +788,18 @@ function StaticBlock({
         {debugNormalMaterial ? (
           <meshNormalMaterial flatShading />
         ) : useGoldMatcap && goldSurfaceKey ? (
-          <GoldHiddenPBRMaterial surfaceKey={goldSurfaceKey} params={goldParams} highlightSpecular={highlightGoldSpecular} />
+          <GoldHiddenPBRMaterial
+            surfaceKey={goldSurfaceKey}
+            params={goldParams}
+            highlightSpecular={highlightGoldSpecular}
+            feedbackEnvMapBoost={feedbackGoldEnvMapBoost}
+          />
         ) : (
           <GoldLumpMaterial
             params={goldParams}
             surfaceKey={goldSurfaceKey ?? `${position.join("|")}|gold`}
             highlightSpecular={highlightGoldSpecular}
+            feedbackEnvMapBoost={feedbackGoldEnvMapBoost}
           />
         )}
       </mesh>
@@ -937,6 +964,7 @@ function FeedbackScene({
   visualMeshScale,
   feedbackAnswerCorrect,
   highlightGoldSpecular,
+  goldEnvMapBoost = 0,
   debugNormalMaterial,
 }: {
   puzzle: HiddenStackPuzzle;
@@ -947,6 +975,7 @@ function FeedbackScene({
   visualMeshScale: number;
   feedbackAnswerCorrect: boolean | null;
   highlightGoldSpecular?: boolean;
+  goldEnvMapBoost?: number;
   debugNormalMaterial?: boolean;
 }) {
   const center = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
@@ -1017,6 +1046,7 @@ function FeedbackScene({
             useGoldMatcap={feedbackAnswerCorrect === true}
             goldSurfaceKey={k}
             highlightGoldSpecular={highlightGoldSpecular}
+            feedbackGoldEnvMapBoost={goldEnvMapBoost}
             debugNormalMaterial={debugNormalMaterial}
           />
         );
@@ -1262,6 +1292,7 @@ function SceneLightingRig({
   const fill2Ref = useRef<THREE.DirectionalLight>(null);
   const rimRef = useRef<THREE.DirectionalLight>(null);
   const spotRef = useRef<THREE.SpotLight>(null);
+  const followPointRef = useRef<THREE.PointLight>(null);
   const spotTargetRef = useRef<THREE.Object3D>(null);
   const feedbackStartRef = useRef<number | null>(null);
 
@@ -1295,12 +1326,14 @@ function SceneLightingRig({
     apply(rimRef.current, enableWoodTexFill ? woodTexRimLightIntensity : 0);
 
     const spot = spotRef.current;
+    const point = followPointRef.current;
     const tgt = spotTargetRef.current;
     if (!spot || !tgt) return;
     tgt.position.copy(targetCenter);
     tgt.updateMatrixWorld();
     if (!isFeedbackEffect || spotlightParams.spotIntensity <= 0) {
       spot.visible = false;
+      if (point) point.visible = false;
       return;
     }
     spot.visible = true;
@@ -1308,13 +1341,31 @@ function SceneLightingRig({
     const rawAngle = elapsed * spotlightParams.angularVelocity;
     const angle = Math.min(rawAngle, maxRange);
     const radius = gridSize * 2.1;
-    const height = gridSize * 2.2;
-    spot.position.set(targetCenter.x + Math.cos(angle) * radius, targetCenter.y + height, targetCenter.z + Math.sin(angle) * radius);
+    /** 低めのスポット（従来 gridSize * 2.2 より下げて金塊へ当てやすく） */
+    const height = gridSize * 1.32;
+    const px = targetCenter.x + Math.cos(angle) * radius;
+    const py = targetCenter.y + height;
+    const pz = targetCenter.z + Math.sin(angle) * radius;
+    spot.position.set(px, py, pz);
     spot.intensity = spotlightParams.spotIntensity;
     spot.angle = spotlightParams.spotAngle;
-    spot.penumbra = 0.45;
+    spot.penumbra = 0.38;
     spot.decay = 2;
     spot.distance = gridSize * 8;
+    /** 暖色スポット＋強めの既定（Intensity はパネルで調整） */
+    spot.color.set("#ffcc8a");
+
+    if (point) {
+      point.visible = spotlightParams.followPointIntensity > 0;
+      if (point.visible) {
+        point.position.set(px, py, pz);
+        point.intensity = spotlightParams.followPointIntensity;
+        point.decay = 2;
+        /** 狭いフォールオフ（距離を短め） */
+        point.distance = Math.max(gridSize * 3.2, 2.5);
+        point.color.set("#ffd4a8");
+      }
+    }
   });
 
   return (
@@ -1336,7 +1387,8 @@ function SceneLightingRig({
         color="#f9e8d1"
       />
       <directionalLight ref={rimRef} position={[0.5, 8.5, -10]} intensity={enableWoodTexFill ? woodTexRimLightIntensity : 0} color="#fff2dc" />
-      <spotLight ref={spotRef} visible={false} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} color="#fff8de" />
+      <spotLight ref={spotRef} visible={false} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} color="#ffcc8a" />
+      <pointLight ref={followPointRef} visible={false} />
       <object3D ref={spotTargetRef} position={[targetCenter.x, targetCenter.y, targetCenter.z]} />
     </>
   );
@@ -1368,11 +1420,13 @@ export default function HiddenStackCanvas({
   woodTexFillLightSecondaryIntensity = 0.9,
   woodTexRimLightIntensity = 0.5,
   feedbackSpotlightParams = {
-    overallLightRatio: 0.4,
-    spotIntensity: 4.2,
-    spotAngle: 0.42,
-    angularVelocity: 0.9,
-    movementRangeDeg: 320,
+    overallLightRatio: 0.32,
+    spotIntensity: 32,
+    spotAngle: 0.28,
+    angularVelocity: 0.45,
+    movementRangeDeg: 300,
+    goldEnvMapBoost: 1.25,
+    followPointIntensity: 16,
   },
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
@@ -1469,6 +1523,7 @@ export default function HiddenStackCanvas({
                   visualMeshScale={visualMeshScale}
                   feedbackAnswerCorrect={feedbackAnswerCorrect}
                   highlightGoldSpecular
+                  goldEnvMapBoost={feedbackSpotlightParams.goldEnvMapBoost}
                   debugNormalMaterial={debugNormalMaterial}
                 />
               </Physics>
