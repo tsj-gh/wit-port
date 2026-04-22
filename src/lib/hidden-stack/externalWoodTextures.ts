@@ -27,6 +27,7 @@ export function cloneExternalWoodTextureForMesh(
   gl: THREE.WebGLRenderer
 ): THREE.Texture {
   const tex = base.clone();
+  tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.center.set(0.5, 0.5);
   tex.rotation = (Math.PI / 2) * Math.floor(rotationQuarters % 4);

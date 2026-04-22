@@ -275,6 +275,7 @@
       "debugNormalProbe": "法線チェック（MeshNormal）",
       "debugNormalProbeOn": "法線チェック: ON",
       "debugNormalProbeOff": "法線チェック: OFF",
+      "debugAmbientLight": "全体アンビエントライト強度",
       "matA": "A 木目調",
       "matB": "B セミグロス",
       "matC": "C 曇りガラス風",

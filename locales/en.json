@@ -275,6 +275,7 @@
       "debugNormalProbe": "Normal check (MeshNormal)",
       "debugNormalProbeOn": "Normal check: ON",
       "debugNormalProbeOff": "Normal check: OFF",
+      "debugAmbientLight": "Global ambient light intensity",
       "matA": "A Wood tone",
       "matB": "B Semi-gloss plastic",
       "matC": "C Frosted glass",

@@ -204,6 +204,8 @@ type HiddenStackCanvasProps = {
   debugNormalMaterial?: boolean;
   /** 外部木目テクスチャ（0=Walnut01 … 5=Oak03）。WoodTex のみ描画に使用 */
   externalWoodTextureIndex?: number;
+  /** デバッグ用の全体アンビエントライト強度 */
+  ambientLightIntensity?: number;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -1093,10 +1095,10 @@ function ReviewOrbitControls({
   );
 }
 
-function Lights() {
+function Lights({ ambientIntensity = 0.6 }: { ambientIntensity?: number }) {
   return (
     <>
-      <ambientLight intensity={0.6} />
+      <ambientLight intensity={ambientIntensity} />
       <directionalLight
         position={[7, 12, 5]}
         intensity={0.8}
@@ -1124,6 +1126,7 @@ export default function HiddenStackCanvas({
   feedbackAnswerCorrect = null,
   debugNormalMaterial = false,
   externalWoodTextureIndex = 0,
+  ambientLightIntensity = 0.6,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
@@ -1146,7 +1149,7 @@ export default function HiddenStackCanvas({
       camera={{ position: [0, 0, 1], near: 0.1, far: 320, zoom: 1 }}
     >
       <color attach="background" args={["#f1f5f9"]} />
-      <Lights />
+      <Lights ambientIntensity={ambientLightIntensity} />
       {reviewMode ? (
         <ReviewOrbitControls
           gridSize={gridSize}

@@ -38,6 +38,9 @@ const RESULT_MESSAGE_DELAY_MS_MIN = 0;
 const RESULT_MESSAGE_DELAY_MS_MAX = 2500;
 const RESULT_MESSAGE_ORIGIN_Y_MIN = 15;
 const RESULT_MESSAGE_ORIGIN_Y_MAX = 48;
+const AMBIENT_LIGHT_INTENSITY_MIN = 0;
+const AMBIENT_LIGHT_INTENSITY_MAX = 1.8;
+const DEFAULT_AMBIENT_LIGHT_INTENSITY = 0.6;
 
 type Phase = "intro" | "think" | "feedback";
 type StatusOverlayPhase = "hidden" | "pending" | "animating" | "docked";
@@ -74,6 +77,7 @@ export default function HiddenStackGame() {
   const [reviewSwipeHintVisible, setReviewSwipeHintVisible] = useState(false);
   const [statusMessageStyle, setStatusMessageStyle] = useState<"card" | "plain">("card");
   const [debugNormalMaterial, setDebugNormalMaterial] = useState(false);
+  const [ambientLightIntensity, setAmbientLightIntensity] = useState(DEFAULT_AMBIENT_LIGHT_INTENSITY);
   const [statusOverlayPhase, setStatusOverlayPhase] = useState<StatusOverlayPhase>("hidden");
   const [resultMessageDelayMs, setResultMessageDelayMs] = useState(DEFAULT_RESULT_MESSAGE_DELAY_MS);
   const [resultMessageOriginYPercent, setResultMessageOriginYPercent] = useState(DEFAULT_RESULT_MESSAGE_ORIGIN_Y_PCT);
@@ -419,6 +423,21 @@ export default function HiddenStackGame() {
                 </label>
               </div>
               <div>
+                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugAmbientLight")}</div>
+                <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <input
+                    type="range"
+                    min={AMBIENT_LIGHT_INTENSITY_MIN}
+                    max={AMBIENT_LIGHT_INTENSITY_MAX}
+                    step={0.02}
+                    value={ambientLightIntensity}
+                    onChange={(e) => setAmbientLightIntensity(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{ambientLightIntensity.toFixed(2)}</span>
+                </label>
+              </div>
+              <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugResultMessageTiming")}</div>
                 <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugResultMessageDelay")}</span>
@@ -638,6 +657,7 @@ export default function HiddenStackGame() {
                     feedbackAnswerCorrect={isAnswerCorrect}
                     debugNormalMaterial={debugNormalMaterial}
                     externalWoodTextureIndex={externalWoodTextureIndex}
+                    ambientLightIntensity={ambientLightIntensity}
                   />
                 </div>
                 {phase === "feedback" && reviewMode && (
