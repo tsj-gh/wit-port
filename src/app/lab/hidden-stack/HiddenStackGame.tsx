@@ -52,7 +52,13 @@ const WOOD_TEX_ENVMAP_INTENSITY_MAX = 3;
 const DEFAULT_WOOD_TEX_ENVMAP_INTENSITY = 1.7;
 const WOOD_TEX_FILL_LIGHT_MIN = 0;
 const WOOD_TEX_FILL_LIGHT_MAX = 1.2;
-const DEFAULT_WOOD_TEX_FILL_LIGHT = 0.4;
+const DEFAULT_WOOD_TEX_FILL_LIGHT = 1.2;
+const WOOD_TEX_FILL_LIGHT_SECONDARY_MIN = 0;
+const WOOD_TEX_FILL_LIGHT_SECONDARY_MAX = 1.2;
+const DEFAULT_WOOD_TEX_FILL_LIGHT_SECONDARY = 0.38;
+const WOOD_TEX_RIM_LIGHT_MIN = 0;
+const WOOD_TEX_RIM_LIGHT_MAX = 1.2;
+const DEFAULT_WOOD_TEX_RIM_LIGHT = 0.26;
 
 type Phase = "intro" | "think" | "feedback";
 type StatusOverlayPhase = "hidden" | "pending" | "animating" | "docked";
@@ -94,6 +100,10 @@ export default function HiddenStackGame() {
   const [woodTexRoughness, setWoodTexRoughness] = useState(DEFAULT_WOOD_TEX_ROUGHNESS);
   const [woodTexEnvMapIntensity, setWoodTexEnvMapIntensity] = useState(DEFAULT_WOOD_TEX_ENVMAP_INTENSITY);
   const [woodTexFillLightIntensity, setWoodTexFillLightIntensity] = useState(DEFAULT_WOOD_TEX_FILL_LIGHT);
+  const [woodTexFillLightSecondaryIntensity, setWoodTexFillLightSecondaryIntensity] = useState(
+    DEFAULT_WOOD_TEX_FILL_LIGHT_SECONDARY
+  );
+  const [woodTexRimLightIntensity, setWoodTexRimLightIntensity] = useState(DEFAULT_WOOD_TEX_RIM_LIGHT);
   const [statusOverlayPhase, setStatusOverlayPhase] = useState<StatusOverlayPhase>("hidden");
   const [resultMessageDelayMs, setResultMessageDelayMs] = useState(DEFAULT_RESULT_MESSAGE_DELAY_MS);
   const [resultMessageOriginYPercent, setResultMessageOriginYPercent] = useState(DEFAULT_RESULT_MESSAGE_ORIGIN_Y_PCT);
@@ -506,6 +516,32 @@ export default function HiddenStackGame() {
                   />
                   <span className="tabular-nums text-[var(--color-text)]">{woodTexFillLightIntensity.toFixed(2)}</span>
                 </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexFillLight2")}</span>
+                  <input
+                    type="range"
+                    min={WOOD_TEX_FILL_LIGHT_SECONDARY_MIN}
+                    max={WOOD_TEX_FILL_LIGHT_SECONDARY_MAX}
+                    step={0.02}
+                    value={woodTexFillLightSecondaryIntensity}
+                    onChange={(e) => setWoodTexFillLightSecondaryIntensity(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{woodTexFillLightSecondaryIntensity.toFixed(2)}</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexRimLight")}</span>
+                  <input
+                    type="range"
+                    min={WOOD_TEX_RIM_LIGHT_MIN}
+                    max={WOOD_TEX_RIM_LIGHT_MAX}
+                    step={0.02}
+                    value={woodTexRimLightIntensity}
+                    onChange={(e) => setWoodTexRimLightIntensity(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{woodTexRimLightIntensity.toFixed(2)}</span>
+                </label>
               </div>
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugResultMessageTiming")}</div>
@@ -732,6 +768,8 @@ export default function HiddenStackGame() {
                     woodTexRoughness={woodTexRoughness}
                     woodTexEnvMapIntensity={woodTexEnvMapIntensity}
                     woodTexFillLightIntensity={woodTexFillLightIntensity}
+                    woodTexFillLightSecondaryIntensity={woodTexFillLightSecondaryIntensity}
+                    woodTexRimLightIntensity={woodTexRimLightIntensity}
                   />
                 </div>
                 {phase === "feedback" && reviewMode && (

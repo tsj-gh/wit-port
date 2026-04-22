@@ -254,6 +254,10 @@ type HiddenStackCanvasProps = {
   woodTexEnvMapIntensity?: number;
   /** WoodTex 専用: 補助フィルライト強度 */
   woodTexFillLightIntensity?: number;
+  /** WoodTex 専用: 2灯目フィルライト強度 */
+  woodTexFillLightSecondaryIntensity?: number;
+  /** WoodTex 専用: リムライト強度 */
+  woodTexRimLightIntensity?: number;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -1145,11 +1149,15 @@ function ReviewOrbitControls({
 
 function Lights({
   ambientIntensity = 0.6,
-  woodTexFillLightIntensity = 0.4,
+  woodTexFillLightIntensity = 1.2,
+  woodTexFillLightSecondaryIntensity = 0.38,
+  woodTexRimLightIntensity = 0.26,
   enableWoodTexFill = false,
 }: {
   ambientIntensity?: number;
   woodTexFillLightIntensity?: number;
+  woodTexFillLightSecondaryIntensity?: number;
+  woodTexRimLightIntensity?: number;
   enableWoodTexFill?: boolean;
 }) {
   return (
@@ -1164,6 +1172,12 @@ function Lights({
       />
       {enableWoodTexFill && woodTexFillLightIntensity > 0 ? (
         <directionalLight position={[-8, 7, -6]} intensity={woodTexFillLightIntensity} color="#ffe3c5" />
+      ) : null}
+      {enableWoodTexFill && woodTexFillLightSecondaryIntensity > 0 ? (
+        <directionalLight position={[8.5, 5.5, 6.5]} intensity={woodTexFillLightSecondaryIntensity} color="#f9e8d1" />
+      ) : null}
+      {enableWoodTexFill && woodTexRimLightIntensity > 0 ? (
+        <directionalLight position={[0.5, 8.5, -10]} intensity={woodTexRimLightIntensity} color="#fff2dc" />
       ) : null}
     </>
   );
@@ -1189,7 +1203,9 @@ export default function HiddenStackCanvas({
   woodTexShadowLift = 0.42,
   woodTexRoughness = 0.58,
   woodTexEnvMapIntensity = 1.7,
-  woodTexFillLightIntensity = 0.4,
+  woodTexFillLightIntensity = 1.2,
+  woodTexFillLightSecondaryIntensity = 0.38,
+  woodTexRimLightIntensity = 0.26,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
@@ -1215,6 +1231,8 @@ export default function HiddenStackCanvas({
       <Lights
         ambientIntensity={ambientLightIntensity}
         woodTexFillLightIntensity={woodTexFillLightIntensity}
+        woodTexFillLightSecondaryIntensity={woodTexFillLightSecondaryIntensity}
+        woodTexRimLightIntensity={woodTexRimLightIntensity}
         enableWoodTexFill={materialVariant === "WoodTex"}
       />
       {reviewMode ? (

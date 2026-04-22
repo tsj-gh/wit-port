@@ -280,6 +280,8 @@
       "debugWoodTexRoughness": "WoodTex roughness",
       "debugWoodTexEnvMap": "WoodTex envMapIntensity",
       "debugWoodTexFillLight": "WoodTex 補助ライト",
+      "debugWoodTexFillLight2": "WoodTex 補助ライト2",
+      "debugWoodTexRimLight": "WoodTex リムライト",
       "matA": "A 木目調",
       "matB": "B セミグロス",
       "matC": "C 曇りガラス風",
