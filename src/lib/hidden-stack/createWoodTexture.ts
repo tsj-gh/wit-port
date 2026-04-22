@@ -1,12 +1,16 @@
 import * as THREE from "three";
 
-/** 板目（Itame）風アルベドの基調 */
-const BR = 210;
-const BG = 180;
-const BB = 140;
-const DR = 118;
-const DG = 84;
-const DB = 56;
+/** 3 色ブレンド（ベース → 中間 → 濃い茶） */
+const C0 = { r: 210, g: 180, b: 140 };
+const C1 = { r: 186, g: 156, b: 118 };
+const C2 = { r: 102, g: 72, b: 50 };
+
+const LACUNARITY = [1, 2.1, 4.3] as const;
+const OCTAVE_GAIN = 0.48;
+
+function clamp255(v: number): number {
+  return Math.max(0, Math.min(255, Math.round(v)));
+}
 
 function hashUnit(ix: number, iy: number, seed: number): number {
   let n = Math.imul(ix + seed, 0x1a85ec53) ^ Math.imul(iy + (seed << 3), 0x7f4a7c15);
@@ -15,7 +19,6 @@ function hashUnit(ix: number, iy: number, seed: number): number {
   return (n >>> 0) / 4294967296;
 }
 
-/** 格子値の双線形補間による滑らかな 2D ノイズ（簡易 Perlin 系） */
 function smoothValueNoise(x: number, y: number, seed: number): number {
   const x0 = Math.floor(x);
   const y0 = Math.floor(y);
@@ -32,23 +35,47 @@ function smoothValueNoise(x: number, y: number, seed: number): number {
   return xb + v * (xc - xb);
 }
 
-function fbm(x: number, y: number, seed: number, octaves: number): number {
+/**
+ * 3 オクターブ・周波数比 1 : 2.1 : 4.3 の fBm（Y を細かくし縦長の流れを維持）
+ */
+function fbmWood(x: number, y: number, seed: number): number {
   let sum = 0;
   let amp = 1;
-  let freq = 1;
   let norm = 0;
-  for (let i = 0; i < octaves; i++) {
-    sum += amp * smoothValueNoise(x * freq + seed * 0.01 * i, y * freq + seed * 0.02 * i, seed + i * 17);
+  for (let i = 0; i < 3; i++) {
+    const f = LACUNARITY[i];
+    sum +=
+      amp *
+      smoothValueNoise(x * 0.11 * f + seed * 0.012 * i, y * 0.0066 * f + seed * 0.019 * i, seed + i * 83);
     norm += amp;
-    amp *= 0.52;
-    freq *= 2.05;
+    amp *= OCTAVE_GAIN;
   }
   return sum / norm;
 }
 
+function lerp3(t: number): { r: number; g: number; b: number } {
+  const u = THREE.MathUtils.clamp(0.42 + (t - 0.5) * 0.26, 0, 1);
+  if (u <= 0.5) {
+    const k = u * 2;
+    const kk = k * k * (3 - 2 * k);
+    return {
+      r: C0.r + (C1.r - C0.r) * kk,
+      g: C0.g + (C1.g - C0.g) * kk,
+      b: C0.b + (C1.b - C0.b) * kk,
+    };
+  }
+  const k = (u - 0.5) * 2;
+  const kk = k * k * (3 - 2 * k);
+  return {
+    r: C1.r + (C2.r - C1.r) * kk,
+    g: C1.g + (C2.g - C1.g) * kk,
+    b: C1.b + (C2.b - C1.b) * kk,
+  };
+}
+
 /**
- * 外部画像なし：全ピクセルを疑似ノイズ＋ sin で「板目」風の流れを計算。
- * 線の重ね描きは行わない。
+ * 全ピクセル計算の板目風アルベド。線描画なし。
+ * 仕上げに横方向の微ノイズ（導管感）を alpha 相当で重ねる。
  */
 export function createWoodTexture(size = 256): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
@@ -65,18 +92,13 @@ export function createWoodTexture(size = 256): THREE.CanvasTexture {
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      /** Y 方向のスケールを X より小さくし、縦に長く流れる板目の基調ノイズ */
-      const nFlow = fbm(x * 0.11 + seed * 0.001, y * 0.0065 + seed * 0.002, seed, 3);
-      const nFine = fbm(x * 0.22, y * 0.018, seed + 101, 2) * 0.22;
-
+      const nFlow = fbmWood(x + seed * 0.001, y + seed * 0.002, seed);
+      const nGrain = fbmWood(x * 1.15 + 17, y * 1.05 + 23, seed + 911);
       const wobble = (nFlow - 0.5) * 2;
-      const stripArg = x * 0.088 + wobble * 11 + nFine * 7 + y * 0.0065;
-      let v = Math.sin(stripArg) * 0.5 + 0.5;
-      v = 0.44 + v * 0.14;
-
-      const r = BR + (DR - BR) * v;
-      const g = BG + (DG - BG) * v;
-      const b = BB + (DB - BB) * v;
+      const stripArg = x * 0.086 + wobble * 12.5 + (nGrain - 0.5) * 6.2 + y * 0.0062;
+      let band = Math.sin(stripArg) * 0.5 + 0.5;
+      const t = band * 0.58 + nFlow * 0.42;
+      const { r, g, b } = lerp3(t);
       const i = (y * size + x) * 4;
       d[i] = r;
       d[i + 1] = g;
@@ -85,17 +107,17 @@ export function createWoodTexture(size = 256): THREE.CanvasTexture {
     }
   }
 
-  /** 極めて薄い横方向の導管っぽいドット */
+  /** 横方向の極薄ノイズ（導管 / ブラッシング）。重ね合わせ強度 ~0.05 */
+  const brushSeed = seed + 2027;
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const h = hashUnit(x, y, seed + 999);
-      if (h < 0.0035) {
-        const i = (y * size + x) * 4;
-        const k = 0.94 + h * 0.04;
-        d[i] *= k;
-        d[i + 1] *= k;
-        d[i + 2] *= k * 0.98;
-      }
+      const nx = smoothValueNoise(x * 0.9 + brushSeed * 0.01, y * 0.028 + x * 0.002, brushSeed);
+      const ny = smoothValueNoise(x * 0.14, y * 0.55 + brushSeed * 0.02, brushSeed + 3);
+      const micro = ((nx - 0.5) * 0.65 + (ny - 0.5) * 0.35) * 0.05 * 55;
+      const i = (y * size + x) * 4;
+      d[i] = clamp255(d[i] + micro);
+      d[i + 1] = clamp255(d[i + 1] + micro * 0.96);
+      d[i + 2] = clamp255(d[i + 2] + micro * 0.92);
     }
   }
 
