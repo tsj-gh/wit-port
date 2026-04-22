@@ -20,7 +20,7 @@ import { Line, OrbitControls, RoundedBox } from "@react-three/drei";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { createWoodTexture, setWoodTextureMaxAnisotropy } from "@/lib/hidden-stack/createWoodTexture";
-import { EXTERNAL_WOOD_TEXTURE_PATHS, cloneExternalWoodTextureForMesh } from "@/lib/hidden-stack/externalWoodTextures";
+import { EXTERNAL_WOOD_TEXTURE_PATHS, cloneExternalWoodTextureForMesh, safeOffsetForRepeat } from "@/lib/hidden-stack/externalWoodTextures";
 import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
 
 /** 物理ボディ（半辺 0.48）はそのまま。レンダリング丸め用の最小オーバーラップ（メッシュのみ） */
@@ -396,7 +396,10 @@ function GoldLumpMaterial({ params, surfaceKey }: { params: GoldLumpParams; surf
     tex.repeat.set(params.texRepeatScale, params.texRepeatScale);
     tex.center.set(0.5, 0.5);
     tex.rotation = (Math.PI / 2) * uv.rotationQuarters;
-    tex.offset.set(uv.offsetU, uv.offsetV);
+    tex.offset.set(
+      safeOffsetForRepeat(uv.offsetU, params.texRepeatScale),
+      safeOffsetForRepeat(uv.offsetV, params.texRepeatScale)
+    );
     setWoodTextureMaxAnisotropy(tex, gl);
     tex.needsUpdate = true;
     return tex;
