@@ -25,7 +25,7 @@ const EXTERNAL_WOOD_DEBUG_LABEL_KEYS = [
   "games.hiddenStack.woodTexOak02",
   "games.hiddenStack.woodTexOak03",
 ] as const;
-import type { BlockMaterialVariant, CollapsePatternId, GoldLumpParams } from "./HiddenStackCanvas";
+import type { BlockMaterialVariant, CollapsePatternId, FeedbackSpotlightParams, GoldLumpParams } from "./HiddenStackCanvas";
 
 const HiddenStackCanvas = dynamic(() => import("./HiddenStackCanvas"), { ssr: false });
 
@@ -62,10 +62,23 @@ const DEFAULT_WOOD_TEX_FILL_LIGHT_SECONDARY = 0.9;
 const WOOD_TEX_RIM_LIGHT_MIN = 0;
 const WOOD_TEX_RIM_LIGHT_MAX = 1.2;
 const DEFAULT_WOOD_TEX_RIM_LIGHT = 0.5;
+const REVIEW_MESH_VISUAL_SCALE_MIN = 0.8;
+const REVIEW_MESH_VISUAL_SCALE_MAX = 1.2;
+const DEFAULT_REVIEW_MESH_VISUAL_SCALE = 1.0;
 const GOLD_ENV_INTENSITY_MIN = 0;
 const GOLD_ENV_INTENSITY_MAX = 4;
 const GOLD_TEX_REPEAT_MIN = 0.1;
 const GOLD_TEX_REPEAT_MAX = 1.0;
+const SPOT_OVERALL_LIGHT_RATIO_MIN = 0.3;
+const SPOT_OVERALL_LIGHT_RATIO_MAX = 0.8;
+const SPOT_INTENSITY_MIN = 0;
+const SPOT_INTENSITY_MAX = 12;
+const SPOT_ANGLE_MIN = 0.1;
+const SPOT_ANGLE_MAX = 1.1;
+const SPOT_ANGULAR_VEL_MIN = 0.1;
+const SPOT_ANGULAR_VEL_MAX = 4;
+const SPOT_MOVEMENT_RANGE_MIN = 30;
+const SPOT_MOVEMENT_RANGE_MAX = 1080;
 
 type Phase = "intro" | "think" | "feedback";
 type StatusOverlayPhase = "hidden" | "pending" | "animating" | "docked";
@@ -90,6 +103,8 @@ export default function HiddenStackGame() {
   });
   /** メッシュ見た目のみ（隙間対策）。物理コライダは HiddenStackCanvas 側で変更しない */
   const [blockMeshVisualScale, setBlockMeshVisualScale] = useState(1.05);
+  const [reviewBlockMeshVisualScale, setReviewBlockMeshVisualScale] = useState(DEFAULT_REVIEW_MESH_VISUAL_SCALE);
+  const [isWoodTexDebugExpanded, setIsWoodTexDebugExpanded] = useState(false);
 
   const [puzzle, setPuzzle] = useState(() => generateHiddenStackPuzzle(`${Date.now()}`, { gridSize: 3 }));
   const [phase, setPhase] = useState<Phase>("intro");
@@ -113,6 +128,13 @@ export default function HiddenStackGame() {
     DEFAULT_WOOD_TEX_FILL_LIGHT_SECONDARY
   );
   const [woodTexRimLightIntensity, setWoodTexRimLightIntensity] = useState(DEFAULT_WOOD_TEX_RIM_LIGHT);
+  const [feedbackSpotlightParams, setFeedbackSpotlightParams] = useState<FeedbackSpotlightParams>({
+    overallLightRatio: 0.4,
+    spotIntensity: 4.2,
+    spotAngle: 0.42,
+    angularVelocity: 0.9,
+    movementRangeDeg: 320,
+  });
   const [statusOverlayPhase, setStatusOverlayPhase] = useState<StatusOverlayPhase>("hidden");
   const [resultMessageDelayMs, setResultMessageDelayMs] = useState(DEFAULT_RESULT_MESSAGE_DELAY_MS);
   const [resultMessageOriginYPercent, setResultMessageOriginYPercent] = useState(DEFAULT_RESULT_MESSAGE_ORIGIN_Y_PCT);
@@ -456,6 +478,19 @@ export default function HiddenStackGame() {
                   />
                   <span className="tabular-nums text-[var(--color-text)]">{blockMeshVisualScale.toFixed(3)}×</span>
                 </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugReviewMeshCrevice")}</span>
+                  <input
+                    type="range"
+                    min={REVIEW_MESH_VISUAL_SCALE_MIN}
+                    max={REVIEW_MESH_VISUAL_SCALE_MAX}
+                    step={0.001}
+                    value={reviewBlockMeshVisualScale}
+                    onChange={(e) => setReviewBlockMeshVisualScale(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{reviewBlockMeshVisualScale.toFixed(3)}×</span>
+                </label>
               </div>
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugAmbientLight")}</div>
@@ -473,97 +508,184 @@ export default function HiddenStackGame() {
                 </label>
               </div>
               <div>
-                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugWoodTexShadowLift")}</div>
+                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugSpotlight")}</div>
                 <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugOverallLightRatio")}</span>
                   <input
                     type="range"
-                    min={WOOD_TEX_SHADOW_LIFT_MIN}
-                    max={WOOD_TEX_SHADOW_LIFT_MAX}
-                    step={0.02}
-                    value={woodTexShadowLift}
-                    onChange={(e) => setWoodTexShadowLift(Number(e.target.value))}
+                    min={SPOT_OVERALL_LIGHT_RATIO_MIN}
+                    max={SPOT_OVERALL_LIGHT_RATIO_MAX}
+                    step={0.01}
+                    value={feedbackSpotlightParams.overallLightRatio}
+                    onChange={(e) =>
+                      setFeedbackSpotlightParams((p) => ({ ...p, overallLightRatio: Number(e.target.value) }))
+                    }
                     className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
                   />
-                  <span className="tabular-nums text-[var(--color-text)]">{woodTexShadowLift.toFixed(2)}</span>
+                  <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.overallLightRatio.toFixed(2)}</span>
                 </label>
                 <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexRoughness")}</span>
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugSpotlightIntensity")}</span>
                   <input
                     type="range"
-                    min={WOOD_TEX_ROUGHNESS_MIN}
-                    max={WOOD_TEX_ROUGHNESS_MAX}
-                    step={0.02}
-                    value={woodTexRoughness}
-                    onChange={(e) => setWoodTexRoughness(Number(e.target.value))}
+                    min={SPOT_INTENSITY_MIN}
+                    max={SPOT_INTENSITY_MAX}
+                    step={0.1}
+                    value={feedbackSpotlightParams.spotIntensity}
+                    onChange={(e) => setFeedbackSpotlightParams((p) => ({ ...p, spotIntensity: Number(e.target.value) }))}
                     className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
                   />
-                  <span className="tabular-nums text-[var(--color-text)]">{woodTexRoughness.toFixed(2)}</span>
+                  <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.spotIntensity.toFixed(1)}</span>
                 </label>
                 <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexEnvMap")}</span>
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugSpotlightAngle")}</span>
                   <input
                     type="range"
-                    min={WOOD_TEX_ENVMAP_INTENSITY_MIN}
-                    max={WOOD_TEX_ENVMAP_INTENSITY_MAX}
+                    min={SPOT_ANGLE_MIN}
+                    max={SPOT_ANGLE_MAX}
+                    step={0.01}
+                    value={feedbackSpotlightParams.spotAngle}
+                    onChange={(e) => setFeedbackSpotlightParams((p) => ({ ...p, spotAngle: Number(e.target.value) }))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.spotAngle.toFixed(2)}</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugAngularVelocity")}</span>
+                  <input
+                    type="range"
+                    min={SPOT_ANGULAR_VEL_MIN}
+                    max={SPOT_ANGULAR_VEL_MAX}
                     step={0.05}
-                    value={woodTexEnvMapIntensity}
-                    onChange={(e) => setWoodTexEnvMapIntensity(Number(e.target.value))}
+                    value={feedbackSpotlightParams.angularVelocity}
+                    onChange={(e) =>
+                      setFeedbackSpotlightParams((p) => ({ ...p, angularVelocity: Number(e.target.value) }))
+                    }
                     className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
                   />
-                  <span className="tabular-nums text-[var(--color-text)]">{woodTexEnvMapIntensity.toFixed(2)}</span>
+                  <span className="tabular-nums text-[var(--color-text)]">{feedbackSpotlightParams.angularVelocity.toFixed(2)}</span>
                 </label>
                 <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexScale")}</span>
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugMovementRange")}</span>
                   <input
                     type="range"
-                    min={WOOD_TEX_REPEAT_SCALE_MIN}
-                    max={WOOD_TEX_REPEAT_SCALE_MAX}
-                    step={0.05}
-                    value={woodTexRepeatScale}
-                    onChange={(e) => setWoodTexRepeatScale(Number(e.target.value))}
+                    min={SPOT_MOVEMENT_RANGE_MIN}
+                    max={SPOT_MOVEMENT_RANGE_MAX}
+                    step={10}
+                    value={feedbackSpotlightParams.movementRangeDeg}
+                    onChange={(e) =>
+                      setFeedbackSpotlightParams((p) => ({ ...p, movementRangeDeg: Number(e.target.value) }))
+                    }
                     className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
                   />
-                  <span className="tabular-nums text-[var(--color-text)]">{woodTexRepeatScale.toFixed(2)}</span>
+                  <span className="tabular-nums text-[var(--color-text)]">{Math.round(feedbackSpotlightParams.movementRangeDeg)}deg</span>
                 </label>
-                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexFillLight")}</span>
-                  <input
-                    type="range"
-                    min={WOOD_TEX_FILL_LIGHT_MIN}
-                    max={WOOD_TEX_FILL_LIGHT_MAX}
-                    step={0.02}
-                    value={woodTexFillLightIntensity}
-                    onChange={(e) => setWoodTexFillLightIntensity(Number(e.target.value))}
-                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                  />
-                  <span className="tabular-nums text-[var(--color-text)]">{woodTexFillLightIntensity.toFixed(2)}</span>
-                </label>
-                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexFillLight2")}</span>
-                  <input
-                    type="range"
-                    min={WOOD_TEX_FILL_LIGHT_SECONDARY_MIN}
-                    max={WOOD_TEX_FILL_LIGHT_SECONDARY_MAX}
-                    step={0.02}
-                    value={woodTexFillLightSecondaryIntensity}
-                    onChange={(e) => setWoodTexFillLightSecondaryIntensity(Number(e.target.value))}
-                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                  />
-                  <span className="tabular-nums text-[var(--color-text)]">{woodTexFillLightSecondaryIntensity.toFixed(2)}</span>
-                </label>
-                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexRimLight")}</span>
-                  <input
-                    type="range"
-                    min={WOOD_TEX_RIM_LIGHT_MIN}
-                    max={WOOD_TEX_RIM_LIGHT_MAX}
-                    step={0.02}
-                    value={woodTexRimLightIntensity}
-                    onChange={(e) => setWoodTexRimLightIntensity(Number(e.target.value))}
-                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
-                  />
-                  <span className="tabular-nums text-[var(--color-text)]">{woodTexRimLightIntensity.toFixed(2)}</span>
-                </label>
+              </div>
+              <div className="rounded border border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] px-2 py-1">
+                <button
+                  type="button"
+                  onClick={() => setIsWoodTexDebugExpanded((v) => !v)}
+                  className="flex w-full items-center justify-between text-left"
+                  aria-expanded={isWoodTexDebugExpanded}
+                >
+                  <span className="font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugWoodTexSection")}</span>
+                  <span className="text-[var(--color-muted)]">{isWoodTexDebugExpanded ? "▲" : "▼"}</span>
+                </button>
+                {isWoodTexDebugExpanded && (
+                  <div className="mt-2">
+                    <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexShadowLift")}</span>
+                      <input
+                        type="range"
+                        min={WOOD_TEX_SHADOW_LIFT_MIN}
+                        max={WOOD_TEX_SHADOW_LIFT_MAX}
+                        step={0.02}
+                        value={woodTexShadowLift}
+                        onChange={(e) => setWoodTexShadowLift(Number(e.target.value))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{woodTexShadowLift.toFixed(2)}</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexRoughness")}</span>
+                      <input
+                        type="range"
+                        min={WOOD_TEX_ROUGHNESS_MIN}
+                        max={WOOD_TEX_ROUGHNESS_MAX}
+                        step={0.02}
+                        value={woodTexRoughness}
+                        onChange={(e) => setWoodTexRoughness(Number(e.target.value))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{woodTexRoughness.toFixed(2)}</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexEnvMap")}</span>
+                      <input
+                        type="range"
+                        min={WOOD_TEX_ENVMAP_INTENSITY_MIN}
+                        max={WOOD_TEX_ENVMAP_INTENSITY_MAX}
+                        step={0.05}
+                        value={woodTexEnvMapIntensity}
+                        onChange={(e) => setWoodTexEnvMapIntensity(Number(e.target.value))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{woodTexEnvMapIntensity.toFixed(2)}</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexScale")}</span>
+                      <input
+                        type="range"
+                        min={WOOD_TEX_REPEAT_SCALE_MIN}
+                        max={WOOD_TEX_REPEAT_SCALE_MAX}
+                        step={0.05}
+                        value={woodTexRepeatScale}
+                        onChange={(e) => setWoodTexRepeatScale(Number(e.target.value))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{woodTexRepeatScale.toFixed(2)}</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexFillLight")}</span>
+                      <input
+                        type="range"
+                        min={WOOD_TEX_FILL_LIGHT_MIN}
+                        max={WOOD_TEX_FILL_LIGHT_MAX}
+                        step={0.02}
+                        value={woodTexFillLightIntensity}
+                        onChange={(e) => setWoodTexFillLightIntensity(Number(e.target.value))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{woodTexFillLightIntensity.toFixed(2)}</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexFillLight2")}</span>
+                      <input
+                        type="range"
+                        min={WOOD_TEX_FILL_LIGHT_SECONDARY_MIN}
+                        max={WOOD_TEX_FILL_LIGHT_SECONDARY_MAX}
+                        step={0.02}
+                        value={woodTexFillLightSecondaryIntensity}
+                        onChange={(e) => setWoodTexFillLightSecondaryIntensity(Number(e.target.value))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{woodTexFillLightSecondaryIntensity.toFixed(2)}</span>
+                    </label>
+                    <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexRimLight")}</span>
+                      <input
+                        type="range"
+                        min={WOOD_TEX_RIM_LIGHT_MIN}
+                        max={WOOD_TEX_RIM_LIGHT_MAX}
+                        step={0.02}
+                        value={woodTexRimLightIntensity}
+                        onChange={(e) => setWoodTexRimLightIntensity(Number(e.target.value))}
+                        className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                      />
+                      <span className="tabular-nums text-[var(--color-text)]">{woodTexRimLightIntensity.toFixed(2)}</span>
+                    </label>
+                  </div>
+                )}
               </div>
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugResultMessageTiming")}</div>
@@ -795,6 +917,7 @@ export default function HiddenStackGame() {
                     feedbackKey={feedbackKey}
                     goldLumpParams={goldLumpParams}
                     blockMeshVisualScale={blockMeshVisualScale}
+                    reviewBlockMeshVisualScale={reviewBlockMeshVisualScale}
                     reviewMode={reviewMode}
                     reviewAzimuthHintLimitDeg={TWIST_MAX}
                     onReviewAzimuthHintThresholdExceeded={dismissReviewSwipeHint}
@@ -809,6 +932,7 @@ export default function HiddenStackGame() {
                     woodTexFillLightIntensity={woodTexFillLightIntensity}
                     woodTexFillLightSecondaryIntensity={woodTexFillLightSecondaryIntensity}
                     woodTexRimLightIntensity={woodTexRimLightIntensity}
+                    feedbackSpotlightParams={feedbackSpotlightParams}
                   />
                 </div>
                 {phase === "feedback" && reviewMode && (

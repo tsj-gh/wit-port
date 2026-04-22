@@ -247,6 +247,14 @@ export type GoldLumpParams = {
   texRepeatScale: number;
 };
 
+export type FeedbackSpotlightParams = {
+  overallLightRatio: number;
+  spotIntensity: number;
+  spotAngle: number;
+  angularVelocity: number;
+  movementRangeDeg: number;
+};
+
 /** 崩落ブロックを消すまでの待ち＋フェード（秒） */
 const FEEDBACK_FALL_FADE_START_SEC = 1.0;
 const FEEDBACK_FALL_FADE_DURATION_SEC = 1.0;
@@ -262,6 +270,8 @@ type HiddenStackCanvasProps = {
   goldLumpParams: GoldLumpParams;
   /** メッシュ見た目のみ（既定 1.05）。物理コライダは変更しない */
   blockMeshVisualScale?: number;
+  /** ふりかえり中の見た目メッシュ倍率（ReviewScene のみ） */
+  reviewBlockMeshVisualScale?: number;
   /** ふりかえりモード中は崩落を止めて静止表示＋自由回転 */
   reviewMode?: boolean;
   /** ふりかえり時の回転誘導：この角度（deg）を初期方位から超えたらコールバックを一度だけ呼ぶ */
@@ -289,6 +299,8 @@ type HiddenStackCanvasProps = {
   woodTexFillLightSecondaryIntensity?: number;
   /** WoodTex 専用: リムライト強度 */
   woodTexRimLightIntensity?: number;
+  /** 正誤判定中スポットライト演出パラメータ */
+  feedbackSpotlightParams?: FeedbackSpotlightParams;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -376,7 +388,15 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
   return null;
 }
 
-function GoldLumpMaterial({ params, surfaceKey }: { params: GoldLumpParams; surfaceKey: string }) {
+function GoldLumpMaterial({
+  params,
+  surfaceKey,
+  highlightSpecular = false,
+}: {
+  params: GoldLumpParams;
+  surfaceKey: string;
+  highlightSpecular?: boolean;
+}) {
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
   const { gl } = useThree();
   const goldEnvMap = useContext(GoldEnvMapContext);
@@ -418,7 +438,7 @@ function GoldLumpMaterial({ params, surfaceKey }: { params: GoldLumpParams; surf
       map={map}
       color="#ffffff"
       metalness={params.metalness}
-      roughness={params.roughness}
+      roughness={highlightSpecular ? Math.min(params.roughness, 0.1) : params.roughness}
       envMap={goldEnvMap ?? undefined}
       envMapIntensity={params.envMapIntensity}
     />
@@ -435,8 +455,16 @@ function BlockWoodPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
   return <meshStandardMaterial map={woodMap} color="#ffffff" roughness={0.8} metalness={0} />;
 }
 
-function GoldHiddenPBRMaterial({ surfaceKey, params }: { surfaceKey: string; params: GoldLumpParams }) {
-  return <GoldLumpMaterial params={params} surfaceKey={surfaceKey} />;
+function GoldHiddenPBRMaterial({
+  surfaceKey,
+  params,
+  highlightSpecular = false,
+}: {
+  surfaceKey: string;
+  params: GoldLumpParams;
+  highlightSpecular?: boolean;
+}) {
+  return <GoldLumpMaterial params={params} surfaceKey={surfaceKey} highlightSpecular={highlightSpecular} />;
 }
 
 function BlockMaterial({
@@ -711,6 +739,7 @@ function StaticBlock({
   visualMeshScale,
   useGoldMatcap,
   goldSurfaceKey,
+  highlightGoldSpecular,
   debugNormalMaterial,
 }: {
   position: [number, number, number];
@@ -720,6 +749,7 @@ function StaticBlock({
   useGoldMatcap?: boolean;
   /** useGoldMatcap 時の明度ジッター用キー（セルキー） */
   goldSurfaceKey?: string;
+  highlightGoldSpecular?: boolean;
   debugNormalMaterial?: boolean;
 }) {
   const [ref] = useBox(() => ({
@@ -737,9 +767,13 @@ function StaticBlock({
         {debugNormalMaterial ? (
           <meshNormalMaterial flatShading />
         ) : useGoldMatcap && goldSurfaceKey ? (
-          <GoldHiddenPBRMaterial surfaceKey={goldSurfaceKey} params={goldParams} />
+          <GoldHiddenPBRMaterial surfaceKey={goldSurfaceKey} params={goldParams} highlightSpecular={highlightGoldSpecular} />
         ) : (
-          <GoldLumpMaterial params={goldParams} surfaceKey={goldSurfaceKey ?? `${position.join("|")}|gold`} />
+          <GoldLumpMaterial
+            params={goldParams}
+            surfaceKey={goldSurfaceKey ?? `${position.join("|")}|gold`}
+            highlightSpecular={highlightGoldSpecular}
+          />
         )}
       </mesh>
     </group>
@@ -902,6 +936,7 @@ function FeedbackScene({
   goldLumpParams,
   visualMeshScale,
   feedbackAnswerCorrect,
+  highlightGoldSpecular,
   debugNormalMaterial,
 }: {
   puzzle: HiddenStackPuzzle;
@@ -911,6 +946,7 @@ function FeedbackScene({
   goldLumpParams: GoldLumpParams;
   visualMeshScale: number;
   feedbackAnswerCorrect: boolean | null;
+  highlightGoldSpecular?: boolean;
   debugNormalMaterial?: boolean;
 }) {
   const center = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
@@ -980,6 +1016,7 @@ function FeedbackScene({
             visualMeshScale={visualMeshScale}
             useGoldMatcap={feedbackAnswerCorrect === true}
             goldSurfaceKey={k}
+            highlightGoldSpecular={highlightGoldSpecular}
             debugNormalMaterial={debugNormalMaterial}
           />
         );
@@ -1007,16 +1044,20 @@ function ReviewScene({
   materialVariant,
   goldLumpParams,
   feedbackAnswerCorrect,
+  highlightGoldSpecular,
+  reviewMeshVisualScale = 1,
   debugNormalMaterial,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
   goldLumpParams: GoldLumpParams;
   feedbackAnswerCorrect: boolean | null;
+  highlightGoldSpecular?: boolean;
+  reviewMeshVisualScale?: number;
   debugNormalMaterial?: boolean;
 }) {
-  const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95;
-  const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE;
+  const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95 * reviewMeshVisualScale;
+  const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE * reviewMeshVisualScale;
   const blockShadows = true;
   return (
     <>
@@ -1057,9 +1098,9 @@ function ReviewScene({
               {debugNormalMaterial ? (
                 <meshNormalMaterial flatShading />
               ) : feedbackAnswerCorrect === true ? (
-                <GoldHiddenPBRMaterial surfaceKey={k} params={goldLumpParams} />
+                <GoldHiddenPBRMaterial surfaceKey={k} params={goldLumpParams} highlightSpecular={highlightGoldSpecular} />
               ) : (
-                <GoldLumpMaterial params={goldLumpParams} surfaceKey={k} />
+                <GoldLumpMaterial params={goldLumpParams} surfaceKey={k} highlightSpecular={highlightGoldSpecular} />
               )}
             </mesh>
           </group>
@@ -1192,38 +1233,111 @@ function ReviewOrbitControls({
   );
 }
 
-function Lights({
+function SceneLightingRig({
+  gridSize,
+  targetCenter,
+  phase,
+  reviewMode,
   ambientIntensity = 0.7,
   woodTexFillLightIntensity = 0.8,
   woodTexFillLightSecondaryIntensity = 0.9,
   woodTexRimLightIntensity = 0.5,
   enableWoodTexFill = false,
+  spotlightParams,
 }: {
+  gridSize: number;
+  targetCenter: THREE.Vector3;
+  phase: "intro" | "think" | "feedback";
+  reviewMode: boolean;
   ambientIntensity?: number;
   woodTexFillLightIntensity?: number;
   woodTexFillLightSecondaryIntensity?: number;
   woodTexRimLightIntensity?: number;
   enableWoodTexFill?: boolean;
+  spotlightParams: FeedbackSpotlightParams;
 }) {
+  const ambientRef = useRef<THREE.AmbientLight>(null);
+  const keyDirRef = useRef<THREE.DirectionalLight>(null);
+  const fill1Ref = useRef<THREE.DirectionalLight>(null);
+  const fill2Ref = useRef<THREE.DirectionalLight>(null);
+  const rimRef = useRef<THREE.DirectionalLight>(null);
+  const spotRef = useRef<THREE.SpotLight>(null);
+  const spotTargetRef = useRef<THREE.Object3D>(null);
+  const feedbackStartRef = useRef<number | null>(null);
+
+  const isFeedbackEffect = phase === "feedback" && !reviewMode;
+  useEffect(() => {
+    if (!isFeedbackEffect) feedbackStartRef.current = null;
+  }, [isFeedbackEffect]);
+
+  useEffect(() => {
+    const s = spotRef.current;
+    const t = spotTargetRef.current;
+    if (!s || !t) return;
+    s.target = t;
+  }, []);
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    if (isFeedbackEffect && feedbackStartRef.current == null) feedbackStartRef.current = t;
+    const elapsed = isFeedbackEffect && feedbackStartRef.current != null ? t - feedbackStartRef.current : 0;
+    const fadeU = isFeedbackEffect ? THREE.MathUtils.clamp(elapsed / 0.5, 0, 1) : 0;
+    const lightFactor = THREE.MathUtils.lerp(1, spotlightParams.overallLightRatio, fadeU);
+
+    const apply = (l: { intensity: number } | null, base: number) => {
+      if (!l) return;
+      l.intensity = base * lightFactor;
+    };
+    apply(ambientRef.current, ambientIntensity);
+    apply(keyDirRef.current, 0.8);
+    apply(fill1Ref.current, enableWoodTexFill ? woodTexFillLightIntensity : 0);
+    apply(fill2Ref.current, enableWoodTexFill ? woodTexFillLightSecondaryIntensity : 0);
+    apply(rimRef.current, enableWoodTexFill ? woodTexRimLightIntensity : 0);
+
+    const spot = spotRef.current;
+    const tgt = spotTargetRef.current;
+    if (!spot || !tgt) return;
+    tgt.position.copy(targetCenter);
+    tgt.updateMatrixWorld();
+    if (!isFeedbackEffect || spotlightParams.spotIntensity <= 0) {
+      spot.visible = false;
+      return;
+    }
+    spot.visible = true;
+    const maxRange = Math.max(0, (spotlightParams.movementRangeDeg * Math.PI) / 180);
+    const rawAngle = elapsed * spotlightParams.angularVelocity;
+    const angle = Math.min(rawAngle, maxRange);
+    const radius = gridSize * 2.1;
+    const height = gridSize * 2.2;
+    spot.position.set(targetCenter.x + Math.cos(angle) * radius, targetCenter.y + height, targetCenter.z + Math.sin(angle) * radius);
+    spot.intensity = spotlightParams.spotIntensity;
+    spot.angle = spotlightParams.spotAngle;
+    spot.penumbra = 0.45;
+    spot.decay = 2;
+    spot.distance = gridSize * 8;
+  });
+
   return (
     <>
-      <ambientLight intensity={ambientIntensity} />
+      <ambientLight ref={ambientRef} intensity={ambientIntensity} />
       <directionalLight
+        ref={keyDirRef}
         position={[7, 12, 5]}
         intensity={0.8}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
-      {enableWoodTexFill && woodTexFillLightIntensity > 0 ? (
-        <directionalLight position={[-8, 7, -6]} intensity={woodTexFillLightIntensity} color="#ffe3c5" />
-      ) : null}
-      {enableWoodTexFill && woodTexFillLightSecondaryIntensity > 0 ? (
-        <directionalLight position={[8.5, 5.5, 6.5]} intensity={woodTexFillLightSecondaryIntensity} color="#f9e8d1" />
-      ) : null}
-      {enableWoodTexFill && woodTexRimLightIntensity > 0 ? (
-        <directionalLight position={[0.5, 8.5, -10]} intensity={woodTexRimLightIntensity} color="#fff2dc" />
-      ) : null}
+      <directionalLight ref={fill1Ref} position={[-8, 7, -6]} intensity={enableWoodTexFill ? woodTexFillLightIntensity : 0} color="#ffe3c5" />
+      <directionalLight
+        ref={fill2Ref}
+        position={[8.5, 5.5, 6.5]}
+        intensity={enableWoodTexFill ? woodTexFillLightSecondaryIntensity : 0}
+        color="#f9e8d1"
+      />
+      <directionalLight ref={rimRef} position={[0.5, 8.5, -10]} intensity={enableWoodTexFill ? woodTexRimLightIntensity : 0} color="#fff2dc" />
+      <spotLight ref={spotRef} visible={false} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} color="#fff8de" />
+      <object3D ref={spotTargetRef} position={[targetCenter.x, targetCenter.y, targetCenter.z]} />
     </>
   );
 }
@@ -1238,6 +1352,7 @@ export default function HiddenStackCanvas({
   feedbackKey,
   goldLumpParams,
   blockMeshVisualScale = DEFAULT_BLOCK_MESH_VISUAL_SCALE,
+  reviewBlockMeshVisualScale = 1,
   reviewMode = false,
   reviewAzimuthHintLimitDeg,
   onReviewAzimuthHintThresholdExceeded,
@@ -1252,6 +1367,13 @@ export default function HiddenStackCanvas({
   woodTexFillLightIntensity = 0.8,
   woodTexFillLightSecondaryIntensity = 0.9,
   woodTexRimLightIntensity = 0.5,
+  feedbackSpotlightParams = {
+    overallLightRatio: 0.4,
+    spotIntensity: 4.2,
+    spotAngle: 0.42,
+    angularVelocity: 0.9,
+    movementRangeDeg: 320,
+  },
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
@@ -1259,6 +1381,12 @@ export default function HiddenStackCanvas({
     () => puzzle.cells.map((c) => ({ key: cellKey(c), center: cellCenter(c) })),
     [puzzle.cells]
   );
+  const spotlightTargetCenter = useMemo(() => {
+    if (cells.length === 0) return lookAtForGrid(gridSize);
+    const sum = new THREE.Vector3();
+    for (const c of cells) sum.add(c.center);
+    return sum.multiplyScalar(1 / cells.length);
+  }, [cells, gridSize]);
 
   const onIntroDone = useCallback(() => {
     onIntroComplete();
@@ -1280,12 +1408,17 @@ export default function HiddenStackCanvas({
       camera={{ position: [0, 0, 1], near: 0.1, far: 320, zoom: 1 }}
     >
       <color attach="background" args={["#f1f5f9"]} />
-      <Lights
+      <SceneLightingRig
+        gridSize={gridSize}
+        targetCenter={spotlightTargetCenter}
+        phase={phase}
+        reviewMode={reviewMode}
         ambientIntensity={ambientLightIntensity}
         woodTexFillLightIntensity={effectiveWoodTexFillLight}
         woodTexFillLightSecondaryIntensity={effectiveWoodTexFillLight2}
         woodTexRimLightIntensity={effectiveWoodTexRimLight}
         enableWoodTexFill={materialVariant === "WoodTex"}
+        spotlightParams={feedbackSpotlightParams}
       />
       {reviewMode ? (
         <ReviewOrbitControls
@@ -1335,6 +1468,7 @@ export default function HiddenStackCanvas({
                   goldLumpParams={goldLumpParams}
                   visualMeshScale={visualMeshScale}
                   feedbackAnswerCorrect={feedbackAnswerCorrect}
+                  highlightGoldSpecular
                   debugNormalMaterial={debugNormalMaterial}
                 />
               </Physics>
@@ -1345,6 +1479,7 @@ export default function HiddenStackCanvas({
                 materialVariant={materialVariant}
                 goldLumpParams={goldLumpParams}
                 feedbackAnswerCorrect={feedbackAnswerCorrect}
+                reviewMeshVisualScale={reviewBlockMeshVisualScale}
                 debugNormalMaterial={debugNormalMaterial}
               />
             )}
