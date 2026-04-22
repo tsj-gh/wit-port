@@ -41,6 +41,18 @@ const RESULT_MESSAGE_ORIGIN_Y_MAX = 48;
 const AMBIENT_LIGHT_INTENSITY_MIN = 0;
 const AMBIENT_LIGHT_INTENSITY_MAX = 1.8;
 const DEFAULT_AMBIENT_LIGHT_INTENSITY = 0.6;
+const WOOD_TEX_SHADOW_LIFT_MIN = 0;
+const WOOD_TEX_SHADOW_LIFT_MAX = 1;
+const DEFAULT_WOOD_TEX_SHADOW_LIFT = 0.42;
+const WOOD_TEX_ROUGHNESS_MIN = 0.2;
+const WOOD_TEX_ROUGHNESS_MAX = 1;
+const DEFAULT_WOOD_TEX_ROUGHNESS = 0.58;
+const WOOD_TEX_ENVMAP_INTENSITY_MIN = 0;
+const WOOD_TEX_ENVMAP_INTENSITY_MAX = 3;
+const DEFAULT_WOOD_TEX_ENVMAP_INTENSITY = 1.7;
+const WOOD_TEX_FILL_LIGHT_MIN = 0;
+const WOOD_TEX_FILL_LIGHT_MAX = 1.2;
+const DEFAULT_WOOD_TEX_FILL_LIGHT = 0.4;
 
 type Phase = "intro" | "think" | "feedback";
 type StatusOverlayPhase = "hidden" | "pending" | "animating" | "docked";
@@ -78,6 +90,10 @@ export default function HiddenStackGame() {
   const [statusMessageStyle, setStatusMessageStyle] = useState<"card" | "plain">("card");
   const [debugNormalMaterial, setDebugNormalMaterial] = useState(false);
   const [ambientLightIntensity, setAmbientLightIntensity] = useState(DEFAULT_AMBIENT_LIGHT_INTENSITY);
+  const [woodTexShadowLift, setWoodTexShadowLift] = useState(DEFAULT_WOOD_TEX_SHADOW_LIFT);
+  const [woodTexRoughness, setWoodTexRoughness] = useState(DEFAULT_WOOD_TEX_ROUGHNESS);
+  const [woodTexEnvMapIntensity, setWoodTexEnvMapIntensity] = useState(DEFAULT_WOOD_TEX_ENVMAP_INTENSITY);
+  const [woodTexFillLightIntensity, setWoodTexFillLightIntensity] = useState(DEFAULT_WOOD_TEX_FILL_LIGHT);
   const [statusOverlayPhase, setStatusOverlayPhase] = useState<StatusOverlayPhase>("hidden");
   const [resultMessageDelayMs, setResultMessageDelayMs] = useState(DEFAULT_RESULT_MESSAGE_DELAY_MS);
   const [resultMessageOriginYPercent, setResultMessageOriginYPercent] = useState(DEFAULT_RESULT_MESSAGE_ORIGIN_Y_PCT);
@@ -438,6 +454,60 @@ export default function HiddenStackGame() {
                 </label>
               </div>
               <div>
+                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugWoodTexShadowLift")}</div>
+                <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <input
+                    type="range"
+                    min={WOOD_TEX_SHADOW_LIFT_MIN}
+                    max={WOOD_TEX_SHADOW_LIFT_MAX}
+                    step={0.02}
+                    value={woodTexShadowLift}
+                    onChange={(e) => setWoodTexShadowLift(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{woodTexShadowLift.toFixed(2)}</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexRoughness")}</span>
+                  <input
+                    type="range"
+                    min={WOOD_TEX_ROUGHNESS_MIN}
+                    max={WOOD_TEX_ROUGHNESS_MAX}
+                    step={0.02}
+                    value={woodTexRoughness}
+                    onChange={(e) => setWoodTexRoughness(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{woodTexRoughness.toFixed(2)}</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexEnvMap")}</span>
+                  <input
+                    type="range"
+                    min={WOOD_TEX_ENVMAP_INTENSITY_MIN}
+                    max={WOOD_TEX_ENVMAP_INTENSITY_MAX}
+                    step={0.05}
+                    value={woodTexEnvMapIntensity}
+                    onChange={(e) => setWoodTexEnvMapIntensity(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{woodTexEnvMapIntensity.toFixed(2)}</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexFillLight")}</span>
+                  <input
+                    type="range"
+                    min={WOOD_TEX_FILL_LIGHT_MIN}
+                    max={WOOD_TEX_FILL_LIGHT_MAX}
+                    step={0.02}
+                    value={woodTexFillLightIntensity}
+                    onChange={(e) => setWoodTexFillLightIntensity(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{woodTexFillLightIntensity.toFixed(2)}</span>
+                </label>
+              </div>
+              <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugResultMessageTiming")}</div>
                 <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugResultMessageDelay")}</span>
@@ -658,6 +728,10 @@ export default function HiddenStackGame() {
                     debugNormalMaterial={debugNormalMaterial}
                     externalWoodTextureIndex={externalWoodTextureIndex}
                     ambientLightIntensity={ambientLightIntensity}
+                    woodTexShadowLift={woodTexShadowLift}
+                    woodTexRoughness={woodTexRoughness}
+                    woodTexEnvMapIntensity={woodTexEnvMapIntensity}
+                    woodTexFillLightIntensity={woodTexFillLightIntensity}
                   />
                 </div>
                 {phase === "feedback" && reviewMode && (

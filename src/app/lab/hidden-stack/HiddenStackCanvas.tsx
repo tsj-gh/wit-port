@@ -48,11 +48,26 @@ function isWoodLikeMaterial(v: BlockMaterialVariant): boolean {
 type ExternalWoodTexturesContextValue = {
   bases: THREE.Texture[];
   activeIndex: number;
+  shadowLift: number;
+  roughness: number;
+  envMapIntensity: number;
 };
 
 const ExternalWoodTexturesContext = createContext<ExternalWoodTexturesContextValue | null>(null);
 
-function ExternalWoodTexturesBridge({ activeIndex, children }: { activeIndex: number; children: ReactNode }) {
+function ExternalWoodTexturesBridge({
+  activeIndex,
+  shadowLift,
+  roughness,
+  envMapIntensity,
+  children,
+}: {
+  activeIndex: number;
+  shadowLift: number;
+  roughness: number;
+  envMapIntensity: number;
+  children: ReactNode;
+}) {
   const bases = useLoader(THREE.TextureLoader, [...EXTERNAL_WOOD_TEXTURE_PATHS]);
   const { gl } = useThree();
   useLayoutEffect(() => {
@@ -63,13 +78,21 @@ function ExternalWoodTexturesBridge({ activeIndex, children }: { activeIndex: nu
       t.needsUpdate = true;
     });
   }, [bases, gl]);
-  const value = useMemo(() => ({ bases, activeIndex }), [bases, activeIndex]);
+  const value = useMemo(
+    () => ({ bases, activeIndex, shadowLift, roughness, envMapIntensity }),
+    [bases, activeIndex, shadowLift, roughness, envMapIntensity]
+  );
   return <ExternalWoodTexturesContext.Provider value={value}>{children}</ExternalWoodTexturesContext.Provider>;
 }
 
 function BlockExternalWoodPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
   const ctx = useContext(ExternalWoodTexturesContext);
   const { gl } = useThree();
+  const shadowLift = ctx?.shadowLift ?? 0.42;
+  const roughness = ctx?.roughness ?? 0.58;
+  const envMapIntensity = ctx?.envMapIntensity ?? 1.7;
+  const baseGainColor = useMemo(() => new THREE.Color().setScalar(1 + shadowLift * 0.22), [shadowLift]);
+  const emissiveIntensity = useMemo(() => shadowLift * 0.24, [shadowLift]);
   const uvJitter = useMemo(
     () => ({
       offsetU: Math.random(),
@@ -86,10 +109,19 @@ function BlockExternalWoodPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
   }, [ctx, gl, uvJitter]);
   useEffect(() => () => map?.dispose(), [map]);
   if (!map) {
-    return <meshStandardMaterial color="#c9a06c" roughness={0.7} metalness={0} envMapIntensity={1} />;
+    return <meshStandardMaterial color="#c9a06c" roughness={roughness} metalness={0} envMapIntensity={envMapIntensity} />;
   }
   return (
-    <meshStandardMaterial map={map} color="#ffffff" roughness={0.7} metalness={0} envMapIntensity={1} />
+    <meshStandardMaterial
+      map={map}
+      color={baseGainColor}
+      roughness={roughness}
+      metalness={0}
+      envMapIntensity={envMapIntensity}
+      emissive="#ffffff"
+      emissiveMap={map}
+      emissiveIntensity={emissiveIntensity}
+    />
   );
 }
 
@@ -104,6 +136,11 @@ function DynamicExternalWoodMaterial({
 }) {
   const ctx = useContext(ExternalWoodTexturesContext);
   const { gl } = useThree();
+  const shadowLift = ctx?.shadowLift ?? 0.42;
+  const roughness = ctx?.roughness ?? 0.58;
+  const envMapIntensity = ctx?.envMapIntensity ?? 1.7;
+  const baseGainColor = useMemo(() => new THREE.Color().setScalar(1 + shadowLift * 0.22), [shadowLift]);
+  const emissiveIntensity = useMemo(() => shadowLift * 0.24, [shadowLift]);
   const uvJitter = useMemo(
     () => ({
       offsetU: Math.random(),
@@ -123,9 +160,9 @@ function DynamicExternalWoodMaterial({
       <meshStandardMaterial
         ref={matRef as never}
         color="#c9a06c"
-        roughness={0.7}
+        roughness={roughness}
         metalness={0}
-        envMapIntensity={1}
+        envMapIntensity={envMapIntensity}
         transparent={pattern === 3}
         opacity={pattern === 3 ? 0.95 : 1}
       />
@@ -135,10 +172,13 @@ function DynamicExternalWoodMaterial({
     <meshStandardMaterial
       ref={matRef as never}
       map={map}
-      color="#ffffff"
-      roughness={0.7}
+      color={baseGainColor}
+      roughness={roughness}
       metalness={0}
-      envMapIntensity={1}
+      envMapIntensity={envMapIntensity}
+      emissive="#ffffff"
+      emissiveMap={map}
+      emissiveIntensity={emissiveIntensity}
       transparent={pattern === 3}
       opacity={pattern === 3 ? 0.95 : 1}
     />
@@ -206,6 +246,14 @@ type HiddenStackCanvasProps = {
   externalWoodTextureIndex?: number;
   /** デバッグ用の全体アンビエントライト強度 */
   ambientLightIntensity?: number;
+  /** WoodTex 専用: 影持ち上げ強度（暗部視認性） */
+  woodTexShadowLift?: number;
+  /** WoodTex 専用: 粗さ */
+  woodTexRoughness?: number;
+  /** WoodTex 専用: 環境反射強度 */
+  woodTexEnvMapIntensity?: number;
+  /** WoodTex 専用: 補助フィルライト強度 */
+  woodTexFillLightIntensity?: number;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -1095,7 +1143,15 @@ function ReviewOrbitControls({
   );
 }
 
-function Lights({ ambientIntensity = 0.6 }: { ambientIntensity?: number }) {
+function Lights({
+  ambientIntensity = 0.6,
+  woodTexFillLightIntensity = 0.4,
+  enableWoodTexFill = false,
+}: {
+  ambientIntensity?: number;
+  woodTexFillLightIntensity?: number;
+  enableWoodTexFill?: boolean;
+}) {
   return (
     <>
       <ambientLight intensity={ambientIntensity} />
@@ -1106,6 +1162,9 @@ function Lights({ ambientIntensity = 0.6 }: { ambientIntensity?: number }) {
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
+      {enableWoodTexFill && woodTexFillLightIntensity > 0 ? (
+        <directionalLight position={[-8, 7, -6]} intensity={woodTexFillLightIntensity} color="#ffe3c5" />
+      ) : null}
     </>
   );
 }
@@ -1127,6 +1186,10 @@ export default function HiddenStackCanvas({
   debugNormalMaterial = false,
   externalWoodTextureIndex = 0,
   ambientLightIntensity = 0.6,
+  woodTexShadowLift = 0.42,
+  woodTexRoughness = 0.58,
+  woodTexEnvMapIntensity = 1.7,
+  woodTexFillLightIntensity = 0.4,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
@@ -1149,7 +1212,11 @@ export default function HiddenStackCanvas({
       camera={{ position: [0, 0, 1], near: 0.1, far: 320, zoom: 1 }}
     >
       <color attach="background" args={["#f1f5f9"]} />
-      <Lights ambientIntensity={ambientLightIntensity} />
+      <Lights
+        ambientIntensity={ambientLightIntensity}
+        woodTexFillLightIntensity={woodTexFillLightIntensity}
+        enableWoodTexFill={materialVariant === "WoodTex"}
+      />
       {reviewMode ? (
         <ReviewOrbitControls
           gridSize={gridSize}
@@ -1161,7 +1228,12 @@ export default function HiddenStackCanvas({
         <RigCamera twistDeg={twistDeg} gridSize={gridSize} />
       )}
       <Suspense fallback={null}>
-        <ExternalWoodTexturesBridge activeIndex={THREE.MathUtils.clamp(externalWoodTextureIndex, 0, EXTERNAL_WOOD_TEXTURE_PATHS.length - 1)}>
+        <ExternalWoodTexturesBridge
+          activeIndex={THREE.MathUtils.clamp(externalWoodTextureIndex, 0, EXTERNAL_WOOD_TEXTURE_PATHS.length - 1)}
+          shadowLift={woodTexShadowLift}
+          roughness={woodTexRoughness}
+          envMapIntensity={woodTexEnvMapIntensity}
+        >
           <FloorGrid gridSize={gridSize} />
           {phase === "intro" && (
             <IntroBlocks
