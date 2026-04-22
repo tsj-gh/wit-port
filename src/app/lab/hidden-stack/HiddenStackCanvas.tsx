@@ -1148,10 +1148,10 @@ function ReviewOrbitControls({
 }
 
 function Lights({
-  ambientIntensity = 0.6,
-  woodTexFillLightIntensity = 1.2,
-  woodTexFillLightSecondaryIntensity = 0.38,
-  woodTexRimLightIntensity = 0.26,
+  ambientIntensity = 0.7,
+  woodTexFillLightIntensity = 0.8,
+  woodTexFillLightSecondaryIntensity = 0.9,
+  woodTexRimLightIntensity = 0.5,
   enableWoodTexFill = false,
 }: {
   ambientIntensity?: number;
@@ -1199,13 +1199,13 @@ export default function HiddenStackCanvas({
   feedbackAnswerCorrect = null,
   debugNormalMaterial = false,
   externalWoodTextureIndex = 0,
-  ambientLightIntensity = 0.6,
-  woodTexShadowLift = 0.42,
-  woodTexRoughness = 0.58,
+  ambientLightIntensity = 0.7,
+  woodTexShadowLift = 0.7,
+  woodTexRoughness = 0.9,
   woodTexEnvMapIntensity = 1.7,
-  woodTexFillLightIntensity = 1.2,
-  woodTexFillLightSecondaryIntensity = 0.38,
-  woodTexRimLightIntensity = 0.26,
+  woodTexFillLightIntensity = 0.8,
+  woodTexFillLightSecondaryIntensity = 0.9,
+  woodTexRimLightIntensity = 0.5,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
@@ -1217,6 +1217,12 @@ export default function HiddenStackCanvas({
   const onIntroDone = useCallback(() => {
     onIntroComplete();
   }, [onIntroComplete]);
+  const isWalnutTexture = externalWoodTextureIndex <= 2;
+  const effectiveWoodTexShadowLift = isWalnutTexture ? woodTexShadowLift : 0.42;
+  const effectiveWoodTexRoughness = isWalnutTexture ? woodTexRoughness : 0.58;
+  const effectiveWoodTexFillLight = isWalnutTexture ? woodTexFillLightIntensity : 1.2;
+  const effectiveWoodTexFillLight2 = isWalnutTexture ? woodTexFillLightSecondaryIntensity : 0.38;
+  const effectiveWoodTexRimLight = isWalnutTexture ? woodTexRimLightIntensity : 0.26;
 
   return (
     <Canvas
@@ -1230,9 +1236,9 @@ export default function HiddenStackCanvas({
       <color attach="background" args={["#f1f5f9"]} />
       <Lights
         ambientIntensity={ambientLightIntensity}
-        woodTexFillLightIntensity={woodTexFillLightIntensity}
-        woodTexFillLightSecondaryIntensity={woodTexFillLightSecondaryIntensity}
-        woodTexRimLightIntensity={woodTexRimLightIntensity}
+        woodTexFillLightIntensity={effectiveWoodTexFillLight}
+        woodTexFillLightSecondaryIntensity={effectiveWoodTexFillLight2}
+        woodTexRimLightIntensity={effectiveWoodTexRimLight}
         enableWoodTexFill={materialVariant === "WoodTex"}
       />
       {reviewMode ? (
@@ -1248,8 +1254,8 @@ export default function HiddenStackCanvas({
       <Suspense fallback={null}>
         <ExternalWoodTexturesBridge
           activeIndex={THREE.MathUtils.clamp(externalWoodTextureIndex, 0, EXTERNAL_WOOD_TEXTURE_PATHS.length - 1)}
-          shadowLift={woodTexShadowLift}
-          roughness={woodTexRoughness}
+          shadowLift={effectiveWoodTexShadowLift}
+          roughness={effectiveWoodTexRoughness}
           envMapIntensity={woodTexEnvMapIntensity}
         >
           <FloorGrid gridSize={gridSize} />
