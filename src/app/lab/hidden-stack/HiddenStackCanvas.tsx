@@ -6,7 +6,7 @@ import { Physics, useBox, usePlane } from "@react-three/cannon";
 import * as THREE from "three";
 import { Line, OrbitControls, RoundedBox } from "@react-three/drei";
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
-import { createWoodTexture } from "@/lib/hidden-stack/createWoodTexture";
+import { createWoodTexture, setWoodTextureMaxAnisotropy } from "@/lib/hidden-stack/createWoodTexture";
 import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
 
 /** 物理ボディ（半辺 0.48）はそのまま。レンダリング丸め用の最小オーバーラップ（メッシュのみ） */
@@ -201,6 +201,10 @@ function GoldLumpMaterial({ params, envMapIntensity = 1.35 }: { params: GoldLump
 
 function BlockWoodPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
   const woodMap = useMemo(() => createWoodTexture(256), [surfaceKey]);
+  const { gl } = useThree();
+  useLayoutEffect(() => {
+    setWoodTextureMaxAnisotropy(woodMap, gl);
+  }, [woodMap, gl]);
   useEffect(() => () => woodMap.dispose(), [woodMap]);
   return <meshStandardMaterial map={woodMap} color="#ffffff" roughness={0.8} metalness={0} />;
 }
@@ -560,6 +564,10 @@ function DynamicFallBlock({
   }, [api, impulse, torque]);
 
   const woodMap = useMemo(() => (materialVariant === "Wood01" ? createWoodTexture(256) : null), [materialVariant, surfaceKey]);
+  const { gl } = useThree();
+  useLayoutEffect(() => {
+    if (woodMap) setWoodTextureMaxAnisotropy(woodMap, gl);
+  }, [woodMap, gl]);
   useEffect(() => () => woodMap?.dispose(), [woodMap]);
   const matRef = useRef<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial>(null);
   const t0Ref = useRef<number | null>(null);
