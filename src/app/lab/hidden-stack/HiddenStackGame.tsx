@@ -50,6 +50,9 @@ const DEFAULT_WOOD_TEX_ROUGHNESS = 0.9;
 const WOOD_TEX_ENVMAP_INTENSITY_MIN = 0;
 const WOOD_TEX_ENVMAP_INTENSITY_MAX = 3;
 const DEFAULT_WOOD_TEX_ENVMAP_INTENSITY = 1.7;
+const WOOD_TEX_REPEAT_SCALE_MIN = 0.2;
+const WOOD_TEX_REPEAT_SCALE_MAX = 1.0;
+const DEFAULT_WOOD_TEX_REPEAT_SCALE = 0.5;
 const WOOD_TEX_FILL_LIGHT_MIN = 0;
 const WOOD_TEX_FILL_LIGHT_MAX = 1.2;
 const DEFAULT_WOOD_TEX_FILL_LIGHT = 0.8;
@@ -99,6 +102,7 @@ export default function HiddenStackGame() {
   const [woodTexShadowLift, setWoodTexShadowLift] = useState(DEFAULT_WOOD_TEX_SHADOW_LIFT);
   const [woodTexRoughness, setWoodTexRoughness] = useState(DEFAULT_WOOD_TEX_ROUGHNESS);
   const [woodTexEnvMapIntensity, setWoodTexEnvMapIntensity] = useState(DEFAULT_WOOD_TEX_ENVMAP_INTENSITY);
+  const [woodTexRepeatScale, setWoodTexRepeatScale] = useState(DEFAULT_WOOD_TEX_REPEAT_SCALE);
   const [woodTexFillLightIntensity, setWoodTexFillLightIntensity] = useState(DEFAULT_WOOD_TEX_FILL_LIGHT);
   const [woodTexFillLightSecondaryIntensity, setWoodTexFillLightSecondaryIntensity] = useState(
     DEFAULT_WOOD_TEX_FILL_LIGHT_SECONDARY
@@ -504,6 +508,19 @@ export default function HiddenStackGame() {
                   <span className="tabular-nums text-[var(--color-text)]">{woodTexEnvMapIntensity.toFixed(2)}</span>
                 </label>
                 <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexScale")}</span>
+                  <input
+                    type="range"
+                    min={WOOD_TEX_REPEAT_SCALE_MIN}
+                    max={WOOD_TEX_REPEAT_SCALE_MAX}
+                    step={0.05}
+                    value={woodTexRepeatScale}
+                    onChange={(e) => setWoodTexRepeatScale(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{woodTexRepeatScale.toFixed(2)}</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugWoodTexFillLight")}</span>
                   <input
                     type="range"
@@ -767,6 +784,7 @@ export default function HiddenStackGame() {
                     woodTexShadowLift={woodTexShadowLift}
                     woodTexRoughness={woodTexRoughness}
                     woodTexEnvMapIntensity={woodTexEnvMapIntensity}
+                    woodTexRepeatScale={woodTexRepeatScale}
                     woodTexFillLightIntensity={woodTexFillLightIntensity}
                     woodTexFillLightSecondaryIntensity={woodTexFillLightSecondaryIntensity}
                     woodTexRimLightIntensity={woodTexRimLightIntensity}

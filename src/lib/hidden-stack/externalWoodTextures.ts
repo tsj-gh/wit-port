@@ -24,11 +24,13 @@ export function cloneExternalWoodTextureForMesh(
   offsetU: number,
   offsetV: number,
   rotationQuarters: number,
+  repeatScale: number,
   gl: THREE.WebGLRenderer
 ): THREE.Texture {
   const tex = base.clone();
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeatScale, repeatScale);
   tex.center.set(0.5, 0.5);
   tex.rotation = (Math.PI / 2) * Math.floor(rotationQuarters % 4);
   tex.offset.set(offsetU, offsetV);

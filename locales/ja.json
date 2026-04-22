@@ -279,6 +279,7 @@
       "debugWoodTexShadowLift": "WoodTex 影持ち上げ",
       "debugWoodTexRoughness": "WoodTex roughness",
       "debugWoodTexEnvMap": "WoodTex envMapIntensity",
+      "debugWoodTexScale": "WoodTex スケール（0.3/0.5/0.7推奨）",
       "debugWoodTexFillLight": "WoodTex 補助ライト",
       "debugWoodTexFillLight2": "WoodTex 補助ライト2",
       "debugWoodTexRimLight": "WoodTex リムライト",

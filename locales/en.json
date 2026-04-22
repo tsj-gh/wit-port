@@ -279,6 +279,7 @@
       "debugWoodTexShadowLift": "WoodTex shadow lift",
       "debugWoodTexRoughness": "WoodTex roughness",
       "debugWoodTexEnvMap": "WoodTex envMapIntensity",
+      "debugWoodTexScale": "WoodTex scale (0.3/0.5/0.7)",
       "debugWoodTexFillLight": "WoodTex fill light",
       "debugWoodTexFillLight2": "WoodTex fill light 2",
       "debugWoodTexRimLight": "WoodTex rim light",

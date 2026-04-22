@@ -51,6 +51,7 @@ type ExternalWoodTexturesContextValue = {
   shadowLift: number;
   roughness: number;
   envMapIntensity: number;
+  repeatScale: number;
 };
 
 const ExternalWoodTexturesContext = createContext<ExternalWoodTexturesContextValue | null>(null);
@@ -60,12 +61,14 @@ function ExternalWoodTexturesBridge({
   shadowLift,
   roughness,
   envMapIntensity,
+  repeatScale,
   children,
 }: {
   activeIndex: number;
   shadowLift: number;
   roughness: number;
   envMapIntensity: number;
+  repeatScale: number;
   children: ReactNode;
 }) {
   const bases = useLoader(THREE.TextureLoader, [...EXTERNAL_WOOD_TEXTURE_PATHS]);
@@ -79,8 +82,8 @@ function ExternalWoodTexturesBridge({
     });
   }, [bases, gl]);
   const value = useMemo(
-    () => ({ bases, activeIndex, shadowLift, roughness, envMapIntensity }),
-    [bases, activeIndex, shadowLift, roughness, envMapIntensity]
+    () => ({ bases, activeIndex, shadowLift, roughness, envMapIntensity, repeatScale }),
+    [bases, activeIndex, shadowLift, roughness, envMapIntensity, repeatScale]
   );
   return <ExternalWoodTexturesContext.Provider value={value}>{children}</ExternalWoodTexturesContext.Provider>;
 }
@@ -105,7 +108,7 @@ function BlockExternalWoodPBRMaterial({ surfaceKey }: { surfaceKey: string }) {
     if (!ctx?.bases.length) return null;
     const idx = THREE.MathUtils.clamp(ctx.activeIndex, 0, ctx.bases.length - 1);
     const base = ctx.bases[idx];
-    return cloneExternalWoodTextureForMesh(base, uvJitter.offsetU, uvJitter.offsetV, uvJitter.rotationQuarters, gl);
+    return cloneExternalWoodTextureForMesh(base, uvJitter.offsetU, uvJitter.offsetV, uvJitter.rotationQuarters, ctx.repeatScale, gl);
   }, [ctx, gl, uvJitter]);
   useEffect(() => () => map?.dispose(), [map]);
   if (!map) {
@@ -152,7 +155,14 @@ function DynamicExternalWoodMaterial({
   const map = useMemo(() => {
     if (!ctx?.bases.length) return null;
     const idx = THREE.MathUtils.clamp(ctx.activeIndex, 0, ctx.bases.length - 1);
-    return cloneExternalWoodTextureForMesh(ctx.bases[idx], uvJitter.offsetU, uvJitter.offsetV, uvJitter.rotationQuarters, gl);
+    return cloneExternalWoodTextureForMesh(
+      ctx.bases[idx],
+      uvJitter.offsetU,
+      uvJitter.offsetV,
+      uvJitter.rotationQuarters,
+      ctx.repeatScale,
+      gl
+    );
   }, [ctx, gl, uvJitter]);
   useEffect(() => () => map?.dispose(), [map]);
   if (!map) {
@@ -252,6 +262,8 @@ type HiddenStackCanvasProps = {
   woodTexRoughness?: number;
   /** WoodTex 専用: 環境反射強度 */
   woodTexEnvMapIntensity?: number;
+  /** WoodTex 専用: UV スケール（小さいほど木目が大きく見える） */
+  woodTexRepeatScale?: number;
   /** WoodTex 専用: 補助フィルライト強度 */
   woodTexFillLightIntensity?: number;
   /** WoodTex 専用: 2灯目フィルライト強度 */
@@ -1203,6 +1215,7 @@ export default function HiddenStackCanvas({
   woodTexShadowLift = 0.7,
   woodTexRoughness = 0.9,
   woodTexEnvMapIntensity = 1.7,
+  woodTexRepeatScale = 0.5,
   woodTexFillLightIntensity = 0.8,
   woodTexFillLightSecondaryIntensity = 0.9,
   woodTexRimLightIntensity = 0.5,
@@ -1257,6 +1270,7 @@ export default function HiddenStackCanvas({
           shadowLift={effectiveWoodTexShadowLift}
           roughness={effectiveWoodTexRoughness}
           envMapIntensity={woodTexEnvMapIntensity}
+          repeatScale={woodTexRepeatScale}
         >
           <FloorGrid gridSize={gridSize} />
           {phase === "intro" && (
