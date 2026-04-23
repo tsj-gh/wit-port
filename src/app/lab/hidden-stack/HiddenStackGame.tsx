@@ -72,11 +72,11 @@ const WOOD_TEX_RIM_LIGHT_MAX = 1.2;
 const DEFAULT_WOOD_TEX_RIM_LIGHT = 0.5;
 const REVIEW_MESH_VISUAL_SCALE_MIN = 0.8;
 const REVIEW_MESH_VISUAL_SCALE_MAX = 1.2;
-const DEFAULT_REVIEW_MESH_VISUAL_SCALE = 1.06;
+const DEFAULT_REVIEW_MESH_VISUAL_SCALE = 1.05;
 /** 正誤判定中の可視セル枠線（GhostBox）のみ。床格子は変更しない */
 const FEEDBACK_VISIBLE_CELL_OUTLINE_OPACITY_MIN = 0.06;
 const FEEDBACK_VISIBLE_CELL_OUTLINE_OPACITY_MAX = 0.72;
-const DEFAULT_FEEDBACK_VISIBLE_CELL_OUTLINE_OPACITY = 0.38;
+const DEFAULT_FEEDBACK_VISIBLE_CELL_OUTLINE_OPACITY = 0.1;
 const GOLD_ENV_INTENSITY_MIN = 0;
 const GOLD_ENV_INTENSITY_MAX = 4;
 const GOLD_TEX_REPEAT_MIN = 0.1;
@@ -98,8 +98,8 @@ const SPOT_FOLLOW_POINT_MIN = 0;
 const SPOT_FOLLOW_POINT_MAX = 50;
 
 const INTRO_FALL_TIME_SCALE_MIN = 0.35;
-const INTRO_FALL_TIME_SCALE_MAX = 2.5;
-const DEFAULT_INTRO_FALL_TIME_SCALE = 1;
+const INTRO_FALL_TIME_SCALE_MAX = 3.5;
+const DEFAULT_INTRO_FALL_TIME_SCALE = 2.5;
 const INTRO_DROP_HEIGHT_SCALE_MIN = 0.35;
 const INTRO_DROP_HEIGHT_SCALE_MAX = 2.2;
 const DEFAULT_INTRO_DROP_HEIGHT_SCALE = 1;
@@ -109,6 +109,9 @@ const DEFAULT_FEEDBACK_GRAVITY_Y = 16;
 const FEEDBACK_IMPULSE_SCALE_MIN = 0.35;
 const FEEDBACK_IMPULSE_SCALE_MAX = 1.8;
 const DEFAULT_FEEDBACK_IMPULSE_SCALE = 1;
+
+/** メッシュ見た目のみ（隙間対策）。HiddenStackCanvas の DEFAULT_BLOCK_MESH_VISUAL_SCALE と揃える */
+const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.03;
 
 type Phase = "intro" | "think" | "feedback";
 type StatusOverlayPhase = "hidden" | "pending" | "animating" | "docked";
@@ -133,7 +136,7 @@ export default function HiddenStackGame() {
     texRepeatScale: 0.25,
   });
   /** メッシュ見た目のみ（隙間対策）。物理コライダは HiddenStackCanvas 側で変更しない */
-  const [blockMeshVisualScale, setBlockMeshVisualScale] = useState(1.05);
+  const [blockMeshVisualScale, setBlockMeshVisualScale] = useState(DEFAULT_BLOCK_MESH_VISUAL_SCALE);
   const [reviewBlockMeshVisualScale, setReviewBlockMeshVisualScale] = useState(DEFAULT_REVIEW_MESH_VISUAL_SCALE);
   const [isWoodTexDebugExpanded, setIsWoodTexDebugExpanded] = useState(false);
   const [isSpotlightDebugExpanded, setIsSpotlightDebugExpanded] = useState(false);

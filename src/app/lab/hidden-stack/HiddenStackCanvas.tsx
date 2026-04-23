@@ -36,7 +36,12 @@ const ORTHO_BBOX_MARGIN = 1.06;
 const BLOCK_B_BEVEL_RADIUS = 0.012;
 const BLOCK_B_BEVEL_SMOOTHNESS = 2;
 
-const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.05;
+const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.03;
+
+/** Cannon 衝突グループ：正誤判定で可視ダイナミックは床と衝突しない（金塊・可視同士は従来どおり） */
+const PHYS_LAYER_FLOOR = 1;
+const PHYS_LAYER_STATIC_GOLD = 2;
+const PHYS_LAYER_DYNAMIC_VISIBLE = 4;
 const BASE_ELEVATION_DEG = 31;
 const BASE_AZIMUTH_DEG = 44;
 
@@ -584,6 +589,11 @@ function hash01(k: string): number {
   return (h >>> 0) / 4294967296;
 }
 
+const INTRO_FALL_DUR_SEC = 1.45;
+const INTRO_FALL_PORTION = 0.9;
+/** 着地のわずかな跳ね：イントロ速さ（時間倍率）と独立した秒数 */
+const INTRO_LAND_BOUNCE_REAL_SEC = 0.22;
+
 function IntroBlocks({
   cells,
   materialVariant,
@@ -629,6 +639,17 @@ function IntroBlocks({
     [cells, gridSize, introDropHeightScale]
   );
 
+  const introFinishTime = useMemo(() => {
+    const scale = Math.max(introFallTimeScale, 0.001);
+    let maxT = 0;
+    for (const m of meta) {
+      const fallEndRel = (INTRO_FALL_PORTION * INTRO_FALL_DUR_SEC) / scale;
+      const end = m.stagger + fallEndRel + INTRO_LAND_BOUNCE_REAL_SEC;
+      if (end > maxT) maxT = end;
+    }
+    return maxT + 0.12;
+  }, [meta, introFallTimeScale]);
+
   const groupRefs = useRef<Map<string, THREE.Group>>(new Map());
 
   useFrame((state) => {
@@ -636,30 +657,40 @@ function IntroBlocks({
     if (startRef.current === null) startRef.current = state.clock.elapsedTime;
     const t0 = startRef.current;
     const t = state.clock.elapsedTime - t0;
-    const dur = 1.45;
-    /** 等加速度に近い ease-in（従来の ease-out は着地手前で不自然に減速する） */
-    const fallPortion = 0.9;
+    const scale = introFallTimeScale;
+    const dur = INTRO_FALL_DUR_SEC;
+    const fallPortion = INTRO_FALL_PORTION;
+    const fallEndRel = (fallPortion * dur) / Math.max(scale, 0.001);
     let all = true;
     for (const m of meta) {
-      const u = THREE.MathUtils.clamp(((t - m.stagger) * introFallTimeScale) / dur, 0, 1);
+      const tRel = t - m.stagger;
       const g = groupRefs.current.get(m.key);
       if (!g) continue;
+      if (tRel < 0) {
+        g.position.copy(m.start);
+        all = false;
+        continue;
+      }
       const pos = m.start.clone();
-      if (u < fallPortion) {
+      if (tRel < fallEndRel) {
+        const u = THREE.MathUtils.clamp((tRel * scale) / dur, 0, fallPortion);
         const w = u / fallPortion;
         const e = w * w;
         pos.lerpVectors(m.start, m.center, e);
-      } else {
+        all = false;
+      } else if (tRel < fallEndRel + INTRO_LAND_BOUNCE_REAL_SEC) {
         pos.copy(m.center);
-        const v = (u - fallPortion) / (1 - fallPortion);
+        const bounceT = tRel - fallEndRel;
+        const v = Math.min(1, bounceT / INTRO_LAND_BOUNCE_REAL_SEC);
         const amp = 0.065 * (1 - v);
         pos.y += Math.sin(v * Math.PI) * amp;
+        if (bounceT < INTRO_LAND_BOUNCE_REAL_SEC - 1e-5) all = false;
+      } else {
+        pos.copy(m.center);
       }
-      if (u >= 1) pos.copy(m.center);
       g.position.copy(pos);
-      if (u < 1) all = false;
     }
-    if (all && t > dur + 0.2) {
+    if (all && t >= introFinishTime) {
       doneRef.current = true;
       onDone();
     }
@@ -791,6 +822,8 @@ function PhysFloor() {
     material: "ground",
     friction: 0.9,
     restitution: 0.05,
+    collisionFilterGroup: PHYS_LAYER_FLOOR,
+    collisionFilterMask: PHYS_LAYER_STATIC_GOLD,
   }));
   return (
     <mesh ref={ref as unknown as RefObject<THREE.Mesh>} visible={false}>
@@ -827,6 +860,8 @@ function StaticBlock({
     material: "stack",
     friction: 0.75,
     restitution: 0.02,
+    collisionFilterGroup: PHYS_LAYER_STATIC_GOLD,
+    collisionFilterMask: PHYS_LAYER_FLOOR | PHYS_LAYER_DYNAMIC_VISIBLE,
   }));
   return (
     <group ref={ref as unknown as RefObject<THREE.Group>}>
@@ -885,6 +920,8 @@ function DynamicFallBlock({
     angularDamping: pattern === 3 ? 0.9 : 0.15,
     friction: 0.55,
     restitution: pattern === 1 ? 0.35 : 0.08,
+    collisionFilterGroup: PHYS_LAYER_DYNAMIC_VISIBLE,
+    collisionFilterMask: PHYS_LAYER_STATIC_GOLD | PHYS_LAYER_DYNAMIC_VISIBLE,
   }));
 
   const visualRef = useRef<THREE.Mesh>(null);
@@ -995,7 +1032,7 @@ function FeedbackScene({
   debugNormalMaterial,
   semiGlossColor,
   feedbackImpulseScale = 1,
-  feedbackVisibleCellOutlineOpacity = 0.38,
+  feedbackVisibleCellOutlineOpacity = 0.1,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
@@ -1478,8 +1515,8 @@ export default function HiddenStackCanvas({
     goldEnvMapBoost: 1.25,
     followPointIntensity: 18.5,
   },
-  feedbackVisibleCellOutlineOpacity = 0.38,
-  introFallTimeScale = 1,
+  feedbackVisibleCellOutlineOpacity = 0.1,
+  introFallTimeScale = 2.5,
   introDropHeightScale = 1,
   feedbackPhysicsGravityY = 16,
   feedbackImpulseScale = 1,
