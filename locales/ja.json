@@ -350,9 +350,9 @@
       "howToTitle": "あそびかた",
       "howToBody": "かくれているブロックのかずをこたえます。かくれているかずだけ、したのほうせきをタップしていろをつけてね",
       "chooseGrade": "グレードをえらぶ",
-      "gradeG1": "G1 グリッド3",
-      "gradeG2": "G2 グリッド4",
-      "gradeG3": "G3 グリッド5",
+      "gradeG1": "G1",
+      "gradeG2": "G2",
+      "gradeG3": "G3",
       "thinkHiddenCountLead": "かくれているかずは・・・",
       "iconAria": "積み木{n}個までを選択",
       "sliderAria": "答えの数（1〜{max}）"

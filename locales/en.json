@@ -350,9 +350,9 @@
       "howToTitle": "How to play",
       "howToBody": "Count the hidden blocks and answer. Only the hidden count—tap the gems below and fill them with color.",
       "chooseGrade": "Choose a grade",
-      "gradeG1": "G1 Grid 3",
-      "gradeG2": "G2 Grid 4",
-      "gradeG3": "G3 Grid 5",
+      "gradeG1": "G1",
+      "gradeG2": "G2",
+      "gradeG3": "G3",
       "thinkHiddenCountLead": "Hidden count…",
       "iconAria": "Select up to {n} blocks",
       "sliderAria": "Answer count (1–{max})"
