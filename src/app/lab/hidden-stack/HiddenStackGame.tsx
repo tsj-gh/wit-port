@@ -46,6 +46,9 @@ const RESULT_MESSAGE_DELAY_MS_MIN = 0;
 const RESULT_MESSAGE_DELAY_MS_MAX = 2500;
 const RESULT_MESSAGE_ORIGIN_Y_MIN = 15;
 const RESULT_MESSAGE_ORIGIN_Y_MAX = 48;
+const RESULT_MESSAGE_FONT_PX_MIN = 10;
+const RESULT_MESSAGE_FONT_PX_MAX = 28;
+const DEFAULT_RESULT_MESSAGE_FONT_PX = 15;
 const AMBIENT_LIGHT_INTENSITY_MIN = 0;
 const AMBIENT_LIGHT_INTENSITY_MAX = 1.8;
 const DEFAULT_AMBIENT_LIGHT_INTENSITY = 0.7;
@@ -72,7 +75,7 @@ const WOOD_TEX_RIM_LIGHT_MAX = 1.2;
 const DEFAULT_WOOD_TEX_RIM_LIGHT = 0.5;
 const REVIEW_MESH_VISUAL_SCALE_MIN = 0.8;
 const REVIEW_MESH_VISUAL_SCALE_MAX = 1.2;
-const DEFAULT_REVIEW_MESH_VISUAL_SCALE = 1.05;
+const DEFAULT_REVIEW_MESH_VISUAL_SCALE = 1.1;
 /** 正誤判定中の可視セル枠線（GhostBox）のみ。床格子は変更しない */
 const FEEDBACK_VISIBLE_CELL_OUTLINE_OPACITY_MIN = 0.06;
 const FEEDBACK_VISIBLE_CELL_OUTLINE_OPACITY_MAX = 0.72;
@@ -98,8 +101,8 @@ const SPOT_FOLLOW_POINT_MIN = 0;
 const SPOT_FOLLOW_POINT_MAX = 50;
 
 const INTRO_FALL_TIME_SCALE_MIN = 0.35;
-const INTRO_FALL_TIME_SCALE_MAX = 3.5;
-const DEFAULT_INTRO_FALL_TIME_SCALE = 2.5;
+const INTRO_FALL_TIME_SCALE_MAX = 4;
+const DEFAULT_INTRO_FALL_TIME_SCALE = 3;
 const INTRO_DROP_HEIGHT_SCALE_MIN = 0.35;
 const INTRO_DROP_HEIGHT_SCALE_MAX = 2.2;
 const DEFAULT_INTRO_DROP_HEIGHT_SCALE = 1;
@@ -157,6 +160,8 @@ export default function HiddenStackGame() {
   const [resultLine, setResultLine] = useState<string | null>(null);
   const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
   const [reviewMode, setReviewMode] = useState(false);
+  /** ふりかえり中：可視ソリッド表示。オフで枠線のみ（初期はオン） */
+  const [reviewShowVisibleSolids, setReviewShowVisibleSolids] = useState(true);
   /** ふりかえり時の左右スワイプ誘導（回転検知でフェードアウト、同一問題では再表示しない） */
   const [reviewSwipeHintVisible, setReviewSwipeHintVisible] = useState(false);
   const [statusMessageStyle, setStatusMessageStyle] = useState<"card" | "plain">("card");
@@ -183,6 +188,7 @@ export default function HiddenStackGame() {
   const [statusOverlayPhase, setStatusOverlayPhase] = useState<StatusOverlayPhase>("hidden");
   const [resultMessageDelayMs, setResultMessageDelayMs] = useState(DEFAULT_RESULT_MESSAGE_DELAY_MS);
   const [resultMessageOriginYPercent, setResultMessageOriginYPercent] = useState(DEFAULT_RESULT_MESSAGE_ORIGIN_Y_PCT);
+  const [resultMessageFontPx, setResultMessageFontPx] = useState(DEFAULT_RESULT_MESSAGE_FONT_PX);
   const [seedInput, setSeedInput] = useState("");
 
   const dragTwistRef = useRef<{ active: boolean; lastX: number }>({ active: false, lastX: 0 });
@@ -212,6 +218,7 @@ export default function HiddenStackGame() {
     setResultLine(null);
     setIsAnswerCorrect(null);
     setReviewMode(false);
+    setReviewShowVisibleSolids(true);
     setStatusOverlayPhase("hidden");
     setFeedbackKey((k) => k + 1);
   }, []);
@@ -337,12 +344,17 @@ export default function HiddenStackGame() {
 
   const startReview = useCallback(() => {
     if (phase !== "feedback") return;
+    setReviewShowVisibleSolids(true);
     setReviewMode(true);
   }, [phase]);
 
   useEffect(() => {
     if (reviewMode) setReviewSwipeHintVisible(true);
     else setReviewSwipeHintVisible(false);
+  }, [reviewMode]);
+
+  useEffect(() => {
+    if (!reviewMode) setReviewShowVisibleSolids(true);
   }, [reviewMode]);
 
   const dismissReviewSwipeHint = useCallback(() => {
@@ -889,6 +901,19 @@ export default function HiddenStackGame() {
                   />
                   <span className="tabular-nums text-[var(--color-text)]">{resultMessageOriginYPercent}%</span>
                 </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugResultMessageFontSize")}</span>
+                  <input
+                    type="range"
+                    min={RESULT_MESSAGE_FONT_PX_MIN}
+                    max={RESULT_MESSAGE_FONT_PX_MAX}
+                    step={1}
+                    value={resultMessageFontPx}
+                    onChange={(e) => setResultMessageFontPx(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{resultMessageFontPx}px</span>
+                </label>
               </div>
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugStatusStyle")}</div>
@@ -1103,6 +1128,7 @@ export default function HiddenStackGame() {
                     blockMeshVisualScale={blockMeshVisualScale}
                     reviewBlockMeshVisualScale={reviewBlockMeshVisualScale}
                     reviewMode={reviewMode}
+                    reviewShowVisibleSolids={reviewShowVisibleSolids}
                     reviewAzimuthHintLimitDeg={TWIST_MAX}
                     onReviewAzimuthHintThresholdExceeded={dismissReviewSwipeHint}
                     feedbackAnswerCorrect={isAnswerCorrect}
@@ -1166,12 +1192,14 @@ export default function HiddenStackGame() {
                     } ${isAnswerCorrect ? "hs-status-overlay--ok" : "hs-status-overlay--ng"} ${
                       statusMessageStyle === "plain" ? "hs-status-overlay--plain" : ""
                     }`}
-                    style={{ ["--hs-result-origin-y" as string]: `${resultMessageOriginYPercent}%` }}
+                    style={{
+                      ["--hs-result-origin-y" as string]: `${resultMessageOriginYPercent}%`,
+                    }}
                     onAnimationEnd={() => {
                       if (statusOverlayPhase === "animating") setStatusOverlayPhase("docked");
                     }}
                   >
-                    <p className="m-0 text-sm font-bold sm:text-base">
+                    <p className="m-0 font-bold" style={{ fontSize: `${resultMessageFontPx}px` }}>
                       {isAnswerCorrect ? (
                         resultLine
                       ) : (
@@ -1191,16 +1219,23 @@ export default function HiddenStackGame() {
               >
                 <div className="mx-auto flex w-full max-w-[520px] flex-col gap-1.5 lg:mx-0 lg:max-w-none">
                   <div className="flex w-full flex-wrap items-center justify-center gap-x-4 gap-y-2">
-                    {phase === "feedback" && (
+                    {phase === "feedback" && !reviewMode && (
                       <button
                         type="button"
                         onClick={startReview}
-                        disabled={reviewMode}
-                        className={`rounded-full border border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] bg-transparent px-4 py-2 text-sm font-bold text-[var(--color-text)] sm:px-5 ${
-                          reviewMode ? "invisible" : ""
-                        }`}
+                        className="rounded-full border border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] bg-transparent px-4 py-2 text-sm font-bold text-[var(--color-text)] sm:px-5"
                       >
                         {t("games.hiddenStack.review")}
+                      </button>
+                    )}
+                    {phase === "feedback" && reviewMode && (
+                      <button
+                        type="button"
+                        onClick={() => setReviewShowVisibleSolids((v) => !v)}
+                        className="min-w-[7.5rem] rounded-full border border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_88%,var(--color-bg))] px-4 py-2 text-sm font-bold text-[var(--color-text)] sm:px-5"
+                        aria-pressed={reviewShowVisibleSolids}
+                      >
+                        {reviewShowVisibleSolids ? t("games.hiddenStack.reviewBlocksOn") : t("games.hiddenStack.reviewBlocksOff")}
                       </button>
                     )}
                     <div className="relative flex min-h-[44px] min-w-[64px] items-center justify-center sm:min-h-[50px]">

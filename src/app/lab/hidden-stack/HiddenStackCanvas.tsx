@@ -299,6 +299,8 @@ type HiddenStackCanvasProps = {
   reviewBlockMeshVisualScale?: number;
   /** ふりかえりモード中は崩落を止めて静止表示＋自由回転 */
   reviewMode?: boolean;
+  /** ふりかえり中：可視ブロックのソリッド表示。false のとき枠線（GhostBox）のみ */
+  reviewShowVisibleSolids?: boolean;
   /** ふりかえり時の回転誘導：この角度（deg）を初期方位から超えたらコールバックを一度だけ呼ぶ */
   reviewAzimuthHintLimitDeg?: number;
   onReviewAzimuthHintThresholdExceeded?: () => void;
@@ -1151,6 +1153,8 @@ function ReviewScene({
   feedbackAnswerCorrect,
   highlightGoldSpecular,
   reviewMeshVisualScale = 1,
+  reviewShowVisibleSolids = true,
+  reviewGhostOutlineOpacity = 0.1,
   debugNormalMaterial,
   semiGlossColor,
 }: {
@@ -1160,6 +1164,8 @@ function ReviewScene({
   feedbackAnswerCorrect: boolean | null;
   highlightGoldSpecular?: boolean;
   reviewMeshVisualScale?: number;
+  reviewShowVisibleSolids?: boolean;
+  reviewGhostOutlineOpacity?: number;
   debugNormalMaterial?: boolean;
   semiGlossColor: string;
 }) {
@@ -1169,39 +1175,51 @@ function ReviewScene({
   const blockShadows = true;
   return (
     <>
-      {Array.from(puzzle.visibleKeys).map((k) => {
-        const p = cellCenter(parseKey(k));
-        return (
-          <group key={`rv-${k}`} position={[p.x, p.y, p.z]}>
-            {materialVariant === "C" ? (
-              <RoundedBox
-                args={[0.96, 0.96, 0.96]}
-                radius={BLOCK_B_BEVEL_RADIUS}
-                smoothness={BLOCK_B_BEVEL_SMOOTHNESS}
-                castShadow={blockShadows}
-                receiveShadow={blockShadows}
-                scale={reviewVisibleScale}
-              >
-                <BlockMaterial
-                  variant={materialVariant}
-                  debugNormalMaterial={debugNormalMaterial}
-                  semiGlossColor={semiGlossColor}
-                />
-              </RoundedBox>
-            ) : (
-              <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewVisibleScale}>
-                <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
-                <BlockMaterial
-                  variant={materialVariant}
-                  debugNormalMaterial={debugNormalMaterial}
-                  woodSurfaceKey={isWoodLikeMaterial(materialVariant) ? k : undefined}
-                  semiGlossColor={semiGlossColor}
-                />
-              </mesh>
-            )}
-          </group>
-        );
-      })}
+      {reviewShowVisibleSolids &&
+        Array.from(puzzle.visibleKeys).map((k) => {
+          const p = cellCenter(parseKey(k));
+          return (
+            <group key={`rv-${k}`} position={[p.x, p.y, p.z]}>
+              {materialVariant === "C" ? (
+                <RoundedBox
+                  args={[0.96, 0.96, 0.96]}
+                  radius={BLOCK_B_BEVEL_RADIUS}
+                  smoothness={BLOCK_B_BEVEL_SMOOTHNESS}
+                  castShadow={blockShadows}
+                  receiveShadow={blockShadows}
+                  scale={reviewVisibleScale}
+                >
+                  <BlockMaterial
+                    variant={materialVariant}
+                    debugNormalMaterial={debugNormalMaterial}
+                    semiGlossColor={semiGlossColor}
+                  />
+                </RoundedBox>
+              ) : (
+                <mesh castShadow={blockShadows} receiveShadow={blockShadows} scale={reviewVisibleScale}>
+                  <boxGeometry args={[0.96, 0.96, 0.96]} onUpdate={(g) => ensureFlatBoxVertexNormals(g)} />
+                  <BlockMaterial
+                    variant={materialVariant}
+                    debugNormalMaterial={debugNormalMaterial}
+                    woodSurfaceKey={isWoodLikeMaterial(materialVariant) ? k : undefined}
+                    semiGlossColor={semiGlossColor}
+                  />
+                </mesh>
+              )}
+            </group>
+          );
+        })}
+      {!reviewShowVisibleSolids &&
+        Array.from(puzzle.visibleKeys).map((k) => (
+          <GhostBox
+            key={`rg-${k}`}
+            center={cellCenter(parseKey(k))}
+            visualMeshScale={reviewVisibleScale}
+            materialVariant={materialVariant}
+            correctGoldFeedback={feedbackAnswerCorrect === true}
+            outlineOpacity={reviewGhostOutlineOpacity}
+          />
+        ))}
       {Array.from(puzzle.hiddenKeys).map((k) => {
         const p = cellCenter(parseKey(k));
         return (
@@ -1492,6 +1510,7 @@ export default function HiddenStackCanvas({
   blockMeshVisualScale = DEFAULT_BLOCK_MESH_VISUAL_SCALE,
   reviewBlockMeshVisualScale = 1,
   reviewMode = false,
+  reviewShowVisibleSolids = true,
   reviewAzimuthHintLimitDeg,
   onReviewAzimuthHintThresholdExceeded,
   feedbackAnswerCorrect = null,
@@ -1516,7 +1535,7 @@ export default function HiddenStackCanvas({
     followPointIntensity: 18.5,
   },
   feedbackVisibleCellOutlineOpacity = 0.1,
-  introFallTimeScale = 2.5,
+  introFallTimeScale = 3,
   introDropHeightScale = 1,
   feedbackPhysicsGravityY = 16,
   feedbackImpulseScale = 1,
@@ -1639,6 +1658,8 @@ export default function HiddenStackCanvas({
                 goldLumpParams={goldLumpParams}
                 feedbackAnswerCorrect={feedbackAnswerCorrect}
                 reviewMeshVisualScale={reviewBlockMeshVisualScale}
+                reviewShowVisibleSolids={reviewShowVisibleSolids}
+                reviewGhostOutlineOpacity={feedbackVisibleCellOutlineOpacity}
                 debugNormalMaterial={debugNormalMaterial}
                 semiGlossColor={semiGlossColor}
               />
