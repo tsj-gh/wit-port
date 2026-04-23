@@ -114,11 +114,15 @@ const FEEDBACK_IMPULSE_SCALE_MAX = 1.8;
 const DEFAULT_FEEDBACK_IMPULSE_SCALE = 1;
 
 /** メッシュ見た目のみ（隙間対策）。HiddenStackCanvas の DEFAULT_BLOCK_MESH_VISUAL_SCALE と揃える */
-const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1;
+const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.03;
 
-const KEY_LIGHT_SHADOW_YAW_MIN = -90;
-const KEY_LIGHT_SHADOW_YAW_MAX = 90;
-const DEFAULT_KEY_LIGHT_SHADOW_YAW_DEG = 0;
+const KEY_LIGHT_SHADOW_YAW_MIN = -180;
+const KEY_LIGHT_SHADOW_YAW_MAX = 180;
+const DEFAULT_KEY_LIGHT_SHADOW_YAW_DEG = 14;
+
+const ORTHO_ZOOM_MUL_MIN = 0.35;
+const ORTHO_ZOOM_MUL_MAX = 2.4;
+const DEFAULT_ORTHO_CAMERA_ZOOM_MUL = 1;
 
 const THINK_IDLE_ORBIT_SPEED_MIN = 0;
 const THINK_IDLE_ORBIT_SPEED_MAX = 10;
@@ -201,6 +205,7 @@ export default function HiddenStackGame() {
   const [resultMessageOriginYPercent, setResultMessageOriginYPercent] = useState(DEFAULT_RESULT_MESSAGE_ORIGIN_Y_PCT);
   const [resultMessageFontPx, setResultMessageFontPx] = useState(DEFAULT_RESULT_MESSAGE_FONT_PX);
   const [keyLightShadowYawDeg, setKeyLightShadowYawDeg] = useState(DEFAULT_KEY_LIGHT_SHADOW_YAW_DEG);
+  const [orthoCameraZoomMul, setOrthoCameraZoomMul] = useState(DEFAULT_ORTHO_CAMERA_ZOOM_MUL);
   const [thinkIdleOrbitDegPerSec, setThinkIdleOrbitDegPerSec] = useState(DEFAULT_THINK_IDLE_ORBIT_DEG_PER_SEC);
   const [thinkIdleOrbitPauseSec, setThinkIdleOrbitPauseSec] = useState(DEFAULT_THINK_IDLE_ORBIT_PAUSE_SEC);
   const [seedInput, setSeedInput] = useState("");
@@ -429,6 +434,10 @@ export default function HiddenStackGame() {
   };
 
   const onCanvasPointerUp = (e: React.PointerEvent) => {
+    if (phase === "think" && dragTwistRef.current.active) {
+      thinkIdleOrbitRef.current.twist = twistDegRef.current;
+      thinkIdleOrbitRef.current.pauseLeft = 0;
+    }
     dragTwistRef.current.active = false;
     try {
       (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
@@ -1246,6 +1255,7 @@ export default function HiddenStackGame() {
                     feedbackPhysicsGravityY={feedbackPhysicsGravityY}
                     feedbackImpulseScale={feedbackImpulseScale}
                     keyLightShadowYawDeg={keyLightShadowYawDeg}
+                    orthoCameraZoomMul={orthoCameraZoomMul}
                   />
                 </div>
                 {phase === "feedback" && reviewMode && (
@@ -1315,7 +1325,7 @@ export default function HiddenStackGame() {
                 className="z-40 w-full shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 backdrop-blur-md lg:mt-auto"
               >
                 <div className="mx-auto flex w-full max-w-[520px] flex-col gap-1.5 lg:mx-0 lg:max-w-none">
-                  <div className="flex w-full flex-wrap items-center justify-center gap-x-4 gap-y-2">
+                  <div className="flex w-full flex-wrap items-end justify-center gap-x-4 gap-y-2 lg:min-h-[44px]">
                     {phase === "feedback" && !reviewMode && (
                       <button
                         type="button"
@@ -1335,17 +1345,26 @@ export default function HiddenStackGame() {
                         {reviewShowVisibleSolids ? t("games.hiddenStack.reviewBlocksOn") : t("games.hiddenStack.reviewBlocksOff")}
                       </button>
                     )}
-                    <div className="relative flex min-h-[44px] min-w-[64px] items-center justify-center sm:min-h-[50px]">
-                      <span className="pointer-events-none select-none text-4xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.2] sm:text-5xl">
-                        {selectedN}
-                      </span>
-                      <span className="absolute text-3xl font-black tabular-nums text-[var(--color-text)] sm:text-4xl">{selectedN}</span>
+                    <div className="flex items-end gap-1 sm:gap-1.5">
+                      {phase === "think" && (
+                        <span className="max-w-[11.5rem] whitespace-normal text-left text-[0.78rem] font-bold leading-snug text-[var(--color-text)] sm:max-w-none sm:whitespace-nowrap sm:text-sm lg:text-[0.82rem]">
+                          {t("games.hiddenStack.thinkHiddenCountLead")}
+                        </span>
+                      )}
+                      <div className="relative flex h-10 min-w-[2.35ch] shrink-0 items-center justify-center sm:h-11">
+                        <span className="pointer-events-none select-none text-4xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.18] sm:text-5xl lg:text-[2.1rem]">
+                          {selectedN}
+                        </span>
+                        <span className="absolute text-3xl font-black tabular-nums text-[var(--color-text)] sm:text-4xl lg:text-[1.65rem]">
+                          {selectedN}
+                        </span>
+                      </div>
                     </div>
                     {phase === "feedback" ? (
                       <button
                         type="button"
                         onClick={() => newRound()}
-                        className="rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] sm:px-6 sm:text-base"
+                        className="hs-cta-pulse rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] sm:px-6 sm:text-base"
                       >
                         {t("games.hiddenStack.nextRound")}
                       </button>
@@ -1354,51 +1373,62 @@ export default function HiddenStackGame() {
                         type="button"
                         onClick={submitAnswer}
                         disabled={phase !== "think"}
-                        className="rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-black text-[var(--color-on-primary)] disabled:opacity-40 sm:px-6 sm:text-base"
+                        className={`rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-black text-[var(--color-on-primary)] disabled:opacity-40 sm:px-6 sm:text-base ${
+                          phase === "think" ? "hs-cta-pulse" : ""
+                        }`}
                       >
                         {t("games.hiddenStack.submit")}
                       </button>
                     )}
                   </div>
-                  <div
-                    ref={stripRef}
-                    role="slider"
-                    aria-valuemin={1}
-                    aria-valuemax={answerSlots}
-                    aria-valuenow={selectedN}
-                    aria-label={t("games.hiddenStack.sliderAria").replace("{max}", String(answerSlots))}
-                    className={`mx-auto grid w-full max-w-[min(100%,420px)] touch-none select-none gap-1 sm:gap-1.5 lg:max-w-full ${
-                      phase === "feedback" || reviewMode ? "pointer-events-none opacity-45" : ""
-                    }`}
-                    style={{ touchAction: "none", gridTemplateColumns: `repeat(${answerSlots}, minmax(0,1fr))` }}
-                    onPointerDown={onStripPointerDown}
-                    onPointerMove={onStripPointerMove}
-                    onPointerUp={onStripPointerEnd}
-                    onPointerCancel={onStripPointerEnd}
-                    onLostPointerCapture={() => {
-                      stripPointerDownRef.current = false;
-                    }}
-                  >
-                    {Array.from({ length: answerSlots }, (_, i) => {
-                      const n = i + 1;
-                      const lit = n <= selectedN;
-                      return (
-                        <div
-                          key={n}
-                          className={`flex h-9 min-w-0 flex-col items-center justify-end rounded-lg border-2 transition-colors sm:h-10 ${
-                            lit
-                              ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_22%,var(--color-bg))] shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
-                              : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_06%,var(--color-bg))] opacity-55"
-                          }`}
-                        >
-                          <span
-                            className="mb-0.5 block h-4 w-4 max-w-[88%] rounded-sm bg-[color-mix(in_srgb,var(--color-text)_25%,var(--color-bg))] sm:h-5 sm:w-5"
-                            style={{ clipPath: "polygon(15% 0,85% 0,100% 35%,50% 100%,0 35%)" }}
-                            aria-hidden
-                          />
-                        </div>
-                      );
-                    })}
+                  <div className="mx-auto flex w-full max-w-[min(100%,420px)] justify-center px-1 lg:max-w-full">
+                    <div
+                      className={`relative flex aspect-square w-[min(100%,288px)] max-h-[104px] shrink-0 items-center justify-center rounded-2xl border-2 border-[color-mix(in_srgb,var(--color-text)_16%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_92%,var(--color-bg))] p-1 sm:max-h-[118px] lg:max-h-[96px] lg:w-[min(100%,260px)] ${
+                        phase === "feedback" || reviewMode ? "pointer-events-none opacity-45" : ""
+                      }`}
+                    >
+                      <div
+                        ref={stripRef}
+                        role="slider"
+                        aria-valuemin={1}
+                        aria-valuemax={answerSlots}
+                        aria-valuenow={selectedN}
+                        aria-label={t("games.hiddenStack.sliderAria").replace("{max}", String(answerSlots))}
+                        className="grid h-full w-full touch-none select-none gap-0.5 sm:gap-1"
+                        style={{ touchAction: "none", gridTemplateColumns: `repeat(${answerSlots}, minmax(0,1fr))` }}
+                        onPointerDown={onStripPointerDown}
+                        onPointerMove={onStripPointerMove}
+                        onPointerUp={onStripPointerEnd}
+                        onPointerCancel={onStripPointerEnd}
+                        onLostPointerCapture={() => {
+                          stripPointerDownRef.current = false;
+                        }}
+                      >
+                        {Array.from({ length: answerSlots }, (_, i) => {
+                          const n = i + 1;
+                          const lit = n <= selectedN;
+                          return (
+                            <div
+                              key={n}
+                              className={`flex min-h-0 min-w-0 items-center justify-center rounded-xl border transition-transform duration-150 ${
+                                lit
+                                  ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_28%,var(--color-bg))] shadow-[0_0_10px_color-mix(in_srgb,var(--color-primary)_30%,transparent)]"
+                                  : "border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_05%,var(--color-bg))]"
+                              }`}
+                            >
+                              <span
+                                className={`flex items-center justify-center text-[clamp(0.7rem,2.6vw,1.35rem)] leading-none sm:text-[clamp(0.85rem,2.2vw,1.5rem)] lg:text-[clamp(0.72rem,1.9vw,1.15rem)] ${
+                                  lit ? "scale-110 drop-shadow-sm" : "opacity-40 grayscale"
+                                }`}
+                                aria-hidden
+                              >
+                                💎
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1414,12 +1444,73 @@ export default function HiddenStackGame() {
                 <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
                   <p className="m-0">{t("games.hiddenStack.howToBody")}</p>
                 </div>
+                <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2">
+                  <label className="mb-1 block text-xs text-[var(--color-muted)]">{t("games.hiddenStack.chooseGrade")}</label>
+                  <div
+                    className="flex w-full min-w-0 gap-2 overflow-x-auto py-1 [scrollbar-width:none] [-ms-overflow-style:none] snap-x snap-mandatory [&::-webkit-scrollbar]:[display:none]"
+                    style={{ WebkitOverflowScrolling: "touch" }}
+                  >
+                    {(
+                      [
+                        { grade: 1 as const, size: 3 as const, labelKey: "games.hiddenStack.gradeG1" as const },
+                        { grade: 2 as const, size: 4 as const, labelKey: "games.hiddenStack.gradeG2" as const },
+                        { grade: 3 as const, size: 5 as const, labelKey: "games.hiddenStack.gradeG3" as const },
+                      ] as const
+                    ).map(({ grade, size, labelKey }) => {
+                      const isActive = gridSize === size;
+                      return (
+                        <button
+                          key={grade}
+                          type="button"
+                          aria-pressed={isActive}
+                          onClick={() => newRound(size)}
+                          className={`min-h-[44px] shrink-0 snap-center touch-manipulation whitespace-nowrap rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                            isActive
+                              ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
+                              : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] text-[var(--color-text)] hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]"
+                          }`}
+                        >
+                          {t(labelKey)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </details>
 
               <div className="mt-1 hidden w-full flex-col gap-2 lg:mt-0 lg:flex lg:shrink-0">
                 <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
                   <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.hiddenStack.howToTitle")}</h3>
                   <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">{t("games.hiddenStack.howToBody")}</p>
+                  <div className="mt-3 border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pt-2">
+                    <label className="mb-1 block text-xs text-[var(--color-muted)]">{t("games.hiddenStack.chooseGrade")}</label>
+                    <div className="flex flex-wrap gap-2">
+                      {(
+                        [
+                          { grade: 1 as const, size: 3 as const, labelKey: "games.hiddenStack.gradeG1" as const },
+                          { grade: 2 as const, size: 4 as const, labelKey: "games.hiddenStack.gradeG2" as const },
+                          { grade: 3 as const, size: 5 as const, labelKey: "games.hiddenStack.gradeG3" as const },
+                        ] as const
+                      ).map(({ grade, size, labelKey }) => {
+                        const isActive = gridSize === size;
+                        return (
+                          <button
+                            key={grade}
+                            type="button"
+                            aria-pressed={isActive}
+                            onClick={() => newRound(size)}
+                            className={`min-h-[40px] rounded-lg border px-3 py-2 text-xs font-medium transition-colors sm:text-sm ${
+                              isActive
+                                ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
+                                : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] text-[var(--color-text)] hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]"
+                            }`}
+                          >
+                            {t(labelKey)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </section>
               </div>
             </div>
@@ -1482,6 +1573,28 @@ export default function HiddenStackGame() {
           }
           50% {
             transform: translateX(6px);
+          }
+        }
+        .hs-cta-pulse {
+          animation: hs-cta-heartbeat 2.65s ease-in-out infinite;
+        }
+        @keyframes hs-cta-heartbeat {
+          0%,
+          82%,
+          100% {
+            transform: scale(1);
+          }
+          86% {
+            transform: scale(1.07);
+          }
+          90% {
+            transform: scale(1);
+          }
+          94% {
+            transform: scale(1.035);
+          }
+          98% {
+            transform: scale(1);
           }
         }
         @keyframes hs-pop-and-slide {

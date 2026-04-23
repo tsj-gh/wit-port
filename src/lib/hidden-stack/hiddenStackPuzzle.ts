@@ -41,13 +41,6 @@ export function cellCenter(c: GridCell): THREE.Vector3 {
   return new THREE.Vector3(c.x + 0.5, c.z + 0.5, c.y + 0.5);
 }
 
-/** セル 1 辺に対する可視ブロック一辺の目標比率（メッシュ幾何 0.96 に対する係数用） */
-export function blockFillRatioForGridSize(gridSize: number): number {
-  if (gridSize <= 3) return 0.825;
-  if (gridSize === 4) return 0.865;
-  return 0.9;
-}
-
 /**
  * 重力方向（z）に沿った柱状支え:
  * 各 (x,y,z) に立方体があるとき、真下 (x,y,z-1) にも立方体がある（z=0 は床が支える）。

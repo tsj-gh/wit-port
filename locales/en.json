@@ -282,6 +282,7 @@
       "debugKeyLightShadowYaw": "Shadow direction (key light yaw on Y, °)",
       "debugThinkIdleOrbitSpeed": "Think idle orbit speed (°/s)",
       "debugThinkIdleOrbitPause": "Think idle pause at each end (s)",
+      "debugOrthoZoomMul": "Orthographic camera zoom multiplier",
       "debugIntroFallTimeScale": "Intro fall speed (initial pace)",
       "debugIntroDropHeightScale": "Intro start height (drop distance)",
       "debugFeedbackGravityY": "Feedback gravity (|Y|)",
@@ -347,7 +348,12 @@
       "reviewBlocksOff": "Blocks off",
       "hintSwipe": "Drag the board to rotate slightly. Touch the row to pick a number immediately, then slide sideways without lifting.",
       "howToTitle": "How to play",
-      "howToBody": "Drag the board to rotate a little left or right. Touch the bottom block row to select instantly, then keep sliding sideways to adjust your answer in real time.",
+      "howToBody": "Count the hidden blocks and answer. Only the hidden count—tap the gems below and fill them with color.",
+      "chooseGrade": "Choose a grade",
+      "gradeG1": "G1 Grid 3",
+      "gradeG2": "G2 Grid 4",
+      "gradeG3": "G3 Grid 5",
+      "thinkHiddenCountLead": "Hidden count…",
       "iconAria": "Select up to {n} blocks",
       "sliderAria": "Answer count (1–{max})"
     }

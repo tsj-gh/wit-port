@@ -21,13 +21,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { createWoodTexture, setWoodTextureMaxAnisotropy } from "@/lib/hidden-stack/createWoodTexture";
 import { EXTERNAL_WOOD_TEXTURE_PATHS, cloneExternalWoodTextureForMesh, safeOffsetForRepeat } from "@/lib/hidden-stack/externalWoodTextures";
-import {
-  blockFillRatioForGridSize,
-  cameraPositionForTwist,
-  cellCenter,
-  cellKey,
-  parseKey,
-} from "@/lib/hidden-stack/hiddenStackPuzzle";
+import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
 
 /** 物理ボディ（半辺 0.48）はそのまま。レンダリング丸め用の最小オーバーラップ（メッシュのみ） */
 const BLOCK_MESH_BASE_OVERLAP = 1.002;
@@ -42,9 +36,7 @@ const ORTHO_BBOX_MARGIN = 1.06;
 const BLOCK_B_BEVEL_RADIUS = 0.012;
 const BLOCK_B_BEVEL_SMOOTHNESS = 2;
 
-const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1;
-/** メッシュ box 一辺 0.96 をセルに載せる前提の基準長 */
-const BLOCK_CELL_GEOMETRY = 0.96;
+const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.03;
 
 /** Cannon 衝突グループ：正誤判定で可視ダイナミックは床と衝突しない（金塊・可視同士は従来どおり） */
 const PHYS_LAYER_FLOOR = 1;
@@ -350,6 +342,8 @@ type HiddenStackCanvasProps = {
   feedbackImpulseScale?: number;
   /** 出題〜ふりかえり：キー Directional の影が床に落ちる水平角（Y 軸周り、度） */
   keyLightShadowYawDeg?: number;
+  /** RigCamera の自動 zoom に掛ける倍率（デバッグ） */
+  orthoCameraZoomMul?: number;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -396,7 +390,15 @@ function orthoFrustumFromHalfExtents(halfW: number, halfH: number, aspect: numbe
   return { vExtent, hExtent };
 }
 
-function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number }) {
+function RigCamera({
+  twistDeg,
+  gridSize,
+  orthoCameraZoomMul = 1,
+}: {
+  twistDeg: number;
+  gridSize: number;
+  orthoCameraZoomMul?: number;
+}) {
   const { camera, size } = useThree();
   const look = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
 
@@ -430,8 +432,9 @@ function RigCamera({ twistDeg, gridSize }: { twistDeg: number; gridSize: number 
     /** 積み木塊の縦が Canvas 高さの ORTHO_STACK_VERTICAL_FILL になるよう zoom を決定（横ははみ出さないよう cap） */
     const zoomV = (ORTHO_STACK_VERTICAL_FILL * fit.vExtent) / raw.halfH;
     const zoomH = fit.hExtent / raw.halfW;
-    const zoom = THREE.MathUtils.clamp(Math.min(zoomV, zoomH), 0.12, 14);
-    camera.zoom = zoom;
+    const autoZoom = THREE.MathUtils.clamp(Math.min(zoomV, zoomH), 0.12, 14);
+    const mul = Number.isFinite(orthoCameraZoomMul) && orthoCameraZoomMul > 0 ? orthoCameraZoomMul : 1;
+    camera.zoom = THREE.MathUtils.clamp(autoZoom * mul, 0.05, 24);
     camera.updateProjectionMatrix();
   });
   return null;
@@ -1179,10 +1182,9 @@ function ReviewScene({
   debugNormalMaterial?: boolean;
   semiGlossColor: string;
 }) {
-  const fillScale = blockFillRatioForGridSize(puzzle.gridSize) / BLOCK_CELL_GEOMETRY;
-  const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95 * reviewMeshVisualScale * fillScale;
+  const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95 * reviewMeshVisualScale;
   /** 死角（金塊）はふりかえり用メッシュ倍率の対象外（反射・サイズを安定させる） */
-  const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE * fillScale;
+  const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE;
   const blockShadows = true;
   return (
     <>
@@ -1387,6 +1389,7 @@ function SceneLightingRig({
   enableWoodTexFill = false,
   spotlightParams,
   keyLightShadowYawDeg = 0,
+  cameraTwistDeg = 0,
 }: {
   gridSize: number;
   targetCenter: THREE.Vector3;
@@ -1399,6 +1402,8 @@ function SceneLightingRig({
   enableWoodTexFill?: boolean;
   spotlightParams: FeedbackSpotlightParams;
   keyLightShadowYawDeg?: number;
+  /** RigCamera の twist（ふりかえり Orbit 時は 0）。影を盤面基準に固定するためキー光の水平角から差し引く */
+  cameraTwistDeg?: number;
 }) {
   const ambientRef = useRef<THREE.AmbientLight>(null);
   const keyDirRef = useRef<THREE.DirectionalLight>(null);
@@ -1443,7 +1448,8 @@ function SceneLightingRig({
     if (key) {
       const anchor = lookAtForGrid(gridSize);
       const base = new THREE.Vector3(7, 12, 5).sub(anchor);
-      base.applyAxisAngle(new THREE.Vector3(0, 1, 0), (keyLightShadowYawDeg * Math.PI) / 180);
+      const yawRad = ((keyLightShadowYawDeg - cameraTwistDeg) * Math.PI) / 180;
+      base.applyAxisAngle(new THREE.Vector3(0, 1, 0), yawRad);
       key.position.copy(anchor).add(base);
       key.target.position.copy(targetCenter);
       key.target.updateMatrixWorld();
@@ -1562,14 +1568,11 @@ export default function HiddenStackCanvas({
   introDropHeightScale = 1,
   feedbackPhysicsGravityY = 16,
   feedbackImpulseScale = 1,
-  keyLightShadowYawDeg = 0,
+  keyLightShadowYawDeg = 14,
+  orthoCameraZoomMul = 1,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
-  const visualMeshScale = useMemo(
-    () =>
-      BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale * (blockFillRatioForGridSize(gridSize) / BLOCK_CELL_GEOMETRY),
-    [blockMeshVisualScale, gridSize]
-  );
+  const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
   const cells = useMemo(
     () => puzzle.cells.map((c) => ({ key: cellKey(c), center: cellCenter(c) })),
     [puzzle.cells]
@@ -1614,6 +1617,7 @@ export default function HiddenStackCanvas({
         enableWoodTexFill={materialVariant === "B"}
         spotlightParams={feedbackSpotlightParams}
         keyLightShadowYawDeg={keyLightShadowYawDeg}
+        cameraTwistDeg={reviewMode ? 0 : twistDeg}
       />
       {reviewMode ? (
         <ReviewOrbitControls
@@ -1623,7 +1627,7 @@ export default function HiddenStackCanvas({
           onReviewAzimuthHintThresholdExceeded={onReviewAzimuthHintThresholdExceeded}
         />
       ) : (
-        <RigCamera twistDeg={twistDeg} gridSize={gridSize} />
+        <RigCamera twistDeg={twistDeg} gridSize={gridSize} orthoCameraZoomMul={orthoCameraZoomMul} />
       )}
       <GoldEnvMapBridge>
         <Suspense fallback={null}>
