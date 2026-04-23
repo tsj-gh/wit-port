@@ -21,7 +21,13 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import type { HiddenStackPuzzle } from "@/lib/hidden-stack/hiddenStackPuzzle";
 import { createWoodTexture, setWoodTextureMaxAnisotropy } from "@/lib/hidden-stack/createWoodTexture";
 import { EXTERNAL_WOOD_TEXTURE_PATHS, cloneExternalWoodTextureForMesh, safeOffsetForRepeat } from "@/lib/hidden-stack/externalWoodTextures";
-import { cameraPositionForTwist, cellCenter, cellKey, parseKey } from "@/lib/hidden-stack/hiddenStackPuzzle";
+import {
+  blockFillRatioForGridSize,
+  cameraPositionForTwist,
+  cellCenter,
+  cellKey,
+  parseKey,
+} from "@/lib/hidden-stack/hiddenStackPuzzle";
 
 /** 物理ボディ（半辺 0.48）はそのまま。レンダリング丸め用の最小オーバーラップ（メッシュのみ） */
 const BLOCK_MESH_BASE_OVERLAP = 1.002;
@@ -36,7 +42,9 @@ const ORTHO_BBOX_MARGIN = 1.06;
 const BLOCK_B_BEVEL_RADIUS = 0.012;
 const BLOCK_B_BEVEL_SMOOTHNESS = 2;
 
-const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.03;
+const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1;
+/** メッシュ box 一辺 0.96 をセルに載せる前提の基準長 */
+const BLOCK_CELL_GEOMETRY = 0.96;
 
 /** Cannon 衝突グループ：正誤判定で可視ダイナミックは床と衝突しない（金塊・可視同士は従来どおり） */
 const PHYS_LAYER_FLOOR = 1;
@@ -340,6 +348,8 @@ type HiddenStackCanvasProps = {
   feedbackPhysicsGravityY?: number;
   /** 正誤判定で飛ばすブロックのインパルス・トルク倍率（初速） */
   feedbackImpulseScale?: number;
+  /** 出題〜ふりかえり：キー Directional の影が床に落ちる水平角（Y 軸周り、度） */
+  keyLightShadowYawDeg?: number;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -1169,9 +1179,10 @@ function ReviewScene({
   debugNormalMaterial?: boolean;
   semiGlossColor: string;
 }) {
-  const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95 * reviewMeshVisualScale;
+  const fillScale = blockFillRatioForGridSize(puzzle.gridSize) / BLOCK_CELL_GEOMETRY;
+  const reviewVisibleScale = BLOCK_MESH_BASE_OVERLAP * 0.95 * reviewMeshVisualScale * fillScale;
   /** 死角（金塊）はふりかえり用メッシュ倍率の対象外（反射・サイズを安定させる） */
-  const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE;
+  const reviewHiddenScale = BLOCK_MESH_BASE_OVERLAP * DEFAULT_BLOCK_MESH_VISUAL_SCALE * fillScale;
   const blockShadows = true;
   return (
     <>
@@ -1375,6 +1386,7 @@ function SceneLightingRig({
   woodTexRimLightIntensity = 0.5,
   enableWoodTexFill = false,
   spotlightParams,
+  keyLightShadowYawDeg = 0,
 }: {
   gridSize: number;
   targetCenter: THREE.Vector3;
@@ -1386,6 +1398,7 @@ function SceneLightingRig({
   woodTexRimLightIntensity?: number;
   enableWoodTexFill?: boolean;
   spotlightParams: FeedbackSpotlightParams;
+  keyLightShadowYawDeg?: number;
 }) {
   const ambientRef = useRef<THREE.AmbientLight>(null);
   const keyDirRef = useRef<THREE.DirectionalLight>(null);
@@ -1425,6 +1438,16 @@ function SceneLightingRig({
     apply(fill1Ref.current, enableWoodTexFill ? woodTexFillLightIntensity : 0);
     apply(fill2Ref.current, enableWoodTexFill ? woodTexFillLightSecondaryIntensity : 0);
     apply(rimRef.current, enableWoodTexFill ? woodTexRimLightIntensity : 0);
+
+    const key = keyDirRef.current;
+    if (key) {
+      const anchor = lookAtForGrid(gridSize);
+      const base = new THREE.Vector3(7, 12, 5).sub(anchor);
+      base.applyAxisAngle(new THREE.Vector3(0, 1, 0), (keyLightShadowYawDeg * Math.PI) / 180);
+      key.position.copy(anchor).add(base);
+      key.target.position.copy(targetCenter);
+      key.target.updateMatrixWorld();
+    }
 
     const spot = spotRef.current;
     const point = followPointRef.current;
@@ -1539,9 +1562,14 @@ export default function HiddenStackCanvas({
   introDropHeightScale = 1,
   feedbackPhysicsGravityY = 16,
   feedbackImpulseScale = 1,
+  keyLightShadowYawDeg = 0,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
-  const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
+  const visualMeshScale = useMemo(
+    () =>
+      BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale * (blockFillRatioForGridSize(gridSize) / BLOCK_CELL_GEOMETRY),
+    [blockMeshVisualScale, gridSize]
+  );
   const cells = useMemo(
     () => puzzle.cells.map((c) => ({ key: cellKey(c), center: cellCenter(c) })),
     [puzzle.cells]
@@ -1585,6 +1613,7 @@ export default function HiddenStackCanvas({
         woodTexRimLightIntensity={effectiveWoodTexRimLight}
         enableWoodTexFill={materialVariant === "B"}
         spotlightParams={feedbackSpotlightParams}
+        keyLightShadowYawDeg={keyLightShadowYawDeg}
       />
       {reviewMode ? (
         <ReviewOrbitControls

@@ -47,8 +47,8 @@ const RESULT_MESSAGE_DELAY_MS_MAX = 2500;
 const RESULT_MESSAGE_ORIGIN_Y_MIN = 15;
 const RESULT_MESSAGE_ORIGIN_Y_MAX = 48;
 const RESULT_MESSAGE_FONT_PX_MIN = 10;
-const RESULT_MESSAGE_FONT_PX_MAX = 28;
-const DEFAULT_RESULT_MESSAGE_FONT_PX = 15;
+const RESULT_MESSAGE_FONT_PX_MAX = 46;
+const DEFAULT_RESULT_MESSAGE_FONT_PX = 28;
 const AMBIENT_LIGHT_INTENSITY_MIN = 0;
 const AMBIENT_LIGHT_INTENSITY_MAX = 1.8;
 const DEFAULT_AMBIENT_LIGHT_INTENSITY = 0.7;
@@ -114,7 +114,18 @@ const FEEDBACK_IMPULSE_SCALE_MAX = 1.8;
 const DEFAULT_FEEDBACK_IMPULSE_SCALE = 1;
 
 /** メッシュ見た目のみ（隙間対策）。HiddenStackCanvas の DEFAULT_BLOCK_MESH_VISUAL_SCALE と揃える */
-const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1.03;
+const DEFAULT_BLOCK_MESH_VISUAL_SCALE = 1;
+
+const KEY_LIGHT_SHADOW_YAW_MIN = -90;
+const KEY_LIGHT_SHADOW_YAW_MAX = 90;
+const DEFAULT_KEY_LIGHT_SHADOW_YAW_DEG = 0;
+
+const THINK_IDLE_ORBIT_SPEED_MIN = 0;
+const THINK_IDLE_ORBIT_SPEED_MAX = 10;
+const DEFAULT_THINK_IDLE_ORBIT_DEG_PER_SEC = 2.2;
+const THINK_IDLE_ORBIT_PAUSE_MIN = 0;
+const THINK_IDLE_ORBIT_PAUSE_MAX = 3.5;
+const DEFAULT_THINK_IDLE_ORBIT_PAUSE_SEC = 0.55;
 
 type Phase = "intro" | "think" | "feedback";
 type StatusOverlayPhase = "hidden" | "pending" | "animating" | "docked";
@@ -189,9 +200,14 @@ export default function HiddenStackGame() {
   const [resultMessageDelayMs, setResultMessageDelayMs] = useState(DEFAULT_RESULT_MESSAGE_DELAY_MS);
   const [resultMessageOriginYPercent, setResultMessageOriginYPercent] = useState(DEFAULT_RESULT_MESSAGE_ORIGIN_Y_PCT);
   const [resultMessageFontPx, setResultMessageFontPx] = useState(DEFAULT_RESULT_MESSAGE_FONT_PX);
+  const [keyLightShadowYawDeg, setKeyLightShadowYawDeg] = useState(DEFAULT_KEY_LIGHT_SHADOW_YAW_DEG);
+  const [thinkIdleOrbitDegPerSec, setThinkIdleOrbitDegPerSec] = useState(DEFAULT_THINK_IDLE_ORBIT_DEG_PER_SEC);
+  const [thinkIdleOrbitPauseSec, setThinkIdleOrbitPauseSec] = useState(DEFAULT_THINK_IDLE_ORBIT_PAUSE_SEC);
   const [seedInput, setSeedInput] = useState("");
 
   const dragTwistRef = useRef<{ active: boolean; lastX: number }>({ active: false, lastX: 0 });
+  const twistDegRef = useRef(0);
+  const thinkIdleOrbitRef = useRef<{ twist: number; dir: 1 | -1; pauseLeft: number }>({ twist: 0, dir: 1, pauseLeft: 0 });
   const stripRef = useRef<HTMLDivElement>(null);
   const stripPointerDownRef = useRef(false);
   const topAdRef = useRef<HTMLDivElement>(null);
@@ -206,6 +222,44 @@ export default function HiddenStackGame() {
   useEffect(() => {
     if (!seedInput) setSeedInput(puzzle.sourceSeed);
   }, [puzzle.sourceSeed, seedInput]);
+
+  useEffect(() => {
+    twistDegRef.current = twistDeg;
+  }, [twistDeg]);
+
+  useEffect(() => {
+    if (phase !== "think" || thinkIdleOrbitDegPerSec <= 0.001) return;
+    thinkIdleOrbitRef.current.twist = twistDegRef.current;
+    let rafId = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      rafId = requestAnimationFrame(tick);
+      const dt = Math.min(0.08, (now - last) / 1000);
+      last = now;
+      if (dragTwistRef.current.active) return;
+      const o = thinkIdleOrbitRef.current;
+      const speed = thinkIdleOrbitDegPerSec;
+      const pause = thinkIdleOrbitPauseSec;
+      if (o.pauseLeft > 0) {
+        o.pauseLeft -= dt;
+        if (o.pauseLeft < 0) o.pauseLeft = 0;
+      } else {
+        o.twist += o.dir * speed * dt;
+        if (o.twist >= TWIST_MAX) {
+          o.twist = TWIST_MAX;
+          o.dir = -1;
+          o.pauseLeft = pause;
+        } else if (o.twist <= -TWIST_MAX) {
+          o.twist = -TWIST_MAX;
+          o.dir = 1;
+          o.pauseLeft = pause;
+        }
+      }
+      setTwistDeg(o.twist);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [phase, thinkIdleOrbitDegPerSec, thinkIdleOrbitPauseSec]);
 
   const answerSlots = useMemo(() => {
     return Math.max(ICON_SLOTS, Math.min(24, puzzle.hiddenCount + 4));
@@ -593,6 +647,48 @@ export default function HiddenStackGame() {
                     className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
                   />
                   <span className="tabular-nums text-[var(--color-text)]">{feedbackImpulseScale.toFixed(2)}×</span>
+                </label>
+              </div>
+              <div>
+                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugThinkPresentation")}</div>
+                <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugKeyLightShadowYaw")}</span>
+                  <input
+                    type="range"
+                    min={KEY_LIGHT_SHADOW_YAW_MIN}
+                    max={KEY_LIGHT_SHADOW_YAW_MAX}
+                    step={1}
+                    value={keyLightShadowYawDeg}
+                    onChange={(e) => setKeyLightShadowYawDeg(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{keyLightShadowYawDeg}°</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugThinkIdleOrbitSpeed")}</span>
+                  <input
+                    type="range"
+                    min={THINK_IDLE_ORBIT_SPEED_MIN}
+                    max={THINK_IDLE_ORBIT_SPEED_MAX}
+                    step={0.1}
+                    value={thinkIdleOrbitDegPerSec}
+                    onChange={(e) => setThinkIdleOrbitDegPerSec(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{thinkIdleOrbitDegPerSec.toFixed(1)}°/s</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugThinkIdleOrbitPause")}</span>
+                  <input
+                    type="range"
+                    min={THINK_IDLE_ORBIT_PAUSE_MIN}
+                    max={THINK_IDLE_ORBIT_PAUSE_MAX}
+                    step={0.05}
+                    value={thinkIdleOrbitPauseSec}
+                    onChange={(e) => setThinkIdleOrbitPauseSec(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{thinkIdleOrbitPauseSec.toFixed(2)}s</span>
                 </label>
               </div>
               <div>
@@ -1027,13 +1123,13 @@ export default function HiddenStackGame() {
                 <input
                   type="range"
                   min={3}
-                  max={6}
+                  max={5}
                   step={1}
                   value={gridSize}
                   onChange={(e) => {
                     const g = Number(e.target.value);
                     if (!Number.isFinite(g)) return;
-                    newRound(Math.max(3, Math.min(6, Math.floor(g))));
+                    newRound(Math.max(3, Math.min(5, Math.floor(g))));
                   }}
                   className="w-full accent-[var(--color-primary)]"
                 />
@@ -1149,6 +1245,7 @@ export default function HiddenStackGame() {
                     introDropHeightScale={introDropHeightScale}
                     feedbackPhysicsGravityY={feedbackPhysicsGravityY}
                     feedbackImpulseScale={feedbackImpulseScale}
+                    keyLightShadowYawDeg={keyLightShadowYawDeg}
                   />
                 </div>
                 {phase === "feedback" && reviewMode && (
