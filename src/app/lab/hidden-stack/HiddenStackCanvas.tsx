@@ -325,6 +325,14 @@ type HiddenStackCanvasProps = {
   feedbackSpotlightParams?: FeedbackSpotlightParams;
   /** 正誤判定フェーズ中の床格子・プレートの不透明度（大きいほど濃い） */
   feedbackFloorGridOpacity?: number;
+  /** イントロ落下：時間進み倍率（大きいほど早く着地＝初速感） */
+  introFallTimeScale?: number;
+  /** イントロ落下：開始高さの倍率（大きいほど高所から） */
+  introDropHeightScale?: number;
+  /** 正誤判定キャノン重力の Y 成分の大きさ（下向きは負で適用） */
+  feedbackPhysicsGravityY?: number;
+  /** 正誤判定で飛ばすブロックのインパルス・トルク倍率（初速） */
+  feedbackImpulseScale?: number;
 };
 
 function lookAtForGrid(gridSize: number): THREE.Vector3 {
@@ -616,6 +624,8 @@ function IntroBlocks({
   visualMeshScale,
   debugNormalMaterial,
   semiGlossColor,
+  introFallTimeScale,
+  introDropHeightScale,
 }: {
   cells: { key: string; center: THREE.Vector3 }[];
   materialVariant: BlockMaterialVariant;
@@ -624,6 +634,8 @@ function IntroBlocks({
   visualMeshScale: number;
   debugNormalMaterial?: boolean;
   semiGlossColor: string;
+  introFallTimeScale: number;
+  introDropHeightScale: number;
 }) {
   const doneRef = useRef(false);
   const startRef = useRef<number | null>(null);
@@ -637,10 +649,16 @@ function IntroBlocks({
         const dropExtra = (h - 0.5) * 0.35;
         const start = center
           .clone()
-          .add(new THREE.Vector3((h - 0.5) * 0.4, gridSize * 1.7 + 0.4 + dropExtra, (hash01(key + "z") - 0.5) * 0.5));
+          .add(
+            new THREE.Vector3(
+              (h - 0.5) * 0.4,
+              (gridSize * 1.7 + 0.4 + dropExtra) * introDropHeightScale,
+              (hash01(key + "z") - 0.5) * 0.5
+            )
+          );
         return { key, center, stagger, start };
       }),
-    [cells, gridSize]
+    [cells, gridSize, introDropHeightScale]
   );
 
   const groupRefs = useRef<Map<string, THREE.Group>>(new Map());
@@ -655,7 +673,7 @@ function IntroBlocks({
     const fallPortion = 0.9;
     let all = true;
     for (const m of meta) {
-      const u = THREE.MathUtils.clamp((t - m.stagger) / dur, 0, 1);
+      const u = THREE.MathUtils.clamp(((t - m.stagger) * introFallTimeScale) / dur, 0, 1);
       const g = groupRefs.current.get(m.key);
       if (!g) continue;
       const pos = m.start.clone();
@@ -1000,6 +1018,7 @@ function FeedbackScene({
   goldEnvMapBoost = 0,
   debugNormalMaterial,
   semiGlossColor,
+  feedbackImpulseScale = 1,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
@@ -1012,6 +1031,7 @@ function FeedbackScene({
   goldEnvMapBoost?: number;
   debugNormalMaterial?: boolean;
   semiGlossColor: string;
+  feedbackImpulseScale?: number;
 }) {
   const center = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
   const [showFalling, setShowFalling] = useState(true);
@@ -1048,6 +1068,9 @@ function FeedbackScene({
         impulse = [dir.x * 0.8, -1.2, dir.z * 0.8];
         torque = [0.05, 0.02, 0.05];
       }
+      const s = feedbackImpulseScale;
+      impulse = [impulse[0] * s, impulse[1] * s, impulse[2] * s];
+      torque = [torque[0] * s, torque[1] * s, torque[2] * s];
       out.push({
         key: k,
         impulse,
@@ -1056,7 +1079,7 @@ function FeedbackScene({
       });
     }
     return out;
-  }, [puzzle.visibleKeys, center, pattern]);
+  }, [puzzle.visibleKeys, center, pattern, feedbackImpulseScale]);
 
   return (
     <>
@@ -1477,6 +1500,10 @@ export default function HiddenStackCanvas({
     followPointIntensity: 18.5,
   },
   feedbackFloorGridOpacity = 0.2,
+  introFallTimeScale = 1,
+  introDropHeightScale = 1,
+  feedbackPhysicsGravityY = 16,
+  feedbackImpulseScale = 1,
 }: HiddenStackCanvasProps) {
   const gridSize = puzzle.gridSize;
   const visualMeshScale = useMemo(() => BLOCK_MESH_BASE_OVERLAP * blockMeshVisualScale, [blockMeshVisualScale]);
@@ -1557,6 +1584,8 @@ export default function HiddenStackCanvas({
                 visualMeshScale={visualMeshScale}
                 debugNormalMaterial={debugNormalMaterial}
                 semiGlossColor={semiGlossColor}
+                introFallTimeScale={introFallTimeScale}
+                introDropHeightScale={introDropHeightScale}
               />
             )}
             {phase === "think" && (
@@ -1569,7 +1598,11 @@ export default function HiddenStackCanvas({
               />
             )}
             {phase === "feedback" && !reviewMode && (
-              <Physics key={feedbackKey} gravity={[0, -16, 0]} defaultContactMaterial={{ friction: 0.6, restitution: 0.12 }}>
+              <Physics
+                key={feedbackKey}
+                gravity={[0, -Math.max(1, feedbackPhysicsGravityY), 0]}
+                defaultContactMaterial={{ friction: 0.6, restitution: 0.12 }}
+              >
                 <FeedbackScene
                   puzzle={puzzle}
                   materialVariant={materialVariant}
@@ -1582,6 +1615,7 @@ export default function HiddenStackCanvas({
                   goldEnvMapBoost={feedbackSpotlightParams.goldEnvMapBoost}
                   debugNormalMaterial={debugNormalMaterial}
                   semiGlossColor={semiGlossColor}
+                  feedbackImpulseScale={feedbackImpulseScale}
                 />
               </Physics>
             )}

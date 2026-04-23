@@ -1,12 +1,13 @@
 "use client";
 
 import { Suspense, useId } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useSiteTheme } from "@/components/SiteThemeProvider";
 import { SITE_THEMES, SITE_THEME_IDS, type SiteThemeId } from "@/lib/themes";
 import { useI18n } from "@/lib/i18n-context";
 
 function DebugThemeSelectorInner() {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { themeId, setThemeId } = useSiteTheme();
   const { t } = useI18n();
@@ -14,9 +15,12 @@ function DebugThemeSelectorInner() {
 
   if (searchParams.get("devtj") !== "true") return null;
 
+  /** トップのみ左下。ラボ等は左上でゲーム用デバッグパネルと干渉しにくくする */
+  const cornerClass = pathname === "/" ? "bottom-3 left-3" : "top-3 left-3";
+
   return (
     <div
-      className="pointer-events-auto fixed bottom-3 left-3 z-[60] w-[min(100vw-1.5rem,220px)] rounded-xl border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_55%,var(--color-bg))] px-2.5 py-2 shadow-lg backdrop-blur-sm"
+      className={`pointer-events-auto fixed z-[60] w-[min(100vw-1.5rem,220px)] rounded-xl border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_55%,var(--color-bg))] px-2.5 py-2 shadow-lg backdrop-blur-sm ${cornerClass}`}
       role="region"
       aria-label={t("common.debugSiteTheme")}
     >

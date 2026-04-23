@@ -96,6 +96,19 @@ const SPOT_GOLD_ENV_BOOST_MAX = 5;
 const SPOT_FOLLOW_POINT_MIN = 0;
 const SPOT_FOLLOW_POINT_MAX = 50;
 
+const INTRO_FALL_TIME_SCALE_MIN = 0.35;
+const INTRO_FALL_TIME_SCALE_MAX = 2.5;
+const DEFAULT_INTRO_FALL_TIME_SCALE = 1;
+const INTRO_DROP_HEIGHT_SCALE_MIN = 0.35;
+const INTRO_DROP_HEIGHT_SCALE_MAX = 2.2;
+const DEFAULT_INTRO_DROP_HEIGHT_SCALE = 1;
+const FEEDBACK_GRAVITY_Y_MIN = 6;
+const FEEDBACK_GRAVITY_Y_MAX = 28;
+const DEFAULT_FEEDBACK_GRAVITY_Y = 16;
+const FEEDBACK_IMPULSE_SCALE_MIN = 0.35;
+const FEEDBACK_IMPULSE_SCALE_MAX = 1.8;
+const DEFAULT_FEEDBACK_IMPULSE_SCALE = 1;
+
 type Phase = "intro" | "think" | "feedback";
 type StatusOverlayPhase = "hidden" | "pending" | "animating" | "docked";
 
@@ -125,6 +138,10 @@ export default function HiddenStackGame() {
   const [isSpotlightDebugExpanded, setIsSpotlightDebugExpanded] = useState(false);
   const [isGoldLumpDebugExpanded, setIsGoldLumpDebugExpanded] = useState(false);
   const [feedbackFloorGridOpacity, setFeedbackFloorGridOpacity] = useState(DEFAULT_FEEDBACK_FLOOR_GRID_OPACITY);
+  const [introFallTimeScale, setIntroFallTimeScale] = useState(DEFAULT_INTRO_FALL_TIME_SCALE);
+  const [introDropHeightScale, setIntroDropHeightScale] = useState(DEFAULT_INTRO_DROP_HEIGHT_SCALE);
+  const [feedbackPhysicsGravityY, setFeedbackPhysicsGravityY] = useState(DEFAULT_FEEDBACK_GRAVITY_Y);
+  const [feedbackImpulseScale, setFeedbackImpulseScale] = useState(DEFAULT_FEEDBACK_IMPULSE_SCALE);
 
   const [puzzle, setPuzzle] = useState(() => generateHiddenStackPuzzle(`${Date.now()}`, { gridSize: 3 }));
   const [phase, setPhase] = useState<Phase>("intro");
@@ -504,6 +521,61 @@ export default function HiddenStackGame() {
                 >
                   {debugNormalMaterial ? t("games.hiddenStack.debugNormalProbeOn") : t("games.hiddenStack.debugNormalProbeOff")}
                 </button>
+              </div>
+              <div>
+                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugBlockMotion")}</div>
+                <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugIntroFallTimeScale")}</span>
+                  <input
+                    type="range"
+                    min={INTRO_FALL_TIME_SCALE_MIN}
+                    max={INTRO_FALL_TIME_SCALE_MAX}
+                    step={0.05}
+                    value={introFallTimeScale}
+                    onChange={(e) => setIntroFallTimeScale(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{introFallTimeScale.toFixed(2)}×</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugIntroDropHeightScale")}</span>
+                  <input
+                    type="range"
+                    min={INTRO_DROP_HEIGHT_SCALE_MIN}
+                    max={INTRO_DROP_HEIGHT_SCALE_MAX}
+                    step={0.05}
+                    value={introDropHeightScale}
+                    onChange={(e) => setIntroDropHeightScale(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{introDropHeightScale.toFixed(2)}×</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugFeedbackGravityY")}</span>
+                  <input
+                    type="range"
+                    min={FEEDBACK_GRAVITY_Y_MIN}
+                    max={FEEDBACK_GRAVITY_Y_MAX}
+                    step={0.5}
+                    value={feedbackPhysicsGravityY}
+                    onChange={(e) => setFeedbackPhysicsGravityY(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{feedbackPhysicsGravityY.toFixed(1)}</span>
+                </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugFeedbackImpulseScale")}</span>
+                  <input
+                    type="range"
+                    min={FEEDBACK_IMPULSE_SCALE_MIN}
+                    max={FEEDBACK_IMPULSE_SCALE_MAX}
+                    step={0.05}
+                    value={feedbackImpulseScale}
+                    onChange={(e) => setFeedbackImpulseScale(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{feedbackImpulseScale.toFixed(2)}×</span>
+                </label>
               </div>
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugMeshCrevice")}</div>
@@ -1041,6 +1113,10 @@ export default function HiddenStackGame() {
                     woodTexRimLightIntensity={woodTexRimLightIntensity}
                     feedbackSpotlightParams={feedbackSpotlightParams}
                     feedbackFloorGridOpacity={feedbackFloorGridOpacity}
+                    introFallTimeScale={introFallTimeScale}
+                    introDropHeightScale={introDropHeightScale}
+                    feedbackPhysicsGravityY={feedbackPhysicsGravityY}
+                    feedbackImpulseScale={feedbackImpulseScale}
                   />
                 </div>
                 {phase === "feedback" && reviewMode && (
