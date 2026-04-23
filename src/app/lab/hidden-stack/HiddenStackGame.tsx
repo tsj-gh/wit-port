@@ -73,9 +73,10 @@ const DEFAULT_WOOD_TEX_RIM_LIGHT = 0.5;
 const REVIEW_MESH_VISUAL_SCALE_MIN = 0.8;
 const REVIEW_MESH_VISUAL_SCALE_MAX = 1.2;
 const DEFAULT_REVIEW_MESH_VISUAL_SCALE = 1.06;
-const FEEDBACK_FLOOR_GRID_OPACITY_MIN = 0.06;
-const FEEDBACK_FLOOR_GRID_OPACITY_MAX = 0.52;
-const DEFAULT_FEEDBACK_FLOOR_GRID_OPACITY = 0.2;
+/** 正誤判定中の可視セル枠線（GhostBox）のみ。床格子は変更しない */
+const FEEDBACK_VISIBLE_CELL_OUTLINE_OPACITY_MIN = 0.06;
+const FEEDBACK_VISIBLE_CELL_OUTLINE_OPACITY_MAX = 0.72;
+const DEFAULT_FEEDBACK_VISIBLE_CELL_OUTLINE_OPACITY = 0.38;
 const GOLD_ENV_INTENSITY_MIN = 0;
 const GOLD_ENV_INTENSITY_MAX = 4;
 const GOLD_TEX_REPEAT_MIN = 0.1;
@@ -137,7 +138,9 @@ export default function HiddenStackGame() {
   const [isWoodTexDebugExpanded, setIsWoodTexDebugExpanded] = useState(false);
   const [isSpotlightDebugExpanded, setIsSpotlightDebugExpanded] = useState(false);
   const [isGoldLumpDebugExpanded, setIsGoldLumpDebugExpanded] = useState(false);
-  const [feedbackFloorGridOpacity, setFeedbackFloorGridOpacity] = useState(DEFAULT_FEEDBACK_FLOOR_GRID_OPACITY);
+  const [feedbackVisibleCellOutlineOpacity, setFeedbackVisibleCellOutlineOpacity] = useState(
+    DEFAULT_FEEDBACK_VISIBLE_CELL_OUTLINE_OPACITY
+  );
   const [introFallTimeScale, setIntroFallTimeScale] = useState(DEFAULT_INTRO_FALL_TIME_SCALE);
   const [introDropHeightScale, setIntroDropHeightScale] = useState(DEFAULT_INTRO_DROP_HEIGHT_SCALE);
   const [feedbackPhysicsGravityY, setFeedbackPhysicsGravityY] = useState(DEFAULT_FEEDBACK_GRAVITY_Y);
@@ -633,17 +636,17 @@ export default function HiddenStackGame() {
                 {isSpotlightDebugExpanded && (
                   <div className="mt-2">
                     <label className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugFeedbackFloorGridOpacity")}</span>
+                      <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugFeedbackVisibleCellOutlineOpacity")}</span>
                       <input
                         type="range"
-                        min={FEEDBACK_FLOOR_GRID_OPACITY_MIN}
-                        max={FEEDBACK_FLOOR_GRID_OPACITY_MAX}
+                        min={FEEDBACK_VISIBLE_CELL_OUTLINE_OPACITY_MIN}
+                        max={FEEDBACK_VISIBLE_CELL_OUTLINE_OPACITY_MAX}
                         step={0.02}
-                        value={feedbackFloorGridOpacity}
-                        onChange={(e) => setFeedbackFloorGridOpacity(Number(e.target.value))}
+                        value={feedbackVisibleCellOutlineOpacity}
+                        onChange={(e) => setFeedbackVisibleCellOutlineOpacity(Number(e.target.value))}
                         className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
                       />
-                      <span className="tabular-nums text-[var(--color-text)]">{feedbackFloorGridOpacity.toFixed(2)}</span>
+                      <span className="tabular-nums text-[var(--color-text)]">{feedbackVisibleCellOutlineOpacity.toFixed(2)}</span>
                     </label>
                     <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugOverallLightRatio")}</span>
@@ -1112,7 +1115,7 @@ export default function HiddenStackGame() {
                     woodTexFillLightSecondaryIntensity={woodTexFillLightSecondaryIntensity}
                     woodTexRimLightIntensity={woodTexRimLightIntensity}
                     feedbackSpotlightParams={feedbackSpotlightParams}
-                    feedbackFloorGridOpacity={feedbackFloorGridOpacity}
+                    feedbackVisibleCellOutlineOpacity={feedbackVisibleCellOutlineOpacity}
                     introFallTimeScale={introFallTimeScale}
                     introDropHeightScale={introDropHeightScale}
                     feedbackPhysicsGravityY={feedbackPhysicsGravityY}

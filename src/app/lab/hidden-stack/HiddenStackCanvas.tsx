@@ -323,8 +323,8 @@ type HiddenStackCanvasProps = {
   woodTexRimLightIntensity?: number;
   /** 正誤判定中スポットライト演出パラメータ */
   feedbackSpotlightParams?: FeedbackSpotlightParams;
-  /** 正誤判定フェーズ中の床格子・プレートの不透明度（大きいほど濃い） */
-  feedbackFloorGridOpacity?: number;
+  /** 正誤判定中：可視ブロック位置の枠線（GhostBox）の不透明度 */
+  feedbackVisibleCellOutlineOpacity?: number;
   /** イントロ落下：時間進み倍率（大きいほど早く着地＝初速感） */
   introFallTimeScale?: number;
   /** イントロ落下：開始高さの倍率（大きいほど高所から） */
@@ -537,16 +537,7 @@ function BlockMaterial({
   return <SemiGlossDustyMaterial color={semiGlossColor} />;
 }
 
-function FloorGrid({
-  gridSize,
-  feedbackPhase = false,
-  feedbackGridOpacity = 0.2,
-}: {
-  gridSize: number;
-  feedbackPhase?: boolean;
-  /** 正誤判定中：線・床プレートの不透明度（大きいほど濃く見える） */
-  feedbackGridOpacity?: number;
-}) {
+function FloorGrid({ gridSize }: { gridSize: number }) {
   /** 各 `<Line>` は2点のみ＝独立線分。drei の Line は points 全体が一本の折れ線になるため結合しない */
   const verticalSegments = useMemo(
     () =>
@@ -564,30 +555,13 @@ function FloorGrid({
       ]),
     [gridSize]
   );
-  const lineOpacity = feedbackPhase ? THREE.MathUtils.clamp(feedbackGridOpacity, 0.04, 0.55) : 0.45;
-  const lineProps = useMemo(
-    () =>
-      feedbackPhase
-        ? ({
-            color: "#dce3ed" as const,
-            lineWidth: 1,
-            dashed: false,
-            transparent: true,
-            opacity: lineOpacity,
-          } as const)
-        : ({
-            color: "#9ca3af" as const,
-            lineWidth: 1,
-            dashed: false,
-            transparent: true,
-            opacity: 0.45,
-          } as const),
-    [feedbackPhase, lineOpacity]
-  );
-  const planeOpacity = feedbackPhase
-    ? THREE.MathUtils.clamp(lineOpacity * 1.15 + 0.04, 0.08, 0.48)
-    : 0.92;
-  const planeColor = feedbackPhase ? "#f0f3f8" : "#e8e4dc";
+  const lineProps = {
+    color: "#9ca3af" as const,
+    lineWidth: 1,
+    dashed: false,
+    transparent: true,
+    opacity: 0.45,
+  };
   return (
     <group>
       {verticalSegments.map((points, i) => (
@@ -598,13 +572,7 @@ function FloorGrid({
       ))}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[gridSize / 2, 0, gridSize / 2]}>
         <planeGeometry args={[gridSize + 0.24, gridSize + 0.24]} />
-        <meshStandardMaterial
-          color={planeColor}
-          roughness={0.95}
-          metalness={0}
-          transparent
-          opacity={planeOpacity}
-        />
+        <meshStandardMaterial color="#e8e4dc" roughness={0.95} metalness={0} transparent opacity={0.92} />
       </mesh>
     </group>
   );
@@ -788,19 +756,27 @@ function GhostBox({
   visualMeshScale,
   materialVariant,
   correctGoldFeedback,
+  outlineOpacity,
 }: {
   center: THREE.Vector3;
   visualMeshScale: number;
   materialVariant: BlockMaterialVariant;
   /** 正解時の金塊演出中はエッジを細いゴールドブラウンに */
   correctGoldFeedback?: boolean;
+  /** 指定時は可視セル枠の不透明度（正誤判定デバッグ）。未指定は従来の木目／非木目で固定 */
+  outlineOpacity?: number;
 }) {
   const edges = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(0.96, 0.96, 0.96)), []);
+  const o = outlineOpacity != null ? THREE.MathUtils.clamp(outlineOpacity, 0.04, 0.85) : null;
   const edge = correctGoldFeedback
     ? ({ color: "#7a5e38" as const, opacity: 0.2 } as const)
-    : isWoodLikeMaterial(materialVariant)
-      ? ({ color: "#0a0a0b" as const, opacity: 0.58 } as const)
-      : ({ color: "#0f172a" as const, opacity: 0.48 } as const);
+    : o != null
+      ? isWoodLikeMaterial(materialVariant)
+        ? ({ color: "#0a0a0b" as const, opacity: o } as const)
+        : ({ color: "#0f172a" as const, opacity: o } as const)
+      : isWoodLikeMaterial(materialVariant)
+        ? ({ color: "#0a0a0b" as const, opacity: 0.58 } as const)
+        : ({ color: "#0f172a" as const, opacity: 0.48 } as const);
   return (
     <lineSegments position={center} geometry={edges} scale={visualMeshScale} renderOrder={1}>
       <lineBasicMaterial color={edge.color} transparent opacity={edge.opacity} depthTest depthWrite={false} />
@@ -1019,6 +995,7 @@ function FeedbackScene({
   debugNormalMaterial,
   semiGlossColor,
   feedbackImpulseScale = 1,
+  feedbackVisibleCellOutlineOpacity = 0.38,
 }: {
   puzzle: HiddenStackPuzzle;
   materialVariant: BlockMaterialVariant;
@@ -1032,6 +1009,7 @@ function FeedbackScene({
   debugNormalMaterial?: boolean;
   semiGlossColor: string;
   feedbackImpulseScale?: number;
+  feedbackVisibleCellOutlineOpacity: number;
 }) {
   const center = useMemo(() => lookAtForGrid(gridSize), [gridSize]);
   const [showFalling, setShowFalling] = useState(true);
@@ -1091,6 +1069,7 @@ function FeedbackScene({
           visualMeshScale={visualMeshScale}
           materialVariant={materialVariant}
           correctGoldFeedback={feedbackAnswerCorrect === true}
+          outlineOpacity={feedbackVisibleCellOutlineOpacity}
         />
       ))}
       {Array.from(puzzle.hiddenKeys).map((k) => {
@@ -1499,7 +1478,7 @@ export default function HiddenStackCanvas({
     goldEnvMapBoost: 1.25,
     followPointIntensity: 18.5,
   },
-  feedbackFloorGridOpacity = 0.2,
+  feedbackVisibleCellOutlineOpacity = 0.38,
   introFallTimeScale = 1,
   introDropHeightScale = 1,
   feedbackPhysicsGravityY = 16,
@@ -1570,11 +1549,7 @@ export default function HiddenStackCanvas({
             envMapIntensity={woodTexEnvMapIntensity}
             repeatScale={woodTexRepeatScale}
           >
-            <FloorGrid
-              gridSize={gridSize}
-              feedbackPhase={phase === "feedback"}
-              feedbackGridOpacity={feedbackFloorGridOpacity}
-            />
+            <FloorGrid gridSize={gridSize} />
             {phase === "intro" && (
               <IntroBlocks
                 cells={cells}
@@ -1616,6 +1591,7 @@ export default function HiddenStackCanvas({
                   debugNormalMaterial={debugNormalMaterial}
                   semiGlossColor={semiGlossColor}
                   feedbackImpulseScale={feedbackImpulseScale}
+                  feedbackVisibleCellOutlineOpacity={feedbackVisibleCellOutlineOpacity}
                 />
               </Physics>
             )}

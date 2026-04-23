@@ -298,7 +298,7 @@
       "debugMovementRange": "Movement Range",
       "debugGoldEnvMapBoostFeedback": "Gold envMap add (feedback only)",
       "debugFollowPointIntensity": "Follow point light intensity",
-      "debugFeedbackFloorGridOpacity": "Feedback floor grid opacity",
+      "debugFeedbackVisibleCellOutlineOpacity": "Feedback visible cell outline opacity",
       "matA": "A Wood (procedural)",
       "matB": "B Wood (texture)",
       "matC": "C Semi-gloss",

@@ -298,7 +298,7 @@
       "debugMovementRange": "Movement Range",
       "debugGoldEnvMapBoostFeedback": "金 envMap 加算（正誤判定中のみ）",
       "debugFollowPointIntensity": "追従 PointLight 強度",
-      "debugFeedbackFloorGridOpacity": "正誤判定・床格子の不透明度",
+      "debugFeedbackVisibleCellOutlineOpacity": "正誤判定・可視ブロック枠線の不透明度",
       "matA": "A木目調",
       "matB": "B木(テクスチャ)",
       "matC": "Cセミグロス",
