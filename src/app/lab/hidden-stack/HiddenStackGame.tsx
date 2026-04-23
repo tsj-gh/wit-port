@@ -699,6 +699,19 @@ export default function HiddenStackGame() {
                   />
                   <span className="tabular-nums text-[var(--color-text)]">{thinkIdleOrbitPauseSec.toFixed(2)}s</span>
                 </label>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugOrthoZoomMul")}</span>
+                  <input
+                    type="range"
+                    min={ORTHO_ZOOM_MUL_MIN}
+                    max={ORTHO_ZOOM_MUL_MAX}
+                    step={0.01}
+                    value={orthoCameraZoomMul}
+                    onChange={(e) => setOrthoCameraZoomMul(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{orthoCameraZoomMul.toFixed(2)}×</span>
+                </label>
               </div>
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugMeshCrevice")}</div>
@@ -1260,16 +1273,16 @@ export default function HiddenStackGame() {
                 </div>
                 {phase === "feedback" && reviewMode && (
                   <div
-                    className={`pointer-events-none absolute inset-x-0 bottom-5 z-[52] flex justify-center transition-opacity duration-500 ease-out ${
+                    className={`pointer-events-none absolute bottom-3 left-3 z-[52] flex justify-start transition-opacity duration-500 ease-out max-lg:bottom-2 max-lg:left-2 ${
                       reviewSwipeHintVisible ? "opacity-100" : "opacity-0"
                     }`}
                     aria-hidden
                   >
-                    <div className="rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_94%,var(--color-bg))] px-3 py-2 shadow-sm backdrop-blur-sm">
+                    <div className="origin-bottom-left scale-[0.72] rounded-2xl border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_94%,var(--color-bg))] px-2 py-1.5 shadow-sm backdrop-blur-sm max-lg:scale-[0.62]">
                       <svg
                         className="hs-review-swipe-hint__svg text-[var(--color-text)]"
-                        width={120}
-                        height={40}
+                        width={100}
+                        height={34}
                         viewBox="0 0 120 40"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
@@ -1298,7 +1311,7 @@ export default function HiddenStackGame() {
                       statusOverlayPhase === "animating" ? "hs-status-overlay--animating" : "hs-status-overlay--docked"
                     } ${isAnswerCorrect ? "hs-status-overlay--ok" : "hs-status-overlay--ng"} ${
                       statusMessageStyle === "plain" ? "hs-status-overlay--plain" : ""
-                    }`}
+                    } ${statusOverlayPhase === "docked" && reviewMode ? "hs-status-overlay--docked-with-review" : ""}`}
                     style={{
                       ["--hs-result-origin-y" as string]: `${resultMessageOriginYPercent}%`,
                     }}
@@ -1306,7 +1319,14 @@ export default function HiddenStackGame() {
                       if (statusOverlayPhase === "animating") setStatusOverlayPhase("docked");
                     }}
                   >
-                    <p className="m-0 font-bold" style={{ fontSize: `${resultMessageFontPx}px` }}>
+                    <p
+                      className="m-0 font-bold"
+                      style={
+                        isLgViewport
+                          ? { fontSize: `${resultMessageFontPx}px` }
+                          : { fontSize: "clamp(0.66rem, 3.25vw, 0.92rem)" }
+                      }
+                    >
                       {isAnswerCorrect ? (
                         resultLine
                       ) : (
@@ -1316,6 +1336,16 @@ export default function HiddenStackGame() {
                         </>
                       )}
                     </p>
+                    {statusOverlayPhase === "docked" && reviewMode && (
+                      <button
+                        type="button"
+                        onClick={() => setReviewShowVisibleSolids((v) => !v)}
+                        className="pointer-events-auto mt-1.5 w-full max-w-[min(100%,14rem)] shrink-0 rounded-full border border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_88%,var(--color-bg))] px-3 py-1.5 text-xs font-bold text-[var(--color-text)]"
+                        aria-pressed={reviewShowVisibleSolids}
+                      >
+                        {reviewShowVisibleSolids ? t("games.hiddenStack.reviewBlocksOn") : t("games.hiddenStack.reviewBlocksOff")}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1325,37 +1355,24 @@ export default function HiddenStackGame() {
                 className="z-40 w-full shrink-0 border-t border-[color-mix(in_srgb,var(--color-text)_12%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_96%,var(--color-bg))] px-3 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 backdrop-blur-md lg:mt-auto"
               >
                 <div className="mx-auto flex w-full max-w-[520px] flex-col gap-1.5 lg:mx-0 lg:max-w-none">
-                  <div className="flex w-full flex-wrap items-end justify-center gap-x-4 gap-y-2 lg:min-h-[44px]">
+                  <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-2 lg:min-h-[44px] lg:justify-center lg:gap-x-4">
                     {phase === "feedback" && !reviewMode && (
                       <button
                         type="button"
                         onClick={startReview}
-                        className="rounded-full border border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] bg-transparent px-4 py-2 text-sm font-bold text-[var(--color-text)] sm:px-5"
+                        className="shrink-0 rounded-full border border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] bg-transparent px-3 py-2 text-xs font-bold text-[var(--color-text)] max-lg:max-w-[5.5rem] max-lg:truncate sm:px-5 sm:text-sm"
                       >
                         {t("games.hiddenStack.review")}
                       </button>
                     )}
-                    {phase === "feedback" && reviewMode && (
-                      <button
-                        type="button"
-                        onClick={() => setReviewShowVisibleSolids((v) => !v)}
-                        className="min-w-[7.5rem] rounded-full border border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] bg-[color-mix(in_srgb,var(--color-surface)_88%,var(--color-bg))] px-4 py-2 text-sm font-bold text-[var(--color-text)] sm:px-5"
-                        aria-pressed={reviewShowVisibleSolids}
-                      >
-                        {reviewShowVisibleSolids ? t("games.hiddenStack.reviewBlocksOn") : t("games.hiddenStack.reviewBlocksOff")}
-                      </button>
-                    )}
-                    <div className="flex items-end gap-1 sm:gap-1.5">
+                    <div className="flex min-w-0 flex-1 items-baseline justify-center gap-2 sm:gap-2.5 lg:gap-3">
                       {phase === "think" && (
-                        <span className="max-w-[14rem] whitespace-normal text-left text-2xl font-bold leading-snug text-[var(--color-text)] sm:max-w-none sm:whitespace-nowrap sm:text-3xl lg:max-w-[16rem] lg:text-[1.5rem]">
+                        <span className="min-w-0 max-w-[min(58vw,13rem)] shrink truncate text-left text-sm font-bold leading-tight text-[var(--color-text)] sm:max-w-none sm:shrink-0 sm:truncate sm:text-base lg:max-w-none lg:text-[1.05rem]">
                           {t("games.hiddenStack.thinkHiddenCountLead")}
                         </span>
                       )}
-                      <div className="relative flex h-10 min-w-[2.35ch] shrink-0 items-center justify-center sm:h-11">
-                        <span className="pointer-events-none select-none text-4xl font-black tabular-nums text-[var(--color-primary)] opacity-[0.18] sm:text-5xl lg:text-[2.1rem]">
-                          {selectedN}
-                        </span>
-                        <span className="absolute text-3xl font-black tabular-nums text-[var(--color-text)] sm:text-4xl lg:text-[1.65rem]">
+                      <div className="grid w-[3.25ch] min-w-[3.25ch] max-w-[3.25ch] shrink-0 place-items-center text-center tabular-nums sm:w-[3.5ch] sm:min-w-[3.5ch] sm:max-w-[3.5ch]">
+                        <span className="text-2xl font-black tabular-nums leading-none text-[var(--color-text)] sm:text-3xl lg:text-[1.65rem]">
                           {selectedN}
                         </span>
                       </div>
@@ -1364,7 +1381,7 @@ export default function HiddenStackGame() {
                       <button
                         type="button"
                         onClick={() => newRound()}
-                        className="hs-cta-pulse rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-[var(--color-on-primary)] sm:px-6 sm:text-base"
+                        className="hs-cta-pulse shrink-0 rounded-full bg-[var(--color-primary)] px-4 py-2 text-xs font-bold text-[var(--color-on-primary)] sm:px-6 sm:text-base"
                       >
                         {t("games.hiddenStack.nextRound")}
                       </button>
@@ -1373,7 +1390,7 @@ export default function HiddenStackGame() {
                         type="button"
                         onClick={submitAnswer}
                         disabled={phase !== "think"}
-                        className={`rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-black text-[var(--color-on-primary)] disabled:opacity-40 sm:px-6 sm:text-base ${
+                        className={`shrink-0 rounded-full bg-[var(--color-accent)] px-4 py-2 text-sm font-black text-[var(--color-on-primary)] disabled:opacity-40 sm:px-6 sm:text-base ${
                           phase === "think" ? "hs-cta-pulse" : ""
                         }`}
                       >
@@ -1438,17 +1455,56 @@ export default function HiddenStackGame() {
 
           <aside className="order-2 flex w-full shrink-0 flex-col lg:order-none lg:min-h-0 lg:w-[min(360px,35%)] lg:max-w-[35%] lg:flex-[0_1_auto] lg:self-start lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-y-contain">
             <div className="mt-1 flex w-full flex-col gap-2 lg:mt-0">
+              <div className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2 text-[var(--color-text)] lg:hidden">
+                <label className="mb-1 block text-xs font-medium text-[var(--color-muted)]">{t("games.hiddenStack.chooseGrade")}</label>
+                <div
+                  className="flex w-full min-w-0 gap-2 overflow-x-auto py-1 [scrollbar-width:none] [-ms-overflow-style:none] snap-x snap-mandatory [&::-webkit-scrollbar]:[display:none]"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  {(
+                    [
+                      { grade: 1 as const, size: 3 as const, labelKey: "games.hiddenStack.gradeG1" as const },
+                      { grade: 2 as const, size: 4 as const, labelKey: "games.hiddenStack.gradeG2" as const },
+                      { grade: 3 as const, size: 5 as const, labelKey: "games.hiddenStack.gradeG3" as const },
+                    ] as const
+                  ).map(({ grade, size, labelKey }) => {
+                    const isActive = gridSize === size;
+                    return (
+                      <button
+                        key={grade}
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={() => newRound(size)}
+                        className={`min-h-[44px] shrink-0 snap-center touch-manipulation whitespace-nowrap rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                          isActive
+                            ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
+                            : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] text-[var(--color-text)] hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]"
+                        }`}
+                      >
+                        {t(labelKey)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <details className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] text-[var(--color-text)] lg:hidden">
                 <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-[var(--color-text)]">
                   {t("games.hiddenStack.howToTitle")}
                 </summary>
                 <div className="border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] px-3 pb-3 pt-2 text-xs leading-relaxed text-[var(--color-muted)]">
                   <p className="m-0">{t("games.hiddenStack.howToBody")}</p>
-                  <label className="mb-1 mt-3 block text-xs text-[var(--color-muted)]">{t("games.hiddenStack.chooseGrade")}</label>
-                  <div
-                    className="flex w-full min-w-0 gap-2 overflow-x-auto py-1 [scrollbar-width:none] [-ms-overflow-style:none] snap-x snap-mandatory [&::-webkit-scrollbar]:[display:none]"
-                    style={{ WebkitOverflowScrolling: "touch" }}
-                  >
+                </div>
+              </details>
+
+              <div className="mt-1 hidden w-full flex-col gap-2 lg:mt-0 lg:flex lg:shrink-0">
+                <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
+                  <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.hiddenStack.howToTitle")}</h3>
+                  <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">{t("games.hiddenStack.howToBody")}</p>
+                </section>
+                <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
+                  <label className="mb-1 block text-xs font-medium text-[var(--color-muted)]">{t("games.hiddenStack.chooseGrade")}</label>
+                  <div className="flex flex-wrap gap-2">
                     {(
                       [
                         { grade: 1 as const, size: 3 as const, labelKey: "games.hiddenStack.gradeG1" as const },
@@ -1463,7 +1519,7 @@ export default function HiddenStackGame() {
                           type="button"
                           aria-pressed={isActive}
                           onClick={() => newRound(size)}
-                          className={`min-h-[44px] shrink-0 snap-center touch-manipulation whitespace-nowrap rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                          className={`min-h-[40px] rounded-lg border px-3 py-2 text-xs font-medium transition-colors sm:text-sm ${
                             isActive
                               ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
                               : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] text-[var(--color-text)] hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]"
@@ -1473,40 +1529,6 @@ export default function HiddenStackGame() {
                         </button>
                       );
                     })}
-                  </div>
-                </div>
-              </details>
-
-              <div className="mt-1 hidden w-full flex-col gap-2 lg:mt-0 lg:flex lg:shrink-0">
-                <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
-                  <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("games.hiddenStack.howToTitle")}</h3>
-                  <p className="mt-2 m-0 text-xs leading-relaxed text-[var(--color-muted)]">{t("games.hiddenStack.howToBody")}</p>
-                  <label className="mb-1 mt-3 block text-xs text-[var(--color-muted)]">{t("games.hiddenStack.chooseGrade")}</label>
-                  <div className="flex flex-wrap gap-2">
-                      {(
-                        [
-                          { grade: 1 as const, size: 3 as const, labelKey: "games.hiddenStack.gradeG1" as const },
-                          { grade: 2 as const, size: 4 as const, labelKey: "games.hiddenStack.gradeG2" as const },
-                          { grade: 3 as const, size: 5 as const, labelKey: "games.hiddenStack.gradeG3" as const },
-                        ] as const
-                      ).map(({ grade, size, labelKey }) => {
-                        const isActive = gridSize === size;
-                        return (
-                          <button
-                            key={grade}
-                            type="button"
-                            aria-pressed={isActive}
-                            onClick={() => newRound(size)}
-                            className={`min-h-[40px] rounded-lg border px-3 py-2 text-xs font-medium transition-colors sm:text-sm ${
-                              isActive
-                                ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
-                                : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_78%,var(--color-bg))] text-[var(--color-text)] hover:bg-[color-mix(in_srgb,var(--color-text)_70%,var(--color-bg))]"
-                            }`}
-                          >
-                            {t(labelKey)}
-                          </button>
-                        );
-                      })}
                   </div>
                 </section>
               </div>
@@ -1555,7 +1577,27 @@ export default function HiddenStackGame() {
           top: 20px;
           right: 20px;
           transform: scale(0.8);
+          transform-origin: top right;
           opacity: 1;
+        }
+        .hs-status-overlay--docked-with-review {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          pointer-events: auto;
+          white-space: normal;
+        }
+        .hs-status-overlay--docked-with-review > p {
+          pointer-events: none;
+          white-space: nowrap;
+        }
+        @media (max-width: 1023px) {
+          .hs-status-overlay--docked {
+            top: max(6px, env(safe-area-inset-top, 0px));
+            right: max(6px, env(safe-area-inset-right, 0px));
+            padding: 5px 9px;
+            transform: scale(0.68);
+          }
         }
         .hs-review-swipe-hint__svg {
           display: block;

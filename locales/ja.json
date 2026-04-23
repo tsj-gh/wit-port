@@ -353,7 +353,7 @@
       "gradeG1": "G1",
       "gradeG2": "G2",
       "gradeG3": "G3",
-      "thinkHiddenCountLead": "かくれているかずは・・・",
+      "thinkHiddenCountLead": "かくれているかずは…",
       "iconAria": "積み木{n}個までを選択",
       "sliderAria": "答えの数（1〜{max}）"
     }
