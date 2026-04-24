@@ -48,7 +48,7 @@ const BASE_AZIMUTH_DEG = 44;
 /** A=手続き木目（旧 Wood01）、B=外部木目テクスチャ、C=くすみセミグロス（色は semiGlossColorId） */
 export type BlockMaterialVariant = "A" | "B" | "C";
 
-export type SemiGlossColorId = "pink" | "turquoise" | "beige" | "green" | "mauve";
+export type SemiGlossColorId = "pink" | "turquoise" | "beige" | "green" | "mauve" | "terracotta";
 
 export const SEMI_GLOSS_COLOR_HEX: Record<SemiGlossColorId, string> = {
   pink: "#f6b8c6",
@@ -56,6 +56,7 @@ export const SEMI_GLOSS_COLOR_HEX: Record<SemiGlossColorId, string> = {
   beige: "#dfcdb7",
   green: "#8ca18c",
   mauve: "#9e8a9c",
+  terracotta: "#c07a5f",
 };
 
 function isWoodLikeMaterial(v: BlockMaterialVariant): boolean {

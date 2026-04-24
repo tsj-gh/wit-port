@@ -319,6 +319,7 @@
       "semiGlossBeige": "Beige",
       "semiGlossGreen": "Green",
       "semiGlossMauve": "Mauve",
+      "semiGlossTerracotta": "Terracotta",
       "woodTexWalnut01": "Walnut 01",
       "woodTexWalnut02": "Walnut 02",
       "woodTexWalnut03": "Walnut 03",
@@ -357,6 +358,7 @@
       "gradeG1": "G1",
       "gradeG2": "G2",
       "gradeG3": "G3",
+      "gradeG4": "G4",
       "thinkHiddenCountLead": "Hidden count…",
       "iconAria": "Select up to {n} blocks",
       "sliderAria": "Answer count (1–{max})"

@@ -33,7 +33,9 @@ import type {
   SemiGlossColorId,
 } from "./HiddenStackCanvas";
 
-const SEMI_GLOSS_COLOR_IDS = ["pink", "turquoise", "beige", "green", "mauve"] as const satisfies readonly SemiGlossColorId[];
+const SEMI_GLOSS_COLOR_IDS = ["pink", "turquoise", "beige", "green", "mauve", "terracotta"] as const satisfies readonly SemiGlossColorId[];
+const SEMI_GLOSS_COLOR_GROUP_1 = ["pink", "turquoise", "beige"] as const satisfies readonly SemiGlossColorId[];
+const SEMI_GLOSS_COLOR_GROUP_2 = ["green", "mauve", "terracotta"] as const satisfies readonly SemiGlossColorId[];
 
 const HiddenStackCanvas = dynamic(() => import("./HiddenStackCanvas"), { ssr: false });
 
@@ -123,6 +125,7 @@ const DEFAULT_KEY_LIGHT_SHADOW_YAW_DEG = 14;
 const ORTHO_ZOOM_MUL_MIN = 0.35;
 const ORTHO_ZOOM_MUL_MAX = 2.4;
 const DEFAULT_ORTHO_CAMERA_ZOOM_MUL = 1;
+const ORTHO_ZOOM_MUL_LARGE_GRID = 1.28;
 const BACK_HIGH_BIAS_WEIGHT_MIN = 0;
 const BACK_HIGH_BIAS_WEIGHT_MAX = 1;
 const DEFAULT_BACK_HIGH_BIAS_WEIGHT = 0.5;
@@ -136,6 +139,20 @@ const DEFAULT_THINK_IDLE_ORBIT_PAUSE_SEC = 0.55;
 
 type Phase = "intro" | "think" | "feedback";
 type StatusOverlayPhase = "hidden" | "pending" | "animating" | "docked";
+type HiddenStackGrade = 1 | 2 | 3 | 4;
+
+const GRADE_PRESETS: ReadonlyArray<{
+  grade: HiddenStackGrade;
+  gridSize: 3 | 4;
+  backHighBiasEnabled: boolean;
+  backHighBiasWeight: number;
+  labelKey: "games.hiddenStack.gradeG1" | "games.hiddenStack.gradeG2" | "games.hiddenStack.gradeG3" | "games.hiddenStack.gradeG4";
+}> = [
+  { grade: 1, gridSize: 3, backHighBiasEnabled: false, backHighBiasWeight: DEFAULT_BACK_HIGH_BIAS_WEIGHT, labelKey: "games.hiddenStack.gradeG1" },
+  { grade: 2, gridSize: 3, backHighBiasEnabled: true, backHighBiasWeight: 0.8, labelKey: "games.hiddenStack.gradeG2" },
+  { grade: 3, gridSize: 4, backHighBiasEnabled: false, backHighBiasWeight: DEFAULT_BACK_HIGH_BIAS_WEIGHT, labelKey: "games.hiddenStack.gradeG3" },
+  { grade: 4, gridSize: 4, backHighBiasEnabled: true, backHighBiasWeight: 0.8, labelKey: "games.hiddenStack.gradeG4" },
+] as const;
 
 export default function HiddenStackGame() {
   const { t } = useI18n();
@@ -148,7 +165,7 @@ export default function HiddenStackGame() {
   const [materialVariant, setMaterialVariant] = useState<BlockMaterialVariant>("A");
   /** 外部木目（Walnut/Oak 各3）。質感 B で使用。プレビュー用に常に保持 */
   const [externalWoodTextureIndex, setExternalWoodTextureIndex] = useState(0);
-  const [semiGlossColorId, setSemiGlossColorId] = useState<SemiGlossColorId>("pink");
+  const [semiGlossColorId, setSemiGlossColorId] = useState<SemiGlossColorId>("terracotta");
   const [collapsePattern, setCollapsePattern] = useState<CollapsePatternId>(1);
   const [goldLumpParams, setGoldLumpParams] = useState<GoldLumpParams>({
     metalness: 1,
@@ -231,10 +248,54 @@ export default function HiddenStackGame() {
   const answerBandRef = useRef<HTMLDivElement>(null);
   const [isLgViewport, setIsLgViewport] = useState(false);
   const [answerBandHeightPx, setAnswerBandHeightPx] = useState(HIDDEN_STACK_PC_ANSWER_BAND_FALLBACK_PX);
+  const activeGrade = useMemo(() => {
+    const preset = GRADE_PRESETS.find(
+      (g) =>
+        g.gridSize === gridSize &&
+        g.backHighBiasEnabled === backHighBiasEnabled &&
+        Math.abs(g.backHighBiasWeight - backHighBiasWeight) < 0.005
+    );
+    return preset?.grade ?? null;
+  }, [backHighBiasEnabled, backHighBiasWeight, gridSize]);
+
+  const pickRandom = useCallback(<T,>(items: readonly T[]): T => {
+    return items[Math.floor(Math.random() * items.length)];
+  }, []);
+
+  const applyRandomMaterialPreset = useCallback(() => {
+    const bucket = Math.floor(Math.random() * 5);
+    if (bucket === 0) {
+      setMaterialVariant("A");
+      return;
+    }
+    if (bucket === 1) {
+      setMaterialVariant("B");
+      setExternalWoodTextureIndex(Math.floor(Math.random() * 3));
+      return;
+    }
+    if (bucket === 2) {
+      setMaterialVariant("B");
+      setExternalWoodTextureIndex(3 + Math.floor(Math.random() * 3));
+      return;
+    }
+    if (bucket === 3) {
+      setMaterialVariant("C");
+      setSemiGlossColorId(pickRandom(SEMI_GLOSS_COLOR_GROUP_1));
+      return;
+    }
+    setMaterialVariant("C");
+    setSemiGlossColorId(pickRandom(SEMI_GLOSS_COLOR_GROUP_2));
+  }, [pickRandom]);
 
   useEffect(() => {
     stripPointerDownRef.current = false;
   }, [phase]);
+  useEffect(() => {
+    applyRandomMaterialPreset();
+  }, [applyRandomMaterialPreset]);
+  useEffect(() => {
+    setOrthoCameraZoomMul(gridSize >= 4 ? ORTHO_ZOOM_MUL_LARGE_GRID : DEFAULT_ORTHO_CAMERA_ZOOM_MUL);
+  }, [gridSize]);
   useEffect(() => {
     if (!seedInput) setSeedInput(puzzle.sourceSeed);
   }, [puzzle.sourceSeed, seedInput]);
@@ -302,18 +363,40 @@ export default function HiddenStackGame() {
     });
     setPuzzle(next);
     if (nextGridSize != null) setGridSize(g);
+    applyRandomMaterialPreset();
     setSeedInput(next.sourceSeed);
     resetRoundStates(next.hiddenCount);
-  }, [backHighBiasEnabled, backHighBiasWeight, gridSize, resetRoundStates]);
+  }, [applyRandomMaterialPreset, backHighBiasEnabled, backHighBiasWeight, gridSize, resetRoundStates]);
 
   const generateFromSeed = useCallback(() => {
     const s = seedInput.trim();
     if (!s) return;
     const next = generateHiddenStackPuzzle(s, { gridSize, backHighBiasEnabled, backHighBiasWeight });
     setPuzzle(next);
+    applyRandomMaterialPreset();
     setSeedInput(next.sourceSeed);
     resetRoundStates(next.hiddenCount);
-  }, [backHighBiasEnabled, backHighBiasWeight, gridSize, resetRoundStates, seedInput]);
+  }, [applyRandomMaterialPreset, backHighBiasEnabled, backHighBiasWeight, gridSize, resetRoundStates, seedInput]);
+
+  const applyGradePreset = useCallback(
+    (grade: HiddenStackGrade) => {
+      const preset = GRADE_PRESETS.find((g) => g.grade === grade);
+      if (!preset) return;
+      setGridSize(preset.gridSize);
+      setBackHighBiasEnabled(preset.backHighBiasEnabled);
+      setBackHighBiasWeight(preset.backHighBiasWeight);
+      const next = generateHiddenStackPuzzle(`${Date.now()}:${Math.random().toString(36).slice(2)}`, {
+        gridSize: preset.gridSize,
+        backHighBiasEnabled: preset.backHighBiasEnabled,
+        backHighBiasWeight: preset.backHighBiasWeight,
+      });
+      setPuzzle(next);
+      applyRandomMaterialPreset();
+      setSeedInput(next.sourceSeed);
+      resetRoundStates(next.hiddenCount);
+    },
+    [applyRandomMaterialPreset, resetRoundStates]
+  );
 
   useEffect(() => {
     setSelectedN((n) => Math.max(1, Math.min(answerSlots, n)));
@@ -598,7 +681,9 @@ export default function HiddenStackGame() {
                               ? t("games.hiddenStack.semiGlossBeige")
                               : id === "green"
                                 ? t("games.hiddenStack.semiGlossGreen")
-                                : t("games.hiddenStack.semiGlossMauve")}
+                                : id === "mauve"
+                                  ? t("games.hiddenStack.semiGlossMauve")
+                                  : t("games.hiddenStack.semiGlossTerracotta")}
                       </button>
                     ))}
                   </div>
@@ -1503,20 +1588,14 @@ export default function HiddenStackGame() {
                   className="flex w-full min-w-0 gap-2 overflow-x-auto py-1 [scrollbar-width:none] [-ms-overflow-style:none] snap-x snap-mandatory [&::-webkit-scrollbar]:[display:none]"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
-                  {(
-                    [
-                      { grade: 1 as const, size: 3 as const, labelKey: "games.hiddenStack.gradeG1" as const },
-                      { grade: 2 as const, size: 4 as const, labelKey: "games.hiddenStack.gradeG2" as const },
-                      { grade: 3 as const, size: 5 as const, labelKey: "games.hiddenStack.gradeG3" as const },
-                    ] as const
-                  ).map(({ grade, size, labelKey }) => {
-                    const isActive = gridSize === size;
+                  {GRADE_PRESETS.map(({ grade, labelKey }) => {
+                    const isActive = activeGrade === grade;
                     return (
                       <button
                         key={grade}
                         type="button"
                         aria-pressed={isActive}
-                        onClick={() => newRound(size)}
+                        onClick={() => applyGradePreset(grade)}
                         className={`min-h-[44px] shrink-0 snap-center touch-manipulation whitespace-nowrap rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
                           isActive
                             ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
@@ -1547,20 +1626,14 @@ export default function HiddenStackGame() {
                 <section className="rounded-xl border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-text)_5%,transparent)] px-3 py-2">
                   <label className="mb-1 block text-xs font-medium text-[var(--color-muted)]">{t("games.hiddenStack.chooseGrade")}</label>
                   <div className="flex flex-wrap gap-2">
-                    {(
-                      [
-                        { grade: 1 as const, size: 3 as const, labelKey: "games.hiddenStack.gradeG1" as const },
-                        { grade: 2 as const, size: 4 as const, labelKey: "games.hiddenStack.gradeG2" as const },
-                        { grade: 3 as const, size: 5 as const, labelKey: "games.hiddenStack.gradeG3" as const },
-                      ] as const
-                    ).map(({ grade, size, labelKey }) => {
-                      const isActive = gridSize === size;
+                    {GRADE_PRESETS.map(({ grade, labelKey }) => {
+                      const isActive = activeGrade === grade;
                       return (
                         <button
                           key={grade}
                           type="button"
                           aria-pressed={isActive}
-                          onClick={() => newRound(size)}
+                          onClick={() => applyGradePreset(grade)}
                           className={`min-h-[40px] rounded-lg border px-3 py-2 text-xs font-medium transition-colors sm:text-sm ${
                             isActive
                               ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]"
