@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { HiddenStackEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import HiddenStackGame from "./HiddenStackGame";
 import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
@@ -38,6 +40,8 @@ export default function HiddenStackPage() {
           </div>
         </Suspense>
       </main>
+      <HiddenStackEducationalI18n />
+      <OtherPuzzlesSection currentId="hidden-stack" />
     </>
   );
 }

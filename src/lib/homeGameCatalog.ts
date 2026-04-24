@@ -2,11 +2,12 @@
  * トップページのゲーム一覧（セクション ID とカードの対応のみ保持。
  * 文言は locales の `home.*`、見出しは特定ゲーム名を含まない。）
  */
-export type HomePlaySectionId = "intuition" | "logical" | "strategic";
+export type HomePlaySectionId = "intuition" | "spatial" | "logical" | "strategic";
 
 export type HomeGameCardId =
   | "tap-coloring"
   | "pop-pop-bubbles"
+  | "hidden-stack"
   | "pair-link"
   | "pres-sure-judge"
   | "skyscraper"
@@ -17,7 +18,9 @@ export type HomeGameCardDef = {
   href: string;
   titleKey: string;
   tooltipKey: string;
+  promptTemplateKey?: string;
   emoji: string;
+  iconType?: "hidden-stack";
 };
 
 export const HOME_GAME_CARDS: Record<HomeGameCardId, HomeGameCardDef> = {
@@ -34,6 +37,15 @@ export const HOME_GAME_CARDS: Record<HomeGameCardId, HomeGameCardDef> = {
     titleKey: "home.cardPopPopBubblesTitle",
     tooltipKey: "home.cardPopPopBubblesTip",
     emoji: "🫧",
+  },
+  "hidden-stack": {
+    id: "hidden-stack",
+    href: "/lab/hidden-stack",
+    titleKey: "home.cardHiddenStackTitle",
+    tooltipKey: "home.cardHiddenStackTip",
+    promptTemplateKey: "home.cardHiddenStackPromptTemplate",
+    emoji: "🧱",
+    iconType: "hidden-stack",
   },
   "pair-link": {
     id: "pair-link",
@@ -76,6 +88,11 @@ export const HOME_GAME_SECTIONS: readonly HomeGameSectionDef[] = [
     id: "intuition",
     titleKey: "home.sectionIntuitionTitle",
     cardIds: ["tap-coloring", "pop-pop-bubbles"],
+  },
+  {
+    id: "spatial",
+    titleKey: "home.sectionSpatialTitle",
+    cardIds: ["hidden-stack"],
   },
   {
     id: "logical",

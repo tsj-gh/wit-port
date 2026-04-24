@@ -52,6 +52,17 @@ export function buildWispoSoftwareApplicationJsonLd(siteUrl: string): Record<str
       },
       {
         "@type": "SoftwareApplication",
+        name: "Hidden Blocks（かくれつみき）",
+        url: `${base}/lab/hidden-stack`,
+        applicationCategory: "EducationalApplication",
+        operatingSystem: "Web Browser",
+        description:
+          "3D空間に積まれたブロックを限定視点から観察し、死角の個数を推測する空間認識パズルです。見える情報から見えない量を再構成する反復を通じ、空間把握・論理的推論・数量感覚の統合を促します。",
+        featureList: ["空間把握能力", "論理的推論", "数概念の定着", "段階別グレード", "無料"],
+        offers: freeOffer,
+      },
+      {
+        "@type": "SoftwareApplication",
         name: "Pair-Link（ペアリンク）",
         url: `${base}/lab/pair-link`,
         applicationCategory: "EducationalApplication",

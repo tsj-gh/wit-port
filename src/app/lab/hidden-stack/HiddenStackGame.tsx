@@ -239,6 +239,7 @@ export default function HiddenStackGame() {
   const [seedInput, setSeedInput] = useState("");
 
   const dragTwistRef = useRef<{ active: boolean; lastX: number }>({ active: false, lastX: 0 });
+  const lastMaterialGroupRef = useRef<-1 | 0 | 1 | 2 | 3 | 4>(-1);
   const twistDegRef = useRef(0);
   const thinkIdleOrbitRef = useRef<{ twist: number; dir: 1 | -1; pauseLeft: number }>({ twist: 0, dir: 1, pauseLeft: 0 });
   const stripRef = useRef<HTMLDivElement>(null);
@@ -263,7 +264,9 @@ export default function HiddenStackGame() {
   }, []);
 
   const applyRandomMaterialPreset = useCallback(() => {
-    const bucket = Math.floor(Math.random() * 5);
+    const choices = [0, 1, 2, 3, 4].filter((id) => id !== lastMaterialGroupRef.current);
+    const bucket = choices[Math.floor(Math.random() * choices.length)] ?? 0;
+    lastMaterialGroupRef.current = bucket as 0 | 1 | 2 | 3 | 4;
     if (bucket === 0) {
       setMaterialVariant("A");
       return;

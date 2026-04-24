@@ -11,6 +11,18 @@ const cardWrapClassName =
 const gameLinkClassName =
   "relative z-[1] flex min-h-0 flex-1 flex-col p-3 pr-9 text-[var(--color-text)] no-underline md:p-3.5 md:pr-10";
 
+function HiddenStackCardIcon() {
+  return (
+    <span className="mb-1 inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,#3d522b_18%,transparent)] text-[#3d522b]">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <rect x="3" y="11" width="8" height="8" rx="1.8" stroke="currentColor" strokeWidth="1.8" />
+        <rect x="13" y="11" width="8" height="8" rx="1.8" stroke="currentColor" strokeWidth="1.8" />
+        <rect x="8" y="4" width="8" height="8" rx="1.8" stroke="currentColor" strokeWidth="1.8" />
+      </svg>
+    </span>
+  );
+}
+
 function HomeGameCard({ cardId }: { cardId: HomeGameCardId }) {
   const { t } = useI18n();
   const def = HOME_GAME_CARDS[cardId];
@@ -48,7 +60,11 @@ function HomeGameCard({ cardId }: { cardId: HomeGameCardId }) {
   return (
     <div className={cardWrapClassName}>
       <DevLink href={def.href} className={gameLinkClassName}>
-        <span className="mb-1 inline-block shrink-0 animate-float text-5xl leading-none">{def.emoji}</span>
+        {def.iconType === "hidden-stack" ? (
+          <HiddenStackCardIcon />
+        ) : (
+          <span className="mb-1 inline-block shrink-0 animate-float text-5xl leading-none">{def.emoji}</span>
+        )}
         <h3 className="mb-1.5 line-clamp-2 text-base font-bold leading-tight tracking-tight">{t(def.titleKey)}</h3>
         <div className="mt-auto flex min-h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-2.5 py-1.5 text-center text-sm font-bold text-[var(--color-on-primary)] transition-colors group-hover:brightness-95">
           {t("home.play")}
@@ -78,6 +94,7 @@ function HomeGameCard({ cardId }: { cardId: HomeGameCardId }) {
           id={eduPanelId}
           role="region"
           aria-labelledby={eduTextId}
+          data-edu-prompt={def.promptTemplateKey ? t(def.promptTemplateKey) : undefined}
           className={`absolute right-0 top-8 w-56 rounded-xl border border-[color-mix(in_srgb,#ffffff_16%,transparent)] bg-[#333333] px-3 py-2 text-xs leading-snug text-white shadow-[0_12px_24px_rgba(0,0,0,0.35)] transition-all duration-150 ease-out ${tooltipPanelClassName}`}
         >
           <p id={eduTextId} className="m-0 whitespace-pre-line">
@@ -103,7 +120,7 @@ export function HomePageLinks() {
   const { t } = useI18n();
 
   return (
-    <div className="space-y-3 pb-6 animate-fade-in-up-delay-more md:space-y-4">
+    <div className="space-y-2.5 pb-4 animate-fade-in-up-delay-more md:space-y-4 md:pb-6">
       {HOME_GAME_SECTIONS.map((section, idx) => (
         <section key={section.id} className={idx > 0 ? "border-t border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] pt-3 md:pt-4" : ""}>
           <header className="mb-1 md:mb-1">

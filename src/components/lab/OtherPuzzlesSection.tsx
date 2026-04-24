@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 type AppCard = {
-  id: "tap-coloring" | "pop-pop-bubbles" | "pair-link" | "pres-sure-judge" | "skyscraper" | "reflec-shot";
+  id: "tap-coloring" | "pop-pop-bubbles" | "pair-link" | "pres-sure-judge" | "skyscraper" | "reflec-shot" | "hidden-stack";
   title: string;
   href: `/${string}`;
   emoji: string;
@@ -23,6 +23,13 @@ const APP_CARDS: AppCard[] = [
     href: "/lab/pop-pop-bubbles",
     emoji: "🫧",
     summary: "軽快タップで協調と集中を育てる",
+  },
+  {
+    id: "hidden-stack",
+    title: "Hidden Blocks（かくれつみき）",
+    href: "/lab/hidden-stack",
+    emoji: "🧱",
+    summary: "死角を含めて積み木数を推理する空間パズル",
   },
   {
     id: "pair-link",

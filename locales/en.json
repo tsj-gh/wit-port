@@ -25,6 +25,7 @@
     "heroLine2a": "We publish ",
     "heroLine2b": "free materials so anyone—from toddlers to adults—can learn at an easy, playful pace.",
     "sectionIntuitionTitle": "Kids / Intuition",
+    "sectionSpatialTitle": "Standard / Spatial",
     "sectionLogicalTitle": "Junior / Logical",
     "sectionStrategicTitle": "Advance / Strategic",
     "cardTapColoringTitle": "Tap coloring",
@@ -33,6 +34,9 @@
     "cardPopPopBubblesTip": "Tap floating bubbles to burst sparkles and little animals.\nA gentle, intuitive game designed for kids.",
     "cardPairLinkTitle": "Pair-Link (ペアリンク)",
     "cardPairLinkTip": "Connect matching numbers without crossing lines.\nFill the board through trial and error.",
+    "cardHiddenStackTitle": "Hidden Blocks (かくれつみき)",
+    "cardHiddenStackTip": "Observe 3D blocks and infer how many are hidden in blind spots.\nReconstruct unseen quantities from visible clues.",
+    "cardHiddenStackPromptTemplate": "Describe the educational benefits of the following app for parents in their 30s, using a warm yet expert tone, in three bullet points.\nApp name: Hidden Blocks (かくれつみき)\nFeature: A puzzle that estimates hidden block counts in 3D space while considering blind spots.\nKeywords: spatial awareness, logical reasoning, consolidation of number sense",
     "cardReflecTitle": "Reflec-Shot (リフレクショット)",
     "cardReflecTip": "Predict reflections and route the shot to goal.\nA compact puzzle for spatial intuition.",
     "cardSkyTitle": "Skyscraper (スカイスクレイパー)",
@@ -409,6 +413,17 @@
       "p_mont": "Montessori emphasizes causality grounded in concrete materials; here, tilt of the scale returns as embodied cause-and-effect before abstract lecture. The screen acts as a prepared environment: misplacements and timeouts appear immediately, offering environmental feedback that supports self-correction without scolding. The NPC stands in for another agent’s move—a thin but clear social frame for “how do I respond after someone else acts?” When adults scaffold, naming which pan looks heavier or what the child fears on the next move supports self-observation more than narrating outcomes for them.",
       "h3_step": "Progression (rounds & difficulty)",
       "p_step": "As rounds advance, NPC pressure and inventory tension shift play from single-weight comparisons toward imagining balance several moves ahead. The Judge action demands a meta-decision to stop tweaking and commit, helping separate impulse from reasoning. Difficulty rises in steps to preserve a prepared gradient of load so learning can be drawn from both success and failure. Alongside logic-puzzle titles, the design offers integrated practice with number, time, and bodily action."
+    },
+    "hiddenStack": {
+      "summary": "Educational benefits of this learning material",
+      "h3_dev": "Design rationale",
+      "p_dev": "Hidden Blocks is designed as a task where learners estimate how many cubes are concealed in blind spots using only what they can see. Instead of a flat worksheet-style problem, it repeatedly trains judgment under 3D occlusion. The same board can look different depending on viewpoint, so children must reconstruct unseen structure mentally. After each answer, review mode lets them verify assumptions by toggling visible blocks, which nudges learning away from guessing and toward evidence-based reasoning.",
+      "h3_neuro": "Neuroscience lens",
+      "p_neuro": "This task repeatedly asks children to hold partial visual information and supplement depth relationships in working memory. Building and revising hypotheses such as “front is lower, back may be higher” engages executive functions in the prefrontal cortex (hypothesis update, inhibition, revision) together with parietal spatial processing. Because responses are numerical, learners also practice translating spatial representations into quantity, which supports number-sense consolidation. Immediate right/wrong feedback strengthens prediction-error processing and naturally promotes strategy adjustment in the next trial.",
+      "h3_mont": "Montessori alignment",
+      "p_mont": "From a Montessori perspective, the key is a prepared environment where children can try and verify by themselves. Hidden Blocks keeps controls simple while leaving the reasoning path to the learner. Instead of giving answers first, adults can scaffold by asking which faces are visible and where blind spots might exist. The ability to reinterpret the board after mistakes aligns with self-correction through the environment rather than external scolding, supporting autonomy and reflective learning habits.",
+      "h3_step": "Progression (grades G1-G4)",
+      "p_step": "Grades G1-G4 combine grid size and back-high weighting to scale cognitive load in clear steps. Early grades prioritize readability and quick success; higher grades increase demands on hidden-structure estimation and sustained reasoning. Weighted stages require reading both pattern and randomness, encouraging flexible thinking beyond memorization. At home, briefly verbalizing “why I chose this number” helps connect spatial imagery with language and can bridge naturally into arithmetic and geometry learning."
     },
     "tapColoring": {
       "summary": "Educational benefits of this learning material",
