@@ -123,6 +123,9 @@ const DEFAULT_KEY_LIGHT_SHADOW_YAW_DEG = 14;
 const ORTHO_ZOOM_MUL_MIN = 0.35;
 const ORTHO_ZOOM_MUL_MAX = 2.4;
 const DEFAULT_ORTHO_CAMERA_ZOOM_MUL = 1;
+const BACK_HIGH_BIAS_WEIGHT_MIN = 0;
+const BACK_HIGH_BIAS_WEIGHT_MAX = 1;
+const DEFAULT_BACK_HIGH_BIAS_WEIGHT = 0.5;
 
 const THINK_IDLE_ORBIT_SPEED_MIN = 0;
 const THINK_IDLE_ORBIT_SPEED_MAX = 10;
@@ -167,7 +170,15 @@ export default function HiddenStackGame() {
   const [feedbackPhysicsGravityY, setFeedbackPhysicsGravityY] = useState(DEFAULT_FEEDBACK_GRAVITY_Y);
   const [feedbackImpulseScale, setFeedbackImpulseScale] = useState(DEFAULT_FEEDBACK_IMPULSE_SCALE);
 
-  const [puzzle, setPuzzle] = useState(() => generateHiddenStackPuzzle(`${Date.now()}`, { gridSize: 3 }));
+  const [backHighBiasEnabled, setBackHighBiasEnabled] = useState(false);
+  const [backHighBiasWeight, setBackHighBiasWeight] = useState(DEFAULT_BACK_HIGH_BIAS_WEIGHT);
+  const [puzzle, setPuzzle] = useState(() =>
+    generateHiddenStackPuzzle(`${Date.now()}`, {
+      gridSize: 3,
+      backHighBiasEnabled: false,
+      backHighBiasWeight: DEFAULT_BACK_HIGH_BIAS_WEIGHT,
+    })
+  );
   const [phase, setPhase] = useState<Phase>("intro");
   const [twistDeg, setTwistDeg] = useState(0);
   const [selectedN, setSelectedN] = useState(4);
@@ -284,21 +295,25 @@ export default function HiddenStackGame() {
 
   const newRound = useCallback((nextGridSize?: number) => {
     const g = nextGridSize ?? gridSize;
-    const next = generateHiddenStackPuzzle(`${Date.now()}:${Math.random().toString(36).slice(2)}`, { gridSize: g });
+    const next = generateHiddenStackPuzzle(`${Date.now()}:${Math.random().toString(36).slice(2)}`, {
+      gridSize: g,
+      backHighBiasEnabled,
+      backHighBiasWeight,
+    });
     setPuzzle(next);
     if (nextGridSize != null) setGridSize(g);
     setSeedInput(next.sourceSeed);
     resetRoundStates(next.hiddenCount);
-  }, [gridSize, resetRoundStates]);
+  }, [backHighBiasEnabled, backHighBiasWeight, gridSize, resetRoundStates]);
 
   const generateFromSeed = useCallback(() => {
     const s = seedInput.trim();
     if (!s) return;
-    const next = generateHiddenStackPuzzle(s, { gridSize });
+    const next = generateHiddenStackPuzzle(s, { gridSize, backHighBiasEnabled, backHighBiasWeight });
     setPuzzle(next);
     setSeedInput(next.sourceSeed);
     resetRoundStates(next.hiddenCount);
-  }, [gridSize, resetRoundStates, seedInput]);
+  }, [backHighBiasEnabled, backHighBiasWeight, gridSize, resetRoundStates, seedInput]);
 
   useEffect(() => {
     setSelectedN((n) => Math.max(1, Math.min(answerSlots, n)));
@@ -588,6 +603,33 @@ export default function HiddenStackGame() {
                     ))}
                   </div>
                 </div>
+              </div>
+              <div>
+                <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugBackHighBias")}</div>
+                <button
+                  type="button"
+                  onClick={() => setBackHighBiasEnabled((v) => !v)}
+                  className={`rounded px-2 py-0.5 text-[10px] border ${
+                    backHighBiasEnabled
+                      ? "border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_18%,var(--color-bg))] text-[var(--color-primary)]"
+                      : "border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] text-[var(--color-muted)]"
+                  }`}
+                >
+                  {backHighBiasEnabled ? t("games.hiddenStack.debugBackHighBiasOn") : t("games.hiddenStack.debugBackHighBiasOff")}
+                </button>
+                <label className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="shrink-0 text-[var(--color-muted)]">{t("games.hiddenStack.debugBackHighBiasWeight")}</span>
+                  <input
+                    type="range"
+                    min={BACK_HIGH_BIAS_WEIGHT_MIN}
+                    max={BACK_HIGH_BIAS_WEIGHT_MAX}
+                    step={0.01}
+                    value={backHighBiasWeight}
+                    onChange={(e) => setBackHighBiasWeight(Number(e.target.value))}
+                    className="min-w-[120px] flex-1 accent-[var(--color-primary)]"
+                  />
+                  <span className="tabular-nums text-[var(--color-text)]">{backHighBiasWeight.toFixed(2)}</span>
+                </label>
               </div>
               <div>
                 <div className="mb-1 font-semibold text-[var(--color-text)]">{t("games.hiddenStack.debugNormalProbe")}</div>

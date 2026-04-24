@@ -20,6 +20,8 @@ export type HiddenStackGenOptions = {
   gridSize?: number;
   minHidden?: number;
   maxHidden?: number;
+  backHighBiasEnabled?: boolean;
+  backHighBiasWeight?: number;
 };
 
 const DEG = Math.PI / 180;
@@ -130,16 +132,44 @@ function satisfiesWedgeOcclusionRule(
 /**
  * 高さ z0（積み数）をランダム抽選し、条件を満たすまで再抽選する。
  */
+function clamp01(v: number): number {
+  if (Number.isNaN(v)) return 0;
+  return Math.max(0, Math.min(1, v));
+}
+
+function drawBiasedHeight(
+  rng: () => number,
+  gridSize: number,
+  x: number,
+  y: number,
+  enabled: boolean,
+  weight: number
+): number {
+  const maxHeight = gridSize - 1;
+  if (maxHeight <= 0) return 0;
+  if (!enabled) return randomIntInclusive(rng, 0, maxHeight);
+  const w = clamp01(weight);
+  if (w <= 0) return randomIntInclusive(rng, 0, maxHeight);
+  const k = Math.min(x, y);
+  const t = maxHeight <= 0 ? 0 : k / maxHeight;
+  const target = Math.round(maxHeight * (1 - t));
+  if (w >= 1) return target;
+  if (rng() < w) return target;
+  return randomIntInclusive(rng, 0, maxHeight);
+}
+
 function drawHeightWithRetry(
   rng: () => number,
   heights: number[][],
   x: number,
   y: number,
   gridSize: number,
-  prevInDiagonalRow: { x: number; y: number; z: number } | null
+  prevInDiagonalRow: { x: number; y: number; z: number } | null,
+  backHighBiasEnabled: boolean,
+  backHighBiasWeight: number
 ): number {
   for (let attempt = 0; attempt < 80; attempt++) {
-    const z0 = randomIntInclusive(rng, 0, gridSize);
+    const z0 = drawBiasedHeight(rng, gridSize, x, y, backHighBiasEnabled, backHighBiasWeight);
     if (!satisfiesOcclusionRule(heights, x, y, z0)) continue;
     if (!satisfiesWedgeOcclusionRule(heights, x, y, z0, prevInDiagonalRow)) continue;
     return z0;
@@ -153,20 +183,25 @@ function drawHeightWithRetry(
   }
   const capped = Math.max(0, maxAllowed);
   for (let attempt = 0; attempt < 80; attempt++) {
-    const z0 = randomIntInclusive(rng, 0, capped);
+    const z0 = Math.min(drawBiasedHeight(rng, gridSize, x, y, backHighBiasEnabled, backHighBiasWeight), capped);
     if (satisfiesWedgeOcclusionRule(heights, x, y, z0, prevInDiagonalRow)) return z0;
   }
   return 0;
 }
 
-function buildColumnHeights(rng: () => number, gridSize: number): number[][] {
+function buildColumnHeights(
+  rng: () => number,
+  gridSize: number,
+  backHighBiasEnabled: boolean,
+  backHighBiasWeight: number
+): number[][] {
   const heights = Array.from({ length: gridSize }, () => Array<number>(gridSize).fill(0));
   for (let s = 0; s <= 2 * (gridSize - 1); s++) {
     const row = diagonalRowPoints(gridSize, s);
     if (row.length > 1 && rng() < 0.5) row.reverse();
     let prev: { x: number; y: number; z: number } | null = null;
     for (const p of row) {
-      const z = drawHeightWithRetry(rng, heights, p.x, p.y, gridSize, prev);
+      const z = drawHeightWithRetry(rng, heights, p.x, p.y, gridSize, prev, backHighBiasEnabled, backHighBiasWeight);
       heights[p.x][p.y] = z;
       prev = { x: p.x, y: p.y, z };
     }
@@ -245,13 +280,15 @@ export function generateHiddenStackPuzzle(seedStr: string, options: HiddenStackG
   const gridSize = Math.max(3, Math.min(5, Math.floor(options.gridSize ?? 3)));
   const minHidden = Math.max(1, options.minHidden ?? 1);
   const maxHidden = Math.max(minHidden, options.maxHidden ?? 10);
+  const backHighBiasEnabled = options.backHighBiasEnabled ?? false;
+  const backHighBiasWeight = clamp01(options.backHighBiasWeight ?? 0.5);
   const rng = mulberry32(hashSeed(seedStr));
 
   let best: HiddenStackPuzzle | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
 
   for (let attempt = 0; attempt < 640; attempt++) {
-    const heights = buildColumnHeights(rng, gridSize);
+    const heights = buildColumnHeights(rng, gridSize, backHighBiasEnabled, backHighBiasWeight);
     const candidate = buildPuzzleFromHeights(heights, seedStr, `${seedStr}:${attempt}`);
     const score =
       candidate.hiddenCount < minHidden
