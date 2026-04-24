@@ -145,14 +145,14 @@ function drawBiasedHeight(
   enabled: boolean,
   weight: number
 ): number {
-  const maxHeight = gridSize - 1;
+  const maxHeight = gridSize;
   if (maxHeight <= 0) return 0;
   if (!enabled) return randomIntInclusive(rng, 0, maxHeight);
   const w = clamp01(weight);
   if (w <= 0) return randomIntInclusive(rng, 0, maxHeight);
   const k = Math.min(x, y);
-  const t = maxHeight <= 0 ? 0 : k / maxHeight;
-  const target = Math.round(maxHeight * (1 - t));
+  const denom = Math.max(1, gridSize - 1);
+  const target = Math.round(gridSize * (1 - k / denom));
   if (w >= 1) return target;
   if (rng() < w) return target;
   return randomIntInclusive(rng, 0, maxHeight);
