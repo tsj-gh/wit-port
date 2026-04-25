@@ -27,13 +27,13 @@ export default function PopPopBubblesPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(popPopBubblesJsonLd) }}
       />
       <main className="mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-1 flex-col px-4 py-4 md:py-6 lg:max-w-[1400px] lg:px-6">
+        <Suspense fallback={<div className="py-8 text-sm text-[var(--color-muted)]">読み込み中…</div>}>
+          <PopPopBubblesLabShell />
+        </Suspense>
         <GameIntroMiniSection
           title="教材概要（はじけて！バブル）"
           body="手眼協調と注意切替を、軽快なタップ体験で育てる入門教材です。短いラウンドで達成感を得やすく、低年齢でも継続しやすい構成です。"
         />
-        <Suspense fallback={<div className="py-8 text-sm text-[var(--color-muted)]">読み込み中…</div>}>
-          <PopPopBubblesLabShell />
-        </Suspense>
       </main>
       <PopPopBubblesEducationalSection />
       <GameTroubleshootingSection

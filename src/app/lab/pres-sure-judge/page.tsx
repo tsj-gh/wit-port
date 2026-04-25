@@ -29,15 +29,15 @@ export default function PresSureJudgePage() {
     <>
       <SmartGuardLock />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(presSureJsonLd) }} />
-      <section className="mx-auto mt-4 w-full max-w-[1080px] px-4">
+      <Suspense fallback={null}>
+        <PresSureJudgeGame />
+      </Suspense>
+      <section className="mx-auto mt-6 w-full max-w-[1080px] px-4">
         <GameIntroMiniSection
           title="教材概要（Pres-Sure Judge）"
           body="時間制約下で天秤の均衡を見極める判断教材です。数量感覚と抑制制御を同時に使い、短いラウンドで意思決定の精度を高めます。"
         />
       </section>
-      <Suspense fallback={null}>
-        <PresSureJudgeGame />
-      </Suspense>
       <PresSureEducationalI18n />
       <GameTroubleshootingSection
         gameTitle="Pres-Sure Judge"

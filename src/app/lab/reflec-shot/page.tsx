@@ -26,13 +26,13 @@ export default function ReflecShotLabPage() {
       <SmartGuardLock />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(reflecShotJsonLd) }} />
       <main className="mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-1 flex-col px-4 py-4 md:py-6 lg:max-w-[1400px] lg:px-6">
+        <Suspense fallback={<div className="py-8 text-sm text-[var(--color-muted)]">読み込み中…</div>}>
+          <ReflecShotGame />
+        </Suspense>
         <GameIntroMiniSection
           title="教材概要（Reflec-Shot）"
           body="反射規則と軌道予測を扱う空間推理教材です。短い試行で仮説を検証できるため、戦略更新と見通しの良い思考習慣を育てます。"
         />
-        <Suspense fallback={<div className="py-8 text-sm text-[var(--color-muted)]">読み込み中…</div>}>
-          <ReflecShotGame />
-        </Suspense>
       </main>
       <ReflecLabEducationalI18n />
       <GameTroubleshootingSection
