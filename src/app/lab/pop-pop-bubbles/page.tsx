@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PopPopBubblesEducationalSection } from "@/components/educational/PopPopBubblesEducationalSection";
-import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { PopPopBubblesLabShell } from "@/components/lab/PopPopBubblesLabShell";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
@@ -29,13 +28,6 @@ export default function PopPopBubblesPage() {
         <Suspense fallback={<div className="py-8 text-sm text-[var(--color-muted)]">読み込み中…</div>}>
           <PopPopBubblesLabShell />
         </Suspense>
-        <section className="mx-auto mt-6 w-full max-w-3xl">
-          <GameQuickInfoNote
-            goal="手眼協調・注意切替・短時間の反応選択を遊びで反復"
-            target="幼児〜小学校低学年"
-            operation="タップ中心でバブルを選択し、連続処理を体験"
-          />
-        </section>
       </main>
       <PopPopBubblesEducationalSection />
       <OtherPuzzlesSection currentId="pop-pop-bubbles" />
