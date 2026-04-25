@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { TapColoringEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import { TapColoringLabShell } from "@/components/lab/TapColoringLabShell";
@@ -28,6 +29,14 @@ export default function TapColoringLabPage() {
         </Suspense>
       </main>
       <TapColoringEducationalI18n />
+      <GameTroubleshootingSection
+        gameTitle="タップぬりえ"
+        items={[
+          { issue: "色が思ったようにまとまらない", action: "最初は2〜3色に絞り、塗る順番を先に決めると迷いが減ります。" },
+          { issue: "すぐ飽きてしまう", action: "1回で完成を目指さず、「今日は背景まで」のように短い目標を作ると続きやすいです。" },
+          { issue: "はみ出しが気になって止まる", action: "正確さより完成経験を優先し、最後に見直し時間を1分だけ取る運用がおすすめです。" },
+        ]}
+      />
       <OtherPuzzlesSection currentId="tap-coloring" />
     </>
   );

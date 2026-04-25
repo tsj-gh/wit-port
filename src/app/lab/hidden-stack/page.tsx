@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { HiddenStackEducationalI18n } from "@/components/educational/GameEducationalI18n";
 import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
+import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import HiddenStackGame from "./HiddenStackGame";
@@ -49,6 +50,14 @@ export default function HiddenStackPage() {
         </section>
       </main>
       <HiddenStackEducationalI18n />
+      <GameTroubleshootingSection
+        gameTitle="かくれつみき"
+        items={[
+          { issue: "見えている数だけで答えてしまう", action: "手前・中央・奥で層を分け、見えない面に何個あり得るかを口に出して確認します。" },
+          { issue: "2桁の推定で混乱する", action: "まず「最低何個あるか」を固定し、その後に「最大何個まで増えるか」を足し算で考えると安定します。" },
+          { issue: "不正解でやる気を失う", action: "ふりかえり表示を使って「どの列の見積もりがズレたか」だけを特定し、次の1問で再挑戦します。" },
+        ]}
+      />
       <OtherPuzzlesSection currentId="hidden-stack" />
     </>
   );

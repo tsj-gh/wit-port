@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PopPopBubblesEducationalSection } from "@/components/educational/PopPopBubblesEducationalSection";
+import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { PopPopBubblesLabShell } from "@/components/lab/PopPopBubblesLabShell";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
@@ -30,6 +31,14 @@ export default function PopPopBubblesPage() {
         </Suspense>
       </main>
       <PopPopBubblesEducationalSection />
+      <GameTroubleshootingSection
+        gameTitle="はじけて！バブル"
+        items={[
+          { issue: "狙ったバブルをタップしにくい", action: "端から順に処理するより、画面中央付近の密集領域を優先すると成功率が上がります。" },
+          { issue: "連打で見落としが増える", action: "1秒に1回だけ「次の標的」を目で決める小休止を入れると精度が保てます。" },
+          { issue: "途中で集中が切れる", action: "1ラウンドごとに達成目標（例: 5回連続成功）を設定し、短い区切りで遊ぶと続きます。" },
+        ]}
+      />
       <OtherPuzzlesSection currentId="pop-pop-bubbles" />
     </>
   );

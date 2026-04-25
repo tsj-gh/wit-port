@@ -66,7 +66,8 @@
     "sectionOperatorContactTail": ".",
     "sectionUpdatesTitle": "Update history",
     "sectionUpdatesBody": "We openly publish improvements, bug fixes, and new material releases.",
-    "sectionUpdatesLink": "View update history (GitHub)"
+    "sectionUpdatesLink": "View updates page",
+    "sectionUpdatesLinkSub": "View full commit history on GitHub"
   },
   "games": {
     "reflecShot": {

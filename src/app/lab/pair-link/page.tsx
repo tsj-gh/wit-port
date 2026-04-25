@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PairLinkEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import PairLinkGame from "./PairLinkGame";
@@ -33,6 +34,14 @@ export default function PairLinkPage() {
         </Suspense>
       </main>
       <PairLinkEducationalI18n />
+      <GameTroubleshootingSection
+        gameTitle="Pair-Link"
+        items={[
+          { issue: "途中で線が詰んで戻れなくなる", action: "端点が少ないペアからでなく、狭い通路を先に確保すると詰みにくくなります。" },
+          { issue: "交差禁止を守ると進まない", action: "確定線と仮線を意識的に分け、仮線は短い区間ごとに検証して進めます。" },
+          { issue: "全マス埋めが難しい", action: "残り空白を1〜2マス単位で見て、孤立マスが出ないかを都度チェックします。" },
+        ]}
+      />
       <OtherPuzzlesSection currentId="pair-link" />
     </>
   );

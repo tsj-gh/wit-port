@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { SkyscraperEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import SkyscraperGame from "./SkyscraperGame";
@@ -33,6 +34,14 @@ export default function SkyscraperPage() {
         </Suspense>
       </main>
       <SkyscraperEducationalI18n />
+      <GameTroubleshootingSection
+        gameTitle="Skyscraper"
+        items={[
+          { issue: "候補が多すぎて止まる", action: "まずヒント1やNが作る確定配置から埋め、候補を一気に減らします。" },
+          { issue: "行列の重複管理が難しい", action: "行と列を交互に見るリズムに固定し、確定値を入れたら必ず反対軸を更新します。" },
+          { issue: "推理が行き詰まる", action: "1マスだけ仮置きして矛盾チェックする「短い仮説検証」を使うと再開しやすいです。" },
+        ]}
+      />
       <OtherPuzzlesSection currentId="skyscraper" />
     </>
   );

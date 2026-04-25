@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ReflecLabEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import ReflecShotGame from "./ReflecShotGame";
@@ -29,6 +30,14 @@ export default function ReflecShotLabPage() {
         </Suspense>
       </main>
       <ReflecLabEducationalI18n />
+      <GameTroubleshootingSection
+        gameTitle="Reflec-Shot"
+        items={[
+          { issue: "反射方向が毎回逆になる", action: "1回目は「1反射先」だけを予測し、2反射以上は後から積み上げて考えます。" },
+          { issue: "目標宝石数まで届かない", action: "ゴール直行より先に、宝石が密な経路を優先して射線を作ると達成しやすくなります。" },
+          { issue: "操作が複雑に感じる", action: "回転操作だけで1問解く回を作り、慣れてから長押し・スワイプ操作を追加します。" },
+        ]}
+      />
       <OtherPuzzlesSection currentId="reflec-shot" />
     </>
   );

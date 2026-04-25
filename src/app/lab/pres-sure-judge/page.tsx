@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PresSureEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import PresSureJudgeGame from "./PresSureJudgeGame";
@@ -31,6 +32,14 @@ export default function PresSureJudgePage() {
         <PresSureJudgeGame />
       </Suspense>
       <PresSureEducationalI18n />
+      <GameTroubleshootingSection
+        gameTitle="Pres-Sure Judge"
+        items={[
+          { issue: "焦ってJudgeして失敗する", action: "残り時間が短くても、最後の1手前で左右差を声に出して確認してから確定します。" },
+          { issue: "重りの配置意図を忘れる", action: "「左を+2」のように目的を短く決めてからドラッグすると判断が安定します。" },
+          { issue: "連続ラウンドで精度が落ちる", action: "2〜3ラウンドごとに10秒休憩を入れ、視線を一度画面外に外すと回復しやすいです。" },
+        ]}
+      />
       <OtherPuzzlesSection currentId="pres-sure-judge" />
     </>
   );
