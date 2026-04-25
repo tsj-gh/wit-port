@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { HiddenStackEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import HiddenStackGame from "./HiddenStackGame";
@@ -39,6 +40,13 @@ export default function HiddenStackPage() {
             <HiddenStackGame />
           </div>
         </Suspense>
+        <section className="mx-auto mt-6 w-full max-w-3xl">
+          <GameQuickInfoNote
+            goal="遮蔽を含む空間把握・数量推定・推理の言語化を促進"
+            target="小学校低学年〜大人"
+            operation="盤面を観察して死角の積み木数を選択し、ふりかえりで検証"
+          />
+        </section>
       </main>
       <HiddenStackEducationalI18n />
       <OtherPuzzlesSection currentId="hidden-stack" />

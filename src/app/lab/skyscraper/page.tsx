@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { SkyscraperEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import SkyscraperGame from "./SkyscraperGame";
@@ -31,6 +32,13 @@ export default function SkyscraperPage() {
         <Suspense fallback={<div className="flex min-h-[40dvh] flex-1 items-center justify-center bg-[var(--color-bg)] text-[var(--color-muted)]">読み込み中…</div>}>
           <SkyscraperGame />
         </Suspense>
+        <section className="mx-auto mt-6 w-full max-w-3xl">
+          <GameQuickInfoNote
+            goal="外周ヒントからの演繹推論・場合分け・検証力を育成"
+            target="小学校高学年〜大人"
+            operation="数字入力とメモ機能を使って行列の高さを推理"
+          />
+        </section>
       </main>
       <SkyscraperEducationalI18n />
       <OtherPuzzlesSection currentId="skyscraper" />

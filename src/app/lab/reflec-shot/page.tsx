@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ReflecLabEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import ReflecShotGame from "./ReflecShotGame";
@@ -27,6 +28,13 @@ export default function ReflecShotLabPage() {
         <Suspense fallback={<div className="py-8 text-sm text-[var(--color-muted)]">読み込み中…</div>}>
           <ReflecShotGame />
         </Suspense>
+        <section className="mx-auto mt-6 w-full max-w-3xl">
+          <GameQuickInfoNote
+            goal="反射規則の理解・軌道予測・空間更新の連続推理を強化"
+            target="小学校中学年〜大人"
+            operation="バンパーを回転配置し、射出体の経路を制御"
+          />
+        </section>
       </main>
       <ReflecLabEducationalI18n />
       <OtherPuzzlesSection currentId="reflec-shot" />

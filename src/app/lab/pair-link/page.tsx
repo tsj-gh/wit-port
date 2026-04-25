@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PairLinkEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import PairLinkGame from "./PairLinkGame";
@@ -31,6 +32,13 @@ export default function PairLinkPage() {
         <Suspense fallback={<div className="flex min-h-[40dvh] flex-1 items-center justify-center bg-[var(--color-bg)] text-[var(--color-muted)]">読み込み中…</div>}>
           <PairLinkGame />
         </Suspense>
+        <section className="mx-auto mt-6 w-full max-w-3xl">
+          <GameQuickInfoNote
+            goal="制約下の探索・先読み計画・自己修正サイクルの定着"
+            target="小学校中学年〜大人"
+            operation="ドラッグ/タップで経路をつなぎ、交差なしで盤面を充填"
+          />
+        </section>
       </main>
       <PairLinkEducationalI18n />
       <OtherPuzzlesSection currentId="pair-link" />
