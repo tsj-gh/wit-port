@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { HiddenStackEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameIntroMiniSection } from "@/components/lab/GameIntroMiniSection";
 import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
@@ -30,6 +31,10 @@ export default function HiddenStackPage() {
       <SmartGuardLock />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(hiddenStackJsonLd) }} />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-2 md:py-3 lg:max-w-none lg:px-0 lg:py-3">
+        <GameIntroMiniSection
+          title="教材概要（かくれつみき）"
+          body="3D積み木の死角を推測し、見えない情報を数量として再構成する空間認識教材です。観察→仮説→検証の循環を短い問題で反復できます。"
+        />
         <Suspense
           fallback={
             <div className="flex min-h-[40dvh] flex-1 items-center justify-center bg-[var(--color-bg)] text-[var(--color-muted)]">

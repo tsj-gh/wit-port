@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PairLinkEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameIntroMiniSection } from "@/components/lab/GameIntroMiniSection";
 import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
@@ -29,6 +30,10 @@ export default function PairLinkPage() {
       <SmartGuardLock />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(pairLinkJsonLd) }} />
       <main className="mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-1 flex-col px-4 py-4 md:py-6 lg:max-w-[1400px] lg:px-6">
+        <GameIntroMiniSection
+          title="教材概要（Pair-Link）"
+          body="交差禁止と全マス充填の制約を同時に扱う論理教材です。先読みと自己修正を繰り返し、試行錯誤の質を高める設計になっています。"
+        />
         <Suspense fallback={<div className="flex min-h-[40dvh] flex-1 items-center justify-center bg-[var(--color-bg)] text-[var(--color-muted)]">読み込み中…</div>}>
           <PairLinkGame />
         </Suspense>

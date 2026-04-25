@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PresSureEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameIntroMiniSection } from "@/components/lab/GameIntroMiniSection";
 import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
@@ -28,6 +29,12 @@ export default function PresSureJudgePage() {
     <>
       <SmartGuardLock />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(presSureJsonLd) }} />
+      <section className="mx-auto mt-4 w-full max-w-[1080px] px-4">
+        <GameIntroMiniSection
+          title="教材概要（Pres-Sure Judge）"
+          body="時間制約下で天秤の均衡を見極める判断教材です。数量感覚と抑制制御を同時に使い、短いラウンドで意思決定の精度を高めます。"
+        />
+      </section>
       <Suspense fallback={null}>
         <PresSureJudgeGame />
       </Suspense>

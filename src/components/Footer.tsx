@@ -39,6 +39,20 @@ function FooterNav() {
       >
         {t("footer.column")}
       </DevLink>
+      <span className="text-[color-mix(in_srgb,var(--color-muted)_50%,transparent)]" aria-hidden="true">|</span>
+      <DevLink
+        href="/operator"
+        className="text-[13px] text-[var(--color-muted)] no-underline transition-colors hover:text-[var(--color-text)]"
+      >
+        {t("footer.operator")}
+      </DevLink>
+      <span className="text-[color-mix(in_srgb,var(--color-muted)_50%,transparent)]" aria-hidden="true">|</span>
+      <DevLink
+        href="/updates"
+        className="text-[13px] text-[var(--color-muted)] no-underline transition-colors hover:text-[var(--color-text)]"
+      >
+        {t("footer.updates")}
+      </DevLink>
     </nav>
   );
 }

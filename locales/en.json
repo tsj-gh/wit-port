@@ -16,7 +16,9 @@
     "top": "Wispo (Home)",
     "privacy": "Privacy Policy",
     "contact": "Contact",
-    "column": "Educational column"
+    "column": "Educational column",
+    "operator": "Operator info",
+    "updates": "Updates"
   },
   "home": {
     "heroTitleLine1": "A digital spot for playful learning materials",

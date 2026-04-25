@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { TapColoringEducationalI18n } from "@/components/educational/GameEducationalI18n";
+import { GameIntroMiniSection } from "@/components/lab/GameIntroMiniSection";
 import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
@@ -24,6 +25,10 @@ export default function TapColoringLabPage() {
       <SmartGuardLock />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(tapColoringJsonLd) }} />
       <main className="mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-1 flex-col px-4 py-4 md:py-6 lg:max-w-[1400px] lg:px-6">
+        <GameIntroMiniSection
+          title="教材概要（タップぬりえ）"
+          body="色彩認知と原因理解を、短い操作と即時反応で学べる入門教材です。幼児でも始めやすいタップ中心の設計で、完成体験を積みながら集中の持続を育てます。"
+        />
         <Suspense fallback={<div className="py-8 text-sm text-[var(--color-muted)]">読み込み中…</div>}>
           <TapColoringLabShell />
         </Suspense>
