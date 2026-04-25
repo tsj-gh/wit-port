@@ -55,7 +55,18 @@
     "sectionUsageContact": "contact page",
     "sectionUsageMid": ". For terms and privacy, see the ",
     "sectionUsagePrivacy": "privacy policy",
-    "sectionUsageAfter": "."
+    "sectionUsageAfter": ".",
+    "sectionWhyUsefulTitle": "Why these materials are useful",
+    "sectionWhyUsefulBody": "Wispo materials are designed around short attempts, immediate feedback, and self-correction.\nInstead of ending at right/wrong, each activity helps children review why an outcome happened through board states and interaction results.\nFrom intuitive toddler play to constraint and spatial reasoning for older learners, difficulty is staged so families can keep practicing consistently.",
+    "sectionPolicyTitle": "Material policy",
+    "sectionPolicyBody": "- Keep games genuinely fun first, then let learning value emerge naturally\n- Prioritize retry-friendly UI and immediate feedback over punishment for mistakes\n- Scale difficulty step by step for different ages and experience levels\n- Clearly show goals, target age, and operations so caregivers can scaffold",
+    "sectionOperatorTitle": "Operator information",
+    "sectionOperatorBody": "Operated by: Wispo development team\nFormat: independent education-focused development\nWhat we provide: free browser-based learning games and educational columns",
+    "sectionOperatorContactLead": "For feedback, bug reports, and adoption inquiries, please use the ",
+    "sectionOperatorContactTail": ".",
+    "sectionUpdatesTitle": "Update history",
+    "sectionUpdatesBody": "We openly publish improvements, bug fixes, and new material releases.",
+    "sectionUpdatesLink": "View update history (GitHub)"
   },
   "games": {
     "reflecShot": {

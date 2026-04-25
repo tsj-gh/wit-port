@@ -55,7 +55,18 @@
     "sectionUsageContact": "お問い合わせページ",
     "sectionUsageMid": "より承ります。利用規約・プライバシーポリシーは",
     "sectionUsagePrivacy": "プライバシーポリシー",
-    "sectionUsageAfter": "をご参照ください。"
+    "sectionUsageAfter": "をご参照ください。",
+    "sectionWhyUsefulTitle": "なぜこの教材が有用か",
+    "sectionWhyUsefulBody": "Wispoの教材は、「短い試行→即時フィードバック→自分で修正」の循環を重視して設計しています。\n正誤だけで終わらず、なぜそうなったかを盤面や操作結果から振り返れるため、暗記ではなく推論の型を育てやすいことが特徴です。\n幼児向けの直感操作から、学童向けの制約推理・空間推理まで難易度を段階化し、家庭で継続しやすい学習体験を目指しています。",
+    "sectionPolicyTitle": "教材方針",
+    "sectionPolicyBody": "・遊びとして成立する面白さを最優先し、その中で知育効果が自然に生まれる設計にする\n・誤答を責めず、再試行しやすいUIと即時フィードバックを重視する\n・年齢や経験差に合わせて、難易度を段階的に上げられる構成にする\n・保護者が伴走しやすいよう、ねらい・対象・操作を明示する",
+    "sectionOperatorTitle": "運営者情報",
+    "sectionOperatorBody": "運営：Wispo開発チーム\n形態：個人開発ベースの教育コンテンツ運営\n提供内容：ブラウザで遊べる無料の知育ゲームと解説コラム",
+    "sectionOperatorContactLead": "ご意見・不具合報告・導入相談は",
+    "sectionOperatorContactTail": "から受け付けています。",
+    "sectionUpdatesTitle": "更新履歴",
+    "sectionUpdatesBody": "機能改善・不具合修正・教材追加の履歴は公開しています。",
+    "sectionUpdatesLink": "更新履歴を見る（GitHub）"
   },
   "games": {
     "reflecShot": {

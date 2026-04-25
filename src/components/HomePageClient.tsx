@@ -63,6 +63,35 @@ export function HomePageClient() {
           </a>
           {t("home.sectionUsageAfter")}
         </p>
+
+        <h2 className="mb-3 mt-6 text-lg font-bold text-[var(--color-text)]">{t("home.sectionWhyUsefulTitle")}</h2>
+        <p className="mb-4 whitespace-pre-line leading-relaxed text-[var(--color-muted)]">{t("home.sectionWhyUsefulBody")}</p>
+
+        <h2 className="mb-3 mt-6 text-lg font-bold text-[var(--color-text)]">{t("home.sectionPolicyTitle")}</h2>
+        <p className="mb-4 whitespace-pre-line leading-relaxed text-[var(--color-muted)]">{t("home.sectionPolicyBody")}</p>
+
+        <h2 className="mb-3 mt-6 text-lg font-bold text-[var(--color-text)]">{t("home.sectionOperatorTitle")}</h2>
+        <p className="mb-2 whitespace-pre-line leading-relaxed text-[var(--color-muted)]">{t("home.sectionOperatorBody")}</p>
+        <p className="mb-4 leading-relaxed text-[var(--color-muted)]">
+          {t("home.sectionOperatorContactLead")}
+          <Link href="/contact" className="text-[var(--color-accent)] hover:underline">
+            {t("home.sectionUsageContact")}
+          </Link>
+          {t("home.sectionOperatorContactTail")}
+        </p>
+
+        <h2 className="mb-3 mt-6 text-lg font-bold text-[var(--color-text)]">{t("home.sectionUpdatesTitle")}</h2>
+        <p className="mb-1 leading-relaxed text-[var(--color-muted)]">{t("home.sectionUpdatesBody")}</p>
+        <p className="mb-2">
+          <a
+            href="https://github.com/tsj-gh/wispo/commits/main"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-[var(--color-accent)] underline-offset-2 hover:text-[var(--color-muted)] hover:underline"
+          >
+            {t("home.sectionUpdatesLink")}
+          </a>
+        </p>
       </section>
     </>
   );
