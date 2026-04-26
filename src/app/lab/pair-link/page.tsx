@@ -4,6 +4,7 @@ import { PairLinkEducationalI18n } from "@/components/educational/GameEducationa
 import { GameIntroMiniSection } from "@/components/lab/GameIntroMiniSection";
 import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
+import { ParentGuideNote } from "@/components/lab/ParentGuideNote";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import PairLinkGame from "./PairLinkGame";
 import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
@@ -46,6 +47,10 @@ export default function PairLinkPage() {
           { issue: "交差禁止を守ると進まない", action: "確定線と仮線を意識的に分け、仮線は短い区間ごとに検証して進めます。" },
           { issue: "全マス埋めが難しい", action: "残り空白を1〜2マス単位で見て、孤立マスが出ないかを都度チェックします。" },
         ]}
+      />
+      <ParentGuideNote
+        gameTitle="Pair-Link"
+        text="行き詰まったときは盤面全体を解かせるのではなく、『今はこの2つの数字だけつないでみよう』と範囲を狭めると再開しやすくなります。間違いを指摘するより『この線のあと空きマスはどうなる？』と問い返すと、先読みが育ちます。最後に解き方を一言説明させると、推理の再現性が高まります。"
       />
       <OtherPuzzlesSection currentId="pair-link" />
     </>

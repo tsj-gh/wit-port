@@ -4,6 +4,7 @@ import { ReflecLabEducationalI18n } from "@/components/educational/GameEducation
 import { GameIntroMiniSection } from "@/components/lab/GameIntroMiniSection";
 import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
+import { ParentGuideNote } from "@/components/lab/ParentGuideNote";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import ReflecShotGame from "./ReflecShotGame";
 import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
@@ -42,6 +43,10 @@ export default function ReflecShotLabPage() {
           { issue: "目標宝石数まで届かない", action: "ゴール直行より先に、宝石が密な経路を優先して射線を作ると達成しやすくなります。" },
           { issue: "操作が複雑に感じる", action: "回転操作だけで1問解く回を作り、慣れてから長押し・スワイプ操作を追加します。" },
         ]}
+      />
+      <ParentGuideNote
+        gameTitle="Reflec-Shot"
+        text="反射が難しいときは、まず1回反射で届くかだけを確認し、複数反射は段階的に増やしてください。『次に向きが変わるのはどこ？』と位置予測を言葉にする声かけが有効です。失敗時はバンパー配置を1つだけ変えて再試行すると、仮説検証の感覚が育ちます。"
       />
       <OtherPuzzlesSection currentId="reflec-shot" />
     </>

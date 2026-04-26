@@ -4,6 +4,7 @@ import { TapColoringEducationalI18n } from "@/components/educational/GameEducati
 import { GameIntroMiniSection } from "@/components/lab/GameIntroMiniSection";
 import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
+import { ParentGuideNote } from "@/components/lab/ParentGuideNote";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import { TapColoringLabShell } from "@/components/lab/TapColoringLabShell";
 import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
@@ -41,6 +42,10 @@ export default function TapColoringLabPage() {
           { issue: "すぐ飽きてしまう", action: "1回で完成を目指さず、「今日は背景まで」のように短い目標を作ると続きやすいです。" },
           { issue: "はみ出しが気になって止まる", action: "正確さより完成経験を優先し、最後に見直し時間を1分だけ取る運用がおすすめです。" },
         ]}
+      />
+      <ParentGuideNote
+        gameTitle="タップぬりえ"
+        text="はじめは色を3つに限定し、1枚を最後まで塗る体験を優先してください。迷った場面では正解を指示するより『次はどこを塗ると目立つかな？』と問いかけると、自分で選ぶ力が伸びます。終了後に『どの色の組み合わせが好き？』と短く振り返ると、言語化と色彩認知の両方を支えられます。"
       />
       <OtherPuzzlesSection currentId="tap-coloring" />
     </>

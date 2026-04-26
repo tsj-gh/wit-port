@@ -4,6 +4,7 @@ import { PresSureEducationalI18n } from "@/components/educational/GameEducationa
 import { GameIntroMiniSection } from "@/components/lab/GameIntroMiniSection";
 import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
+import { ParentGuideNote } from "@/components/lab/ParentGuideNote";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import PresSureJudgeGame from "./PresSureJudgeGame";
 import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
@@ -46,6 +47,10 @@ export default function PresSureJudgePage() {
           { issue: "重りの配置意図を忘れる", action: "「左を+2」のように目的を短く決めてからドラッグすると判断が安定します。" },
           { issue: "連続ラウンドで精度が落ちる", action: "2〜3ラウンドごとに10秒休憩を入れ、視線を一度画面外に外すと回復しやすいです。" },
         ]}
+      />
+      <ParentGuideNote
+        gameTitle="Pres-Sure Judge"
+        text="時間圧があるため、先に『今回は安全重視でいこう』など方針を決めてから始めると判断が安定します。失敗時は結果だけでなく『どの時点で急いだか』を一緒に振り返ると改善点が見えます。短い休憩を挟んで再挑戦する運用が、集中と自己調整の学習に効果的です。"
       />
       <OtherPuzzlesSection currentId="pres-sure-judge" />
     </>

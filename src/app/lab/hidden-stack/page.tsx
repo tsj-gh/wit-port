@@ -5,6 +5,7 @@ import { GameIntroMiniSection } from "@/components/lab/GameIntroMiniSection";
 import { GameQuickInfoNote } from "@/components/lab/GameQuickInfoNote";
 import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
+import { ParentGuideNote } from "@/components/lab/ParentGuideNote";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import HiddenStackGame from "./HiddenStackGame";
 import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
@@ -62,6 +63,10 @@ export default function HiddenStackPage() {
           { issue: "2桁の推定で混乱する", action: "まず「最低何個あるか」を固定し、その後に「最大何個まで増えるか」を足し算で考えると安定します。" },
           { issue: "不正解でやる気を失う", action: "ふりかえり表示を使って「どの列の見積もりがズレたか」だけを特定し、次の1問で再挑戦します。" },
         ]}
+      />
+      <ParentGuideNote
+        gameTitle="かくれつみき"
+        text="答えを先に伝えず、『どの面が見えていて、どこが見えていないか』を一緒に確認する進め方がおすすめです。迷ったら最低個数と最大個数を分けて考えるよう促すと推定が安定します。解答後に1列だけ振り返る習慣を作ると、空間推理の再現性が高まります。"
       />
       <OtherPuzzlesSection currentId="hidden-stack" />
     </>

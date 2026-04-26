@@ -4,6 +4,7 @@ import { PopPopBubblesEducationalSection } from "@/components/educational/PopPop
 import { GameIntroMiniSection } from "@/components/lab/GameIntroMiniSection";
 import { GameTroubleshootingSection } from "@/components/lab/GameTroubleshootingSection";
 import { OtherPuzzlesSection } from "@/components/lab/OtherPuzzlesSection";
+import { ParentGuideNote } from "@/components/lab/ParentGuideNote";
 import { PopPopBubblesLabShell } from "@/components/lab/PopPopBubblesLabShell";
 import { SmartGuardLock } from "@/components/lab/SmartGuardLock";
 import { gameLabAlternates, gameLabPageSeo } from "@/lib/gameLabPageSeo";
@@ -43,6 +44,10 @@ export default function PopPopBubblesPage() {
           { issue: "連打で見落としが増える", action: "1秒に1回だけ「次の標的」を目で決める小休止を入れると精度が保てます。" },
           { issue: "途中で集中が切れる", action: "1ラウンドごとに達成目標（例: 5回連続成功）を設定し、短い区切りで遊ぶと続きます。" },
         ]}
+      />
+      <ParentGuideNote
+        gameTitle="はじけて！バブル"
+        text="短時間で終わる区切りを作ると、集中が切れる前に達成感を得られます。『次は真ん中のバブルだけ狙おう』のように狙いを1つに絞る声かけが有効です。連打より観察を優先できた場面を具体的にほめると、注意切替の質が安定していきます。"
       />
       <OtherPuzzlesSection currentId="pop-pop-bubbles" />
     </>
